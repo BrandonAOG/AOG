@@ -1,16 +1,36 @@
 // ============================================================
 //  Always On Generators – Field Hub
-//  Service Worker  |  sw.js  |  Version: aog-forms-v2.0.3
+//  Service Worker  |  sw.js  |  Version: aog-forms-v2.0.2
 //  Scope: root (../)
 //  Strategy: Network-First for HTML, Stale-While-Revalidate
 //  for assets, with full offline fallback
 //
 //  ⚠ WHEN YOU UPDATE ANY TOOL: bump CACHE_NAME so users
 //  get fresh files instead of stale cached versions.
-//  e.g.  aog-forms-v2.0.1  →  aog-forms-v2.0.2
+//  e.g.  aog-forms-v2.0.1  →  aog-forms-v2.0.4
 // ============================================================
 
-var CACHE_NAME    = 'aog-forms-v2.0.1';
+// ============================================================
+//  CHANGELOG
+//  Add a new entry here every time you bump CACHE_NAME.
+//  Newest version at the top.
+// ============================================================
+////  v2.0.4  (2026-05-09)
+//  - [Added a scripted that lets users know whats being changed in the update]
+//  v2.0.2  (2026-05-09)
+//  - [describe what you changed here]
+//  - [e.g. Added ../wire-sizing/ tool to PRECACHE_URLS]
+//  - [e.g. Fixed offline fallback for conduit-fill page]
+//
+//  v2.0.1  (YYYY-MM-DD)
+//  - [previous change notes here]
+//
+//  v2.0.0  (YYYY-MM-DD)
+//  - Initial release
+//
+// ============================================================
+
+var CACHE_NAME    = 'aog-forms-v2.0.2';
 var DEV_MODE      = false; // ← SET TRUE during development/testing
 
 // ─── Files to pre-cache on install ───────────────────────────
