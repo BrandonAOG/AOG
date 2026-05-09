@@ -1297,41 +1297,33 @@ body.dark-mode::-webkit-scrollbar-thumb:hover {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MOBILE SAFARI — SINGLE-PAGE PRINT FIX  (Ver 1.1)
-   JS detects iOS/iPadOS Safari and adds "mobile-safari" to <body>.
-   Strategy: one master zoom (~14% reduction) handles all proportional
-   scaling — fonts, radios, checkboxes, Y/N toggles, inputs, spacing.
-   Only three targeted overrides are needed beyond that:
-     1. Enforce two-column layout (mobile viewport collapses it)
-     2. Reduce fixed-px textarea heights to match the zoom ratio
-     3. Trim page padding slightly to recover extra vertical room
+   Now covers ALL iOS browsers (Safari, Chrome/CriOS, Firefox/FxiOS, etc.)
+   since every iOS browser shares WebKit and hits the same narrow-viewport
+   print breakpoints.
    ═══════════════════════════════════════════════════════════════════════════ */
 @media print {
 
-  /* ── 1. MASTER SCALE — let zoom do all proportional work ── */
+  /* ── 1. MASTER SCALE ── */
   body.mobile-safari .page {
     zoom: 0.753;
-    padding: 18px !important;  /* slightly tighter than desktop's 24px        */
+    padding: 18px !important;
   }
 
-  /* ── 2. TWO-COLUMN: mobile viewport width triggers the ≤820px breakpoint ──
-          which collapses Battery + Generator into a single column.
-          Force it back to side-by-side for print.                           */
+  /* ── 2. TWO-COLUMN: force side-by-side for print ── */
   body.mobile-safari .two-column {
     grid-template-columns: 1fr 1fr !important;
   }
 
-  /* ── 3. TEXTAREA FIXED HEIGHTS — zoom scales layout but not explicit
-          height/min-height values in all WebKit builds; set them manually
-          at the same ~0.86 ratio so they don't exceed their natural space. */
+  /* ── 3. TEXTAREA FIXED HEIGHTS ── */
   body.mobile-safari #batnotes,
   body.mobile-safari #gennotes {
-    min-height: 53px !important;   /* 62px × 0.86 */
+    min-height: 53px !important;
     height:     53px !important;
   }
   body.mobile-safari #oilnotes,
   body.mobile-safari #gasnotes,
   body.mobile-safari #tsnotes {
-    min-height: 26px !important;   /* 30px × 0.86 */
+    min-height: 26px !important;
     height:     26px !important;
   }
 
@@ -1340,6 +1332,29 @@ body.dark-mode::-webkit-scrollbar-thumb:hover {
 </head>
 
 <body>
+
+<script>
+/* ── iOS device detection — applies mobile-safari class to ALL browsers on iOS
+     (Safari, Chrome/CriOS, Firefox/FxiOS, Edge/EdgiOS, etc.)
+     All iOS browsers share the same WebKit rendering engine and hit the same
+     narrow-viewport print breakpoints, so they all need the same fix.      */
+(function () {
+  var ua = navigator.userAgent;
+  if (
+    /iP(hone|od|ad)/.test(ua) &&
+    /WebKit/.test(ua)
+  ) {
+    document.documentElement.classList.add('mobile-safari');
+    if (document.body) {
+      document.body.classList.add('mobile-safari');
+    } else {
+      document.addEventListener('DOMContentLoaded', function () {
+        document.body.classList.add('mobile-safari');
+      });
+    }
+  }
+})();
+</script>
 
 <div class="page" id="page">
 
@@ -1787,30 +1802,6 @@ body.dark-mode::-webkit-scrollbar-thumb:hover {
 </div>
 
 <script>
-// ── Mobile Safari detection for single-page print ──────────────────────────
-// Runs immediately (before DOMContentLoaded) so the class is present when
-// print CSS is evaluated.  Only targets iOS/iPadOS Safari — Chrome, Firefox,
-// Edge, and Opera on iOS are excluded via their specific UA tokens.
-(function () {
-  var ua = navigator.userAgent;
-  if (
-    /iP(hone|od|ad)/.test(ua) &&
-    /WebKit/.test(ua) &&
-    !/CriOS|FxiOS|OPiOS|EdgiOS|mercury/.test(ua)
-  ) {
-    // Set on <html> immediately; set on <body> once it exists
-    document.documentElement.classList.add('mobile-safari');
-    if (document.body) {
-      document.body.classList.add('mobile-safari');
-    } else {
-      document.addEventListener('DOMContentLoaded', function () {
-        document.body.classList.add('mobile-safari');
-      });
-    }
-  }
-})();
-// ──────────────────────────────────────────────────────────────────────────
-
 const THEME_KEY = 'aog_maint_theme';
 const DRAFT_KEY = 'aog_maint_draft';
 
