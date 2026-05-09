@@ -1,6 +1,6 @@
 // ============================================================
 //  Always On Generators – Field Hub
-//  Service Worker  |  sw.js  |  Version: aog-forms-v2.0.6
+//  Service Worker  |  sw.js  |  Version: aog-forms-v2.0.2
 //  Scope: root (../)
 //  Strategy: Network-First for HTML, Stale-While-Revalidate
 //  for assets, with full offline fallback
@@ -10,7 +10,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.1.0';
+var CACHE_NAME = 'aog-forms-v1.0.0';
 var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
@@ -19,7 +19,7 @@ var DEV_MODE   = false; // ← SET TRUE during development/testing
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  'PUSHES AN UPDATE BANNER SHOWING WHATS BEING CHANGED',
+  'TESTING BANNER POPUP ON V1.0.0',
   'Describe your second change here',
   'Add or remove lines as needed'
 ];
