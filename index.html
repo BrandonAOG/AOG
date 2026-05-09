@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script src="../update-banner.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Always On Generators - Forms Hub</title>
@@ -35,16 +34,8 @@
   --font-body: 'Exo 2', sans-serif;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html, body {
-  height: 100%;
-  overflow-x: hidden;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow-x: hidden; }
 
 body {
   font-family: var(--font-body);
@@ -58,7 +49,7 @@ body {
 
 @keyframes bgShift {
   0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
+  50%       { background-position: 100% 50%; }
 }
 
 body::before {
@@ -76,7 +67,7 @@ body::before {
 }
 
 @keyframes gridMove {
-  0% { background-position: 0 0; }
+  0%   { background-position: 0 0; }
   100% { background-position: 50px 50px; }
 }
 
@@ -116,17 +107,11 @@ body::after {
 
 @keyframes bannerPulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.75; }
+  50%       { opacity: 0.75; }
 }
 
-#offline-banner::before {
-  content: '⚠ ';
-  color: var(--yellow-bright);
-}
-#offline-banner::after {
-  content: ' ⚠';
-  color: var(--yellow-bright);
-}
+#offline-banner::before { content: '⚠ '; color: var(--yellow-bright); }
+#offline-banner::after  { content: ' ⚠'; color: var(--yellow-bright); }
 
 /* ===== UPDATE TOAST ===== */
 #update-toast {
@@ -134,8 +119,8 @@ body::after {
   position: fixed;
   bottom: 24px; right: 24px;
   z-index: 9998;
-  padding: 14px 20px;
-  background: linear-gradient(135deg, rgba(15,21,53,0.97), rgba(26,40,71,0.97));
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(15,21,53,0.98), rgba(26,40,71,0.98));
   border: 1px solid var(--yellow-bright);
   border-radius: 4px;
   font-family: var(--font-mono);
@@ -143,38 +128,43 @@ body::after {
   letter-spacing: 2px;
   color: var(--text-dim);
   text-transform: uppercase;
-  max-width: 320px;
-  box-shadow: 0 0 20px rgba(251,191,36,0.2);
+  max-width: 340px;
+  box-shadow:
+    0 0 20px rgba(251,191,36,0.2),
+    0 0 40px rgba(249,115,22,0.1);
   clip-path: polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px);
+  animation: toastSlideIn 0.4s cubic-bezier(0.4,0,0.2,1) forwards;
 }
 
-#update-toast.visible { display: flex; align-items: center; gap: 14px; }
-
-#update-toast-msg { flex: 1; }
-#update-toast-msg strong {
-  display: block;
-  color: var(--yellow-bright);
-  margin-bottom: 4px;
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-#update-reload-btn {
-  flex-shrink: 0;
-  padding: 6px 14px;
-  background: linear-gradient(135deg, var(--yellow-bright), var(--orange));
-  border: none;
-  border-radius: 2px;
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
+#update-toast.visible { display: flex; flex-direction: column; gap: 12px; }
+
+#update-toast-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#update-toast-title {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 2px;
-  color: var(--bg-dark);
-  cursor: pointer;
-  text-transform: uppercase;
-  transition: all 0.2s;
+  letter-spacing: 3px;
+  color: var(--yellow-bright);
+  text-shadow: 0 0 8px rgba(251,191,36,0.4);
 }
-#update-reload-btn:hover {
-  box-shadow: 0 0 12px rgba(251,191,36,0.5);
-  transform: scale(1.05);
+
+#update-toast-version {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 2px;
+  color: var(--blue-electric);
+  text-shadow: 0 0 6px rgba(0,212,255,0.4);
 }
 
 #update-dismiss-btn {
@@ -184,12 +174,54 @@ body::after {
   color: var(--text-dim);
   font-size: 1rem;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0 2px;
   line-height: 1;
   transition: color 0.2s;
 }
 #update-dismiss-btn:hover { color: var(--orange-bright); }
 
+#update-toast-changelog {
+  margin: 0;
+  padding: 0 0 0 14px;
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+  line-height: 1.8;
+  border-left: 2px solid rgba(251,191,36,0.3);
+}
+
+#update-toast-changelog li { list-style: none; padding-left: 4px; }
+#update-toast-changelog li::before {
+  content: '▸ ';
+  color: var(--orange-bright);
+}
+
+#update-toast-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+#update-reload-btn {
+  padding: 7px 18px;
+  background: linear-gradient(135deg, var(--yellow-bright), var(--orange));
+  border: none;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--bg-dark);
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.2s;
+  clip-path: polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%);
+}
+#update-reload-btn:hover {
+  box-shadow: 0 0 16px rgba(251,191,36,0.5);
+  transform: scale(1.04);
+}
+
+/* ===== LAYOUT ===== */
 .container {
   position: relative;
   z-index: 10;
@@ -209,8 +241,7 @@ body::after {
   position: relative;
 }
 
-.header::before,
-.header::after {
+.header::before, .header::after {
   content: '';
   position: absolute;
   height: 2px;
@@ -219,19 +250,12 @@ body::after {
   background: linear-gradient(90deg, transparent, var(--yellow-bright), var(--orange), var(--blue-electric), transparent);
 }
 
-.header::before {
-  top: 0;
-  animation: scanline 4s linear infinite;
-}
-
-.header::after {
-  bottom: 0;
-  animation: scanline 4s linear infinite reverse;
-}
+.header::before { top: 0;    animation: scanline 4s linear infinite; }
+.header::after  { bottom: 0; animation: scanline 4s linear infinite reverse; }
 
 @keyframes scanline {
-  0% { opacity: 0; transform: scaleX(0); }
-  50% { opacity: 1; transform: scaleX(1); }
+  0%   { opacity: 0; transform: scaleX(0); }
+  50%  { opacity: 1; transform: scaleX(1); }
   100% { opacity: 0; transform: scaleX(0); }
 }
 
@@ -245,12 +269,11 @@ body::after {
 }
 
 .logo-img {
-  width: 110px;
-  height: 110px;
+  width: 110px; height: 110px;
   object-fit: contain;
   filter:
-    drop-shadow(0 0 12px rgba(251, 191, 36, 0.6))
-    drop-shadow(0 0 24px rgba(249, 115, 22, 0.4))
+    drop-shadow(0 0 12px rgba(251,191,36,0.6))
+    drop-shadow(0 0 24px rgba(249,115,22,0.4))
     brightness(1.1);
   animation: logoPulse 3s ease-in-out infinite;
 }
@@ -258,23 +281,20 @@ body::after {
 @keyframes logoPulse {
   0%, 100% {
     filter:
-      drop-shadow(0 0 12px rgba(251, 191, 36, 0.6))
-      drop-shadow(0 0 24px rgba(249, 115, 22, 0.4))
+      drop-shadow(0 0 12px rgba(251,191,36,0.6))
+      drop-shadow(0 0 24px rgba(249,115,22,0.4))
       brightness(1.1);
   }
   50% {
     filter:
-      drop-shadow(0 0 18px rgba(251, 191, 36, 0.8))
-      drop-shadow(0 0 36px rgba(249, 115, 22, 0.6))
+      drop-shadow(0 0 18px rgba(251,191,36,0.8))
+      drop-shadow(0 0 36px rgba(249,115,22,0.6))
       brightness(1.2);
   }
 }
 
 .title-block { text-align: left; }
-
-@media (max-width: 600px) {
-  .title-block { text-align: center; }
-}
+@media (max-width: 600px) { .title-block { text-align: center; } }
 
 .company-name {
   font-family: var(--font-display);
@@ -295,7 +315,7 @@ body::after {
   letter-spacing: 6px;
   color: var(--blue-electric);
   text-transform: uppercase;
-  text-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+  text-shadow: 0 0 8px rgba(0,212,255,0.5);
 }
 
 .subtitle {
@@ -310,7 +330,7 @@ body::after {
 
 .subtitle span {
   color: var(--orange-bright);
-  text-shadow: 0 0 8px rgba(249, 115, 22, 0.5);
+  text-shadow: 0 0 8px rgba(249,115,22,0.5);
 }
 
 /* ===== STATUS BAR ===== */
@@ -322,8 +342,8 @@ body::after {
   flex-wrap: wrap;
   padding: 12px 24px;
   margin-bottom: 40px;
-  background: rgba(15, 21, 53, 0.6);
-  border: 1px solid rgba(251, 191, 36, 0.25);
+  background: rgba(15,21,53,0.6);
+  border: 1px solid rgba(251,191,36,0.25);
   border-radius: 4px;
   backdrop-filter: blur(8px);
   font-family: var(--font-mono);
@@ -332,12 +352,7 @@ body::after {
   text-transform: uppercase;
 }
 
-.status-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-dim);
-}
+.status-item { display: flex; align-items: center; gap: 8px; color: var(--text-dim); }
 
 .status-dot {
   width: 8px; height: 8px;
@@ -365,18 +380,11 @@ body::after {
   text-align: center;
   margin-bottom: 32px;
   text-transform: uppercase;
-  text-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
-  position: relative;
+  text-shadow: 0 0 10px rgba(251,191,36,0.4);
 }
 
 .forms-section-label::before,
-.forms-section-label::after {
-  content: '◆';
-  color: var(--orange);
-  margin: 0 16px;
-  font-size: 0.7rem;
-  vertical-align: middle;
-}
+.forms-section-label::after { content: '◆'; color: var(--orange); margin: 0 16px; font-size: 0.7rem; vertical-align: middle; }
 
 .forms-grid {
   display: grid;
@@ -386,9 +394,7 @@ body::after {
   flex: 1;
 }
 
-@media (max-width: 700px) {
-  .forms-grid { grid-template-columns: 1fr; }
-}
+@media (max-width: 700px) { .forms-grid { grid-template-columns: 1fr; } }
 
 /* ===== FORM CARD ===== */
 .form-card {
@@ -398,11 +404,11 @@ body::after {
   justify-content: center;
   text-decoration: none;
   padding: 32px 28px;
-  background: linear-gradient(135deg, rgba(15, 21, 53, 0.9) 0%, rgba(26, 40, 71, 0.7) 100%);
-  border: 2px solid rgba(251, 191, 36, 0.3);
+  background: linear-gradient(135deg, rgba(15,21,53,0.9) 0%, rgba(26,40,71,0.7) 100%);
+  border: 2px solid rgba(251,191,36,0.3);
   border-radius: 4px;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
   cursor: pointer;
   min-height: 180px;
   clip-path: polygon(12px 0%, 100% 0%, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0% 100%, 0% 12px);
@@ -431,11 +437,11 @@ body::after {
 .form-card:hover {
   transform: translateY(-4px);
   border-color: var(--orange);
-  background: linear-gradient(135deg, rgba(26, 40, 71, 0.95) 0%, rgba(36, 52, 88, 0.85) 100%);
+  background: linear-gradient(135deg, rgba(26,40,71,0.95) 0%, rgba(36,52,88,0.85) 100%);
   box-shadow:
-    0 0 30px rgba(251, 191, 36, 0.3),
-    0 0 60px rgba(249, 115, 22, 0.2),
-    inset 0 0 30px rgba(251, 191, 36, 0.05);
+    0 0 30px rgba(251,191,36,0.3),
+    0 0 60px rgba(249,115,22,0.2),
+    inset 0 0 30px rgba(251,191,36,0.05);
 }
 
 .form-card:hover::before { width: 28px; height: 28px; border-color: var(--orange-bright); }
@@ -461,13 +467,7 @@ body::after {
   100% { transform: translateX(100%); }
 }
 
-.form-card-content {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  position: relative;
-  z-index: 2;
-}
+.form-card-content { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
 
 .form-icon-wrap {
   flex-shrink: 0;
@@ -475,17 +475,17 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(249, 115, 22, 0.1));
-  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: linear-gradient(135deg, rgba(251,191,36,0.15), rgba(249,115,22,0.1));
+  border: 1px solid rgba(251,191,36,0.4);
   border-radius: 4px;
   transition: all 0.3s;
 }
 
 .form-card:hover .form-icon-wrap {
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(249, 115, 22, 0.2));
+  background: linear-gradient(135deg, rgba(251,191,36,0.3), rgba(249,115,22,0.2));
   border-color: var(--orange);
   transform: rotate(5deg) scale(1.05);
-  box-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
+  box-shadow: 0 0 20px rgba(251,191,36,0.4);
 }
 
 .form-icon-wrap svg {
@@ -510,13 +510,13 @@ body::after {
   color: var(--yellow-bright);
   text-transform: uppercase;
   margin-bottom: 6px;
-  text-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+  text-shadow: 0 0 8px rgba(251,191,36,0.3);
   transition: all 0.3s;
 }
 
 .form-card:hover .form-title {
   color: var(--orange-bright);
-  text-shadow: 0 0 12px rgba(249, 115, 22, 0.5);
+  text-shadow: 0 0 12px rgba(249,115,22,0.5);
   letter-spacing: 4px;
 }
 
@@ -543,7 +543,7 @@ body::after {
 .form-card:hover .form-arrow {
   opacity: 1;
   transform: translateX(0);
-  text-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+  text-shadow: 0 0 8px rgba(0,212,255,0.6);
 }
 
 /* ===== FOOTER ===== */
@@ -551,7 +551,7 @@ body::after {
   margin-top: auto;
   padding-top: 32px;
   text-align: center;
-  border-top: 1px solid rgba(251, 191, 36, 0.2);
+  border-top: 1px solid rgba(251,191,36,0.2);
   position: relative;
 }
 
@@ -594,6 +594,7 @@ body::after {
   .form-icon-wrap { width: 52px; height: 52px; }
   .form-icon-wrap svg { width: 28px; height: 28px; }
   .status-bar { gap: 12px; padding: 10px 14px; font-size: 0.6rem; letter-spacing: 1px; }
+  #update-toast { left: 12px; right: 12px; bottom: 16px; max-width: 100%; }
 }
 </style>
 </head>
@@ -604,14 +605,17 @@ body::after {
 
 <!-- UPDATE TOAST -->
 <div id="update-toast">
-  <div id="update-toast-msg">
-    <strong>Update Available</strong>
-    New version ready to install
+  <div id="update-toast-header">
+    <div>
+      <div id="update-toast-title">⚡ App Needs Update</div>
+      <div id="update-toast-version"></div>
+    </div>
+    <button id="update-dismiss-btn" title="Dismiss">✕</button>
   </div>
-  <button id="update-reload-btn" onclick="window.location.reload()">Reload</button>
-  <button id="update-dismiss-btn"
-    onclick="document.getElementById('update-toast').classList.remove('visible')"
-    title="Dismiss">✕</button>
+  <ul id="update-toast-changelog"></ul>
+  <div id="update-toast-footer">
+    <button id="update-reload-btn">Update Now</button>
+  </div>
 </div>
 
 <div class="container">
@@ -830,7 +834,7 @@ body::after {
 </div>
 
 <script>
-// ── Form URL routing ──────────────────────────────────────
+// ── Form URL routing ──────────────────────────────────────────
 const FORM_URLS = {
   'install':        './elect-install/',
   'gas-install':    './gas-install/',
@@ -856,33 +860,33 @@ document.querySelectorAll('.form-card').forEach(function(card) {
   });
 });
 
-// ── Card entrance animation ───────────────────────────────
+// ── Card entrance animation ───────────────────────────────────
 window.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.form-card').forEach(function(card, i) {
     card.style.opacity = '0';
     card.style.transform = 'translateY(20px)';
     setTimeout(function() {
-      card.style.transition = 'opacity 0.6s ease, transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+      card.style.transition = 'opacity 0.6s ease, transform 0.6s cubic-bezier(0.4,0,0.2,1)';
       card.style.opacity = '1';
       card.style.transform = 'translateY(0)';
     }, 100 + (i * 100));
   });
 });
 
-// ── Online / Offline banner ───────────────────────────────
-const banner  = document.getElementById('offline-banner');
-const swDot   = document.getElementById('sw-status-dot');
-const swLabel = document.getElementById('sw-status-label');
+// ── Online / Offline banner ───────────────────────────────────
+const offlineBanner = document.getElementById('offline-banner');
+const swDot         = document.getElementById('sw-status-dot');
+const swLabel       = document.getElementById('sw-status-label');
 
 function setOnline() {
-  banner.classList.remove('visible');
+  offlineBanner.classList.remove('visible');
   swDot.classList.remove('offline-dot');
   swDot.classList.add('blue');
   swLabel.textContent = 'Sync Enabled';
 }
 
 function setOffline() {
-  banner.classList.add('visible');
+  offlineBanner.classList.add('visible');
   swDot.classList.remove('blue');
   swDot.classList.add('offline-dot');
   swLabel.textContent = 'Offline Mode';
@@ -892,34 +896,82 @@ window.addEventListener('online',  setOnline);
 window.addEventListener('offline', setOffline);
 if (!navigator.onLine) setOffline();
 
-// ── Service Worker registration ───────────────────────────
+// ── Service Worker + Update Toast ────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
     navigator.serviceWorker.register('./sw.js', { scope: './' })
       .then(function(reg) {
 
-        // Show update toast when new SW is waiting
-        reg.addEventListener('updatefound', function() {
-          const newWorker = reg.installing;
-          newWorker.addEventListener('statechange', function() {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              document.getElementById('update-toast').classList.add('visible');
-            }
-          });
-        });
-
-        // Update SW status dot once active
+        // Update status dot once SW is active
         if (reg.active) {
-          swDot.classList.remove('offline-dot');
           swDot.classList.add('blue');
           swLabel.textContent = navigator.onLine ? 'Sync Enabled' : 'Offline Mode';
         }
+
+        // Ask the WAITING (new) SW for its changelog, then show toast
+        function askAndShowToast(waitingWorker) {
+          var channel = new MessageChannel();
+          channel.port1.onmessage = function(e) {
+            var version   = e.data.version   || '';
+            var changelog = e.data.changelog || [];
+
+            document.getElementById('update-toast-version').textContent = version;
+
+            var list = document.getElementById('update-toast-changelog');
+            list.innerHTML = '';
+            changelog.forEach(function(item) {
+              var li = document.createElement('li');
+              li.textContent = item;
+              list.appendChild(li);
+            });
+
+            document.getElementById('update-toast').classList.add('visible');
+          };
+          // Message goes to the NEW waiting SW — always fresh, never cached
+          waitingWorker.postMessage({ action: 'GET_CHANGELOG' }, [channel.port2]);
+        }
+
+        // Waiting worker already there when page loaded
+        if (reg.waiting) {
+          askAndShowToast(reg.waiting);
+        }
+
+        // New worker found while page is open
+        reg.addEventListener('updatefound', function() {
+          var newWorker = reg.installing;
+          newWorker.addEventListener('statechange', function() {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              askAndShowToast(newWorker);
+            }
+          });
+        });
 
         console.log('[SW] Registered, scope:', reg.scope);
       })
       .catch(function(err) {
         console.warn('[SW] Registration failed:', err);
       });
+
+    // Once the new SW takes control, reload the page
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      window.location.reload();
+    });
+  });
+
+  // Update Now button — tell waiting SW to take over, then reload
+  document.getElementById('update-reload-btn').addEventListener('click', function() {
+    navigator.serviceWorker.getRegistration('./').then(function(reg) {
+      if (reg && reg.waiting) {
+        reg.waiting.postMessage({ action: 'SKIP_WAITING' });
+      } else {
+        window.location.reload();
+      }
+    });
+  });
+
+  // Dismiss button
+  document.getElementById('update-dismiss-btn').addEventListener('click', function() {
+    document.getElementById('update-toast').classList.remove('visible');
   });
 }
 </script>
