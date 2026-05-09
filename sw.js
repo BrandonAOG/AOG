@@ -1,9 +1,7 @@
 // ============================================================
 //  Always On Generators – Field Hub
-//  Service Worker  |  sw.js  |  Version: aog-forms-v2.0.2
+//  Service Worker  |  sw.js  |  Version: aog-forms-v1.0.0
 //  Scope: root (../)
-//  Strategy: Network-First for HTML, Stale-While-Revalidate
-//  for assets, with full offline fallback
 //
 //  ⚠ WHEN YOU UPDATE ANY TOOL:
 //    1. Bump CACHE_NAME
@@ -15,25 +13,22 @@ var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
 //  CHANGELOG — Update this every time you bump CACHE_NAME.
-//  This text is sent to the page and shown in the update banner.
+//  This is what shows up in the update banner on their device.
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  'TESTING BANNER POPUP ON V1.0.0',
+  'tESTING BANNER FOR UPDATES. VER 1.0.0',
   'Describe your second change here',
   'Add or remove lines as needed'
 ];
 // ============================================================
 
-// ─── Files to pre-cache on install ───────────────────────────
 var PRECACHE_URLS = [
   '../',
   '../index.html',
   '../offline.html',
   '../logo.png',
   '../sw.js',
-  '../update-banner.js',
-
   '../estimate/',
   '../maintenance/',
   '../site-visit/',
@@ -45,7 +40,6 @@ var PRECACHE_URLS = [
   '../sketch-pad/'
 ];
 
-// ─── CDN assets to cache on first use ────────────────────────
 var CACHE_CDN = [
   'https://api.mapbox.com',
   'https://fonts.googleapis.com',
@@ -55,12 +49,15 @@ var CACHE_CDN = [
 
 // ============================================================
 //  INSTALL — Pre-cache all core files
+//  ⚠ NO skipWaiting here — we wait for the user to tap
+//  "Update Now" before taking over. This gives them time
+//  to read the changelog before the page reloads.
 // ============================================================
 self.addEventListener('install', function(event) {
   console.log('[SW] Installing — Cache:', CACHE_NAME);
 
   if (DEV_MODE) {
-    console.log('[SW] ⚠ DEV MODE — Skipping pre-cache, taking control immediately');
+    console.log('[SW] ⚠ DEV MODE — taking control immediately');
     self.skipWaiting();
     return;
   }
@@ -72,14 +69,15 @@ self.addEventListener('install', function(event) {
         return Promise.all(
           PRECACHE_URLS.map(function(url) {
             return cache.add(url).catch(function(err) {
-              console.warn('[SW] Pre-cache skipped (file not found):', url, err);
+              console.warn('[SW] Pre-cache skipped:', url, err);
             });
           })
         );
       })
       .then(function() {
-        console.log('[SW] Install complete — waiting to activate');
-        return self.skipWaiting();
+        console.log('[SW] Install complete — waiting for user to approve update');
+        // ← No skipWaiting() here on purpose. SW sits in "waiting"
+        //   state until the user taps "Update Now".
       })
   );
 });
@@ -121,8 +119,7 @@ self.addEventListener('fetch', function(event) {
     event.respondWith(
       fetch(request).catch(function() {
         return new Response(
-          '<h2 style="font-family:sans-serif;color:red;padding:20px">' +
-          '⚠ Network unavailable (Dev Mode — no cache)</h2>',
+          '<h2 style="font-family:sans-serif;color:red;padding:20px">⚠ Network unavailable (Dev Mode)</h2>',
           { headers: { 'Content-Type': 'text/html' } }
         );
       })
@@ -183,7 +180,6 @@ function networkFirst(request) {
       return networkResponse;
     })
     .catch(function() {
-      console.log('[SW] Network failed — serving from cache:', request.url);
       return caches.match(request)
         .then(function(cachedResponse) {
           if (cachedResponse) return cachedResponse;
@@ -208,7 +204,7 @@ function staleWhileRevalidate(request) {
         }
         return networkResponse;
       }).catch(function(err) {
-        console.log('[SW] Revalidate network fetch failed:', err);
+        console.log('[SW] Revalidate failed:', err);
       });
       return cachedResponse || networkFetch;
     });
@@ -240,23 +236,20 @@ function cacheFirst(request) {
 // ============================================================
 self.addEventListener('message', function(event) {
 
+  // User tapped "Update Now" — activate and let page reload
   if (event.data && event.data.action === 'SKIP_WAITING') {
-    console.log('[SW] Received SKIP_WAITING — activating now');
+    console.log('[SW] User approved update — activating now');
     self.skipWaiting();
   }
 
   if (event.data && event.data.action === 'CLEAR_CACHE') {
-    console.log('[SW] Received CLEAR_CACHE — nuking all caches');
     caches.keys().then(function(keys) {
       keys.forEach(function(key) { caches.delete(key); });
     });
     event.ports[0].postMessage({ result: 'Cache cleared' });
   }
 
-  // ── Page asks the waiting SW what changed ──────────────────
-  // update-banner.js sends GET_CHANGELOG to the *waiting* SW
-  // (not the active one), so the reply always contains the
-  // fresh changelog from the new sw.js — never stale cached text.
+  // Page asks new waiting SW what changed — reply with fresh changelog
   if (event.data && event.data.action === 'GET_CHANGELOG') {
     event.ports[0].postMessage({
       version:   CACHE_NAME,
