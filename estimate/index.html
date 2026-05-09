@@ -553,42 +553,23 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
 
 /* ══════════════════════════════════════════════════════════════════════════
    MOBILE SAFARI — SINGLE-PAGE PRINT FIX  (Ver 1.4)
-
-   The general @media print already has  html { zoom: 0.789 }  which fills
-   the page width perfectly — we leave that alone.
-
-   The problem: mobile Safari fires the ≤600-768px screen breakpoints even
-   during printing, collapsing grids AND adding extra vertical space from
-   flex-wrap on inline-rows. The content ends up ~9% too tall for one page.
-
-   Fix strategy:
-     1. Force grids back to multi-column (prevents the main height explosion)
-     2. Compact spacing — save ~150px of height through tighter padding,
-        smaller textareas, and reduced min-heights. This pulls the overflow
-        back onto page 1 without shrinking the form width or font sizes.
-     3. Force light mode via cascade position (this block is last in file).
+   Now also covers Chrome/Firefox/Edge on iOS (CriOS/FxiOS/etc.)
+   since all iOS browsers share the same WebKit rendering engine and
+   hit the same narrow-viewport breakpoints during printing.
    ══════════════════════════════════════════════════════════════════════════ */
 @media print {
 
-  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-     ZOOM CONTROL — change this number to scale the form up or down.
-     mobile Safari ignores zoom on <html>; this .page rule is what works.
-     Higher = bigger/taller (risk 2 pages). Lower = smaller, always 1 page.
-     Safe range to try: 0.70 → 0.90
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
   body.mobile-safari .page {
     zoom: 1.10 !important;
     margin-left:  auto !important;
     margin-right: auto !important;
-    min-height: 100vh !important;        /* fill the full paper height */
+    min-height: 100vh !important;
   }
 
   body.mobile-safari .footer {
-    margin-top: auto !important;         /* push footer to page bottom */
+    margin-top: auto !important;
   }
-          Mobile viewport triggers ≤600-768px breakpoints that collapse
-          top-grid and grid-2/3/4 to single-column. Force them back so the
-          content fits vertically on one page at the existing html zoom.    */
+
   body.mobile-safari .top-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
@@ -601,9 +582,6 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   body.mobile-safari .grid-3 { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; }
   body.mobile-safari .grid-4 { display: grid !important; grid-template-columns: repeat(4,1fr) !important; }
 
-  /* ── 2. COMPACT SPACING — save ~150px height without affecting width ──
-          Content overflows by ~9% at html zoom 0.789. These reductions pull
-          it back onto one page while preserving the full-width layout.     */
   body.mobile-safari .content       { padding: 4px 14px !important; }
   body.mobile-safari .top-col       { padding: 8px 10px !important; }
   body.mobile-safari .col-label     { margin-bottom: 8px !important; }
@@ -622,16 +600,11 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   body.mobile-safari .gas-appliances-box  { padding: 4px 6px !important; margin-bottom: 4px !important; }
   body.mobile-safari .gas-appliances-label { margin-bottom: 4px !important; }
 
-  /* Textareas — proportionally tighter but still legible */
   body.mobile-safari #gen_notes   { min-height: 28px !important; height: 28px !important; max-height: 28px !important; }
   body.mobile-safari #pad_notes   { min-height: 22px !important; height: 22px !important; max-height: 22px !important; }
   body.mobile-safari #gas_notes   { min-height: 28px !important; height: 28px !important; max-height: 28px !important; }
   body.mobile-safari #ready_notes { min-height: 26px !important; height: 26px !important; max-height: 26px !important; width: 100% !important; box-sizing: border-box !important; }
 
-  /* ── 3. FORCE LIGHT MODE ──
-          Cascade-last position beats body.dark-mode at equal specificity.
-          Mobile Safari captures its print snapshot before JS can remove
-          the dark-mode class, so we handle it purely in CSS.              */
   body.mobile-safari .page,
   body.mobile-safari .header,
   body.mobile-safari .content,
@@ -702,13 +675,11 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
 
   body.mobile-safari textarea { background: white !important; color: #1F2937 !important; border-color: rgba(217,119,6,0.4) !important; box-shadow: none !important; }
 
-  /* ── RADIO & CHECKBOX — override dark-mode accent-color ── */
   body.mobile-safari .check-item input[type="checkbox"],
   body.mobile-safari .check-item input[type="radio"] {
     accent-color: #D97706 !important;
   }
 
-  /* ── PLACEHOLDERS — mobile Safari needs opacity:0 + webkit prefix ── */
   body.mobile-safari input::placeholder,
   body.mobile-safari textarea::placeholder { color: transparent !important; opacity: 0 !important; }
   body.mobile-safari input::-webkit-input-placeholder,
@@ -729,13 +700,15 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
 <body>
 
 <script>
-/* ── Mobile Safari detection — runs immediately before any DOM paint ── */
+/* ── iOS device detection — applies mobile-safari class to ALL browsers on iOS
+     (Safari, Chrome/CriOS, Firefox/FxiOS, Edge/EdgiOS, etc.)
+     All iOS browsers share the same WebKit rendering engine and hit the same
+     narrow-viewport print breakpoints, so they all need the same fix.      */
 (function () {
   var ua = navigator.userAgent;
   if (
     /iP(hone|od|ad)/.test(ua) &&
-    /WebKit/.test(ua) &&
-    !/CriOS|FxiOS|OPiOS|EdgiOS|mercury/.test(ua)
+    /WebKit/.test(ua)
   ) {
     document.documentElement.classList.add('mobile-safari');
     if (document.body) {
