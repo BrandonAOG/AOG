@@ -15,7 +15,7 @@
 (function () {
 
   // ── UPDATE THIS every time you bump the SW version ────────
-  var APP_VERSION = 'v2.0.2';
+  var APP_VERSION = 'v2.0.4';
 
   var CHANGELOG = [
     'Describe your first change here',
