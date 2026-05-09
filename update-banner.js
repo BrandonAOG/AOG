@@ -15,11 +15,10 @@
 (function () {
 
   // ── UPDATE THIS every time you bump the SW version ────────
-  var APP_VERSION = 'v2.0.4';
+  var APP_VERSION = 'v2.0.5';
 
   var CHANGELOG = [
-    'Describe your first change here',
-    'Describe your second change here',
+    'pushed a model so users know whats in the update',
     'Add or remove lines as needed'
   ];
   // ──────────────────────────────────────────────────────────
