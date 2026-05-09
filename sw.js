@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v1.0.0';
+var CACHE_NAME = 'aog-forms-v1.0.1';
 var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
@@ -17,9 +17,9 @@ var DEV_MODE   = false; // ← SET TRUE during development/testing
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  'tESTING BANNER FOR UPDATES. VER 1.0.0',
-  'Describe your second change here',
-  'Add or remove lines as needed'
+  'INITITIAL RELEASE VER 1.0.1',
+  'READY FOR PUBLIC TESTING',
+  ''
 ];
 // ============================================================
 
