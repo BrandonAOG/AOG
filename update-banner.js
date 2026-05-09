@@ -1,29 +1,17 @@
 // ============================================================
 //  Always On Generators – Field Hub
-//  Update Banner  |  update-banner.js  |  v2.0.2
+//  Update Banner  |  update-banner.js
 //
 //  HOW TO USE:
-//  1. Add this to the <head> of every page (or index.html):
-//       <script src="../update-banner.js"></script>
+//  Add this ONE line to the <head> of every page:
+//    <script src="../update-banner.js"></script>
 //
-//  2. Each time you bump the SW version, update CHANGELOG
-//     below with what changed. Keep it short — one line each.
-//
-//  3. Bump APP_VERSION to match CACHE_NAME in sw.js.
+//  DO NOT edit changelog text here.
+//  Edit the CHANGELOG array in sw.js instead.
+//  That's the only file you need to touch when you update.
 // ============================================================
 
 (function () {
-
-  // ── UPDATE THIS every time you bump the SW version ────────
-  var APP_VERSION = 'v2.0.5';
-
-  var CHANGELOG = [
-    'pushed a model so users know whats in the update',
-    'Add or remove lines as needed'
-  ];
-  // ──────────────────────────────────────────────────────────
-
-
   if (!('serviceWorker' in navigator)) return;
 
   // ── Inject banner CSS ──────────────────────────────────────
@@ -45,27 +33,20 @@
     '  transform: translateY(-100%);',
     '  transition: transform 0.35s ease;',
     '}',
-    '#aog-update-banner.show {',
-    '  transform: translateY(0);',
-    '}',
-    '#aog-update-banner .aog-banner-text {',
-    '  flex: 1;',
-    '  line-height: 1.5;',
-    '}',
-    '#aog-update-banner .aog-banner-title {',
+    '#aog-update-banner.show { transform: translateY(0); }',
+    '#aog-update-banner .aog-text { flex: 1; line-height: 1.5; }',
+    '#aog-update-banner .aog-title {',
     '  font-weight: bold;',
     '  font-size: 15px;',
     '  margin-bottom: 4px;',
     '}',
-    '#aog-update-banner .aog-banner-list {',
+    '#aog-update-banner .aog-list {',
     '  margin: 0;',
     '  padding-left: 18px;',
     '  color: #ccc;',
     '}',
-    '#aog-update-banner .aog-banner-list li {',
-    '  margin: 2px 0;',
-    '}',
-    '#aog-update-banner .aog-banner-btn {',
+    '#aog-update-banner .aog-list li { margin: 2px 0; }',
+    '#aog-update-banner .aog-btn {',
     '  background: #e8a020;',
     '  color: #000;',
     '  border: none;',
@@ -77,73 +58,78 @@
     '  white-space: nowrap;',
     '  align-self: center;',
     '}',
-    '#aog-update-banner .aog-banner-btn:hover {',
-    '  background: #f5b535;',
-    '}'
+    '#aog-update-banner .aog-btn:hover { background: #f5b535; }'
   ].join('\n');
   document.head.appendChild(style);
 
-  // ── Build the banner HTML ──────────────────────────────────
-  function showBanner() {
-    var banner = document.createElement('div');
-    banner.id = 'aog-update-banner';
+  // ── Ask the waiting SW for its changelog, then show banner ─
+  function askAndShow(waitingWorker) {
+    var channel = new MessageChannel();
 
-    var listItems = CHANGELOG.map(function (item) {
+    channel.port1.onmessage = function (event) {
+      var version   = event.data.version   || 'New Version';
+      var changelog = event.data.changelog || ['App has been updated'];
+      showBanner(version, changelog, waitingWorker);
+    };
+
+    // Send GET_CHANGELOG to the *waiting* (new) SW, not the active one.
+    // This guarantees we always get the fresh changelog text.
+    waitingWorker.postMessage({ action: 'GET_CHANGELOG' }, [channel.port2]);
+  }
+
+  // ── Build and display the banner ───────────────────────────
+  function showBanner(version, changelog, waitingWorker) {
+    if (document.getElementById('aog-update-banner')) return; // already showing
+
+    var listItems = changelog.map(function (item) {
       return '<li>' + item + '</li>';
     }).join('');
 
+    var banner = document.createElement('div');
+    banner.id = 'aog-update-banner';
     banner.innerHTML =
-      '<div class="aog-banner-text">' +
-        '<div class="aog-banner-title">⚡ App Update Available — ' + APP_VERSION + '</div>' +
-        '<ul class="aog-banner-list">' + listItems + '</ul>' +
+      '<div class="aog-text">' +
+        '<div class="aog-title">⚡ App Update Ready — ' + version + '</div>' +
+        '<ul class="aog-list">' + listItems + '</ul>' +
       '</div>' +
-      '<button class="aog-banner-btn" id="aog-update-btn">Update Now</button>';
+      '<button class="aog-btn" id="aog-update-btn">Update Now</button>';
 
     document.body.insertBefore(banner, document.body.firstChild);
 
-    // Slide in after a short delay so transition fires
-    setTimeout(function () {
-      banner.classList.add('show');
-    }, 100);
+    setTimeout(function () { banner.classList.add('show'); }, 100);
 
-    // Update Now — tell SW to activate, then reload
     document.getElementById('aog-update-btn').addEventListener('click', function () {
-      if (window._aogWaitingWorker) {
-        window._aogWaitingWorker.postMessage({ action: 'SKIP_WAITING' });
-      }
-      window.location.reload();
+      waitingWorker.postMessage({ action: 'SKIP_WAITING' });
     });
   }
 
-  // ── Register SW and watch for updates ─────────────────────
+  // ── Reload once the new SW takes control ───────────────────
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    window.location.reload();
+  });
+
+  // ── Register SW and watch for a waiting update ─────────────
   navigator.serviceWorker.register('../sw.js', { scope: '../' })
     .then(function (reg) {
 
-      // Already a waiting worker on load (e.g. user had tab open)
+      // Waiting worker already present on page load
       if (reg.waiting) {
-        window._aogWaitingWorker = reg.waiting;
-        showBanner();
+        askAndShow(reg.waiting);
         return;
       }
 
-      // New worker found while page is open
+      // New worker found while user has the page open
       reg.addEventListener('updatefound', function () {
         var newWorker = reg.installing;
         newWorker.addEventListener('statechange', function () {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            window._aogWaitingWorker = newWorker;
-            showBanner();
+            askAndShow(newWorker);
           }
         });
       });
     })
     .catch(function (err) {
-      console.warn('[AOG] SW registration failed:', err);
+      console.warn('[AOG Banner] SW registration failed:', err);
     });
-
-  // ── Reload all tabs once new SW takes control ──────────────
-  navigator.serviceWorker.addEventListener('controllerchange', function () {
-    window.location.reload();
-  });
 
 })();
