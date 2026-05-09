@@ -10,7 +10,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.0.2';
+var CACHE_NAME = 'aog-forms-v2.1.0';
 var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
