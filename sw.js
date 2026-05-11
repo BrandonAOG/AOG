@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v1.0.1';
+var CACHE_NAME = 'aog-forms-v1.0.2';
 var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
@@ -17,8 +17,9 @@ var DEV_MODE   = false; // ← SET TRUE during development/testing
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  'INITITIAL RELEASE VER 1.0.1',
-  'READY FOR PUBLIC TESTING',
+  'ADDED: Generac Gas Calculator tool',
+  'BTU sizing · pipe sizing · model lookup · 10-150kW',
+  'Guardian NextGen + Legacy · Protector QS / RG / XG',
   ''
 ];
 // ============================================================
@@ -37,7 +38,8 @@ var PRECACHE_URLS = [
   '../load-calcs/',
   '../breaker-conductor/',
   '../conduit-fill/',
-  '../sketch-pad/'
+  '../sketch-pad/',
+  '../gas-calc/'
 ];
 
 var CACHE_CDN = [
