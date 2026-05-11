@@ -705,7 +705,7 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 
 <div class="footer">
   <div class="footer-text">Always On Generators · Field Operations Portal</div>
-  <div class="footer-version">GENERAC GAS CALC <span>v1.0</span> · BrandonAOG</div>
+  <div class="footer-version">GENERAC GAS CALC <span>v1.0</span> · BrandonAOG  · 2026</div>
 </div>
 </div>
 
@@ -713,7 +713,7 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 // ═══════════════════════════════════════════════════════════════════
 // ALL GENERAC MODELS — spec-accurate fuel consumption data
 // Sources: A0005151081, A0005151077, A0005999721, A0000373704,
-//          A0002505135, A0005286945
+//          A0002505135, A0005286945, A0000937814, A0002026894
 // ═══════════════════════════════════════════════════════════════════
 const GM = [
   // ── GUARDIAN AIR-COOLED — NEXTGEN SERIES ───────────────
@@ -799,8 +799,24 @@ const GM = [
   {cooled:"air", kw_ng:19.5, kw_lp:22,  label:"22kW  · G007042-10 / G007043-10", model:"Generac 22kW Guardian (Legacy)", num:"G007042-10 / G007043-10", grp:"Guardian — Legacy Series",
    ng_cfh_f:327,  ng_cfh_h:228,  lp_gph_f:3.90, lp_gph_h:2.53,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
-   snd:"67 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:100, weight:"460 lb",
-   desc:"Air-cooled · G-Force 1000 · 2-cyl 999cc · 3,600 RPM · 46.4\"L × 26.3\"W × 30.7\"H"},
+   snd:"67 / 57 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:100, weight:"466 lb",
+   desc:"Air-cooled · G-Force 1000 · 2-cyl 999cc · 3,600 RPM · 48\"L × 25\"W × 29\"H"},
+
+  // ── NEW: 24kW Legacy (G007209-10 / G007210-10) ──────────────────
+  // Source: Generac spec sheet A0000937814 Rev. E — 20/22/24 kW Guardian
+  {cooled:"air", kw_ng:21,   kw_lp:24,  label:"24kW  · G007209-10 / G007210-10", model:"Generac 24kW Guardian (Legacy)", num:"G007209-10 / G007210-10", grp:"Guardian — Legacy Series",
+   ng_cfh_f:287,  ng_cfh_h:164,  lp_gph_f:3.74, lp_gph_h:2.36,
+   ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
+   snd:"67 / 57 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:100, weight:"455 lb",
+   desc:"Air-cooled · G-Force 1000 · 2-cyl 999cc · 3,600 RPM · 48\"L × 25\"W × 29\"H"},
+
+  // ── NEW: 26kW Legacy (G007290-0 / G007291-0) ────────────────────
+  // Source: Generac spec sheet A0002026894 Rev. D — 26 kW Guardian
+  {cooled:"air", kw_ng:22.5, kw_lp:26,  label:"26kW  · G007290-0 / G007291-0",  model:"Generac 26kW Guardian (Legacy)", num:"G007290-0 / G007291-0",  grp:"Guardian — Legacy Series",
+   ng_cfh_f:333,  ng_cfh_h:188,  lp_gph_f:3.63, lp_gph_h:2.06,
+   ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
+   snd:"67 / 57 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:110, weight:"518 lb",
+   desc:"Air-cooled · G-Force 1000 · 2-cyl 999cc · 3,600 RPM · 48\"L × 25\"W × 29\"H"},
 
   // ── PROTECTOR QS (2.4L Inline-4) ────────────────────────────────
   {cooled:"liq", kw_ng:22,  kw_lp:22,  label:"22kW Protector QS — RG02224",  model:"22kW Protector QS",       num:"RG02224",               grp:"Protector QS (2.4L I-4)",
@@ -1079,56 +1095,21 @@ function onModelChange(){
 }
 
 // ── PRESSURE MULTIPLIER LOOKUP ────────────────────────────────────────
-// All multipliers vs NFPA 54 Table 402.4(2) base (0.5" WC drop, NG, SG=0.60)
-// NG medium-pressure: Spitzglass P1²−P2² formula (NFPA 54 Appendix D)
-// LP high-pressure: corrected for LP SG = 1.52 per NFPA 58 §5.5
-// LP low-pressure: proportional to allowable pressure drop at near-atmospheric
 function getPressMult(pressVal, fuelType) {
   if (fuelType === 'ng') {
     const M = {
-      // Low pressure / near-atmospheric (NFPA 54 Table 402.4(2) basis)
-      '3.5wc':  0.85,  // 3.5" WC — minimum Guardian inlet
-      '5wc':    0.90,  // 5" WC
-      '7wc':    1.00,  // 7" WC — NFPA 54 Table 402.4(2) base
-      '8wc':    1.05,  // 8" WC
-      '10wc':   1.15,  // 10" WC
-      '11wc':   1.20,  // 11" WC
-      '14wc':   1.45,  // 14" WC = 0.5 PSI
-      // Medium / high pressure (Spitzglass P1²−P2² formula, NFPA 54 Appendix D)
-      '0.25psi': 0.95, // 1/4 PSI supply — barely medium
-      '0.5psi':  1.50, // 1/2 PSI
-      '1psi':    2.20, // 1 PSI
-      '2psi':    8.50, // 2 PSI — standard residential medium
-      '5psi':   14.00, // 5 PSI
-      '10psi':  18.00, // 10 PSI commercial
-      '15psi':  24.00, // 15 PSI high-pressure service
-      '30psi':  38.00, // 30 PSI high-pressure main
-      '60psi':  60.00, // 60 PSI distribution main
+      '3.5wc':  0.85, '5wc':    0.90, '7wc':    1.00, '8wc':    1.05,
+      '10wc':   1.15, '11wc':   1.20, '14wc':   1.45,
+      '0.25psi': 0.95,'0.5psi':  1.50,'1psi':    2.20,'2psi':    8.50,
+      '5psi':   14.00,'10psi':  18.00,'15psi':  24.00,'30psi':  38.00,'60psi':  60.00,
     };
     return M[pressVal] || 1.0;
   } else {
-    // LP propane — all multipliers use LP SG = 1.52 (NFPA 58 §5.5)
     const M = {
-      // Low pressure delivery (second stage → generator)
-      '8wc':    0.90,  // 8" WC
-      '10wc':   0.97,  // 10" WC
-      '11wc':   1.00,  // 11" WC — NFPA 58 Table 5.5.5 base
-      '12wc':   1.03,  // 12" WC
-      '14wc':   1.45,  // 14" WC = 0.5 PSI
-      '0.5psi': 1.50,  // 0.5 PSI outlet
-      '1psi':   2.20,  // 1 PSI outlet
-      '2psi':   4.00,  // 2 PSI outlet
-      // High-pressure vapor (first stage → second stage regulator)
-      // Corrected for LP SG = 1.52 via NFPA 58 §5.5 / NFPA 54 Appendix D Spitzglass
-      '5psi':   7.00,  // 5 PSI — very low vapor / cold / nearly empty
-      '10psi': 11.50,  // 10 PSI
-      '15psi': 16.00,  // 15 PSI
-      '20psi': 20.00,  // 20 PSI
-      '25psi': 23.50,  // 25 PSI
-      '30psi': 28.50,  // 30 PSI
-      '60psi': 42.00,  // 60 PSI bulk
-      '100psi':62.00,  // 100 PSI bulk storage
-      '200psi':98.00,  // 200 PSI transport pressure
+      '8wc':    0.90, '10wc':   0.97, '11wc':   1.00, '12wc':   1.03,
+      '14wc':   1.45, '0.5psi': 1.50, '1psi':   2.20, '2psi':   4.00,
+      '5psi':   7.00, '10psi': 11.50, '15psi': 16.00, '20psi': 20.00,
+      '25psi': 23.50, '30psi': 28.50, '60psi': 42.00, '100psi':62.00, '200psi':98.00,
     };
     return M[pressVal] || 1.0;
   }
@@ -1145,7 +1126,6 @@ function generateResults(){
 
   const elev=parseInt(document.getElementById('elev').value)||0;
 
-  // Altitude derate
   let derateF=1.0;
   if(elev>m.der_above){
     derateF=Math.max(1-((elev-m.der_above)/1000)*(m.der_pct/100),0.55);
@@ -1256,10 +1236,7 @@ function generateResults(){
     `<div class="info-cell"><div class="ic-label">${c.label}</div><div class="ic-val">${c.val}</div></div>`
   ).join('');
 
-  // LP_SCALE — NFPA 54 Appendix D / NFPA 58 §5.5
-  const LP_SCALE = (2516/1020) * Math.pow(0.60/1.52, 0.541); // ≈ 1.492
-
-  // BTU basis normalization for NG pipe comparison
+  const LP_SCALE = (2516/1020) * Math.pow(0.60/1.52, 0.541);
   const ngBtuAdj = fuel === 'ng' ? (1020 / m.ng_btu_cf) : 1.0;
 
   function buildPipeTable(tbodyId, thUnitId, runLen, pressMult, isLP, matKey){
@@ -1300,7 +1277,6 @@ function generateResults(){
     });
   }
 
-  // Read pipe config from Step 2 using unified getPressMult()
   let run1Len, run2Len, run1Mult, run2Mult, run1Label, run2Label, run1PressLabel, run2PressLabel;
 
   if(fuel==='ng'){
@@ -1327,13 +1303,8 @@ function generateResults(){
     run2PressLabel= document.getElementById('lp2-press').options[document.getElementById('lp2-press').selectedIndex].text.split('—')[0].trim();
   }
 
-  const run1Mat = fuel==='ng'
-    ? document.getElementById('ng1-mat').value
-    : document.getElementById('lp1-mat').value;
-  const run2Mat = fuel==='ng'
-    ? document.getElementById('ng2-mat').value
-    : document.getElementById('lp2-mat').value;
-
+  const run1Mat = fuel==='ng' ? document.getElementById('ng1-mat').value : document.getElementById('lp1-mat').value;
+  const run2Mat = fuel==='ng' ? document.getElementById('ng2-mat').value : document.getElementById('lp2-mat').value;
   const mat1Label = PIPE_MATERIALS[run1Mat]?.label || '';
   const mat2Label = PIPE_MATERIALS[run2Mat]?.label || '';
 
@@ -1345,7 +1316,6 @@ function generateResults(){
   r('pipe2-meta').textContent  = `${run2Len} ft · ${run2PressLabel} · ${mat2Label} · Full load: ${fmtBTU(btuFull)} BTU/hr`;
   buildPipeTable('pipe2-tbody','th2-unit', run2Len, run2Mult, fuel==='lp', run2Mat);
 
-  // Extra runs
   const extraContainer = document.getElementById('extra-pipe-results');
   extraContainer.innerHTML = '';
   const extraCards = document.querySelectorAll(`.extra-run-${fuel}`);
@@ -1396,7 +1366,6 @@ function addPipeRun(fuelType, stageNum, btn) {
   card.id = `card-${runId}`;
   card.dataset.runId = runId;
 
-  // Stage-appropriate pressure options — full range for both stages
   const ngS1Press = `
     <optgroup label="── Low / Near-Atmospheric ──">
       <option value="0.25psi">¼ PSI (7" WC) — Low medium</option>
