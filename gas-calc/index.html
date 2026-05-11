@@ -325,15 +325,12 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 
 <div class="section-label">Model Lookup · BTU Analysis · Pipe Sizing · 7–150kW</div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- STEP 1 — COOLING TYPE                                      -->
-<!-- ══════════════════════════════════════════════════════════ -->
+<!-- STEP 1 -->
 <div class="panel">
   <div class="panel-header"><div class="panel-num">01</div><div><div class="panel-title">Cooling Type &amp; Fuel</div><div class="panel-desc">Select generator cooling method and fuel source</div></div></div>
   <div class="panel-body">
 
     <div class="cooling-grid">
-      <!-- AIR COOLED -->
       <button class="cool-btn active" id="btn-air" onclick="setCooling('air')">
         <div class="cool-check">✓ SELECTED</div>
         <svg viewBox="0 0 24 24">
@@ -344,7 +341,6 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
         <div class="cool-btn-label">Air Cooled</div>
         <div class="cool-btn-sub">Guardian NextGen Series &amp; Legacy · 7–28kW</div>
       </button>
-      <!-- LIQUID COOLED -->
       <button class="cool-btn" id="btn-liq" onclick="setCooling('liq')">
         <div class="cool-check">✓ SELECTED</div>
         <svg viewBox="0 0 24 24">
@@ -365,14 +361,11 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- STEP 2 — MODEL + SITE                                      -->
-<!-- ══════════════════════════════════════════════════════════ -->
+<!-- STEP 2 -->
 <div class="panel">
   <div class="panel-header"><div class="panel-num">02</div><div><div class="panel-title">Model &amp; Site Configuration</div><div class="panel-desc">Select model · elevation · two-stage pipe run setup</div></div></div>
   <div class="panel-body">
 
-    <!-- Model + elevation row -->
     <div class="config-row" style="margin-bottom:20px">
       <div class="field-wrap" style="grid-column:1/-1">
         <label class="field-label" for="model-select">Generator Model &amp; kW Rating</label>
@@ -388,9 +381,9 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
       </div>
     </div>
 
-    <!-- NATURAL GAS pipe stages (shown when NG selected) -->
+    <!-- NATURAL GAS pipe stages -->
     <div id="ng-pipe-config" class="pipe-stages-wrap">
-      <!-- NG Stage 1 group -->
+      <!-- NG Stage 1 -->
       <div class="stage-group">
         <div class="pipe-stage-config ng1">
           <div class="psc-title"><span class="psc-title-left"><span class="psc-num">1</span>NG First Run — Gas Meter to Second Stage Regulator</span></div>
@@ -403,10 +396,23 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
             <div class="field-wrap">
               <label class="field-label" for="ng1-press">Supply Pressure from Meter</label>
               <select class="field-select" id="ng1-press">
-                <option value="2psi" selected>2 PSI — Medium pressure (common residential)</option>
-                <option value="5psi">5 PSI — Higher medium pressure</option>
+                <optgroup label="── Low / Near-Atmospheric ──">
+                  <option value="0.25psi">¼ PSI (7" WC) — Low medium, some residential</option>
+                  <option value="0.5psi">½ PSI (14" WC) — Lower medium pressure</option>
+                  <option value="1psi">1 PSI (28" WC) — Medium-low pressure</option>
+                </optgroup>
+                <optgroup label="── Medium Pressure (Residential / Light Commercial) ──">
+                  <option value="2psi" selected>2 PSI — Medium pressure (most common residential)</option>
+                  <option value="5psi">5 PSI — Higher medium pressure</option>
+                </optgroup>
+                <optgroup label="── High Pressure (Commercial / Industrial) ──">
+                  <option value="10psi">10 PSI — High medium pressure (commercial)</option>
+                  <option value="15psi">15 PSI — High pressure service</option>
+                  <option value="30psi">30 PSI — High pressure main</option>
+                  <option value="60psi">60 PSI — High pressure distribution main</option>
+                </optgroup>
               </select>
-              <div class="field-hint">Utility delivery pressure at the meter</div>
+              <div class="field-hint">Utility delivery pressure at the meter outlet</div>
             </div>
             <div class="field-wrap" style="grid-column:1/-1">
               <label class="field-label" for="ng1-mat">Pipe Material</label>
@@ -421,7 +427,7 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
         </div>
         <button class="add-run-btn stage-add-btn" onclick="addPipeRun('ng',1,this)">Add Run — Gas Meter to Second Stage Regulator</button>
       </div>
-      <!-- NG Stage 2 group -->
+      <!-- NG Stage 2 -->
       <div class="stage-group">
         <div class="pipe-stage-config ng2">
           <div class="psc-title"><span class="psc-title-left"><span class="psc-num">2</span>NG Second Run — Second Stage Regulator to Generator</span></div>
@@ -434,12 +440,22 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
             <div class="field-wrap">
               <label class="field-label" for="ng2-press">Regulator Outlet / Line Pressure</label>
               <select class="field-select" id="ng2-press">
-                <option value="7wc" selected>7" WC — Standard low pressure (0.25 PSI)</option>
-                <option value="11wc">11" WC — Higher low pressure (0.40 PSI)</option>
-                <option value="0.5psi">0.5 PSI — 14" WC</option>
-                <option value="1psi">1 PSI — 28" WC</option>
+                <optgroup label="── Standard Low Pressure (Residential) ──">
+                  <option value="3.5wc">3.5" WC — Minimum Guardian inlet pressure</option>
+                  <option value="5wc">5" WC — Low end Protector inlet</option>
+                  <option value="7wc" selected>7" WC — Standard low pressure (0.25 PSI)</option>
+                  <option value="8wc">8" WC — Slightly elevated low pressure</option>
+                  <option value="10wc">10" WC — Mid low pressure</option>
+                  <option value="11wc">11" WC — Higher low pressure (0.40 PSI)</option>
+                </optgroup>
+                <optgroup label="── Higher Low Pressure ──">
+                  <option value="14wc">14" WC — 0.5 PSI delivery</option>
+                  <option value="0.5psi">0.5 PSI (14" WC) — Higher low pressure</option>
+                  <option value="1psi">1 PSI (28" WC)</option>
+                  <option value="2psi">2 PSI — High low-pressure delivery</option>
+                </optgroup>
               </select>
-              <div class="field-hint">Generac Guardian requires 3.5–7" WC at inlet</div>
+              <div class="field-hint">Generac Guardian requires 3.5–7" WC at inlet · Protector requires 5–14" WC</div>
             </div>
             <div class="field-wrap" style="grid-column:1/-1">
               <label class="field-label" for="ng2-mat">Pipe Material</label>
@@ -456,9 +472,9 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
       </div>
     </div>
 
-    <!-- LP PROPANE pipe stages (shown when LP selected) -->
+    <!-- LP PROPANE pipe stages -->
     <div id="lp-pipe-config" class="pipe-stages-wrap" style="display:none">
-      <!-- LP Stage 1 group -->
+      <!-- LP Stage 1 -->
       <div class="stage-group">
         <div class="pipe-stage-config lp1">
           <div class="psc-title"><span class="psc-title-left"><span class="psc-num">1</span>LP First Stage — First Stage Regulator to Second Stage Regulator</span></div>
@@ -469,14 +485,27 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
               <div class="field-hint">From first stage regulator to second stage regulator</div>
             </div>
             <div class="field-wrap">
-              <label class="field-label" for="lp1-press">LP Vapor / Inlet Pressure</label>
+              <label class="field-label" for="lp1-press">LP Vapor / First Stage Inlet Pressure</label>
               <select class="field-select" id="lp1-press">
-                <option value="10psi" selected>10 PSI — Low vapor pressure</option>
-                <option value="15psi">15 PSI — Moderate vapor pressure</option>
-                <option value="20psi">20 PSI — Higher vapor pressure</option>
-                <option value="30psi">30 PSI — High vapor / large tank</option>
+                <optgroup label="── Low Vapor (Cold Weather / Nearly Empty Tank) ──">
+                  <option value="5psi">5 PSI — Very low vapor (cold / nearly empty)</option>
+                  <option value="10psi" selected>10 PSI — Low vapor pressure</option>
+                </optgroup>
+                <optgroup label="── Moderate Vapor (Typical Residential) ──">
+                  <option value="15psi">15 PSI — Moderate vapor pressure</option>
+                  <option value="20psi">20 PSI — Higher vapor pressure</option>
+                  <option value="25psi">25 PSI — High vapor pressure</option>
+                </optgroup>
+                <optgroup label="── High Vapor (Large / Full Tank) ──">
+                  <option value="30psi">30 PSI — High vapor / large tank</option>
+                </optgroup>
+                <optgroup label="── Bulk / Commercial Storage ──">
+                  <option value="60psi">60 PSI — Bulk / high-pressure underground supply</option>
+                  <option value="100psi">100 PSI — Bulk / high-pressure storage</option>
+                  <option value="200psi">200 PSI — Bulk storage / transport pressure</option>
+                </optgroup>
               </select>
-              <div class="field-hint">LP vapor pressure at first stage regulator inlet</div>
+              <div class="field-hint">LP vapor pressure at first stage regulator inlet — varies with temperature and tank level</div>
             </div>
             <div class="field-wrap" style="grid-column:1/-1">
               <label class="field-label" for="lp1-mat">Pipe Material</label>
@@ -491,7 +520,7 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
         </div>
         <button class="add-run-btn stage-add-btn" onclick="addPipeRun('lp',1,this)">Add Run — First Stage Reg. to Second Stage Reg.</button>
       </div>
-      <!-- LP Stage 2 group -->
+      <!-- LP Stage 2 -->
       <div class="stage-group">
         <div class="pipe-stage-config lp2">
           <div class="psc-title"><span class="psc-title-left"><span class="psc-num">2</span>LP Second Stage — Second Stage Regulator to Generator</span></div>
@@ -502,14 +531,22 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
               <div class="field-hint">From second stage regulator to generator inlet</div>
             </div>
             <div class="field-wrap">
-              <label class="field-label" for="lp2-press">Second Stage Outlet Pressure</label>
+              <label class="field-label" for="lp2-press">Second Stage Outlet / Line Pressure</label>
               <select class="field-select" id="lp2-press">
-                <option value="11wc" selected>11" WC — Standard LP low pressure (0.40 PSI)</option>
-                <option value="0.5psi">0.5 PSI — 14" WC (higher delivery)</option>
-                <option value="1psi">1 PSI — 28" WC</option>
-                <option value="2psi">2 PSI</option>
+                <optgroup label="── Standard LP Low Pressure ──">
+                  <option value="8wc">8" WC — Low end LP delivery</option>
+                  <option value="10wc">10" WC — Minimum Guardian LP inlet</option>
+                  <option value="11wc" selected>11" WC — Standard LP low pressure (0.40 PSI)</option>
+                  <option value="12wc">12" WC — Maximum Guardian LP inlet</option>
+                </optgroup>
+                <optgroup label="── Higher Low Pressure Delivery ──">
+                  <option value="14wc">14" WC — 0.5 PSI delivery</option>
+                  <option value="0.5psi">0.5 PSI (14" WC) — Higher delivery</option>
+                  <option value="1psi">1 PSI (28" WC)</option>
+                  <option value="2psi">2 PSI — High low-pressure delivery</option>
+                </optgroup>
               </select>
-              <div class="field-hint">Generac Guardian requires 10–12" WC at inlet</div>
+              <div class="field-hint">Generac Guardian requires 10–12" WC at inlet · Protector requires 5–14" WC</div>
             </div>
             <div class="field-wrap" style="grid-column:1/-1">
               <label class="field-label" for="lp2-mat">Pipe Material</label>
@@ -533,9 +570,7 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- STEP 3 — BTU & PIPE RESULTS                                -->
-<!-- ══════════════════════════════════════════════════════════ -->
+<!-- STEP 3 -->
 <div class="panel">
   <div class="panel-header"><div class="panel-num">03</div><div><div class="panel-title">BTU &amp; Gas Pipe Results</div><div class="panel-desc">Spec-accurate consumption data · NFPA 54 pipe sizing</div></div></div>
   <div class="panel-body">
@@ -547,7 +582,6 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 
     <div id="results-output" style="display:none">
 
-      <!-- Model info banner -->
       <div class="model-info">
         <div class="mi-glow"></div>
         <div class="mi-label">Selected Generator</div>
@@ -557,10 +591,8 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
         <div class="mi-badges" id="mi-badges"></div>
       </div>
 
-      <!-- Derate notice -->
       <div class="derate-notice" id="derate-notice"></div>
 
-      <!-- BTU hero cards -->
       <div class="btu-hero">
         <div class="btu-card full">
           <div class="btu-card-label">BTU/hr — Full Load</div>
@@ -582,14 +614,11 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
         </div>
       </div>
 
-      <!-- Spec detail grid -->
       <div class="fuel-rows-wrap" id="fuel-rows-wrap"></div>
       <div class="info-row-cards" id="info-row-cards"></div>
 
-      <!-- Pipe sizing — two stages -->
       <div class="pipe-section">
 
-        <!-- Stage 1 -->
         <div class="pipe-stage">
           <div class="pipe-stage-hdr first">
             <span class="pipe-stage-num">⑴</span>
@@ -605,7 +634,6 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
           </table>
         </div>
 
-        <!-- Stage 2 -->
         <div class="pipe-stage">
           <div class="pipe-stage-hdr second">
             <span class="pipe-stage-num">⑵</span>
@@ -621,7 +649,6 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
           </table>
         </div>
 
-        <!-- Extra runs (dynamically added) -->
         <div id="extra-pipe-results"></div>
 
         <div class="disclaimer">
@@ -633,14 +660,10 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- DIVIDER                                                    -->
-<!-- ══════════════════════════════════════════════════════════ -->
+<!-- DIVIDER -->
 <div class="mode-divider"><div class="mode-divider-inner">Optional · Generator Sizing Tool</div></div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- SECONDARY: LOAD BUILDER                                    -->
-<!-- ══════════════════════════════════════════════════════════ -->
+<!-- LOAD BUILDER -->
 <div class="panel">
   <div class="panel-header"><div class="panel-num">✦</div><div><div class="panel-title">Load Calculator</div><div class="panel-desc">Add your loads to determine what generator size you need</div></div></div>
   <div class="panel-body">
@@ -682,7 +705,7 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 
 <div class="footer">
   <div class="footer-text">Always On Generators · Field Operations Portal</div>
-  <div class="footer-version">GENERAC GAS CALC <span>v5.1</span> · Guardian NextGen Series 7–28kW + Legacy · Protector QS / RG / XG 22–150kW · 2026</div>
+  <div class="footer-version">GENERAC GAS CALC <span>v5.2</span> · Guardian NextGen Series 7–28kW + Legacy · Protector QS / RG / XG 22–150kW · 2026</div>
 </div>
 </div>
 
@@ -694,7 +717,6 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 // ═══════════════════════════════════════════════════════════════════
 const GM = [
   // ── GUARDIAN AIR-COOLED — NEXTGEN SERIES ───────────────
-  // Source: A0005151081 Rev C 02/11/2026 & A0005151077 Rev B 07/11/2025
   {cooled:"air", kw_ng:9,    kw_lp:10,  label:"10kW NextGen · G007257-0 / G007321-0",  model:"Generac 10kW Guardian NextGen",   num:"G007257-0 / G007321-0",  grp:"Guardian NextGen Series",
    ng_cfh_f:132,  ng_cfh_h:98,   lp_gph_f:1.60, lp_gph_h:0.94,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
@@ -738,8 +760,6 @@ const GM = [
    desc:"Air-cooled · NextGen Series · G-Force 1000 · 2-cyl 997cc · 3,600 RPM · 46.4\"L × 26.3\"W × 30.7\"H"},
 
   // ── GUARDIAN AIR-COOLED — LEGACY SERIES ─────────────────────────
-  // Source: Published Generac spec sheets (pre-2024 G-Force OHVI lineup)
-  // Note: NG output is lower than LP on all legacy models — spec-accurate.
   {cooled:"air", kw_ng:6,    kw_lp:7,   label:"7kW   · G007043-0 / G007038-0",  model:"Generac 7kW Guardian",    num:"G007043-0 / G007038-0",  grp:"Guardian — Legacy Series",
    ng_cfh_f:66,   ng_cfh_h:44,   lp_gph_f:1.04, lp_gph_h:0.69,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
@@ -782,7 +802,7 @@ const GM = [
    snd:"67 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:100, weight:"460 lb",
    desc:"Air-cooled · G-Force 1000 · 2-cyl 999cc · 3,600 RPM · 46.4\"L × 26.3\"W × 30.7\"H"},
 
-  // ── PROTECTOR QS (2.4L Inline-4, Evolution controller) ──────────
+  // ── PROTECTOR QS (2.4L Inline-4) ────────────────────────────────
   {cooled:"liq", kw_ng:22,  kw_lp:22,  label:"22kW Protector QS — RG02224",  model:"22kW Protector QS",       num:"RG02224",               grp:"Protector QS (2.4L I-4)",
    ng_cfh_f:316,  ng_cfh_h:190,  lp_gph_f:3.4,  lp_gph_h:2.1,
    ng_btu_cf:1036, lp_btu_gal:91452, req_ng:'5–14" WC', req_lp:'5–14" WC',
@@ -819,7 +839,7 @@ const GM = [
    snd:"73 / 65 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:3000, cb:300, weight:"—",
    desc:"Liquid-cooled · 2.4L I-4 Turbo+AC · 3,600 RPM · 1-Ph or 3-Ph · Evolution controller · Bisque"},
 
-  // ── PROTECTOR RG (4.5L Inline-4, 1,800 RPM, Evolution) ──────────
+  // ── PROTECTOR RG (4.5L Inline-4, 1,800 RPM) ─────────────────────
   {cooled:"liq", kw_ng:48,  kw_lp:48,  label:"48kW Protector RG — RG04845",  model:"48kW Protector RG",       num:"RG04845",               grp:"Protector RG (4.5L I-4)",
    ng_cfh_f:607,  ng_cfh_h:336,  lp_gph_f:6.6,  lp_gph_h:4.2,
    ng_btu_cf:1036, lp_btu_gal:91452, req_ng:'3.5–14" WC', req_lp:'7–14" WC',
@@ -838,8 +858,7 @@ const GM = [
    snd:"68 dB(A) exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:3000, cb:400, weight:"—",
    desc:"Liquid-cooled · 4.5L I-4 Turbo+AC · 1,800 RPM · 1-Ph or 3-Ph · Evolution controller"},
 
-  // ── PROTECTOR XG (4.5L, Power Zone 410, Metro Gray) ─────────────
-  // 25/50/75/100% data from spec A0005286945
+  // ── PROTECTOR XG (4.5L, Power Zone 410) ─────────────────────────
   {cooled:"liq", kw_ng:32,  kw_lp:32,  label:"LP 32kW  /  NG 32kW  ·  XG03245",  model:"32kW Protector XG",  num:"XG03245", grp:"Protector XG (4.5L I-4)",
    ng_cfh_f:417, ng_cfh_h:258, ng_cfh_75:335, ng_cfh_25:177,
    lp_gph_f:5.0, lp_gph_h:3.4, lp_gph_75:4.2, lp_gph_25:2.6,
@@ -875,7 +894,7 @@ const GM = [
    snd:"64 / 55 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:3000, cb:400, weight:"—",
    desc:"Liquid-cooled · 4.5L I-4 Turbo+AC · 1,800 RPM · 1-Ph or 3-Ph · Power Zone 410 · NFPA 110 · Metro Gray"},
 
-  // ── PROTECTOR RG (9.0L V8, Power Zone 410) ──────────────────────
+  // ── PROTECTOR RG (9.0L V8) ───────────────────────────────────────
   {cooled:"liq", kw_ng:130, kw_lp:130, label:"130kW Protector RG — RG13090", model:"130kW Protector RG",      num:"RG13090",               grp:"Protector RG (9.0L V8)",
    ng_cfh_f:1554, ng_cfh_h:858,  lp_gph_f:13.5, lp_gph_h:7.6,
    ng_btu_cf:1036, lp_btu_gal:91452, req_ng:'7–11" WC', req_lp:'7–11" WC',
@@ -889,18 +908,10 @@ const GM = [
    desc:"Liquid-cooled · 9.0L V-8 Turbo+AC · 1,800 RPM · 1-Ph or 3-Ph · Power Zone 410 · NFPA 110 · Bisque"},
 ];
 
-// ── NFPA 54 PIPE CAPACITY (BTU/hr) ─────────────────────────────────
-// Schedule 40 black steel, 0.5" W.C. drop, NG at 1,020 BTU/ft³
-// ── PIPE CAPACITY TABLES BY MATERIAL ───────────────────────────────────
-// All values: BTU/hr · NG @ 0.5" W.C. pressure drop · Schedule 40 steel basis
-// LP capacity applied via LP_SCALE multiplier in buildPipeTable()
-// Lengths: 10, 20, 30, 50, 100, 150, 200, 300, 500 ft
+// ── PIPE CAPACITY TABLES ─────────────────────────────────────────────
 const PIPE_LENGTHS = [10, 20, 30, 50, 100, 150, 200, 300, 500];
 
 const PIPE_MATERIALS = {
-
-  // ── 1. BLACK STEEL / RIGID / GALVANIZED (Sch 40) ──────────────────
-  // Source: NFPA 54 / IFGC Table 402.4(2), SG = 0.60, 1,020 BTU/ft³
   steel: {
     label: 'Black Steel / Rigid / Galvanized (Sch 40)',
     note:  'NFPA 54 Table 402.4(2)',
@@ -916,12 +927,6 @@ const PIPE_MATERIALS = {
       '3"':   [22680000,15606000,12587000, 9551000,6546000,5241000,4388000,3537000,2706000],
     }
   },
-
-  // ── 2. PE UNDERGROUND — IPS SDR-11 ────────────────────────────────
-  // Source: NFPA 54 Table 402.4(19) approximation; SDR-11 polyethylene
-  // Note: PE IPS OD matches steel IPS OD; ID varies by SDR — capacities
-  // are close to Sch 40 steel for small sizes, slightly less at larger sizes.
-  // Underground use only. Available in 1/2" – 2" IPS for gas service.
   pe: {
     label: 'PE Underground (IPS SDR-11)',
     note:  'NFPA 54 Table 402.4(19) approx · Underground only',
@@ -935,11 +940,6 @@ const PIPE_MATERIALS = {
       '2" IPS':   [5783000, 3981000,3210000,  2436000,1669000,1337000,1119000, 902000, 690000],
     }
   },
-
-  // ── 3. CSST — Gastite / Wardflex ──────────────────────────────────
-  // Source: Published manufacturer capacity tables (Gastite / Wardflex)
-  // Approximate values — corrugated profile reduces capacity vs smooth pipe.
-  // Verify with current manufacturer installation guide.
   csst: {
     label: 'CSST — Gastite / Wardflex',
     note:  'Manufacturer tables (approximate) · Verify w/ install guide',
@@ -954,11 +954,6 @@ const PIPE_MATERIALS = {
       '2"':    [3070000,2113000,1707000,1290000, 883000, 715000, 609000, 475000, 355000],
     }
   },
-
-  // ── 4. TracPipe CounterStrike (OmegaFlex) ─────────────────────────
-  // Source: OmegaFlex TracPipe published capacity charts (BTU/hr, NG, 0.5" WC)
-  // Size designators are TracPipe model numbers per OmegaFlex installation manual.
-  // Always verify with current OmegaFlex TracPipe Installation Guide.
   tracpipe: {
     label: 'TracPipe CounterStrike (OmegaFlex)',
     note:  'OmegaFlex published charts · Verify w/ current TracPipe install guide',
@@ -976,7 +971,7 @@ const PIPE_MATERIALS = {
   },
 };
 
-// ── APPLIANCES ──────────────────────────────────────────────────────
+// ── APPLIANCES ───────────────────────────────────────────────────────
 const APPLIANCES=[
   {name:"Central A/C (2-ton)",    run:2500,start:5500, cat:"hvac"},
   {name:"Central A/C (3-ton)",    run:3500,start:7500, cat:"hvac"},
@@ -1046,7 +1041,6 @@ function setFuel(f){
   document.getElementById('btn-lp').classList.toggle('active',f==='lp');
   document.getElementById('ng-pipe-config').style.display=f==='ng'?'flex':'none';
   document.getElementById('lp-pipe-config').style.display=f==='lp'?'flex':'none';
-  selModel=null;
   clearResults();
 }
 function clearResults(){
@@ -1067,7 +1061,6 @@ function populateModelDropdown(){
     filtered.filter(m=>m.grp===g).forEach(m=>{
       const opt=document.createElement('option');
       opt.value=m.num;
-      // Always show LP (Propane) first, then NG — LP is typically the nameplate rating
       const lpStr = `LP ${m.kw_lp}kW`;
       const ngStr = `NG ${m.kw_ng}kW`;
       opt.textContent=`${lpStr}  /  ${ngStr}  ·  ${m.num}`;
@@ -1077,12 +1070,68 @@ function populateModelDropdown(){
   });
 
   document.getElementById('model-hint').textContent=
-    cooling==='air'?'Guardian air-cooled · 7–28kW · NextGen &amp; Legacy Series':
+    cooling==='air'?'Guardian air-cooled · 7–28kW · NextGen & Legacy Series':
                     'Protector liquid-cooled · 22–150kW · QS / RG / XG series';
 }
 
 function onModelChange(){
   clearResults();
+}
+
+// ── PRESSURE MULTIPLIER LOOKUP ────────────────────────────────────────
+// All multipliers vs NFPA 54 Table 402.4(2) base (0.5" WC drop, NG, SG=0.60)
+// NG medium-pressure: Spitzglass P1²−P2² formula (NFPA 54 Appendix D)
+// LP high-pressure: corrected for LP SG = 1.52 per NFPA 58 §5.5
+// LP low-pressure: proportional to allowable pressure drop at near-atmospheric
+function getPressMult(pressVal, fuelType) {
+  if (fuelType === 'ng') {
+    const M = {
+      // Low pressure / near-atmospheric (NFPA 54 Table 402.4(2) basis)
+      '3.5wc':  0.85,  // 3.5" WC — minimum Guardian inlet
+      '5wc':    0.90,  // 5" WC
+      '7wc':    1.00,  // 7" WC — NFPA 54 Table 402.4(2) base
+      '8wc':    1.05,  // 8" WC
+      '10wc':   1.15,  // 10" WC
+      '11wc':   1.20,  // 11" WC
+      '14wc':   1.45,  // 14" WC = 0.5 PSI
+      // Medium / high pressure (Spitzglass P1²−P2² formula, NFPA 54 Appendix D)
+      '0.25psi': 0.95, // 1/4 PSI supply — barely medium
+      '0.5psi':  1.50, // 1/2 PSI
+      '1psi':    2.20, // 1 PSI
+      '2psi':    8.50, // 2 PSI — standard residential medium
+      '5psi':   14.00, // 5 PSI
+      '10psi':  18.00, // 10 PSI commercial
+      '15psi':  24.00, // 15 PSI high-pressure service
+      '30psi':  38.00, // 30 PSI high-pressure main
+      '60psi':  60.00, // 60 PSI distribution main
+    };
+    return M[pressVal] || 1.0;
+  } else {
+    // LP propane — all multipliers use LP SG = 1.52 (NFPA 58 §5.5)
+    const M = {
+      // Low pressure delivery (second stage → generator)
+      '8wc':    0.90,  // 8" WC
+      '10wc':   0.97,  // 10" WC
+      '11wc':   1.00,  // 11" WC — NFPA 58 Table 5.5.5 base
+      '12wc':   1.03,  // 12" WC
+      '14wc':   1.45,  // 14" WC = 0.5 PSI
+      '0.5psi': 1.50,  // 0.5 PSI outlet
+      '1psi':   2.20,  // 1 PSI outlet
+      '2psi':   4.00,  // 2 PSI outlet
+      // High-pressure vapor (first stage → second stage regulator)
+      // Corrected for LP SG = 1.52 via NFPA 58 §5.5 / NFPA 54 Appendix D Spitzglass
+      '5psi':   7.00,  // 5 PSI — very low vapor / cold / nearly empty
+      '10psi': 11.50,  // 10 PSI
+      '15psi': 16.00,  // 15 PSI
+      '20psi': 20.00,  // 20 PSI
+      '25psi': 23.50,  // 25 PSI
+      '30psi': 28.50,  // 30 PSI
+      '60psi': 42.00,  // 60 PSI bulk
+      '100psi':62.00,  // 100 PSI bulk storage
+      '200psi':98.00,  // 200 PSI transport pressure
+    };
+    return M[pressVal] || 1.0;
+  }
 }
 
 // ── GENERATE RESULTS ─────────────────────────────────────────────────
@@ -1094,7 +1143,6 @@ function generateResults(){
   const m=GM.find(x=>x.num===numVal);
   if(!m)return;
 
-  // pipe run lengths are now read per-stage inside the pipe rendering section below
   const elev=parseInt(document.getElementById('elev').value)||0;
 
   // Altitude derate
@@ -1105,17 +1153,14 @@ function generateResults(){
   const effKW_ng=m.kw_ng*derateF;
   const effKW_lp=m.kw_lp*derateF;
 
-  // BTU from spec
   const btuFull=fuel==='ng'?m.ng_cfh_f*m.ng_btu_cf:m.lp_gph_f*m.lp_btu_gal;
   const btuHalf=fuel==='ng'?m.ng_cfh_h*m.ng_btu_cf:m.lp_gph_h*m.lp_btu_gal;
   const cfhF=m.ng_cfh_f, cfhH=m.ng_cfh_h;
   const gphF=m.lp_gph_f, gphH=m.lp_gph_h;
 
-  // Show results
   document.getElementById('results-placeholder').style.display='none';
   document.getElementById('results-output').style.display='block';
 
-  // Model info
   const r=id=>document.getElementById(id);
   r('mi-model').textContent=m.model;
   r('mi-num').textContent='▸ '+m.num;
@@ -1133,14 +1178,12 @@ function generateResults(){
     m.grp.includes('Legacy')?`<span class="badge badge-orange">Legacy — Verify BTUs w/ Spec Sheet</span>`:'',
   ].filter(Boolean).join('');
 
-  // Derate notice
   const dn=r('derate-notice');
   if(derateF<1){
     dn.className='derate-notice show';
     dn.textContent=`⚠ Altitude derate: ${Math.round((1-derateF)*100)}% reduction at ${elev.toLocaleString()} ft above sea level. Effective output: NG → ${effKW_ng.toFixed(1)}kW · LP → ${effKW_lp.toFixed(1)}kW. Per Generac spec: −${m.der_pct}% per 1,000 ft above ${m.der_above.toLocaleString()} ft.`;
   } else {dn.className='derate-notice';}
 
-  // BTU hero cards
   r('btu-full-val').textContent=fmtBTU(btuFull);
   r('btu-full-sub').textContent=fuel==='ng'
     ?`${cfhF} CFH × ${m.ng_btu_cf.toLocaleString()} BTU/ft³`
@@ -1163,94 +1206,44 @@ function generateResults(){
     r('flow-sub').textContent=`Half load: ${gphH.toFixed(2)} GPH`;
   }
 
-  // Spec detail grid
-  // ── Fuel rows (NG on top, LP on bottom) ──
-  // For models with actual 25%/75% spec data use it; otherwise estimate.
-  // Estimation ratios derived from XG series spec patterns.
   const hasSpec25 = m.ng_cfh_25 != null;
   const ng25  = hasSpec25 ? m.ng_cfh_25  : Math.round(m.ng_cfh_f  * 0.40);
   const ng75  = hasSpec25 ? m.ng_cfh_75  : Math.round(m.ng_cfh_f  * 0.80);
   const lp25  = hasSpec25 ? m.lp_gph_25  : parseFloat((m.lp_gph_f * 0.44).toFixed(2));
   const lp75  = hasSpec25 ? m.lp_gph_75  : parseFloat((m.lp_gph_f * 0.81).toFixed(2));
-  const est   = hasSpec25 ? '' : ' class="fc-val est"';  // dim estimated values
   const estCls= hasSpec25 ? 'fc-val' : 'fc-val est';
 
   const btuFull_ng = m.ng_cfh_f * m.ng_btu_cf;
   const btuFull_lp = m.lp_gph_f * m.lp_btu_gal;
 
   r('fuel-rows-wrap').innerHTML = `
-    <!-- NG ROW -->
     <div class="fuel-row-card ng-row">
       <div class="fuel-tag">NG</div>
       <div class="fuel-cells">
-        <div class="fuel-cell">
-          <div class="fc-label">Rated Output</div>
-          <div class="fc-val">${m.kw_ng} kW</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">¼ Load</div>
-          <div class="${estCls}">${ng25} CFH</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">½ Load</div>
-          <div class="fc-val">${m.ng_cfh_h} CFH</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">¾ Load</div>
-          <div class="${estCls}">${ng75} CFH</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">Full Load</div>
-          <div class="fc-val">${m.ng_cfh_f} CFH</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">BTU/hr Full</div>
-          <div class="fc-val">${Math.round(btuFull_ng).toLocaleString()}</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">Required Press.</div>
-          <div class="fc-val" style="font-size:.7rem">${m.req_ng}</div>
-        </div>
+        <div class="fuel-cell"><div class="fc-label">Rated Output</div><div class="fc-val">${m.kw_ng} kW</div></div>
+        <div class="fuel-cell"><div class="fc-label">¼ Load</div><div class="${estCls}">${ng25} CFH</div></div>
+        <div class="fuel-cell"><div class="fc-label">½ Load</div><div class="fc-val">${m.ng_cfh_h} CFH</div></div>
+        <div class="fuel-cell"><div class="fc-label">¾ Load</div><div class="${estCls}">${ng75} CFH</div></div>
+        <div class="fuel-cell"><div class="fc-label">Full Load</div><div class="fc-val">${m.ng_cfh_f} CFH</div></div>
+        <div class="fuel-cell"><div class="fc-label">BTU/hr Full</div><div class="fc-val">${Math.round(btuFull_ng).toLocaleString()}</div></div>
+        <div class="fuel-cell"><div class="fc-label">Required Press.</div><div class="fc-val" style="font-size:.7rem">${m.req_ng}</div></div>
       </div>
     </div>
-    <!-- LP ROW -->
     <div class="fuel-row-card lp-row">
       <div class="fuel-tag">LP</div>
       <div class="fuel-cells">
-        <div class="fuel-cell">
-          <div class="fc-label">Rated Output</div>
-          <div class="fc-val">${m.kw_lp} kW</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">¼ Load</div>
-          <div class="${estCls}">${lp25.toFixed(2)} GPH</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">½ Load</div>
-          <div class="fc-val">${m.lp_gph_h.toFixed(2)} GPH</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">¾ Load</div>
-          <div class="${estCls}">${lp75.toFixed(2)} GPH</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">Full Load</div>
-          <div class="fc-val">${m.lp_gph_f.toFixed(2)} GPH</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">BTU/hr Full</div>
-          <div class="fc-val">${Math.round(btuFull_lp).toLocaleString()}</div>
-        </div>
-        <div class="fuel-cell">
-          <div class="fc-label">Required Press.</div>
-          <div class="fc-val" style="font-size:.7rem">${m.req_lp}</div>
-        </div>
+        <div class="fuel-cell"><div class="fc-label">Rated Output</div><div class="fc-val">${m.kw_lp} kW</div></div>
+        <div class="fuel-cell"><div class="fc-label">¼ Load</div><div class="${estCls}">${lp25.toFixed(2)} GPH</div></div>
+        <div class="fuel-cell"><div class="fc-label">½ Load</div><div class="fc-val">${m.lp_gph_h.toFixed(2)} GPH</div></div>
+        <div class="fuel-cell"><div class="fc-label">¾ Load</div><div class="${estCls}">${lp75.toFixed(2)} GPH</div></div>
+        <div class="fuel-cell"><div class="fc-label">Full Load</div><div class="fc-val">${m.lp_gph_f.toFixed(2)} GPH</div></div>
+        <div class="fuel-cell"><div class="fc-label">BTU/hr Full</div><div class="fc-val">${Math.round(btuFull_lp).toLocaleString()}</div></div>
+        <div class="fuel-cell"><div class="fc-label">Required Press.</div><div class="fc-val" style="font-size:.7rem">${m.req_lp}</div></div>
       </div>
     </div>
     ${!hasSpec25?'<div style="font-family:var(--font-mono);font-size:.58rem;color:var(--text-dim);letter-spacing:1px;padding:4px 2px">* ¼ and ¾ load values estimated — spec sheet for this model only publishes ½ and full load data</div>':''}
   `;
 
-  // ── Info row (shared specs) ──
   const infoCells = [
     {label:'Main Breaker',       val:m.cb+'A (1-Ph)'},
     {label:'NG BTU Content',     val:m.ng_btu_cf.toLocaleString()+' BTU/ft³'},
@@ -1263,90 +1256,11 @@ function generateResults(){
     `<div class="info-cell"><div class="ic-label">${c.label}</div><div class="ic-val">${c.val}</div></div>`
   ).join('');
 
-  // ── Two-stage pipe sizing ──────────────────────────────────────────
-  // Capacity multipliers vs base NFPA 54 Table 402.4(2) (0.5" WC drop, NG)
-  // Derived from Spitzglass medium-pressure formula: Q ∝ √(P1²-P2²)
-  const PRESS_MULT = {
-    // NG first run (medium pressure, meter → service reg)
-    ng1_2psi:  8.5,   // 2 PSI supply, ~1 PSI drop
-    ng1_5psi: 14.0,   // 5 PSI supply, ~2.5 PSI drop
-    // NG second run (low pressure, service reg → generator)
-    ng2_7wc:   1.0,   // 7" WC std low pressure
-    ng2_11wc:  1.2,   // 11" WC
-    ng2_0p5:   1.5,   // 0.5 PSI (14" WC)
-    ng2_1psi:  2.2,   // 1 PSI (28" WC)
-    // LP first stage (high-pressure vapor, 1st stage reg → 2nd stage reg)
-    // Recalculated per NFPA 58 §5.5 / NFPA 54 Appendix D Spitzglass medium-pressure formula:
-    //   Q ∝ ((P1²−P2²) / SG / L)^0.541 — LP SG = 1.52 must be used (not NG SG = 0.60)
-    //   Multiplier = [((P1²−P2²)_LP / SG_LP) / ((P1²−P2²)_NG_base / SG_NG)]^0.541 × (BTU_LP/BTU_NG) / LP_SCALE
-    //   Assumes 10% pressure drop per stage; atmospheric = 14.696 PSIA
-    // Previous values (10.6, 13.0, 17.5, 22.0) were calculated using NG SG = 0.60 instead of LP SG = 1.52,
-    // understating LP high-pressure capacity by 8–23%.
-    lp1_10psi: 11.5,  // 10 PSI supply, 1 PSI drop  (was 10.6 — corrected for LP SG = 1.52)
-    lp1_15psi: 16.0,  // 15 PSI supply, 1.5 PSI drop (was 13.0 — corrected for LP SG = 1.52)
-    lp1_20psi: 20.0,  // 20 PSI supply, 2 PSI drop  (was 17.5 — corrected for LP SG = 1.52)
-    lp1_30psi: 28.5,  // 30 PSI supply, 3 PSI drop  (was 22.0 — corrected for LP SG = 1.52)
-    // LP second stage (low pressure, 2nd stage reg → generator)
-    // At near-atmospheric pressures, SG density effects are fully captured by LP_SCALE.
-    // These multipliers represent proportional pressure drop vs LP base at 11" WC.
-    // Verified correct with updated LP_SCALE = 1.492 (NFPA 58 §5.5.5 consistent):
-    lp2_11wc:  1.0,   // 11" WC — NFPA 58 Table 5.5.5 base ✓
-    lp2_0p5:   1.5,   // 0.5 PSI outlet, ~1" WC allowable drop ✓
-    lp2_1psi:  2.2,   // 1 PSI outlet, ~2" WC allowable drop ✓
-    lp2_2psi:  4.0,   // 2 PSI outlet, ~4" WC allowable drop ✓
-  };
   // LP_SCALE — NFPA 54 Appendix D / NFPA 58 §5.5
-  // LP propane vapor is denser than NG: SG_LP = 1.52, SG_NG = 0.60 (per NFPA 58 §5.5 / NFPA 54 Table 402.4 basis)
-  // Spitzglass formula: Q ∝ (ΔP / SG / L)^0.541  →  Q_LP/Q_NG = (SG_NG/SG_LP)^0.541
-  // LP flows LESS volume through same pipe. LP_SCALE converts NG BTU/hr table values to LP BTU/hr:
-  //   LP_BTU = (NG_CFH × (SG_NG/SG_LP)^0.541) × LP_BTU_per_CFH
-  //   LP_SCALE = (2516 BTU/ft³ LP) / (1020 BTU/ft³ NG) × (0.60/1.52)^0.541
-  //           = 2.4667 × 0.6048 ≈ 1.492
-  // PREVIOUS VALUE of 2516/1020 = 2.467 was WRONG — it ignored LP vapor density,
-  // overstating LP pipe capacity by ~65% — a safety error under NFPA 58.
   const LP_SCALE = (2516/1020) * Math.pow(0.60/1.52, 0.541); // ≈ 1.492
 
-  // Read pipe config from Step 2
-  let run1Len, run2Len, run1Mult, run2Mult, run1Label, run2Label, run1Press, run2Press;
-  if(fuel==='ng'){
-    run1Len  = parseInt(document.getElementById('ng1-len').value)||50;
-    run2Len  = parseInt(document.getElementById('ng2-len').value)||30;
-    run1Press= document.getElementById('ng1-press').value;
-    run2Press= document.getElementById('ng2-press').value;
-    run1Mult = run1Press==='5psi' ? PRESS_MULT.ng1_5psi : PRESS_MULT.ng1_2psi;
-    run2Mult = run2Press==='11wc' ? PRESS_MULT.ng2_11wc
-             : run2Press==='0.5psi' ? PRESS_MULT.ng2_0p5
-             : run2Press==='1psi'   ? PRESS_MULT.ng2_1psi
-             : PRESS_MULT.ng2_7wc;
-    run1Label= 'Gas Meter → Second Stage Regulator';
-    run2Label= 'Second Stage Regulator → Generator';
-    run1Press= run1Press==='5psi'?'5 PSI supply':'2 PSI supply';
-    run2Press= run2Press==='7wc'?'7" WC line':run2Press==='11wc'?'11" WC line':run2Press==='0.5psi'?'0.5 PSI line':'1 PSI line';
-  } else {
-    run1Len  = parseInt(document.getElementById('lp1-len').value)||30;
-    run2Len  = parseInt(document.getElementById('lp2-len').value)||20;
-    run1Press= document.getElementById('lp1-press').value;
-    run2Press= document.getElementById('lp2-press').value;
-    run1Mult = run1Press==='15psi'?PRESS_MULT.lp1_15psi:run1Press==='20psi'?PRESS_MULT.lp1_20psi:run1Press==='30psi'?PRESS_MULT.lp1_30psi:PRESS_MULT.lp1_10psi;
-    run2Mult = run2Press==='0.5psi'?PRESS_MULT.lp2_0p5:run2Press==='1psi'?PRESS_MULT.lp2_1psi:run2Press==='2psi'?PRESS_MULT.lp2_2psi:PRESS_MULT.lp2_11wc;
-    run1Label= 'First Stage Regulator → Second Stage Regulator';
-    run2Label= 'Second Stage Regulator → Generator';
-    run1Press= run1Press.replace('psi',' PSI vapor pressure');
-    run2Press= run2Press==='11wc'?'11" WC outlet':run2Press==='0.5psi'?'0.5 PSI outlet':run2Press==='1psi'?'1 PSI outlet':'2 PSI outlet';
-  }
-
-  // ── BTU basis normalization — NFPA 54 ────────────────────────────────
-  // Pipe table (NFPA 54 Table 402.4(2)) is calibrated at 1,020 BTU/ft³ (standard NG SG=0.60).
-  // Generator specs use model-specific BTU/ft³: Guardian = 1,000 · Protector = 1,036.
-  // Correct comparison: pipe_capacity_CFH ≥ generator_demand_CFH
-  //   pipe_CFH = capBTU / 1020
-  //   demand_CFH = btuFull / ng_btu_cf
-  //   → capBTU ≥ btuFull × (1020 / ng_btu_cf)
-  // Without this, Guardian pipes can be flagged SUFFICIENT when 2% undersized (non-conservative).
-  // LP comparison is already correct in BTU/hr — LP_SCALE handles all unit conversion.
+  // BTU basis normalization for NG pipe comparison
   const ngBtuAdj = fuel === 'ng' ? (1020 / m.ng_btu_cf) : 1.0;
-  // Guardian  (1,000 BTU/ft³): ngBtuAdj = 1.020 — pipe needs 2.0% more BTU/hr capacity
-  // Protector (1,036 BTU/ft³): ngBtuAdj = 0.985 — pipe needs 1.5% less BTU/hr capacity
 
   function buildPipeTable(tbodyId, thUnitId, runLen, pressMult, isLP, matKey){
     const mat = PIPE_MATERIALS[matKey] || PIPE_MATERIALS.steel;
@@ -1356,7 +1270,6 @@ function generateResults(){
     document.getElementById(thUnitId).textContent = isLP ? 'GPH Capacity' : 'CFH Capacity';
     const tbody = document.getElementById(tbodyId);
     tbody.innerHTML = '';
-    // Material note row
     const noteRow = document.createElement('tr');
     noteRow.innerHTML = `<td colspan="5" style="font-family:var(--font-mono);font-size:.6rem;color:var(--text-dim);padding:6px 12px;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.06)">📐 ${mat.label} — ${mat.note} · ${PIPE_LENGTHS[li]} ft column</td>`;
     tbody.appendChild(noteRow);
@@ -1365,11 +1278,9 @@ function generateResults(){
       if(!matData[size]) return;
       let capBTU = matData[size][li] * pressMult;
       if(isLP) capBTU *= LP_SCALE;
-      // Apply BTU basis normalization for NG (LP uses btuAdj=1.0 — already correct)
       const ok     = capBTU >= btuFull * (isLP ? 1.0 : ngBtuAdj);
       const isRec  = ok && !found;
       if(isRec) found = true;
-      // CFH display: pipe table capacity in CFH (flow rate, independent of BTU/ft³)
       const capDisp = isLP
         ? (capBTU / m.lp_btu_gal).toFixed(1) + ' GPH'
         : Math.round(capBTU / 1020).toLocaleString() + ' CFH';
@@ -1389,7 +1300,33 @@ function generateResults(){
     });
   }
 
-  // Stage 1 — read material
+  // Read pipe config from Step 2 using unified getPressMult()
+  let run1Len, run2Len, run1Mult, run2Mult, run1Label, run2Label, run1PressLabel, run2PressLabel;
+
+  if(fuel==='ng'){
+    run1Len       = parseInt(document.getElementById('ng1-len').value)||50;
+    run2Len       = parseInt(document.getElementById('ng2-len').value)||30;
+    const p1v     = document.getElementById('ng1-press').value;
+    const p2v     = document.getElementById('ng2-press').value;
+    run1Mult      = getPressMult(p1v, 'ng');
+    run2Mult      = getPressMult(p2v, 'ng');
+    run1Label     = 'Gas Meter → Second Stage Regulator';
+    run2Label     = 'Second Stage Regulator → Generator';
+    run1PressLabel= document.getElementById('ng1-press').options[document.getElementById('ng1-press').selectedIndex].text.split('—')[0].trim();
+    run2PressLabel= document.getElementById('ng2-press').options[document.getElementById('ng2-press').selectedIndex].text.split('—')[0].trim();
+  } else {
+    run1Len       = parseInt(document.getElementById('lp1-len').value)||30;
+    run2Len       = parseInt(document.getElementById('lp2-len').value)||20;
+    const p1v     = document.getElementById('lp1-press').value;
+    const p2v     = document.getElementById('lp2-press').value;
+    run1Mult      = getPressMult(p1v, 'lp');
+    run2Mult      = getPressMult(p2v, 'lp');
+    run1Label     = 'First Stage Regulator → Second Stage Regulator';
+    run2Label     = 'Second Stage Regulator → Generator';
+    run1PressLabel= document.getElementById('lp1-press').options[document.getElementById('lp1-press').selectedIndex].text.split('—')[0].trim();
+    run2PressLabel= document.getElementById('lp2-press').options[document.getElementById('lp2-press').selectedIndex].text.split('—')[0].trim();
+  }
+
   const run1Mat = fuel==='ng'
     ? document.getElementById('ng1-mat').value
     : document.getElementById('lp1-mat').value;
@@ -1401,15 +1338,14 @@ function generateResults(){
   const mat2Label = PIPE_MATERIALS[run2Mat]?.label || '';
 
   r('pipe1-title').textContent = run1Label;
-  r('pipe1-meta').textContent  = `${run1Len} ft · ${run1Press} · ${mat1Label} · Full load: ${fmtBTU(btuFull)} BTU/hr`;
+  r('pipe1-meta').textContent  = `${run1Len} ft · ${run1PressLabel} · ${mat1Label} · Full load: ${fmtBTU(btuFull)} BTU/hr`;
   buildPipeTable('pipe1-tbody','th1-unit', run1Len, run1Mult, fuel==='lp', run1Mat);
 
-  // Stage 2
   r('pipe2-title').textContent = run2Label;
-  r('pipe2-meta').textContent  = `${run2Len} ft · ${run2Press} · ${mat2Label} · Full load: ${fmtBTU(btuFull)} BTU/hr`;
+  r('pipe2-meta').textContent  = `${run2Len} ft · ${run2PressLabel} · ${mat2Label} · Full load: ${fmtBTU(btuFull)} BTU/hr`;
   buildPipeTable('pipe2-tbody','th2-unit', run2Len, run2Mult, fuel==='lp', run2Mat);
 
-  // ── Extra runs (dynamically added) ──────────────────────────────
+  // Extra runs
   const extraContainer = document.getElementById('extra-pipe-results');
   extraContainer.innerHTML = '';
   const extraCards = document.querySelectorAll(`.extra-run-${fuel}`);
@@ -1420,7 +1356,8 @@ function generateResults(){
     const pressV  = document.getElementById(`press-${runId}`).value;
     const matKey  = document.getElementById(`mat-${runId}`).value;
     const pressMult = getPressMult(pressV, fuel);
-    const pressLabel = pressV.replace('wc', '" WC').replace('psi', ' PSI');
+    const pressOpt  = document.getElementById(`press-${runId}`);
+    const pressLabel = pressOpt.options[pressOpt.selectedIndex].text.split('—')[0].trim();
     const matLabel = PIPE_MATERIALS[matKey]?.label || matKey;
 
     const stageDiv = document.createElement('div');
@@ -1429,7 +1366,7 @@ function generateResults(){
     const thId = `extra-th-${runId}`;
     stageDiv.innerHTML = `
       <div class="pipe-stage-hdr extra">
-        <span class="pipe-stage-num">⑶${extraRunNum > 3 ? String(extraRunNum).slice(-1) : ''}</span>
+        <span class="pipe-stage-num">⑶</span>
         <span class="pipe-stage-title-txt">Additional Run ${extraRunNum - 2}</span>
         <span class="pipe-stage-meta">${runLen} ft · ${pressLabel} · ${matLabel} · Full load: ${fmtBTU(btuFull)} BTU/hr</span>
       </div>
@@ -1445,11 +1382,10 @@ function generateResults(){
     extraRunNum++;
   });
 
-  // Scroll to results
   document.getElementById('results-output').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-// ── DYNAMIC PIPE RUNS ────────────────────────────────────────────────
+// ── DYNAMIC PIPE RUNS ─────────────────────────────────────────────────
 let runSeq = 0;
 
 function addPipeRun(fuelType, stageNum, btn) {
@@ -1460,25 +1396,70 @@ function addPipeRun(fuelType, stageNum, btn) {
   card.id = `card-${runId}`;
   card.dataset.runId = runId;
 
-  // Stage-appropriate pressure options
+  // Stage-appropriate pressure options — full range for both stages
   const ngS1Press = `
-    <option value="2psi" selected>2 PSI — Medium pressure</option>
-    <option value="5psi">5 PSI — Higher medium pressure</option>`;
+    <optgroup label="── Low / Near-Atmospheric ──">
+      <option value="0.25psi">¼ PSI (7" WC) — Low medium</option>
+      <option value="0.5psi">½ PSI (14" WC) — Lower medium</option>
+      <option value="1psi">1 PSI (28" WC)</option>
+    </optgroup>
+    <optgroup label="── Medium Pressure ──">
+      <option value="2psi" selected>2 PSI — Standard residential</option>
+      <option value="5psi">5 PSI — Higher medium</option>
+    </optgroup>
+    <optgroup label="── High Pressure ──">
+      <option value="10psi">10 PSI — Commercial</option>
+      <option value="15psi">15 PSI — High-pressure service</option>
+      <option value="30psi">30 PSI — High-pressure main</option>
+      <option value="60psi">60 PSI — Distribution main</option>
+    </optgroup>`;
+
   const ngS2Press = `
-    <option value="7wc" selected>7" WC — Standard low pressure</option>
-    <option value="11wc">11" WC — Higher low pressure</option>
-    <option value="0.5psi">0.5 PSI — 14" WC</option>
-    <option value="1psi">1 PSI — 28" WC</option>`;
+    <optgroup label="── Standard Low Pressure ──">
+      <option value="3.5wc">3.5" WC — Min Guardian inlet</option>
+      <option value="5wc">5" WC</option>
+      <option value="7wc" selected>7" WC — Standard (0.25 PSI)</option>
+      <option value="8wc">8" WC</option>
+      <option value="10wc">10" WC</option>
+      <option value="11wc">11" WC (0.40 PSI)</option>
+    </optgroup>
+    <optgroup label="── Higher Low Pressure ──">
+      <option value="14wc">14" WC — 0.5 PSI</option>
+      <option value="0.5psi">0.5 PSI</option>
+      <option value="1psi">1 PSI</option>
+      <option value="2psi">2 PSI</option>
+    </optgroup>`;
+
   const lpS1Press = `
-    <option value="10psi" selected>10 PSI — Low vapor pressure</option>
-    <option value="15psi">15 PSI — Moderate vapor pressure</option>
-    <option value="20psi">20 PSI — Higher vapor pressure</option>
-    <option value="30psi">30 PSI — High vapor / large tank</option>`;
+    <optgroup label="── Low Vapor ──">
+      <option value="5psi">5 PSI — Cold / nearly empty</option>
+      <option value="10psi" selected>10 PSI — Low vapor</option>
+    </optgroup>
+    <optgroup label="── Moderate / High Vapor ──">
+      <option value="15psi">15 PSI</option>
+      <option value="20psi">20 PSI</option>
+      <option value="25psi">25 PSI</option>
+      <option value="30psi">30 PSI — Large tank</option>
+    </optgroup>
+    <optgroup label="── Bulk / Commercial ──">
+      <option value="60psi">60 PSI — Bulk underground</option>
+      <option value="100psi">100 PSI — Bulk storage</option>
+      <option value="200psi">200 PSI — Transport</option>
+    </optgroup>`;
+
   const lpS2Press = `
-    <option value="11wc" selected>11" WC — Standard LP low pressure</option>
-    <option value="0.5psi">0.5 PSI — 14" WC</option>
-    <option value="1psi">1 PSI — 28" WC</option>
-    <option value="2psi">2 PSI</option>`;
+    <optgroup label="── Standard LP Low Pressure ──">
+      <option value="8wc">8" WC</option>
+      <option value="10wc">10" WC — Min Guardian inlet</option>
+      <option value="11wc" selected>11" WC — Standard (0.40 PSI)</option>
+      <option value="12wc">12" WC — Max Guardian inlet</option>
+    </optgroup>
+    <optgroup label="── Higher Delivery ──">
+      <option value="14wc">14" WC — 0.5 PSI</option>
+      <option value="0.5psi">0.5 PSI</option>
+      <option value="1psi">1 PSI</option>
+      <option value="2psi">2 PSI</option>
+    </optgroup>`;
 
   const pressOpts = fuelType==='ng'
     ? (stageNum===1 ? ngS1Press : ngS2Press)
@@ -1521,43 +1502,12 @@ function addPipeRun(fuelType, stageNum, btn) {
       </div>
     </div>`;
 
-  // Insert immediately before the Add button so it stays inside the stage group
   btn.parentNode.insertBefore(card, btn);
 }
 
 function removePipeRun(cardId) {
   const el = document.getElementById(cardId);
   if(el) el.remove();
-}
-
-function getPressMult(pressVal, fuelType) {
-  // Fuel-type-aware lookup — '2psi' means different things for NG vs LP:
-  //   NG stage 1: 2 PSI = medium pressure supply (mult = 8.5, per NFPA 54 Table 402.4(9))
-  //   LP stage 2: 2 PSI = low pressure delivery  (mult = 4.0, near-atmospheric)
-  // LP high-pressure multipliers corrected for SG = 1.52 (NFPA 58 §5.5 / NFPA 54 Appendix D)
-  if (fuelType === 'ng') {
-    const M = {
-      '7wc': 1.0,   // 7" WC standard low pressure (NFPA 54 Table 402.4(2) base)
-      '11wc': 1.2,  // 11" WC low pressure
-      '0.5psi': 1.5, // 0.5 PSI (14" WC)
-      '1psi': 2.2,  // 1 PSI (28" WC)
-      '2psi': 8.5,  // 2 PSI MEDIUM pressure supply (NFPA 54 Table 402.4(9))
-      '5psi': 14.0, // 5 PSI medium pressure supply
-    };
-    return M[pressVal] || 1.0;
-  } else { // LP propane
-    const M = {
-      '11wc': 1.0,  // 11" WC — NFPA 58 Table 5.5.5 base
-      '0.5psi': 1.5, // 0.5 PSI outlet
-      '1psi': 2.2,  // 1 PSI outlet
-      '2psi': 4.0,  // 2 PSI outlet (low pressure delivery)
-      '10psi': 11.5, // 10 PSI high-pressure vapor (corrected for LP SG = 1.52)
-      '15psi': 16.0, // 15 PSI high-pressure vapor (corrected)
-      '20psi': 20.0, // 20 PSI high-pressure vapor (corrected)
-      '30psi': 28.5, // 30 PSI high-pressure vapor (corrected)
-    };
-    return M[pressVal] || 1.0;
-  }
 }
 
 // ── LOAD BUILDER ─────────────────────────────────────────────────────
@@ -1626,9 +1576,8 @@ function applyRecommendedModel(){
   const opt=[...sel.options].find(o=>o.value===suggestedModel.num);
   if(opt){
     sel.value=suggestedModel.num;
-    document.getElementById('panel-lookup').scrollIntoView({behavior:'smooth'});
+    window.scrollTo({top:0,behavior:'smooth'});
   } else {
-    // switch cooling type if needed
     if(suggestedModel.cooled!==cooling){setCooling(suggestedModel.cooled);}
     setTimeout(()=>{
       const s=document.getElementById('model-select');
@@ -1647,11 +1596,10 @@ function fmtBTU(v){
 }
 </script>
 
-<!-- ── Offline banner (matches hub style) ── -->
+<!-- Offline banner -->
 <div id="offline-banner">No network connection · Calculator available offline</div>
 
 <script>
-// ── Service Worker Registration ──────────────────────────
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('../sw.js', { scope: '../' })
     .then(function(reg) {
@@ -1660,7 +1608,7 @@ if ('serviceWorker' in navigator) {
         var newWorker = reg.installing;
         newWorker.addEventListener('statechange', function() {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('[Gas Calc] Update available — user will see toast on hub');
+            console.log('[Gas Calc] Update available');
           }
         });
       });
@@ -1668,7 +1616,6 @@ if ('serviceWorker' in navigator) {
     .catch(function(err) { console.warn('[Gas Calc] SW registration failed:', err); });
 }
 
-// ── Online/Offline banner (.visible class matches hub pattern) ──
 (function() {
   var banner = document.getElementById('offline-banner');
   function setOnline()  { if (banner) banner.classList.remove('visible'); }
