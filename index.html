@@ -144,7 +144,6 @@ body::after {
 
 #update-toast.visible { display: flex; flex-direction: column; gap: 14px; }
 
-/* Header row */
 #update-toast-header {
   display: flex;
   align-items: flex-start;
@@ -186,13 +185,11 @@ body::after {
   color: var(--orange-bright);
 }
 
-/* Divider */
 #update-toast-divider {
   height: 1px;
   background: linear-gradient(90deg, rgba(251,191,36,0.4), rgba(249,115,22,0.2), transparent);
 }
 
-/* Changelog list */
 #update-toast-changelog {
   margin: 0;
   padding: 0;
@@ -220,7 +217,6 @@ body::after {
   text-shadow: 0 0 6px rgba(249,115,22,0.5);
 }
 
-/* Footer buttons */
 #update-toast-footer {
   display: flex;
   align-items: center;
@@ -263,9 +259,7 @@ body::after {
   box-shadow: 0 0 20px rgba(251,191,36,0.6);
   transform: scale(1.04);
 }
-#update-reload-btn:active {
-  transform: scale(0.98);
-}
+#update-reload-btn:active { transform: scale(0.98); }
 
 /* ===== LAYOUT ===== */
 .container {
@@ -688,7 +682,7 @@ body::after {
     </div>
     <div class="status-item">
       <span class="status-dot yellow"></span>
-      <span>9 Forms Active</span>
+      <span>10 Tools Active</span>
     </div>
     <div class="status-item">
       <span class="status-dot orange"></span>
@@ -851,6 +845,25 @@ body::after {
       <div class="form-arrow">▶ ENTER</div>
     </a>
 
+    <!-- GAS CALCULATOR -->
+    <a href="#" class="form-card" data-form="gas-calc">
+      <div class="glow-strip"></div>
+      <div class="form-card-content">
+        <div class="form-icon-wrap">
+          <svg viewBox="0 0 24 24">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            <circle cx="18" cy="5" r="2"/>
+            <path d="M20 3v4M18 5h4"/>
+          </svg>
+        </div>
+        <div class="form-text">
+          <div class="form-title">Gas Calculator</div>
+          <div class="form-desc">BTU sizing, pipe sizing &amp; Generac model selection · 10–150kW</div>
+        </div>
+      </div>
+      <div class="form-arrow">▶ ENTER</div>
+    </a>
+
     <!-- BREAKER & CONDUCTOR -->
     <a href="#" class="form-card" data-form="breaker-sizing">
       <div class="glow-strip"></div>
@@ -886,6 +899,7 @@ body::after {
 const FORM_URLS = {
   'install':        './elect-install/',
   'gas-install':    './gas-install/',
+  'gas-calc':       './gas-calc/',
   'estimate':       './estimate/',
   'maintenance':    './maintenance/',
   'site-visits':    './site-visit/',
@@ -1003,7 +1017,6 @@ if ('serviceWorker' in navigator) {
       });
 
     // Only reload once the new SW actually takes control
-    // This fires AFTER the user taps "Update Now" → SKIP_WAITING → controllerchange
     navigator.serviceWorker.addEventListener('controllerchange', function() {
       window.location.reload();
     });
