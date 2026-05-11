@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v1.0.3';
+var CACHE_NAME = 'aog-forms-v1.0.4';
 var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
@@ -18,7 +18,7 @@ var DEV_MODE   = false; // ← SET TRUE during development/testing
 // ============================================================
 var CHANGELOG = [
   'ADDED: Generac Gas Calculator tool',
-  'BTU sizing · pipe sizing · model lookup · 10-150kW',
+  'Corrected values based on NFPA 54 and NFPa 58',
   'Guardian NextGen + Legacy · Protector QS / RG / XG',
   ''
 ];
