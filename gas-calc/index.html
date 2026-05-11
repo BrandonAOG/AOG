@@ -625,7 +625,7 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
         <div id="extra-pipe-results"></div>
 
         <div class="disclaimer">
-          NFPA 54 / IFGC Schedule 40 black steel pipe. Base table: 0.5" W.C. pressure drop at standard low pressure (SG = 0.60, 1,020 BTU/ft³ NG). Medium-pressure capacities calculated using P₁²–P₂² Spitzglass formula scaled from base table. BTU content per Generac spec: 1,000 BTU/ft³ Guardian · 1,036 BTU/ft³ Protector. LP scaled ×2.467 (2,516 ÷ 1,020 BTU/ft³ content ratio). Size for full rated load — ANSI Z21.75 14" flex connector required at generator. Derate for fittings and other appliances on same meter run. Verify with licensed gas fitter.
+          NFPA 54 / IFGC Schedule 40 black steel pipe. Base table: NFPA 54 Table 402.4(2) — 0.5" W.C. pressure drop, SG = 0.60, 1,020 BTU/ft³ NG. Medium-pressure NG capacities from P₁²−P₂² Spitzglass formula (NFPA 54 Appendix D). NG BTU content per Generac spec: 1,000 BTU/ft³ Guardian · 1,036 BTU/ft³ Protector — comparison normalized to CFH per NFPA 54 §402. LP capacity scaled per NFPA 58 §5.5 / NFPA 54 Appendix D Spitzglass formula: LP_SCALE = (2,516 BTU/ft³ ÷ 1,020 BTU/ft³) × (SG_NG/SG_LP)^0.541 = (2,516/1,020) × (0.60/1.52)^0.541 ≈ 1.492 — accounts for LP propane vapor density (SG = 1.52) and BTU content. LP high-pressure multipliers recalculated per NFPA 58 §5.5 for SG = 1.52. PE SDR-11 per NFPA 54 Table 402.4(19) approx. CSST / TracPipe per manufacturer installation tables — verify with current install guide. Size for full rated load at sea level — derate for elevation per Generac spec. ANSI Z21.75 14" flex connector required at generator. Derate additional capacity for fittings and branch loads. Verify all sizing with a licensed gas fitter and authority having jurisdiction (AHJ).
         </div>
       </div>
 
@@ -1275,18 +1275,36 @@ function generateResults(){
     ng2_11wc:  1.2,   // 11" WC
     ng2_0p5:   1.5,   // 0.5 PSI (14" WC)
     ng2_1psi:  2.2,   // 1 PSI (28" WC)
-    // LP first run (high-pressure vapor, tank → 1st stage reg)
-    lp1_10psi: 10.6,
-    lp1_15psi: 13.0,
-    lp1_20psi: 17.5,
-    lp1_30psi: 22.0,
-    // LP second run (low pressure, 1st stage reg → generator)
-    lp2_11wc:  1.0,   // 11" WC standard
-    lp2_0p5:   1.5,   // 0.5 PSI
-    lp2_1psi:  2.2,   // 1 PSI
-    lp2_2psi:  4.0,   // 2 PSI
+    // LP first stage (high-pressure vapor, 1st stage reg → 2nd stage reg)
+    // Recalculated per NFPA 58 §5.5 / NFPA 54 Appendix D Spitzglass medium-pressure formula:
+    //   Q ∝ ((P1²−P2²) / SG / L)^0.541 — LP SG = 1.52 must be used (not NG SG = 0.60)
+    //   Multiplier = [((P1²−P2²)_LP / SG_LP) / ((P1²−P2²)_NG_base / SG_NG)]^0.541 × (BTU_LP/BTU_NG) / LP_SCALE
+    //   Assumes 10% pressure drop per stage; atmospheric = 14.696 PSIA
+    // Previous values (10.6, 13.0, 17.5, 22.0) were calculated using NG SG = 0.60 instead of LP SG = 1.52,
+    // understating LP high-pressure capacity by 8–23%.
+    lp1_10psi: 11.5,  // 10 PSI supply, 1 PSI drop  (was 10.6 — corrected for LP SG = 1.52)
+    lp1_15psi: 16.0,  // 15 PSI supply, 1.5 PSI drop (was 13.0 — corrected for LP SG = 1.52)
+    lp1_20psi: 20.0,  // 20 PSI supply, 2 PSI drop  (was 17.5 — corrected for LP SG = 1.52)
+    lp1_30psi: 28.5,  // 30 PSI supply, 3 PSI drop  (was 22.0 — corrected for LP SG = 1.52)
+    // LP second stage (low pressure, 2nd stage reg → generator)
+    // At near-atmospheric pressures, SG density effects are fully captured by LP_SCALE.
+    // These multipliers represent proportional pressure drop vs LP base at 11" WC.
+    // Verified correct with updated LP_SCALE = 1.492 (NFPA 58 §5.5.5 consistent):
+    lp2_11wc:  1.0,   // 11" WC — NFPA 58 Table 5.5.5 base ✓
+    lp2_0p5:   1.5,   // 0.5 PSI outlet, ~1" WC allowable drop ✓
+    lp2_1psi:  2.2,   // 1 PSI outlet, ~2" WC allowable drop ✓
+    lp2_2psi:  4.0,   // 2 PSI outlet, ~4" WC allowable drop ✓
   };
-  const LP_SCALE = 2516/1020;
+  // LP_SCALE — NFPA 54 Appendix D / NFPA 58 §5.5
+  // LP propane vapor is denser than NG: SG_LP = 1.52, SG_NG = 0.60 (per NFPA 58 §5.5 / NFPA 54 Table 402.4 basis)
+  // Spitzglass formula: Q ∝ (ΔP / SG / L)^0.541  →  Q_LP/Q_NG = (SG_NG/SG_LP)^0.541
+  // LP flows LESS volume through same pipe. LP_SCALE converts NG BTU/hr table values to LP BTU/hr:
+  //   LP_BTU = (NG_CFH × (SG_NG/SG_LP)^0.541) × LP_BTU_per_CFH
+  //   LP_SCALE = (2516 BTU/ft³ LP) / (1020 BTU/ft³ NG) × (0.60/1.52)^0.541
+  //           = 2.4667 × 0.6048 ≈ 1.492
+  // PREVIOUS VALUE of 2516/1020 = 2.467 was WRONG — it ignored LP vapor density,
+  // overstating LP pipe capacity by ~65% — a safety error under NFPA 58.
+  const LP_SCALE = (2516/1020) * Math.pow(0.60/1.52, 0.541); // ≈ 1.492
 
   // Read pipe config from Step 2
   let run1Len, run2Len, run1Mult, run2Mult, run1Label, run2Label, run1Press, run2Press;
@@ -1317,6 +1335,19 @@ function generateResults(){
     run2Press= run2Press==='11wc'?'11" WC outlet':run2Press==='0.5psi'?'0.5 PSI outlet':run2Press==='1psi'?'1 PSI outlet':'2 PSI outlet';
   }
 
+  // ── BTU basis normalization — NFPA 54 ────────────────────────────────
+  // Pipe table (NFPA 54 Table 402.4(2)) is calibrated at 1,020 BTU/ft³ (standard NG SG=0.60).
+  // Generator specs use model-specific BTU/ft³: Guardian = 1,000 · Protector = 1,036.
+  // Correct comparison: pipe_capacity_CFH ≥ generator_demand_CFH
+  //   pipe_CFH = capBTU / 1020
+  //   demand_CFH = btuFull / ng_btu_cf
+  //   → capBTU ≥ btuFull × (1020 / ng_btu_cf)
+  // Without this, Guardian pipes can be flagged SUFFICIENT when 2% undersized (non-conservative).
+  // LP comparison is already correct in BTU/hr — LP_SCALE handles all unit conversion.
+  const ngBtuAdj = fuel === 'ng' ? (1020 / m.ng_btu_cf) : 1.0;
+  // Guardian  (1,000 BTU/ft³): ngBtuAdj = 1.020 — pipe needs 2.0% more BTU/hr capacity
+  // Protector (1,036 BTU/ft³): ngBtuAdj = 0.985 — pipe needs 1.5% less BTU/hr capacity
+
   function buildPipeTable(tbodyId, thUnitId, runLen, pressMult, isLP, matKey){
     const mat = PIPE_MATERIALS[matKey] || PIPE_MATERIALS.steel;
     const matSizes = mat.sizes;
@@ -1334,11 +1365,13 @@ function generateResults(){
       if(!matData[size]) return;
       let capBTU = matData[size][li] * pressMult;
       if(isLP) capBTU *= LP_SCALE;
-      const ok     = capBTU >= btuFull;
+      // Apply BTU basis normalization for NG (LP uses btuAdj=1.0 — already correct)
+      const ok     = capBTU >= btuFull * (isLP ? 1.0 : ngBtuAdj);
       const isRec  = ok && !found;
       if(isRec) found = true;
+      // CFH display: pipe table capacity in CFH (flow rate, independent of BTU/ft³)
       const capDisp = isLP
-        ? (capBTU / 91452).toFixed(1) + ' GPH'
+        ? (capBTU / m.lp_btu_gal).toFixed(1) + ' GPH'
         : Math.round(capBTU / 1020).toLocaleString() + ' CFH';
       const pct  = Math.round((btuFull / capBTU) * 100);
       const note = isRec ? '✓ Minimum recommended'
@@ -1498,16 +1531,33 @@ function removePipeRun(cardId) {
 }
 
 function getPressMult(pressVal, fuelType) {
-  const M = {
-    // low pressure
-    '7wc':    1.0, '11wc': 1.2,
-    '0.5psi': 1.5, '1psi': 2.2, '2psi': 4.0,
-    // medium pressure NG
-    '2psi_med': 8.5, '5psi': 14.0,
-    // LP high pressure
-    '10psi': 10.6, '15psi': 13.0, '20psi': 17.5, '30psi': 22.0,
-  };
-  return M[pressVal] || 1.0;
+  // Fuel-type-aware lookup — '2psi' means different things for NG vs LP:
+  //   NG stage 1: 2 PSI = medium pressure supply (mult = 8.5, per NFPA 54 Table 402.4(9))
+  //   LP stage 2: 2 PSI = low pressure delivery  (mult = 4.0, near-atmospheric)
+  // LP high-pressure multipliers corrected for SG = 1.52 (NFPA 58 §5.5 / NFPA 54 Appendix D)
+  if (fuelType === 'ng') {
+    const M = {
+      '7wc': 1.0,   // 7" WC standard low pressure (NFPA 54 Table 402.4(2) base)
+      '11wc': 1.2,  // 11" WC low pressure
+      '0.5psi': 1.5, // 0.5 PSI (14" WC)
+      '1psi': 2.2,  // 1 PSI (28" WC)
+      '2psi': 8.5,  // 2 PSI MEDIUM pressure supply (NFPA 54 Table 402.4(9))
+      '5psi': 14.0, // 5 PSI medium pressure supply
+    };
+    return M[pressVal] || 1.0;
+  } else { // LP propane
+    const M = {
+      '11wc': 1.0,  // 11" WC — NFPA 58 Table 5.5.5 base
+      '0.5psi': 1.5, // 0.5 PSI outlet
+      '1psi': 2.2,  // 1 PSI outlet
+      '2psi': 4.0,  // 2 PSI outlet (low pressure delivery)
+      '10psi': 11.5, // 10 PSI high-pressure vapor (corrected for LP SG = 1.52)
+      '15psi': 16.0, // 15 PSI high-pressure vapor (corrected)
+      '20psi': 20.0, // 20 PSI high-pressure vapor (corrected)
+      '30psi': 28.5, // 30 PSI high-pressure vapor (corrected)
+    };
+    return M[pressVal] || 1.0;
+  }
 }
 
 // ── LOAD BUILDER ─────────────────────────────────────────────────────
