@@ -35,9 +35,8 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 .header::after{bottom:0;animation:scanline 4s linear infinite reverse}
 @keyframes scanline{0%,100%{opacity:0;transform:scaleX(0)}50%{opacity:1;transform:scaleX(1)}}
 .logo-wrap{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;margin-bottom:12px}
-.logo-icon{width:72px;height:72px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(251,191,36,.15),rgba(249,115,22,.1));border:2px solid rgba(251,191,36,.5);border-radius:4px;clip-path:polygon(10px 0%,100% 0%,100% calc(100% - 10px),calc(100% - 10px) 100%,0% 100%,0% 10px);animation:logoPulse 3s ease-in-out infinite}
-.logo-icon svg{width:44px;height:44px;stroke:var(--yellow-bright);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-@keyframes logoPulse{0%,100%{box-shadow:0 0 12px rgba(251,191,36,.4),0 0 24px rgba(249,115,22,.2)}50%{box-shadow:0 0 20px rgba(251,191,36,.6),0 0 40px rgba(249,115,22,.4)}}
+.logo-img{width:100px;height:100px;object-fit:contain;filter:drop-shadow(0 0 12px rgba(251,191,36,.6)) drop-shadow(0 0 24px rgba(249,115,22,.4)) brightness(1.1);animation:logoPulse 3s ease-in-out infinite}
+@keyframes logoPulse{0%,100%{filter:drop-shadow(0 0 12px rgba(251,191,36,.6)) drop-shadow(0 0 24px rgba(249,115,22,.4)) brightness(1.1)}50%{filter:drop-shadow(0 0 18px rgba(251,191,36,.8)) drop-shadow(0 0 36px rgba(249,115,22,.6)) brightness(1.2)}}
 .title-block{text-align:left}@media(max-width:600px){.title-block{text-align:center}}
 .company-name{font-family:var(--font-display);font-size:1.9rem;font-weight:900;letter-spacing:3px;line-height:1.1;background:linear-gradient(135deg,var(--yellow-bright) 0%,var(--orange) 50%,var(--orange-deep) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:5px}
 .tagline{font-family:var(--font-mono);font-size:.74rem;letter-spacing:5px;color:var(--blue-electric);text-transform:uppercase;text-shadow:0 0 8px rgba(0,212,255,.5)}
@@ -299,6 +298,12 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 /* ── Home button ── */
 .home-btn{position:fixed;top:14px;left:14px;z-index:9999;width:40px;height:40px;background:rgba(15,21,53,.9);border:1px solid rgba(251,191,36,.4);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;cursor:pointer;transition:all .2s;text-decoration:none;color:var(--text)}
 .home-btn:hover{background:rgba(251,191,36,.15);border-color:var(--yellow-bright);box-shadow:0 0 12px rgba(251,191,36,.3)}
+/* Offline banner — matches hub style */
+#offline-banner{display:none;position:fixed;top:0;left:0;right:0;z-index:9998;padding:10px 20px;background:linear-gradient(90deg,rgba(10,14,39,.97),rgba(15,21,53,.97));border-bottom:2px solid var(--orange);text-align:center;font-family:var(--font-mono);font-size:.72rem;letter-spacing:3px;color:var(--orange-bright);text-transform:uppercase;text-shadow:0 0 8px rgba(249,115,22,.5);animation:bannerPulse 2s ease-in-out infinite}
+#offline-banner.visible{display:block}
+@keyframes bannerPulse{0%,100%{opacity:1}50%{opacity:.75}}
+#offline-banner::before{content:'⚠ ';color:var(--yellow-bright)}
+#offline-banner::after{content:' ⚠';color:var(--yellow-bright)}
 @media(max-width:600px){.container{padding:18px 13px 40px}.company-name{font-size:1.5rem}.panel-body{padding:18px 16px}.btu-card-value{font-size:1.35rem}}
 </style>
 </head>
@@ -309,7 +314,7 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 <!-- HEADER -->
 <div class="header">
   <div class="logo-wrap">
-    <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="18" cy="5" r="2"/><path d="M20 3v4M18 5h4"/></svg></div>
+    <img src="../logo.png" alt="Always On Generators Logo" class="logo-img">
     <div class="title-block">
       <div class="company-name">Always On<br>Generators</div>
       <div class="tagline">// Power When You Need It //</div>
@@ -1592,10 +1597,8 @@ function fmtBTU(v){
 }
 </script>
 
-<!-- ── Offline banner ── -->
-<div id="offline-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9998;background:rgba(249,115,22,.95);color:#fff;font-family:'Exo 2',sans-serif;font-size:.78rem;font-weight:600;letter-spacing:2px;text-align:center;padding:10px;text-transform:uppercase">
-  ⚠ Offline — Showing cached data
-</div>
+<!-- ── Offline banner (matches hub style) ── -->
+<div id="offline-banner">No network connection · Calculator available offline</div>
 
 <script>
 // ── Service Worker Registration ──────────────────────────
@@ -1607,7 +1610,7 @@ if ('serviceWorker' in navigator) {
         var newWorker = reg.installing;
         newWorker.addEventListener('statechange', function() {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('[Gas Calc] Update available');
+            console.log('[Gas Calc] Update available — user will see toast on hub');
           }
         });
       });
@@ -1615,15 +1618,14 @@ if ('serviceWorker' in navigator) {
     .catch(function(err) { console.warn('[Gas Calc] SW registration failed:', err); });
 }
 
-// ── Online/Offline banner ────────────────────────────────
+// ── Online/Offline banner (.visible class matches hub pattern) ──
 (function() {
   var banner = document.getElementById('offline-banner');
-  function updateStatus() {
-    if (banner) banner.style.display = navigator.onLine ? 'none' : 'block';
-  }
-  window.addEventListener('online',  updateStatus);
-  window.addEventListener('offline', updateStatus);
-  updateStatus();
+  function setOnline()  { if (banner) banner.classList.remove('visible'); }
+  function setOffline() { if (banner) banner.classList.add('visible');    }
+  window.addEventListener('online',  setOnline);
+  window.addEventListener('offline', setOffline);
+  if (!navigator.onLine) setOffline();
 })();
 </script>
 
