@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v1.0.0';
+var CACHE_NAME = 'aog-forms-v1.0.1';
 var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
@@ -20,7 +20,7 @@ var CHANGELOG = [
   'ADDED: Generac Gas Calculator tool',
   'Corrected values based on NFPA 54 and NFPa 58',
   'add more 1st stage and 2nd stage regulators for more variance',
-  ''
+  'ADDED 24KW & 26KW Generac Gaurdian legacy Generators'
 ];
 // ============================================================
 
