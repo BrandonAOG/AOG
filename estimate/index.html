@@ -1205,6 +1205,50 @@ function printForm() {
 }
 
 // ── CANVAS CAPTURE ──
+function cropCanvasToContent(canvas) {
+  try {
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const data = imageData.data;
+
+    // "White" tolerance — anything below this on any channel counts as content
+    const WHITE_TOL = 240;
+    // Sample every Nth column for speed (still catches the page border on either edge,
+    // and any text/borders in between)
+    const SAMPLE_STRIDE = 8;
+
+    // Scan from bottom upward, find the last row containing non-white pixels
+    let bottomRow = -1;
+    for (let y = h - 1; y >= 0; y--) {
+      let found = false;
+      for (let x = 0; x < w; x += SAMPLE_STRIDE) {
+        const idx = (y * w + x) * 4;
+        if (data[idx] < WHITE_TOL || data[idx + 1] < WHITE_TOL || data[idx + 2] < WHITE_TOL) {
+          found = true;
+          break;
+        }
+      }
+      if (found) { bottomRow = y; break; }
+    }
+
+    if (bottomRow < 0) return canvas;            // entirely white — nothing to do
+    const padding = Math.round(h * 0.005);       // ~0.5% bottom padding
+    const cropHeight = Math.min(bottomRow + 1 + padding, h);
+    if (cropHeight >= h - 2) return canvas;      // already snug, no crop needed
+
+    const cropped = document.createElement('canvas');
+    cropped.width = w;
+    cropped.height = cropHeight;
+    cropped.getContext('2d').drawImage(canvas, 0, 0);
+    return cropped;
+  } catch (err) {
+    console.warn('Crop failed, returning original canvas:', err);
+    return canvas;
+  }
+}
+
 function capturePageToCanvas() {
   return new Promise((resolve, reject) => {
     const page = document.getElementById('page');
@@ -1216,32 +1260,45 @@ function capturePageToCanvas() {
     const prevBodyPad  = document.body.style.padding;
 
     const CAPTURE_W = 1050;
-    const CAPTURE_H = Math.round(CAPTURE_W * 11 / 8.5);
+    const PAPER_H   = Math.round(CAPTURE_W * 11 / 8.5); // 1359 — 8.5x11 ratio
 
     page.style.width     = CAPTURE_W + 'px';
     page.style.maxWidth  = CAPTURE_W + 'px';
-    page.style.height    = CAPTURE_H + 'px';
-    page.style.minHeight = CAPTURE_H + 'px';
-    page.style.overflow  = 'hidden';
+    page.style.height    = 'auto';
+    page.style.minHeight = PAPER_H + 'px';
+    page.style.overflow  = 'visible';
     document.body.style.padding = '0';
 
     const forceStyle = document.createElement('style');
     forceStyle.id = 'capture-force-style';
     forceStyle.textContent = `
       .toolbar, .theme-toggle-btn { display: none !important; }
+      body { max-width: ${CAPTURE_W}px !important; }
       #page {
         width: ${CAPTURE_W}px !important;
-        height: ${CAPTURE_H}px !important;
-        min-height: ${CAPTURE_H}px !important;
-        overflow: hidden !important;
+        max-width: ${CAPTURE_W}px !important;
+        height: auto !important;
+        min-height: ${PAPER_H}px !important;
+        overflow: visible !important;
         display: flex !important;
         flex-direction: column !important;
+        border-left: 2px solid var(--cyan) !important;
+        border-right: 2px solid var(--cyan) !important;
       }
       .content {
-        flex: 1 1 auto !important;
-        overflow: hidden !important;
+        overflow: visible !important;
         min-height: 0 !important;
       }
+      /* Force desktop grid layout regardless of mobile viewport,
+         so page.scrollHeight matches what html2canvas renders at windowWidth:1050 */
+      .top-grid { grid-template-columns: 1fr 1fr !important; }
+      .top-col:first-child {
+        border-right: 1px solid var(--border) !important;
+        border-bottom: none !important;
+      }
+      .grid-2 { grid-template-columns: 1fr 1fr !important; }
+      .grid-3 { grid-template-columns: 1fr 1fr 1fr !important; }
+      .grid-4 { grid-template-columns: repeat(4, 1fr) !important; }
     `;
     document.head.appendChild(forceStyle);
 
@@ -1256,13 +1313,14 @@ function capturePageToCanvas() {
     };
 
     requestAnimationFrame(() => { requestAnimationFrame(() => {
+      const CAPTURE_H = Math.max(page.scrollHeight, PAPER_H);
       html2canvas(page, {
         scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false,
         width: CAPTURE_W, height: CAPTURE_H, windowWidth: CAPTURE_W, scrollX: 0, scrollY: 0,
         ignoreElements: el => el.classList.contains('toolbar') || el.classList.contains('theme-toggle-btn')
       }).then(canvas => {
         restore();
-        resolve(canvas);
+        resolve(cropCanvasToContent(canvas));
       }).catch(err => { restore(); reject(err); });
     }); });
   });
