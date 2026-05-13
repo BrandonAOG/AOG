@@ -168,6 +168,7 @@ body.dark-mode .page {
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
+    padding-left: 30px;
   }
 
   .logo-img {
@@ -179,6 +180,7 @@ body.dark-mode .page {
     font-size: 0.75rem !important;
     letter-spacing: 0.5px !important;
     white-space: nowrap;
+    
   }
 
   .doc-title {
@@ -679,7 +681,7 @@ body.dark-mode select:focus {
 }
 
 input.short { width: 48px; min-width: 48px; flex-shrink: 0; }
-input.med   { width: 80px; min-width: 60px; flex: 0 0 auto; }
+input.med   { width: 80px; min-width: ; flex: 0 0 auto; }
 input.long  { flex: 1; min-width: 70px; }
 
 textarea {
@@ -935,7 +937,7 @@ body.dark-mode .yn-group .yn-n:checked + .yn-label-n {
 /* ── FOOTER ── */
 .footer {
   background: var(--panel);
-  padding: 4px 10px;
+  padding: 12px 10px 4px 10px;
   padding-bottom: max(4px, env(safe-area-inset-bottom, 4px));
   display: flex;
   justify-content: space-between;
@@ -1081,7 +1083,7 @@ body.dark-mode::-webkit-scrollbar-thumb:hover {
     letter-spacing: 1.5px !important;
   }
 
-  .toolbar, button, .theme-toggle-btn { display: none !important; }
+  .toolbar, butt.toolbar, button, .theme-toggle-btn, .home-btn { display: none !important; }on, .theme-toggle-btn { display: none !important; }
 
   /* ── CONTENT ── */
   .content {
@@ -1093,18 +1095,20 @@ body.dark-mode::-webkit-scrollbar-thumb:hover {
 
   /* ── FOOTER ── */
   .footer {
-    display: flex !important;
-    margin-top: 5px !important;
-    padding: 4px 2px !important;
-    border-top: 1px solid #D97706 !important;
-    background: white !important;
-    min-height: auto !important;
-    box-sizing: border-box !important;
-  }
+  display: flex !important;
+  margin-top: auto !important;
+  margin-bottom: 0.5px !important;
+  padding: 4px 2px !important;
+  border-top: 1px solid #D97706 !important;
+  background: white !important;
+  min-height: auto !important;
+  box-sizing: border-box !important;
+  align-items: center !important;
+}
   .footer-text, .footer span {
     line-height: 1.4 !important;
     white-space: nowrap !important;
-    font-size: 0.52rem !important;
+    font-size: 0.45rem !important;
   }
 
   /* ── TWO-COLUMN ── */
@@ -1305,7 +1309,7 @@ body.dark-mode::-webkit-scrollbar-thumb:hover {
 
   /* ── 1. MASTER SCALE ── */
   body.mobile-safari .page {
-    zoom: 0.753;
+    zoom: 0.830;
     padding: 18px !important;
   }
 
@@ -1328,10 +1332,16 @@ body.dark-mode::-webkit-scrollbar-thumb:hover {
   }
 
 } /* end mobile-safari @media print */
+
+/* ── Home button ── */
+.home-btn{position:fixed;top:14px;left:calc(50% - 425px + 8px);z-index:9999;width:40px;height:40px;background:rgba(15,21,53,.9);border:1px solid rgba(251,191,36,.4);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;cursor:pointer;transition:all .2s;text-decoration:none;color:var(--text)}
+.home-btn:hover{background:rgba(251,191,36,.15);border-color:var(--yellow-bright);box-shadow:0 0 12px rgba(251,191,36,.3)}
+  @media(max-width:850px){.home-btn{left:8px;}}
 </style>
 </head>
 
 <body>
+<a class="home-btn" href="../" title="Back to Hub">🏠</a>
 
 <script>
 /* ── iOS device detection — applies mobile-safari class to ALL browsers on iOS
@@ -1359,7 +1369,7 @@ body.dark-mode::-webkit-scrollbar-thumb:hover {
 <div class="page" id="page">
 
   <div class="header">
-    <div class="header-logo">
+    <div class="header-logo" style="padding-left:30px;">
       <img src="https://raw.githubusercontent.com/BrandonAOG/AOG-Logo/main/logo.png" alt="logo" width="40" height="40" class="logo-img">
       <div class="company-name">Always On<br>Generators</div>
     </div>
@@ -1376,7 +1386,6 @@ body.dark-mode::-webkit-scrollbar-thumb:hover {
   </div>
 
   <div class="toolbar">
-    <button class="btn" onclick="window.location.href='../'">🏠</button>
     <button class="btn" onclick="printForm()" title="Print or save as PDF">📄 PDF</button>
     <button class="btn" onclick="saveForIPhone()" title="Save as image for iPhone">📱 iPhone</button>
     <button class="btn" onclick="saveForAndroid()" title="Save as image for Android">🤖 Android</button>
@@ -1696,49 +1705,43 @@ body.dark-mode::-webkit-scrollbar-thumb:hover {
     </div>
 
     <!-- Transfer Switch Section -->
-    <div class="section">
-      <div class="section-header">Transfer Switch</div>
-      <div class="section-body">
-        
-        <div class="field-row">
-          <div class="field-group">
-            <label for="tsserial1">TS Serial # 1</label>
-            <input type="text" id="tsserial1" placeholder="SN">
-          </div>
-          <div class="field-group">
-            <label>Condition</label>
-            <div class="radio-group">
-              <label><input type="radio" name="tscond1"> Good</label>
-              <label><input type="radio" name="tscond1"> Avg</label>
-              <label><input type="radio" name="tscond1"> Poor</label>
-              <label><input type="radio" name="tscond1"> Needs Replaced</label>
-            </div>
-          </div>
-        </div>  
-        
-        <div class="field-row">
-          <div class="field-group">
-            <label for="tsserial2">TS Serial # 2</label>
-            <input type="text" id="tsserial2" placeholder="SN">
-          </div>
-          <div class="field-group">
-            <label>Condition</label>
-            <div class="radio-group">
-              <label><input type="radio" name="tscond2"> Good</label>
-              <label><input type="radio" name="tscond2"> Avg</label>
-              <label><input type="radio" name="tscond2"> Poor</label>
-              <label><input type="radio" name="tscond2"> Needs Replaced</label>
-            </div>
-          </div>
-        </div>  
-        
-        <div class="field-row">
-          <label for="tsnotes"></label>
-          <textarea id="tsnotes" placeholder="Transfer Switch notes..."></textarea>
-        </div> 
-        
-      </div>  
-    </div>  
+<div class="section">
+  <div class="section-header">Transfer Switch</div>
+  <div class="section-body">
+
+    <div class="field-row" style="display:flex; align-items:center; gap:8px; flex-wrap:nowrap; margin-bottom:6px;">
+      <label for="tsserial1" style="white-space:nowrap;">TS Serial # 1</label>
+      <input type="text" id="tsserial1" placeholder="SN" style="width:90px; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <label>Condition</label>
+        <div class="check-group" style="flex-wrap:wrap; gap:2px;">
+          <label class="check-item"><input type="radio" name="tscond1" value="good"><span>Good</span></label>
+          <label class="check-item"><input type="radio" name="tscond1" value="avg"><span>Avg</span></label>
+          <label class="check-item"><input type="radio" name="tscond1" value="poor"><span>Poor</span></label>
+          <label class="check-item"><input type="radio" name="tscond1" value="replace"><span>Needs Replaced</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="field-row" style="display:flex; align-items:center; gap:8px; flex-wrap:nowrap; margin-bottom:6px;">
+      <label for="tsserial2" style="white-space:nowrap;">TS Serial # 2</label>
+      <input type="text" id="tsserial2" placeholder="SN" style="width:90px; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <label>Condition</label>
+        <div class="check-group" style="flex-wrap:wrap; gap:2px;">
+          <label class="check-item"><input type="radio" name="tscond2" value="good"><span>Good</span></label>
+          <label class="check-item"><input type="radio" name="tscond2" value="avg"><span>Avg</span></label>
+          <label class="check-item"><input type="radio" name="tscond2" value="poor"><span>Poor</span></label>
+          <label class="check-item"><input type="radio" name="tscond2" value="replace"><span>Needs Replaced</span></label>
+        </div>
+      </div>
+    </div>
+
+    <textarea id="tsnotes" placeholder="Transfer Switch notes..." style="min-height:50px;"></textarea>
+
+  </div>
+</div>
+    
 
     <!-- Other Section -->
     <div class="section">
@@ -1913,7 +1916,7 @@ function printForm() {
     .footer-text { color: #9CA3AF !important; }
     .footer { padding-bottom: 4px !important; }
     .content { flex-grow: 0 !important; }
-    .toolbar, button, .theme-toggle-btn { display: none !important; }
+    .toolbar, button, .theme-toggle-btn, .home-btn { display: none !important; }
   `;
   document.head.appendChild(printStyle);
 
