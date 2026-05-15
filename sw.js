@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v1.0.4';
+var CACHE_NAME = 'aog-forms-v1.0.5';
 var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
@@ -17,10 +17,10 @@ var DEV_MODE   = false; // ← SET TRUE during development/testing
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  'fixed Image capture on estimate form. fixed TS alignment on Maint. form',
-  'ADDED; spec viewer card and its files',
-  'Added seasonal theming back to estimate form',
-  'took off pre-cached on estimate so themes would generate properly'
+  'better dropdown for generator section on spec viewer',
+  'Fixed some spec sheets breaker sizes',
+  '',
+  ''
 ];
 // ============================================================
 
