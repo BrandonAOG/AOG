@@ -578,6 +578,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
   .gas-appliances-label { color: #6B7280 !important; font-size: 0.57rem !important; margin-bottom: 3px !important; }
   #install-difficulty-row { flex-shrink: 0 !important; margin-top: 0 !important; }
   #address-suggestions, #gps-status { display: none !important; }
+  .field-error { display: none !important; }
   #install_days { padding: 2px 5px !important; min-height: 31px !important; height: 31px !important; }
   #elec_run_ft { width: 9ch !important; min-width: 9ch !important; max-width: 9ch !important; flex-shrink: 0 !important; }
   #gen_size { width: 15ch !important; min-width: 15ch !important; max-width: 15ch !important; flex-shrink: 0 !important; }
@@ -870,7 +871,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
         Fuel Tank
       </div>
       <div class="section-body">
-        <div class="inline-row" style="margin-bottom:14px;">
+        <div class="inline-row" style="margin-bottom:0;">
           <div class="check-group" role="group" aria-label="Fuel type">
             <label class="check-item"><input type="checkbox" name="fuel_type" value="natural_gas"><span>Natural Gas</span></label>
             <label class="check-item"><input type="checkbox" name="fuel_type" value="needs_tank"><span>Needs Tank</span></label>
@@ -1040,8 +1041,7 @@ var VALIDATION_RULES = {
   phone:     { required: true, pattern: /^[\d\-\(\)\s+]{10,}$/, message: 'Phone must be at least 10 digits' },
   email:     { required: true, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Please enter a valid email address' },
   estimator: { required: true, minLength: 2, message: 'Estimator name is required' },
-  sqft:      { pattern: /^[0-9]*$/, min: 500, max: 100000, message: 'Square footage must be between 500 and 100,000' },
-  gen_size:  { pattern: /^[\d\w\s\-]*$/, message: 'Invalid generator size format' }
+  sqft:      { pattern: /^[0-9]*$/, min: 500, max: 100000, message: 'Square footage must be between 500 and 100,000' }
 };
 
 var FormValidator = (function() {
