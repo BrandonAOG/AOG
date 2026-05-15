@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v1.0.3';
+var CACHE_NAME = 'aog-forms-v1.0.4';
 var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
@@ -19,8 +19,8 @@ var DEV_MODE   = false; // ← SET TRUE during development/testing
 var CHANGELOG = [
   'fixed Image capture on estimate form. fixed TS alignment on Maint. form',
   'ADDED; spec viewer card and its files',
-  'add more 1st stage and 2nd stage regulators for more variance',
-  'ADDED 24KW & 26KW Generac Gaurdian legacy Generators'
+  'Added seasonal theming back to estimate form',
+  'took off pre-cached on estimate so themes would generate properly'
 ];
 // ============================================================
 
@@ -30,7 +30,6 @@ var PRECACHE_URLS = [
   '../offline.html',
   '../logo.png',
   '../sw.js',
-  '../estimate/',
   '../maintenance/',
   '../site-visit/',
   '../gas-install/',
