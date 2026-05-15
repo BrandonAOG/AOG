@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v1.0.5';
+var CACHE_NAME = 'aog-forms-v1.0.6';
 var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
@@ -19,7 +19,7 @@ var DEV_MODE   = false; // ← SET TRUE during development/testing
 var CHANGELOG = [
   'better dropdown for generator section on spec viewer',
   'Fixed some spec sheets breaker sizes',
-  '',
+  'Added torque Values-still verifying',
   ''
 ];
 // ============================================================
