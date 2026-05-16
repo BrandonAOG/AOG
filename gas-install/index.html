@@ -621,10 +621,10 @@ body.dark-mode .miscues-textarea {
     break-before: avoid !important;
   }
 
-  /* Page 2: always starts fresh, allow content to flow/break freely */
+  /* Page 2: let it follow naturally after the page break on page1 */
   #page2 {
-    page-break-before: always !important;
-    break-before: page !important;
+    page-break-before: avoid !important;
+    break-before: avoid !important;
     page-break-after: avoid !important;
     break-after: avoid !important;
     page-break-inside: auto !important;
@@ -903,6 +903,7 @@ body.dark-mode .miscues-textarea {
   table.mat-table th,
   table.mat-table td {
     border: 0.5pt solid #333 !important;
+    outline: 0.5pt solid #333 !important;
     padding: 0.75pt 1pt !important;
     text-align: center !important;
     font-size: 9.5pt !important;
@@ -911,6 +912,11 @@ body.dark-mode .miscues-textarea {
     display: table-cell !important;
     visibility: visible !important;
     opacity: 1 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  table.mat-table tr {
+    outline: 0.5pt solid #333 !important;
   }
   table.mat-table th {
     background: #4B5563 !important;
@@ -1071,7 +1077,7 @@ body.dark-mode .miscues-textarea {
     page-break-inside: auto !important;
   }
   #page2 {
-    page-break-before: always !important; break-before: page !important;
+    page-break-before: avoid !important; break-before: avoid !important;
     page-break-inside: auto !important;
   }
 
@@ -1162,16 +1168,23 @@ body.dark-mode .miscues-textarea {
   table.mat-table {
     font-size: 7.5pt !important; width: 100% !important;
     table-layout: fixed !important; border-collapse: collapse !important;
+    border: 0.5pt solid #333 !important;
     display: table !important; visibility: visible !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
   table.mat-table col.col-data { width: 16pt !important; }
   table.mat-table thead { display: table-header-group !important; }
   table.mat-table tbody { display: table-row-group !important; }
-  table.mat-table tr { display: table-row !important; visibility: visible !important; }
+  table.mat-table tr {
+    display: table-row !important; visibility: visible !important;
+    outline: 0.5pt solid #333 !important;
+  }
   table.mat-table th, table.mat-table td {
     font-size: 7.5pt !important; border: 0.5pt solid #333 !important;
+    outline: 0.5pt solid #333 !important;
     padding: 0.5pt 1pt !important; display: table-cell !important;
     visibility: visible !important; opacity: 1 !important; line-height: 1.15 !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
   table.mat-table th {
     background: #4B5563 !important; color: #fff !important;
@@ -1192,8 +1205,6 @@ body.dark-mode .miscues-textarea {
   table.mat-table td input[type="number"] {
     font-size: 7.5pt !important; color: #1F2937 !important;
     background: #fff !important; border: none !important;
-    border-top: none !important; border-bottom: none !important;
-    border-left: none !important; border-right: none !important;
     box-shadow: none !important; outline: none !important;
     width: 100% !important; text-align: center !important; padding: 0 !important;
     display: block !important;
@@ -1361,6 +1372,13 @@ body.dark-mode .miscues-textarea {
             <tbody id="pipe-body"></tbody>
           </table>
         </div>
+        <div class="grid-section">
+          <table class="mat-table" id="risers-table">
+            <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
+            <thead><tr><th style="text-align:left;">Risers</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
+            <tbody id="risers-body"></tbody>
+          </table>
+        </div>
       </div>
       <div class="tables-col">
         <div class="grid-section">
@@ -1368,13 +1386,6 @@ body.dark-mode .miscues-textarea {
             <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
             <thead><tr><th style="text-align:left;">Poly Fittings</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
             <tbody id="poly-body"></tbody>
-          </table>
-        </div>
-        <div class="grid-section">
-          <table class="mat-table" id="risers-table">
-            <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
-            <thead><tr><th style="text-align:left;">Risers</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
-            <tbody id="risers-body"></tbody>
           </table>
         </div>
         <div class="grid-section">
@@ -1611,12 +1622,16 @@ if (document.readyState !== 'loading') setTimeout(applyYNColors, 50);
     document.body.style.maxWidth = '';
   });
 })();
+const SAVE_KEY = 'aog_gas_install_v1';
 let saveTimer = null;
 
 function collectState() {
-  const d = { inputs: {}, checks: {} };
+  const d = { inputs: {}, numbers: {}, checks: {} };
   document.querySelectorAll('input[type="text"], textarea').forEach((el, i) => {
     d.inputs['i' + i] = el.value;
+  });
+  document.querySelectorAll('input[type="number"]').forEach((el, i) => {
+    d.numbers['n' + i] = el.value;
   });
   document.querySelectorAll('input[type="checkbox"]').forEach((el, i) => {
     d.checks['c' + i] = el.checked;
@@ -1627,6 +1642,9 @@ function restoreState(d) {
   if (!d) return;
   document.querySelectorAll('input[type="text"], textarea').forEach((el, i) => {
     if (d.inputs && d.inputs['i' + i] !== undefined) el.value = d.inputs['i' + i];
+  });
+  document.querySelectorAll('input[type="number"]').forEach((el, i) => {
+    if (d.numbers && d.numbers['n' + i] !== undefined) el.value = d.numbers['n' + i];
   });
   document.querySelectorAll('input[type="checkbox"]').forEach((el, i) => {
     if (d.checks && d.checks['c' + i] !== undefined) {
@@ -1643,7 +1661,7 @@ function doSave() {
   setTimeout(() => setStatus(''), 2000);
 }
 document.addEventListener('input', e => {
-  if (e.target.matches('input[type="text"], textarea')) {
+  if (e.target.matches('input[type="text"], textarea, input[type="number"]')) {
     clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 1200);
   }
 });
@@ -2034,23 +2052,23 @@ function setStatus(msg) {
 
     // ── mat-tables ──
     document.querySelectorAll('table.mat-table').forEach(el =>
-      save(el, 'display:table!important;width:100%!important;table-layout:fixed!important;border-collapse:collapse!important;visibility:visible!important;font-size:7.5pt!important;'));
+      save(el, 'display:table!important;width:100%!important;table-layout:fixed!important;border-collapse:collapse!important;border:0.5pt solid #333!important;visibility:visible!important;font-size:7.5pt!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;'));
     document.querySelectorAll('table.mat-table thead').forEach(el =>
       save(el, 'display:table-header-group!important;visibility:visible!important;'));
     document.querySelectorAll('table.mat-table tbody').forEach(el =>
       save(el, 'display:table-row-group!important;visibility:visible!important;'));
     document.querySelectorAll('table.mat-table tr').forEach(el =>
-      save(el, 'display:table-row!important;visibility:visible!important;'));
+      save(el, 'display:table-row!important;visibility:visible!important;outline:0.5pt solid #333!important;'));
     document.querySelectorAll('table.mat-table th').forEach(el =>
-      save(el, 'display:table-cell!important;visibility:visible!important;font-size:7.5pt!important;padding:0.5pt 1pt!important;border:0.5pt solid #333!important;background:#4B5563!important;color:#fff!important;white-space:nowrap!important;-webkit-print-color-adjust:exact!important;'));
+      save(el, 'display:table-cell!important;visibility:visible!important;font-size:7.5pt!important;padding:0.5pt 1pt!important;border:0.5pt solid #333!important;outline:0.5pt solid #333!important;background:#4B5563!important;color:#fff!important;white-space:nowrap!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;'));
     document.querySelectorAll('table.mat-table td').forEach(el =>
-      save(el, 'display:table-cell!important;visibility:visible!important;font-size:7.5pt!important;padding:0.5pt 1pt!important;border:0.5pt solid #333!important;line-height:1.15!important;overflow:visible!important;'));
+      save(el, 'display:table-cell!important;visibility:visible!important;font-size:7.5pt!important;padding:0.5pt 1pt!important;border:0.5pt solid #333!important;outline:0.5pt solid #333!important;line-height:1.15!important;overflow:visible!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;'));
     document.querySelectorAll('table.mat-table td.row-label').forEach(el =>
-      save(el, 'display:table-cell!important;visibility:visible!important;font-size:7.5pt!important;padding:0.5pt 1pt!important;border:0.5pt solid #333!important;text-align:left!important;font-weight:bold!important;background:#fafafa!important;color:#1F2937!important;-webkit-print-color-adjust:exact!important;'));
+      save(el, 'display:table-cell!important;visibility:visible!important;font-size:7.5pt!important;padding:0.5pt 1pt!important;border:0.5pt solid #333!important;outline:0.5pt solid #333!important;text-align:left!important;font-weight:bold!important;background:#fafafa!important;color:#1F2937!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;'));
     document.querySelectorAll('table.mat-table td.row-label.section-header').forEach(el =>
-      save(el, 'display:table-cell!important;visibility:visible!important;font-size:7.5pt!important;padding:0.5pt 1pt!important;border:0.5pt solid #333!important;background:#4B5563!important;color:#fff!important;text-align:center!important;-webkit-print-color-adjust:exact!important;'));
+      save(el, 'display:table-cell!important;visibility:visible!important;font-size:7.5pt!important;padding:0.5pt 1pt!important;border:0.5pt solid #333!important;outline:0.5pt solid #333!important;background:#4B5563!important;color:#fff!important;text-align:center!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;'));
     document.querySelectorAll('table.mat-table td input[type="number"]').forEach(el =>
-      save(el, 'font-size:7.5pt!important;color:#1F2937!important;background:#fff!important;border:none!important;border-top:none!important;border-bottom:none!important;border-left:none!important;border-right:none!important;box-shadow:none!important;outline:none!important;width:100%!important;text-align:center!important;padding:0!important;display:block!important;-webkit-appearance:none!important;'));
+      save(el, 'font-size:7.5pt!important;color:#1F2937!important;background:#fff!important;border:none!important;box-shadow:none!important;outline:none!important;width:100%!important;text-align:center!important;padding:0!important;display:block!important;-webkit-appearance:none!important;-webkit-print-color-adjust:exact!important;'));
   }
 
   window.addEventListener('beforeprint', function() {
@@ -2061,6 +2079,37 @@ function setStatus(msg) {
     restorePHs();
     restoreStyles();
   });
+})();
+
+/* ================================================================
+   PRINT — FORCE LIGHT MODE
+   Switch to light for print, restore dark after (with fallback timer
+   in case afterprint never fires on Mobile Safari)
+================================================================ */
+(function() {
+  let wasDark = false;
+  let restoreTimer = null;
+
+  function forceLightForPrint() {
+    wasDark = document.body.classList.contains('dark-mode');
+    if (wasDark) {
+      document.body.classList.remove('dark-mode');
+    }
+    // Fallback: restore dark mode after 30s if afterprint never fires
+    clearTimeout(restoreTimer);
+    restoreTimer = setTimeout(restoreDarkAfterPrint, 30000);
+  }
+
+  function restoreDarkAfterPrint() {
+    clearTimeout(restoreTimer);
+    if (wasDark) {
+      document.body.classList.add('dark-mode');
+      wasDark = false;
+    }
+  }
+
+  window.addEventListener('beforeprint', forceLightForPrint);
+  window.addEventListener('afterprint', restoreDarkAfterPrint);
 })();
 </script>
 <script>
