@@ -59,7 +59,7 @@ body.dark-mode {
   }
   /* But keep table cell inputs small — they're not tap-focused fields */
   table.mat-table td input[type="number"] {
-    font-size: 12px !important;
+    font-size: 10px !important;
   }
 }
 
@@ -107,7 +107,7 @@ body.dark-mode .action-bar {
 }
 
 .btn {
-  padding: 9px 18px; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
+  padding: 9px 18px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
   border: 1px solid rgba(217,119,6,0.4); background: rgba(217,119,6,0.05);
   border-radius: 0; cursor: pointer; transition: all 0.15s ease;
   font-family: Arial, sans-serif; color: var(--cyan); text-transform: uppercase;
@@ -145,7 +145,7 @@ body.dark-mode .theme-icon { opacity:0; transform:rotate(-180deg); }
 body.dark-mode .theme-icon.theme-icon-moon { opacity:1; transform:rotate(0deg); }
 
 #save-status {
-  color:var(--text-muted); font-size:11px; min-height:16px;
+  color:var(--text-muted); font-size:10px; min-height:16px;
   text-align:center; width:100%; font-family:Arial,sans-serif;
 }
 
@@ -171,7 +171,7 @@ body.dark-mode .form-page {
    INPUTS
    ============================================================ */
 input[type="text"], textarea {
-  font-family:Arial,sans-serif; font-size:12px; color:var(--text);
+  font-family:Arial,sans-serif; font-size:11px; color:var(--text);
   background:var(--panel); border:none;
   border-bottom:1px solid rgba(217,119,6,0.25);
   padding:2px 4px; outline:none; transition:all 0.2s;
@@ -206,7 +206,7 @@ input[type="checkbox"] {
 textarea.multiline {
   width:100%; resize:none;
   border:1px solid rgba(217,119,6,0.25); border-radius:3px;
-  padding:6px 8px; font-size:12px; line-height:1.5;
+  padding:6px 8px; font-size:10px; line-height:1.5;
   color:var(--text); background:var(--panel); outline:none; display:block;
 }
 textarea.multiline:focus {
@@ -221,7 +221,7 @@ body.dark-mode textarea.multiline {
    ============================================================ */
 .yn-checkbox-wrap {
   display:inline-flex; align-items:center; gap:3px; cursor:pointer;
-  padding:2px 6px 2px 3px; border-radius:3px; font-size:11px; font-weight:bold;
+  padding:2px 6px 2px 3px; border-radius:3px; font-size:10px; font-weight:bold;
   border:1px solid transparent; transition:background 0.15s, border-color 0.15s;
   vertical-align:middle; user-select:none; white-space:nowrap; flex-shrink:0;
 }
@@ -236,7 +236,7 @@ body.dark-mode .yn-checkbox-wrap { border-color:rgba(0,255,200,0.3); }
 /* ============================================================
    PAGE 1 — NON-TABLE ELEMENTS 0.5px SMALLER
    ============================================================ */
-/* Base font shrink on page1 sections (excluding tables) */
+/* Base font sizes on page1 */
 #page1 .section-row { font-size: 11.5px; }
 #page1 .section-title { font-size: 11.5px; }
 #page1 .field-row { font-size: 11.5px; }
@@ -253,7 +253,7 @@ body.dark-mode .yn-checkbox-wrap { border-color:rgba(0,255,200,0.3); }
 
 /* Date input styling */
 input[type="date"] {
-  font-family: Arial, sans-serif; font-size: 12px; color: var(--text);
+  font-family: Arial, sans-serif; font-size: 10px; color: var(--text);
   background: var(--panel); border: none;
   border-bottom: 1px solid rgba(217,119,6,0.25);
   padding: 2px 4px; outline: none; transition: all 0.2s;
@@ -390,10 +390,14 @@ body.dark-mode .full-line-input { color:#E0F7FF; border-bottom-color:rgba(0,255,
    REGULATORS ROW
    ============================================================ */
 .reg-row {
-  font-size:11px; font-weight:bold;
+  font-size:12px; font-weight:bold;
   display:flex; flex-wrap:wrap; gap:4px 12px;
   align-items:flex-end; margin-bottom:8px; padding:4px 0;
   border-top:1px solid #ccc; border-bottom:1px solid #ccc;
+}
+.reg-title {
+  width:100%; font-size:14px; font-weight:bold;
+  margin-bottom:2px; letter-spacing:0.5px;
 }
 .reg-field { display:flex; align-items:flex-end; gap:3px; white-space:nowrap; min-width:0; }
 .reg-field input {
@@ -429,7 +433,7 @@ body.dark-mode .page2-tables-split .tables-col .mat-table thead tr th:first-chil
 .grid-section { margin-bottom:8px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
 table.mat-table {
   border-collapse:collapse; width:100%; table-layout:fixed;
-  font-size:11px; font-family:Arial,sans-serif;
+  font-size:10px; font-family:Arial,sans-serif;
 }
 table.mat-table col.col-data { width:38px; }
 table.mat-table th,
@@ -439,20 +443,20 @@ table.mat-table td {
 }
 table.mat-table th {
   background:var(--header-bg); color:var(--header-fg);
-  font-weight:bold; font-size:11px; white-space:nowrap;
+  font-weight:bold; font-size:10px; white-space:nowrap;
 }
 table.mat-table td.row-label {
-  text-align:left; font-weight:bold;
+  text-align:right; font-weight:bold;
   background:var(--row-label-bg); color:var(--text);
-  font-size:11px; word-break:break-word; white-space:normal;
+  font-size:10px; word-break:break-word; white-space:normal;
 }
 table.mat-table td.row-label.section-header {
   background:var(--header-bg); color:var(--header-fg);
-  text-align:center; font-size:11px; font-weight:bold;
+  text-align:center; font-size:10px; font-weight:bold;
 }
 table.mat-table td input[type="number"] {
   width:100%; border:none; text-align:center;
-  font-size:11px; padding:1px; background:transparent;
+  font-size:10px; padding:1px; background:transparent;
   color:var(--text); font-family:Arial,sans-serif; min-width:0;
   -moz-appearance:textfield;
 }
@@ -472,7 +476,7 @@ body.dark-mode table.mat-table td input[type="number"]::-webkit-inner-spin-butto
    ============================================================ */
 .other-section { width:100%; padding-top:4px; }
 .other-title {
-  font-weight:bold; font-size:11px;
+  font-weight:bold; font-size:10px;
   background:var(--header-bg); color:var(--header-fg);
   padding:4px 8px; margin-bottom:6px;
   border:1px solid #555;
@@ -481,14 +485,14 @@ body.dark-mode .other-title { border-color:rgba(0,255,200,0.2); }
 .miscues-textarea {
   width:100%; resize:none;
   border:1px solid rgba(217,119,6,0.25); border-radius:3px;
-  padding:6px 8px; font-size:12px; line-height:1.6; overflow:visible;
+  padding:6px 8px; font-size:10px; line-height:1.6; overflow:visible;
   color:var(--text); background:var(--panel); outline:none; display:block;
 }
 body.dark-mode .miscues-textarea {
   background:rgba(10,14,39,0.6); border-color:rgba(0,255,200,0.2); color:#E0F7FF;
 }
 
-.notice { text-align:center; font-size:11px; color:var(--text-muted); padding:10px 16px 6px; }
+.notice { text-align:center; font-size:10px; color:var(--text-muted); padding:10px 16px 6px; }
 
 /* ============================================================
    ██████╗ ██████╗ ██╗███╗   ██╗████████╗
@@ -720,7 +724,7 @@ body.dark-mode .miscues-textarea {
   }
   .field-row input[type="text"],
   .field-row input[type="date"] {
-    font-size: 9pt !important;
+    font-size: 7pt !important;
     color: #1F2937 !important;
     background: transparent !important;
     border-top: none !important;
@@ -773,7 +777,7 @@ body.dark-mode .miscues-textarea {
 
   /* ── 9. Inline inputs ── */
   .inline-input, .full-line-input {
-    font-size: 9pt !important;
+    font-size: 7pt !important;
     color: #1F2937 !important;
     background: transparent !important;
     border-top: none !important;
@@ -815,6 +819,10 @@ body.dark-mode .miscues-textarea {
   .yn-checkbox-wrap.yn-opt.checked { background: #D97706 !important; border-color: #b45309 !important; color: #fff !important; }
 
   /* ── 11. Regulators row ── */
+  .reg-title {
+    width: 100% !important; font-size: 10.5pt !important;
+    font-weight: bold !important; margin-bottom: 1pt !important;
+  }
   .reg-row {
     display: flex !important;
     flex-wrap: wrap !important;
@@ -830,7 +838,7 @@ body.dark-mode .miscues-textarea {
   .reg-field { gap: 1.5pt !important; }
   .reg-field label { font-size: 8.5pt !important; }
   .reg-field input {
-    font-size: 8.5pt !important;
+    font-size: 7pt !important;
     width: 20pt !important;
     color: #1F2937 !important;
     background: transparent !important;
@@ -872,7 +880,7 @@ body.dark-mode .miscues-textarea {
     display: block !important;
   }
   .grid-section {
-    margin-bottom: 1pt !important;
+    margin-bottom: 3.5pt !important;
     overflow: visible !important;
   }
 
@@ -969,38 +977,22 @@ body.dark-mode .miscues-textarea {
     padding: 0 !important;
   }
 
-  /* ── 14. Miscues textarea — compact ── */
-  .miscues-textarea {
-    font-size: 9pt !important;
-    min-height: 16.5pt !important;
-    max-height: 22.5pt !important;
-    height: 18.5pt !important;
+  /* ── 14. Miscues, Needs Completed, Why Not — exact 5 lines ── */
+  .miscues-textarea,
+  #page1 textarea.multiline {
+    font-size: 7pt !important;
+    line-height: 1.3 !important;
+    height: 59pt !important;
+    min-height: 59pt !important;
+    max-height: 59pt !important;
     background: #fff !important;
     color: #1F2937 !important;
     border: 0.5pt solid #bbb !important;
-    border-radius: 1pt !important;
-    padding: 0.5pt 2pt !important;
-    line-height: 1.2 !important;
+    padding: 1pt 2pt !important;
     overflow: hidden !important;
     resize: none !important;
-    display: block !important;
-  }
-
-  /* Needs Completed & Why Not textareas — compact for print */
-  #page1 textarea.multiline {
-    font-size: 9pt !important;
-    height: 18.5pt !important;
-    min-height: 18.5pt !important;
-    max-height: 22.5pt !important;
-    background: #fff !important;
-    color: #1F2937 !important;
-    border: 0.5pt solid #bbb !important;
-    padding: 0.5pt 2pt !important;
-    line-height: 1.2 !important;
-    overflow: hidden !important;
     display: block !important;
     width: 100% !important;
-    resize: none !important;
   }
 
   /* ── 15. Other/Notes (page 2) — compact ── */
@@ -1097,11 +1089,18 @@ body.dark-mode .miscues-textarea {
   }
   .top-fields-row .field-row {
     display: table-cell !important; width: 50% !important; vertical-align: bottom !important;
-    font-size: 7.5pt !important; line-height: 1.2 !important; padding: 0 4pt 1pt 0 !important;
+    font-size: 9pt !important; line-height: 1.2 !important; padding: 0 4pt 1pt 0 !important;
+    white-space: nowrap !important;
+  }
+  .top-fields-row .field-row label {
+    display: inline !important; white-space: nowrap !important;
+    font-size: 9pt !important; font-weight: bold !important; margin-right: 3pt !important;
   }
   .top-fields-row .field-row input[type="text"],
   .top-fields-row .field-row input[type="date"] {
-    font-size: 7.5pt !important; padding: 0 2pt !important; clip-path: none !important;
+    display: inline !important; width: 55% !important;
+    min-width: 0 !important; box-sizing: border-box !important;
+    font-size: 9pt !important; padding: 0 2pt !important; clip-path: none !important;
   }
 
   .two-col {
@@ -1112,34 +1111,42 @@ body.dark-mode .miscues-textarea {
   .two-col > div { display: table-cell !important; width: 50% !important; vertical-align: top !important; }
 
   .section { margin-bottom: 0 !important; }
-  .section-title { font-size: 7.5pt !important; padding-bottom: 0 !important; margin-bottom: 0 !important; }
+  .section-title { font-size: 9pt !important; padding-bottom: 0 !important; margin-bottom: 0 !important; }
   .section-row {
-    font-size: 7.5pt !important; line-height: 1.2 !important;
+    font-size: 9pt !important; line-height: 1.2 !important;
     min-height: 0 !important; padding-top: 0 !important; margin-bottom: 0 !important;
     display: block !important; overflow: visible !important;
   }
   hr.section-hr { margin: 1pt 0 !important; }
   .section-row .inline-input { width: 7ch !important; }
   .inline-input, .full-line-input {
-    font-size: 7.5pt !important; line-height: 1.2 !important;
+    font-size: 9pt !important; line-height: 1.2 !important;
     min-height: 0 !important; padding: 0 2pt !important; clip-path: none !important;
   }
   .full-line-input { width: 100% !important; }
 
-  input[type="checkbox"] { width: 7pt !important; height: 7pt !important; }
-  .yn-checkbox-wrap { font-size: 7.5pt !important; padding: 0 1.5pt !important; line-height: 1.1 !important; }
+  input[type="checkbox"] { width: 9pt !important; height: 9pt !important; }
+  .yn-checkbox-wrap { font-size: 9pt !important; padding: 0 1.5pt !important; line-height: 1.1 !important; }
   .yn-checkbox-wrap.yn-yes.checked { background: #059669 !important; -webkit-print-color-adjust: exact !important; }
   .yn-checkbox-wrap.yn-no.checked  { background: #DC2626 !important; -webkit-print-color-adjust: exact !important; }
   .yn-checkbox-wrap.yn-opt.checked { background: #D97706 !important; -webkit-print-color-adjust: exact !important; }
 
   #page1 textarea.multiline, .miscues-textarea {
-    font-size: 7.5pt !important; height: 12pt !important;
-    min-height: 12pt !important; max-height: 12pt !important;
-    padding: 0 2pt !important; overflow: hidden !important; resize: none !important;
+    font-size: 9pt !important;
+    line-height: 1.3 !important;
+    height: 59pt !important;
+    min-height: 59pt !important;
+    max-height: 59pt !important;
+    padding: 1pt 2pt !important;
+    overflow: hidden !important; resize: none !important;
     display: block !important; width: 100% !important;
     background: #fff !important; border: 0.5pt solid #bbb !important;
   }
 
+  .reg-title {
+    width: 100% !important; font-size: 11pt !important;
+    font-weight: bold !important; margin-bottom: 1pt !important; display: block !important;
+  }
   .reg-row {
     font-size: 7pt !important; padding: 1pt 0 !important; margin-bottom: 2pt !important;
     border-top: 0.5pt solid #ccc !important; border-bottom: 0.5pt solid #ccc !important;
@@ -1149,7 +1156,7 @@ body.dark-mode .miscues-textarea {
   .reg-field label { font-size: 7pt !important; }
   .reg-field label span { color: #1E40AF !important; -webkit-print-color-adjust: exact !important; }
   .reg-field input {
-    font-size: 7pt !important; width: 22pt !important;
+    font-size: 9pt !important; width: 22pt !important;
     background: transparent !important; border: none !important;
     border-bottom: 0.5pt solid #999 !important; padding: 0 2pt !important;
     clip-path: none !important;
@@ -1163,7 +1170,7 @@ body.dark-mode .miscues-textarea {
   .tables-split .tables-col, .page2-tables-split .tables-col {
     display: table-cell !important; width: 50% !important; vertical-align: top !important;
   }
-  .grid-section { margin-bottom: 1pt !important; overflow: visible !important; }
+  .grid-section { margin-bottom: 3.5pt !important; overflow: visible !important; }
 
   table.mat-table {
     font-size: 7.5pt !important; width: 100% !important;
@@ -1306,7 +1313,7 @@ body.dark-mode .miscues-textarea {
           <div class="section-row">Surface Mounted Length: <input class="inline-input" style="width:40px;" type="text"></div>
           <div class="section-row">Underground Length: <input class="inline-input" style="width:40px;" type="text"></div>
           <div class="section-row">Attic CSST Length: <input class="inline-input" style="width:40px;" type="text"></div>
-          <div class="section-row" style="flex-direction:column;align-items:flex-start;gap:2px;"><b>Needs Completed:</b><textarea class="multiline" rows="2" style="width:100%;min-height:38px;resize:none;font-size:11.5px;" placeholder="Enter items to be completed…"></textarea></div>
+          <div class="section-row" style="flex-direction:column;align-items:flex-start;gap:2px;"><b>Needs Completed:</b><textarea class="multiline" rows="5" maxlength="225" style="width:100%;resize:none;font-size:10.5px;" placeholder="Enter items to be completed…"></textarea></div>
           <div class="section-row"><input type="text" class="full-line-input" placeholder="Additional notes"></div>
         </div>
         <hr class="section-hr">
@@ -1315,12 +1322,12 @@ body.dark-mode .miscues-textarea {
           <div class="section-row"><b>Team Member:</b>&nbsp;<input class="inline-input" style="width:15ch;" type="text">&nbsp;<b>Checked By:</b>&nbsp;<input class="inline-input" style="width:15ch;" type="text"></div>
           <div class="section-row" style="font-weight:bold;">EVERYTHING CLEAN: <input type="checkbox"> YES</div>
           <div class="section-row">Ready for H/O Training: <input type="checkbox"> YES <input type="checkbox"> NO</div>
-          <div class="section-row" style="flex-direction:column;align-items:flex-start;gap:2px;"><b>Why Not:</b><textarea class="multiline" rows="2" style="width:100%;min-height:38px;resize:none;font-size:11.5px;" placeholder="Enter reason…"></textarea></div>
+          <div class="section-row" style="flex-direction:column;align-items:flex-start;gap:2px;"><b>Why Not:</b><textarea class="multiline" rows="5" maxlength="225" style="width:100%;resize:none;font-size:10.5px;" placeholder="Enter reason…"></textarea></div>
         </div>
         <hr class="section-hr">
         <div class="section">
           <div class="section-title" style="text-transform:none;">Any Miscues or Delays:</div>
-          <textarea class="miscues-textarea" rows="3" placeholder="Enter any miscues or delays…"></textarea>
+          <textarea class="miscues-textarea" rows="5" maxlength="225" placeholder="Enter any miscues or delays…"></textarea>
         </div>
       </div>
       <!-- RIGHT -->
@@ -1355,47 +1362,13 @@ body.dark-mode .miscues-textarea {
     </div>
 
     <div class="reg-row">
-      <div class="reg-field"><label><span style="color:#1E40AF;font-weight:bold;">REGULATORS</span> 1<sup>ST</sup> STAGE:</label><input type="text"></div>
+      <div class="reg-title"><span style="color:#1E40AF;font-weight:bold;">REGULATORS</span></div>
+      <div class="reg-field"><label>1<sup>ST</sup> STAGE:</label><input type="text"></div>
       <div class="reg-field"><label>NORGAS:</label><input type="text"></div>
       <div class="reg-field"><label>2<sup>ND</sup> STAGE STRAIGHT:</label><input type="text"></div>
       <div class="reg-field"><label>2<sup>ND</sup> STAGE BACK MOUNT:</label><input type="text"></div>
       <div class="reg-field"><label>2PSI:</label><input type="text"></div>
       <div class="reg-field"><label>Pietro:</label><input type="text"></div>
-    </div>
-
-    <div class="tables-split">
-      <div class="tables-col">
-        <div class="grid-section">
-          <table class="mat-table" id="pipe-table">
-            <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
-            <thead><tr><th style="text-align:left;">Galv. Pipe &amp; Fittings</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
-            <tbody id="pipe-body"></tbody>
-          </table>
-        </div>
-        <div class="grid-section">
-          <table class="mat-table" id="risers-table">
-            <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
-            <thead><tr><th style="text-align:left;">Risers</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
-            <tbody id="risers-body"></tbody>
-          </table>
-        </div>
-      </div>
-      <div class="tables-col">
-        <div class="grid-section">
-          <table class="mat-table" id="poly-table">
-            <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
-            <thead><tr><th style="text-align:left;">Poly Fittings</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
-            <tbody id="poly-body"></tbody>
-          </table>
-        </div>
-        <div class="grid-section">
-          <table class="mat-table" id="whips-table">
-            <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
-            <thead><tr><th style="text-align:left;">Appliance Whips</th><th>½"</th><th>3/8"</th><th>5/8"</th><th>1"</th><th>¾"</th></tr></thead>
-            <tbody id="whips-body"></tbody>
-          </table>
-        </div>
-      </div>
     </div>
 
   </div><!-- end page1 -->
@@ -1406,18 +1379,46 @@ body.dark-mode .miscues-textarea {
     <div class="page2-tables-split">
       <div class="tables-col">
         <div class="grid-section">
+          <table class="mat-table" id="pipe-table">
+            <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
+            <thead><tr><th style="text-align:right;">Galv. Pipe &amp; Fittings</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
+            <tbody id="pipe-body"></tbody>
+          </table>
+        </div>
+        <div class="grid-section">
           <table class="mat-table" id="nipples-left-table">
             <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
-            <thead><tr><th style="text-align:left;">Galv. Nipples</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
+            <thead><tr><th style="text-align:right;">Galv. Nipples</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
             <tbody id="nipples-left-body"></tbody>
+          </table>
+        </div>
+        <div class="grid-section">
+          <table class="mat-table" id="risers-table">
+            <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
+            <thead><tr><th style="text-align:right;">Risers</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
+            <tbody id="risers-body"></tbody>
           </table>
         </div>
       </div>
       <div class="tables-col">
         <div class="grid-section">
+          <table class="mat-table" id="poly-table">
+            <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
+            <thead><tr><th style="text-align:right;">Poly Fittings</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
+            <tbody id="poly-body"></tbody>
+          </table>
+        </div>
+        <div class="grid-section">
+          <table class="mat-table" id="whips-table">
+            <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
+            <thead><tr><th style="text-align:right;">Appliance Whips</th><th>½"</th><th>3/8"</th><th>5/8"</th><th>1"</th><th>¾"</th></tr></thead>
+            <tbody id="whips-body"></tbody>
+          </table>
+        </div>
+        <div class="grid-section">
           <table class="mat-table" id="nipples-right-table">
             <colgroup><col class="col-label"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"><col class="col-data"></colgroup>
-            <thead><tr><th style="text-align:left;">Misc. Materials</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
+            <thead><tr><th style="text-align:right;">Misc. Materials</th><th>2"</th><th>1¼"</th><th>1"</th><th>¾"</th><th>½"</th></tr></thead>
             <tbody id="nipples-right-body"></tbody>
           </table>
         </div>
@@ -1671,10 +1672,13 @@ document.addEventListener('change', e => {
   }
 });
 window.addEventListener('DOMContentLoaded', () => {
-  try {
-    const s = localStorage.getItem(SAVE_KEY);
-    if (s) restoreState(JSON.parse(s));
-  } catch(e) {}
+  // Delay restore slightly so JS-built table rows are in the DOM first
+  setTimeout(() => {
+    try {
+      const s = localStorage.getItem(SAVE_KEY);
+      if (s) restoreState(JSON.parse(s));
+    } catch(e) {}
+  }, 100);
 });
 
 /* ================================================================
@@ -2022,7 +2026,11 @@ function setStatus(msg) {
     document.querySelectorAll('.top-fields-row').forEach(el =>
       save(el, 'display:table-row!important;width:100%!important;'));
     document.querySelectorAll('.top-fields-row .field-row').forEach(el =>
-      save(el, 'display:table-cell!important;width:50%!important;vertical-align:bottom!important;font-size:7.5pt!important;line-height:1.2!important;min-height:0!important;padding:0 4pt 1pt 0!important;'));
+      save(el, 'display:table-cell!important;width:50%!important;vertical-align:bottom!important;font-size:9pt!important;line-height:1.2!important;min-height:0!important;padding:0 4pt 1pt 0!important;white-space:nowrap!important;'));
+    document.querySelectorAll('.top-fields-row .field-row label').forEach(el =>
+      save(el, 'display:inline!important;white-space:nowrap!important;font-size:9pt!important;font-weight:bold!important;margin-right:3pt!important;'));
+    document.querySelectorAll('.top-fields-row .field-row input[type="text"], .top-fields-row .field-row input[type="date"]').forEach(el =>
+      save(el, 'display:inline!important;width:55%!important;min-width:0!important;box-sizing:border-box!important;font-size:9pt!important;'));
 
     // ── tables-split (page 1 & 2) ──
     document.querySelectorAll('.tables-split, .page2-tables-split').forEach(el =>
@@ -2032,23 +2040,43 @@ function setStatus(msg) {
 
     // ── section rows ──
     document.querySelectorAll('.section-row').forEach(el =>
-      save(el, 'font-size:7.5pt!important;line-height:1.2!important;min-height:0!important;padding-top:0!important;margin-bottom:0!important;display:block!important;overflow:visible!important;'));
+      save(el, 'font-size:9pt!important;line-height:1.2!important;min-height:0!important;padding-top:0!important;margin-bottom:0!important;display:block!important;overflow:visible!important;'));
     document.querySelectorAll('.section-title').forEach(el =>
-      save(el, 'font-size:7.5pt!important;padding-bottom:0!important;margin-bottom:0!important;'));
+      save(el, 'font-size:9pt!important;padding-bottom:0!important;margin-bottom:0!important;'));
     document.querySelectorAll('.section').forEach(el =>
       save(el, 'margin-bottom:0!important;'));
 
+    // ── top-fields inputs (Customer Name, Date, Address etc.) ──
+    document.querySelectorAll('.top-fields-row .field-row input[type="text"], .top-fields-row .field-row input[type="date"]').forEach(el =>
+      save(el, 'display:inline!important;width:55%!important;min-width:0!important;box-sizing:border-box!important;font-size:9pt!important;'));
+
     // ── inline inputs — shorten team member fields ──
     document.querySelectorAll('.section-row .inline-input').forEach(el =>
-      save(el, 'width:7ch!important;font-size:7.5pt!important;line-height:1.2!important;min-height:0!important;padding:0 2pt!important;clip-path:none!important;-webkit-appearance:none!important;'));
+      save(el, 'width:7ch!important;font-size:9pt!important;line-height:1.2!important;min-height:0!important;padding:0 2pt!important;clip-path:none!important;-webkit-appearance:none!important;'));
 
-    // ── page 1 textareas ──
+    // ── full-line inputs ──
+    document.querySelectorAll('.full-line-input').forEach(el =>
+      save(el, 'font-size:9pt!important;width:100%!important;'));
+
+    // ── reg-field inputs ──
+    document.querySelectorAll('.reg-title').forEach(el =>
+      save(el, 'display:block!important;width:100%!important;font-size:11pt!important;font-weight:bold!important;margin-bottom:1pt!important;'));
+    document.querySelectorAll('.reg-field input[type="text"]').forEach(el =>
+      save(el, 'font-size:9pt!important;width:22pt!important;border:none!important;border-bottom:0.5pt solid #999!important;padding:0 2pt!important;background:transparent!important;clip-path:none!important;'));
+
+    // ── page 1 textareas — exact 5 lines ──
     document.querySelectorAll('#page1 textarea.multiline, .miscues-textarea').forEach(el =>
-      save(el, 'font-size:7.5pt!important;height:12pt!important;min-height:12pt!important;max-height:12pt!important;padding:0 2pt!important;line-height:1.2!important;overflow:hidden!important;resize:none!important;display:block!important;width:100%!important;background:#fff!important;border:0.5pt solid #bbb!important;'));
+      save(el, 'font-size:9pt!important;line-height:1.3!important;height:59pt!important;min-height:59pt!important;max-height:59pt!important;padding:1pt 2pt!important;overflow:hidden!important;resize:none!important;display:block!important;width:100%!important;background:#fff!important;border:0.5pt solid #bbb!important;'));
 
     // ── page 2 textarea ──
     document.querySelectorAll('#page2 textarea.multiline').forEach(el =>
-      save(el, 'font-size:8pt!important;height:40pt!important;min-height:40pt!important;max-height:40pt!important;background:#fff!important;border:0.5pt solid #bbb!important;padding:2pt!important;line-height:1.3!important;overflow:hidden!important;display:block!important;width:100%!important;resize:none!important;'));
+      save(el, 'font-size:9pt!important;height:40pt!important;min-height:40pt!important;max-height:40pt!important;background:#fff!important;border:0.5pt solid #bbb!important;padding:2pt!important;line-height:1.3!important;overflow:hidden!important;display:block!important;width:100%!important;resize:none!important;'));
+
+    // ── checkboxes and yn pills ──
+    document.querySelectorAll('input[type="checkbox"]').forEach(el =>
+      save(el, 'width:9pt!important;height:9pt!important;margin:0 0.5pt!important;'));
+    document.querySelectorAll('.yn-checkbox-wrap').forEach(el =>
+      save(el, 'font-size:9pt!important;padding:0.25pt 2pt 0.25pt 0.5pt!important;gap:0.5pt!important;line-height:1.1!important;border-radius:1pt!important;'));
 
     // ── mat-tables ──
     document.querySelectorAll('table.mat-table').forEach(el =>
