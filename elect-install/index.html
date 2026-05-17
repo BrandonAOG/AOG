@@ -228,9 +228,34 @@ body.dark-mode input[type="number"]:focus, body.dark-mode textarea:focus, body.d
 }
 }
 
-input[type="checkbox"] { width: 14px; height: 14px; cursor: pointer; vertical-align: middle; margin: 2px 4px 2px 0; accent-color: var(--cyan); flex-shrink: 0; }
+input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; min-width: 14px;
+  border: 2px solid #D97706; border-radius: 2px;
+  background: #fff; cursor: pointer;
+  vertical-align: middle; margin: 2px 4px 2px 0;
+  flex-shrink: 0; position: relative; display: inline-block;
+  overflow: visible;
+  transition: background 0.15s, border-color 0.15s;
+}
+input[type="checkbox"]:checked {
+  background: #D97706; border-color: #D97706;
+}
+input[type="checkbox"]:checked::after {
+  content: '';
+  display: block;
+  position: absolute;
+  left: 2px; top: -1px;
+  width: 5px; height: 9px;
+  border: 2px solid #000;
+  border-top: none; border-left: none;
+  transform: rotate(45deg);
+  -webkit-transform: rotate(45deg);
+}
 @media (max-width: 480px) { input[type="checkbox"] { width: 12px; height: 12px; margin: 1px 3px 1px 0; } }
-body.dark-mode input[type="checkbox"] { accent-color: #00FFC8; }
+body.dark-mode input[type="checkbox"] { border-color: #00FFC8; }
+body.dark-mode input[type="checkbox"]:checked { background: #00FFC8; border-color: #00FFC8; }
+body.dark-mode input[type="checkbox"]:checked::after { border-color: #000; }
 
 textarea { resize: vertical; border: 1px solid rgba(217,119,6,0.2); padding: 6px; min-height: 40px; font-family: Arial, sans-serif; }
 body.dark-mode textarea { border-color: rgba(0,255,200,0.15); }
@@ -243,16 +268,20 @@ body.dark-mode textarea:focus { border-color: #00FFC8; box-shadow: 0 0 8px rgba(
   padding: 2px 6px 2px 3px; border-radius: 3px; font-size: 10px; font-weight: bold;
   border: 1px solid transparent; transition: background 0.15s, border-color 0.15s;
   vertical-align: middle; user-select: none; white-space: nowrap; flex-shrink: 0; font-family: Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  min-height: 32px; min-width: 44px; justify-content: center;
 }
 @media (max-width: 480px) { .yn-checkbox-wrap { font-size: 9px; padding: 1px 4px 1px 2px; } }
 .yn-checkbox-wrap.yn-yes { border-color: #bbb; }
 .yn-checkbox-wrap.yn-no { border-color: #bbb; }
 .yn-checkbox-wrap.yn-yes.checked { background: #059669; border-color: #047857; color: #fff; }
 .yn-checkbox-wrap.yn-no.checked { background: #DC2626; border-color: #b91c1c; color: #fff; }
-.yn-checkbox-wrap.yn-yes.checked input, .yn-checkbox-wrap.yn-no.checked input { accent-color: #fff; }
 .yn-checkbox-wrap.yn-opt { border-color: #bbb; }
 .yn-checkbox-wrap.yn-opt.checked { background: #D97706; border-color: #b45309; color: #fff; }
-.yn-checkbox-wrap.yn-opt.checked input { accent-color: #fff; }
+
+/* Safari: invert the native checkbox to white when inside a colored checked pill */
+/* yn-checkbox-wrap checked — white checkmark via ::after already set above */
+.yn-checkbox-wrap.checked input[type="checkbox"]:checked::after { border-color: #000; }
 body.dark-mode .yn-checkbox-wrap { border-color: rgba(0,255,200,0.3); }
 body.dark-mode .yn-checkbox-wrap.checked { border-color: rgba(0,255,200,0.5); }
 
@@ -639,11 +668,29 @@ body.dark-mode .notice { color: #7DD3FC; }
   #page1 .add-ts-btn { display: none !important; }
   #page1 .ts-remove-btn { display: none !important; }
   #page1 .textarea-field { border-color: #aaa !important; min-height: 30px !important; font-size: 9px !important; }
-  #page1 .yn-checkbox-wrap { border-color: #bbb !important; font-size: 8px !important; padding: 1px 3px !important; }
+  #page1 .yn-checkbox-wrap { border-color: #bbb !important; font-size: 8px !important; padding: 1px 3px !important; min-height: 0 !important; min-width: 0 !important; }
   #page1 .yn-checkbox-wrap.yn-yes.checked { background: #059669 !important; color: #fff !important; }
   #page1 .yn-checkbox-wrap.yn-no.checked  { background: #DC2626 !important; color: #fff !important; }
   #page1 .yn-checkbox-wrap.yn-opt.checked { background: #D97706 !important; color: #fff !important; }
-  #page1 input[type="checkbox"] { width: 10px !important; height: 10px !important; }
+  input[type="checkbox"] {
+    -webkit-appearance: none !important; appearance: none !important;
+    width: 10px !important; height: 10px !important; min-width: 10px !important;
+    border: 1.5px solid #D97706 !important; border-radius: 2px !important;
+    background: #fff !important; position: relative !important; display: inline-block !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+  }
+  input[type="checkbox"]:checked {
+    background: #D97706 !important; border-color: #D97706 !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+  }
+  input[type="checkbox"]:checked::after {
+    content: '' !important; position: absolute !important;
+    left: 1px !important; top: -2px !important;
+    width: 4px !important; height: 7px !important;
+    border: 2px solid #000 !important; border-top: none !important; border-left: none !important;
+    transform: rotate(45deg) !important; display: block !important;
+  }
+  .yn-checkbox-wrap.checked input[type="checkbox"]:checked::after { border-color: #000 !important; }
 
   /* ── PAGE 2 ── */
   #page2 { page-break-before: always !important; break-before: page !important; }
@@ -1131,7 +1178,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
 
     <div class="top-fields">
       <div class="field-row"><label>Customer Name:</label><input type="text"></div>
-      <div class="field-row"><label>Date:</label><input type="text"></div>
+      <div class="field-row"><label>Date:</label><input type="date"></div>
       <div class="field-row"><label>Address:</label><input type="text"></div>
       <div class="field-row"><label>Install Truck:</label><input type="text"></div>
       <div class="field-row"><label>Job:</label><input type="text"></div>
@@ -1493,7 +1540,12 @@ function applyYNColors() {
       });
     }
     cb.addEventListener('change', () => { exclusiveCheck(); syncState(); saveFormData(); });
-    wrap.addEventListener('click', (e) => { if (e.target !== cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); } });
+    wrap.addEventListener('click', (e) => {
+      if (e.target === cb) return; // let native checkbox handle its own click
+      e.preventDefault();
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event('change'));
+    });
     syncState();
   });
 }
@@ -1503,6 +1555,9 @@ const ynObserver = new MutationObserver(() => applyYNColors());
 function clearForm() {
   if (!confirm("Clear all fields? This cannot be undone.")) return;
   try { localStorage.removeItem(SAVE_KEY); } catch(e) {}
+  // Remove all extra transfer switches, keep only the first
+  document.querySelectorAll('.ts-block:not(:first-child)').forEach(el => el.remove());
+  renumberTS();
   document.querySelectorAll('input[type="text"], textarea').forEach(el => el.value = "");
   document.querySelectorAll('input[type="checkbox"]').forEach(el => {
     el.checked = false;
@@ -1694,11 +1749,38 @@ if (document.readyState === 'loading') {
 
 // ===== BEFORE/AFTER PRINT =====
 window.addEventListener('beforeprint', () => {
-  // Safari: fires after window.print() returns, dark mode already stripped manually
+  // Inject compact style for page1 when multiple transfer switches are present
+  const tsCount = document.querySelectorAll('.ts-block').length;
+  if (tsCount > 1) {
+    const s = document.createElement('style');
+    s.id = 'multi-ts-print';
+    s.textContent = `
+      #page1 .section-row { font-size: 8px !important; margin-bottom: 1px !important; }
+      #page1 .field-row label { font-size: 8px !important; }
+      #page1 .field-row input[type="text"] { font-size: 8px !important; }
+      #page1 .inline-input { font-size: 8px !important; }
+      #page1 .section { margin-bottom: 4px !important; }
+      #page1 .section-title { font-size: 9px !important; margin-bottom: 2px !important; }
+      #page1 .ts-block { margin-bottom: 2px !important; border-color: #bbb !important; }
+      #page1 .ts-header { padding: 2px 4px !important; }
+      #page1 .ts-header-left { font-size: 8px !important; }
+      #page1 .ts-body { padding: 2px 4px !important; }
+      #page1 .ts-body .section-row { font-size: 8px !important; margin-bottom: 1px !important; }
+      #page1 .yn-checkbox-wrap { font-size: 7px !important; padding: 0px 2px !important; min-height: 0 !important; min-width: 0 !important; }
+      #page1 input[type="checkbox"] { width: 8px !important; height: 8px !important; min-width: 8px !important; }
+      #page1 .two-col { gap: 4px 8px !important; }
+      #page1 hr.section-hr { margin: 2px 0 !important; }
+      #page1 .top-fields { margin-bottom: 4px !important; gap: 1px 6px !important; }
+      #page1 .textarea-field { min-height: 20px !important; font-size: 8px !important; }
+    `;
+    document.head.appendChild(s);
+  }
 });
 window.addEventListener('afterprint', () => {
   const nt = document.getElementById('no-transitions');
   if (nt) nt.remove();
+  const mts = document.getElementById('multi-ts-print');
+  if (mts) mts.remove();
   if (wasDarkAtPrint) document.body.classList.add('dark-mode');
 });
 
