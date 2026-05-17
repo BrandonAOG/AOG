@@ -1168,7 +1168,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
           <div class="section-row"><label>Grounds and Neutrals Separated:</label><input type="checkbox"> YES <input type="checkbox"> NO</div>
           <div class="section-row"><label>Transfer Switch(es) Made Up:</label><input type="checkbox"> YES <input type="checkbox"> NO</div>
           <div class="section-row"><label>Generator Made Up:</label><input type="checkbox"> YES <input type="checkbox"> NO</div>
-          <div class="section-row"><label>Generator Electrical Run:</label><input type="checkbox"> Surface Mount <input type="checkbox"> U.G. <input type="checkbox"> Attic</div>
+          <div class="section-row" data-multi="true"><label>Generator Electrical Run:</label><input type="checkbox"> Surface Mount <input type="checkbox"> U.G. <input type="checkbox"> Attic</div>
           <div class="section-row"><label>Generator Set to NG or LQ in Controller &amp; In Generator:</label><input type="checkbox"> YES <input type="checkbox"> NO</div>
           <div class="section-row"><label>60A Load Shed Installed &amp; Programmed:</label><input type="checkbox"> YES <input type="checkbox"> NO</div>
           <div class="section-row"><label>100A Load Shed Installed &amp; Programmed:</label><input type="checkbox"> YES <input type="checkbox"> NO</div>
@@ -1480,7 +1480,19 @@ function applyYNColors() {
     cb.parentNode.insertBefore(wrap, cb); wrap.appendChild(cb);
     if (textNode) { wrap.appendChild(document.createTextNode(' ' + label)); textNode.remove(); }
     function syncState() { wrap.classList.toggle('checked', cb.checked); }
-    cb.addEventListener('change', syncState);
+    function exclusiveCheck() {
+      if (!cb.checked) return;
+      const row = cb.closest('.section-row, .ts-body > div');
+      if (!row || row.dataset.multi === 'true') return;
+      row.querySelectorAll('.yn-checkbox-wrap input[type="checkbox"]').forEach(other => {
+        if (other !== cb && other.checked) {
+          other.checked = false;
+          const w = other.parentElement;
+          if (w) w.classList.remove('checked');
+        }
+      });
+    }
+    cb.addEventListener('change', () => { exclusiveCheck(); syncState(); saveFormData(); });
     wrap.addEventListener('click', (e) => { if (e.target !== cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); } });
     syncState();
   });
@@ -1667,9 +1679,9 @@ function attachAutosave() {
 }
 
 function initApp() {
+  restoreFormData();
   applyYNColors();
   setupThemeToggle();
-  restoreFormData();
   attachAutosave();
   const container = document.getElementById('ts-container');
   if (container) ynObserver.observe(container, { childList: true, subtree: true });
