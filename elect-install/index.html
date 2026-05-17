@@ -74,7 +74,7 @@ body.dark-mode {
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { width: 100%; height: 100%; overflow-x: hidden; }
+html { width: 100%; height: 100%; overflow: hidden; }
 
 body {
   font-family: Arial, sans-serif;
@@ -87,8 +87,9 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 24px);
   -webkit-text-size-adjust: 100%;
   overflow-x: hidden;
+  overflow-y: auto;
+  height: 100%;
   transition: background-color 0.3s ease, color 0.3s ease;
-  min-height: 100vh;
 }
 
 @media screen {
@@ -99,9 +100,15 @@ body.dark-mode {
 }
 }
 
-/* ===== STICKY ACTION BAR ===== */
-.action-bar {
-  position: sticky; top: 0; z-index: 1000; width: 100%;
+/* ===== ACTION BAR — sticky, follows scroll ===== */
+.action-bar,
+#action-bar,
+body .action-bar,
+body #action-bar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 999;
+  width: 100%;
   background: var(--panel); padding: 12px 16px;
   display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;
   box-shadow: 0 4px 18px rgba(0,0,0,0.3);
@@ -119,7 +126,7 @@ body.dark-mode .action-bar {
 }
 
 .btn {
-  padding: 9px 18px; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
+  padding: 9px 18px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
   border: 1px solid rgba(217,119,6,0.4); background: rgba(217,119,6,0.05);
   border-radius: 0; cursor: pointer; transition: all 0.15s ease;
   font-family: Arial, sans-serif; color: var(--cyan); text-transform: uppercase;
@@ -127,7 +134,7 @@ body.dark-mode .action-bar {
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   white-space: nowrap; flex-shrink: 0;
 }
-@media (max-width: 640px) { .btn { padding: 8px 14px; font-size: 10px; } }
+@media (max-width: 640px) { .btn { padding: 8px 14px; font-size: 9px; } }
 body.dark-mode .btn { background: rgba(0,255,200,0.08); border-color: rgba(0,255,200,0.25); color: #00FFC8; text-shadow: 0 0 4px rgba(0,255,200,0.3); }
 .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: var(--glow); transform: translateY(-1px); }
 body.dark-mode .btn:hover { background: rgba(0,255,200,0.12); border-color: #00FFC8; box-shadow: 0 0 12px rgba(0,255,200,0.25); text-shadow: 0 0 8px rgba(0,255,200,0.6); }
@@ -157,10 +164,10 @@ body.dark-mode .theme-icon { opacity: 0; transform: rotate(-180deg); }
 body.dark-mode .theme-icon.theme-icon-moon { opacity: 1; transform: rotate(0deg); }
 
 #save-status {
-  color: var(--text-muted); font-size: 11px; min-height: 16px;
+  color: var(--text-muted); font-size: 10px; min-height: 16px;
   text-align: center; transition: color 0.3s ease; width: 100%; font-family: Arial, sans-serif;
 }
-@media (max-width: 640px) { #save-status { font-size: 10px; } }
+@media (max-width: 640px) { #save-status { font-size: 9px; } }
 body.dark-mode #save-status { color: #7DD3FC; }
 
 .page-wrapper { width: 100%; max-width: 1050px; margin: 0 auto; display: flex; flex-direction: column; gap: 0; padding: 0; }
@@ -432,6 +439,11 @@ body.dark-mode .notice { color: #7DD3FC; }
     print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
+
+  /* Always show real tables and hide mobile UI on print, regardless of screen width */
+  #mobile-p2-accordions { display: none !important; }
+  #page2 .grid-section  { display: block !important; overflow: visible !important; }
+  #page2 .footer-fields { display: block !important; }
 
   @page { size: 8.5in 11in; margin: 0.2in; }
 
@@ -718,6 +730,205 @@ body.dark-mode .notice { color: #7DD3FC; }
    These rules tighten page 2 on mobile so the footer
    stays on page 2 and doesn't spill to a 3rd page.
    ===================================================== */
+/* ===== MOBILE ACCORDION — SCREEN ONLY (max-width: 767px) =====
+   Tables stay 100% untouched in print.
+   ============================================================ */
+@media screen and (max-width: 767px) {
+
+  /* Hide the real tables on mobile */
+  #page2 .grid-section { display: none !important; }
+  #page2 .footer-fields { display: none !important; }
+
+  /* Accordion wrapper injected by JS */
+  #mobile-p2-accordions {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  /* Each accordion panel */
+  .mob-accordion {
+    border: 1px solid var(--border-bright);
+    border-radius: 0;
+    overflow: hidden;
+    margin-bottom: 6px;
+    background: var(--panel);
+  }
+  body.dark-mode .mob-accordion {
+    border-color: rgba(0,255,200,0.2);
+    background: rgba(15,21,53,0.8);
+  }
+
+  /* Accordion header button */
+  .mob-acc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 14px 16px;
+    background: #f0f0f0;
+    border: none;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: var(--text);
+    letter-spacing: 0.5px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    text-align: left;
+    gap: 8px;
+  }
+  body.dark-mode .mob-acc-header {
+    background: rgba(36,52,88,0.9);
+    color: #00FFC8;
+  }
+  .mob-acc-header .mob-acc-title { flex: 1; }
+  .mob-acc-header .mob-acc-badge {
+    font-size: 10px;
+    background: rgba(217,119,6,0.12);
+    color: #D97706;
+    border: 1px solid rgba(217,119,6,0.3);
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-weight: normal;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  body.dark-mode .mob-acc-header .mob-acc-badge {
+    background: rgba(0,255,200,0.08);
+    color: #00FFC8;
+    border-color: rgba(0,255,200,0.25);
+  }
+  .mob-acc-header .mob-acc-arrow {
+    font-size: 12px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .mob-acc-header.open .mob-acc-arrow { transform: rotate(180deg); }
+
+  /* Accordion body */
+  .mob-acc-body {
+    display: none;
+    padding: 10px 12px 14px;
+    background: var(--panel);
+  }
+  body.dark-mode .mob-acc-body { background: transparent; }
+  .mob-acc-body.open { display: block; }
+
+  /* Card rows — one per column/wire-size */
+  .mob-card-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  body.dark-mode .mob-card-row { border-bottom-color: rgba(0,255,200,0.1); }
+  .mob-card-row:last-child { border-bottom: none; }
+
+  .mob-card-label {
+    flex: 1;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  body.dark-mode .mob-card-label { color: #E0F7FF; }
+
+  /* Sub-label for multi-row tables (row name + col name) */
+  .mob-card-sublabel {
+    font-size: 10px;
+    font-weight: normal;
+    color: var(--text-muted);
+  }
+  body.dark-mode .mob-card-sublabel { color: #7DD3FC; }
+
+  .mob-card-input {
+    width: 90px;
+    min-width: 70px;
+    height: 44px;
+    border: 1.5px solid var(--border-bright) !important;
+    border-radius: 4px !important;
+    background: var(--bg3) !important;
+    color: var(--text);
+    font-size: 16px !important; /* prevents iOS zoom */
+    text-align: center;
+    padding: 4px 6px;
+    font-family: Arial, sans-serif;
+    flex-shrink: 0;
+    border-bottom: 1.5px solid var(--border-bright) !important;
+    outline: none;
+  }
+  body.dark-mode .mob-card-input {
+    background: rgba(26,40,71,0.7) !important;
+    border-color: rgba(0,255,200,0.3) !important;
+    color: #E0F7FF;
+  }
+  .mob-card-input:focus {
+    border-color: var(--cyan) !important;
+    background: rgba(217,119,6,0.05) !important;
+    box-shadow: 0 0 0 2px rgba(217,119,6,0.15) !important;
+  }
+  body.dark-mode .mob-card-input:focus {
+    border-color: #00FFC8 !important;
+    background: rgba(0,255,200,0.05) !important;
+    box-shadow: 0 0 0 2px rgba(0,255,200,0.15) !important;
+  }
+
+  /* Section heading inside accordion (for multi-row tables) */
+  .mob-section-heading {
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #D97706;
+    letter-spacing: 0.5px;
+    padding: 10px 0 4px;
+    border-bottom: 1px solid rgba(217,119,6,0.2);
+    margin-bottom: 2px;
+  }
+  body.dark-mode .mob-section-heading { color: #00FFC8; border-bottom-color: rgba(0,255,200,0.2); }
+
+  /* Footer accordion field rows */
+  .mob-footer-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  body.dark-mode .mob-footer-row { border-bottom-color: rgba(0,255,200,0.1); }
+  .mob-footer-row:last-child { border-bottom: none; }
+  .mob-footer-label {
+    flex: 1;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  body.dark-mode .mob-footer-label { color: #E0F7FF; }
+
+  /* Filled indicator dot on header */
+  .mob-acc-header .mob-filled-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #059669;
+    display: none;
+    flex-shrink: 0;
+  }
+  .mob-acc-header.has-data .mob-filled-dot { display: inline-block; }
+}
+
+/* ===================================================================
+   PRINT — mobile-only tightening (unchanged from original)
+   =================================================================== */
 @media print and (max-width: 767px) {
 
   @page { size: 8.5in 11in; margin: 0.15in; }
@@ -774,7 +985,7 @@ body.dark-mode .notice { color: #7DD3FC; }
 <body>
 
 <!-- ACTION BAR -->
-<div class="action-bar">
+<div class="action-bar" id="action-bar" style="position:sticky!important;top:0!important;">
   <div style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:100%;">
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;">
       <button class="btn" onclick="window.location.href='../'">🏠 HOME</button>
@@ -894,6 +1105,9 @@ body.dark-mode .notice { color: #7DD3FC; }
   <!-- PAGE 2 -->
   <div class="form-page" id="page2">
     <div id="page2-inner">
+
+    <!-- MOBILE ACCORDION UI — built by JS, screen-only -->
+    <div id="mobile-p2-accordions"></div>
 
     <div class="grid-section">
       <table class="mat-table">
@@ -1295,6 +1509,217 @@ window.addEventListener('afterprint', () => {
   if (nt) nt.remove();
   if (wasDarkAtPrint) document.body.classList.add('dark-mode');
 });
+
+// ===== MOBILE ACCORDION — PAGE 2 =====
+// Runs on screen only; print uses the real tables.
+function buildMobileAccordions() {
+  const container = document.getElementById('mobile-p2-accordions');
+  if (!container) return;
+
+  // --- Helper: create one accordion panel ---
+  function makeAccordion(title, badge, buildBodyFn) {
+    const wrap = document.createElement('div');
+    wrap.className = 'mob-accordion';
+
+    const btn = document.createElement('button');
+    btn.className = 'mob-acc-header';
+    btn.type = 'button';
+    btn.innerHTML = `
+      <span class="mob-acc-title">${title}</span>
+      <span class="mob-acc-badge">${badge}</span>
+      <span class="mob-filled-dot"></span>
+      <span class="mob-acc-arrow">▼</span>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'mob-acc-body';
+    buildBodyFn(body, btn);
+
+    btn.addEventListener('click', () => {
+      const isOpen = body.classList.contains('open');
+      body.classList.toggle('open', !isOpen);
+      btn.classList.toggle('open', !isOpen);
+    });
+
+    wrap.appendChild(btn);
+    wrap.appendChild(body);
+    container.appendChild(wrap);
+  }
+
+  // --- Multi-row table (Fittings, Wireway, Polaris) ---
+  // Each row of the real table = a sub-section with heading
+  // Each cell in that row = a card row
+  function addMultiRowTableAccordion(title, badge, tableId) {
+    makeAccordion(title, badge, (body, headerBtn) => {
+      const table = document.getElementById(tableId);
+      if (!table) return;
+      const colHeaders = Array.from(table.querySelectorAll('thead th')).slice(1).map(th => th.textContent.trim());
+      const rows = Array.from(table.querySelectorAll('tbody tr'));
+
+      rows.forEach(tr => {
+        const rowLabel = tr.querySelector('td.row-label')?.textContent.trim() || '';
+        const realInputs = Array.from(tr.querySelectorAll('input'));
+
+        const heading = document.createElement('div');
+        heading.className = 'mob-section-heading';
+        heading.textContent = rowLabel;
+        body.appendChild(heading);
+
+        colHeaders.forEach((colName, i) => {
+          const row = document.createElement('div');
+          row.className = 'mob-card-row';
+
+          const lbl = document.createElement('div');
+          lbl.className = 'mob-card-label';
+          lbl.innerHTML = `${colName}`;
+
+          const inp = document.createElement('input');
+          inp.type = 'text';
+          inp.inputMode = 'numeric';
+          inp.pattern = '[0-9]*';
+          inp.className = 'mob-card-input';
+          inp.placeholder = '—';
+
+          const realInput = realInputs[i];
+          if (realInput) {
+            inp.value = realInput.value;
+            inp.addEventListener('input', () => {
+              realInput.value = inp.value;
+              const hasAny = Array.from(body.querySelectorAll('.mob-card-input')).some(el => el.value.trim() !== '');
+              headerBtn.classList.toggle('has-data', hasAny);
+            });
+          }
+
+          row.appendChild(lbl);
+          row.appendChild(inp);
+          body.appendChild(row);
+        });
+      });
+    });
+  }
+
+  // --- Footer accordion ---
+  function addFooterAccordion() {
+    makeAccordion('Hardware & Extras', 'Qty / Length', (body, headerBtn) => {
+      const realFooter = document.querySelector('#page2 .footer-fields');
+      if (!realFooter) return;
+
+      const realLabels = realFooter.querySelectorAll('.footer-field label');
+      const realInputs = realFooter.querySelectorAll('.footer-field input');
+
+      realLabels.forEach((lbl, i) => {
+        const realInput = realInputs[i];
+        if (!realInput) return;
+
+        const row = document.createElement('div');
+        row.className = 'mob-footer-row';
+
+        const labelEl = document.createElement('div');
+        labelEl.className = 'mob-footer-label';
+        labelEl.textContent = lbl.textContent.replace(':', '').trim();
+
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.inputMode = realInput.inputMode || 'text';
+        inp.pattern = realInput.pattern || '';
+        inp.className = 'mob-card-input mob-footer-input';
+        inp.placeholder = '—';
+        inp.value = realInput.value;
+
+        inp.addEventListener('input', () => {
+          realInput.value = inp.value;
+          const hasAny = Array.from(body.querySelectorAll('.mob-card-input')).some(el => el.value.trim() !== '');
+          headerBtn.classList.toggle('has-data', hasAny);
+        });
+
+        row.appendChild(labelEl);
+        row.appendChild(inp);
+        body.appendChild(row);
+      });
+    });
+  }
+
+  // --- Wire tables (need tables to exist first, so we defer slightly) ---
+  function buildAll() {
+    // Wire tables — simple 1-row (select by thead content)
+    function findTableByHeader(text) {
+      return Array.from(document.querySelectorAll('#page2 table.mat-table')).find(t => {
+        const th = t.querySelector('thead th');
+        return th && th.textContent.includes(text);
+      });
+    }
+
+    function addSimpleTableByRef(title, badge, table) {
+      if (!table) return;
+      makeAccordion(title, badge, (body, headerBtn) => {
+        const headers = Array.from(table.querySelectorAll('thead th')).slice(1);
+        const realInputs = Array.from(table.querySelectorAll('tbody tr:first-child td input'));
+        headers.forEach((th, i) => {
+          const row = document.createElement('div');
+          row.className = 'mob-card-row';
+          const lbl = document.createElement('div');
+          lbl.className = 'mob-card-label';
+          lbl.textContent = th.textContent.trim().replace(/\n/g, ' ');
+          const inp = document.createElement('input');
+          inp.type = 'text'; inp.inputMode = 'numeric'; inp.pattern = '[0-9]*';
+          inp.className = 'mob-card-input'; inp.placeholder = '—';
+          const realInput = realInputs[i];
+          if (realInput) {
+            inp.value = realInput.value;
+            inp.addEventListener('input', () => {
+              realInput.value = inp.value;
+              const hasAny = Array.from(body.querySelectorAll('.mob-card-input')).some(el => el.value.trim() !== '');
+              headerBtn.classList.toggle('has-data', hasAny);
+            });
+          }
+          row.appendChild(lbl); row.appendChild(inp); body.appendChild(row);
+        });
+      });
+    }
+
+    addSimpleTableByRef('CU Wire', '13 sizes', findTableByHeader('CU Wire'));
+    addSimpleTableByRef('AL Wire', '12 sizes', findTableByHeader('AL Wire'));
+    addSimpleTableByRef('THHN Wire', '9 sizes', findTableByHeader('THHN'));
+
+    // Multi-row tables
+    addMultiRowTableAccordion('Fittings', '24 types × 11 sizes', 'fittings-table');
+    addMultiRowTableAccordion('Wireway', '5 sizes × 5 lengths', 'wireway-table');
+    addMultiRowTableAccordion('Polaris Taps', '6 gauges × 5 ports', 'polaris-table');
+
+    // Footer
+    addFooterAccordion();
+  }
+
+  // Tables are built by earlier JS — run after them
+  buildAll();
+}
+
+// Only run on mobile screen widths
+function initMobileAccordions() {
+  if (window.matchMedia && window.matchMedia('screen and (max-width: 767px)').matches) {
+    buildMobileAccordions();
+  }
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initMobileAccordions);
+} else {
+  // DOM already ready; run on next tick so JS-built tables exist
+  setTimeout(initMobileAccordions, 0);
+}
+
+// ===== FORCE ACTION BAR TO SCROLL (runs after all scripts) =====
+function unstickActionBar() {
+  var bar = document.getElementById('action-bar') || document.querySelector('.action-bar');
+  if (!bar) return;
+  bar.style.setProperty('position', 'sticky', 'important');
+  bar.style.setProperty('top', '0', 'important');
+  bar.style.removeProperty('bottom');
+}
+// Run immediately, after paint, and after load — catches any script that re-sticks it
+unstickActionBar();
+requestAnimationFrame(unstickActionBar);
+window.addEventListener('load', unstickActionBar);
+setTimeout(unstickActionBar, 500);
 
 // ===== SERVICE WORKER =====
 if ('serviceWorker' in navigator) {
