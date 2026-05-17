@@ -1763,7 +1763,7 @@ window.addEventListener('DOMContentLoaded', () => {
 ================================================================ */
 function clearForm() {
   if (!confirm('Clear all fields? This cannot be undone.')) return;
-  document.querySelectorAll('input[type="text"], textarea').forEach(el => el.value = '');
+  document.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(el => el.value = '');
   document.querySelectorAll('input[type="checkbox"]').forEach(el => {
     el.checked = false;
     const w = el.parentElement;
