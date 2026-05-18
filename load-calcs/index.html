@@ -35,7 +35,7 @@ html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;}
 body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;}
 
 /* ── TOP BAR ── */
-.topbar{background:#1C2333;color:#fff;padding:0 16px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.topbar{background:#1C2333;color:#fff;padding:0 16px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.3);margin-top:44px;}
 .topbar-brand{font-weight:700;font-size:16px;letter-spacing:.3px;color:#fff;}
 .topbar-brand span{color:var(--yellow);}
 .topbar-right{display:flex;gap:6px;}
@@ -293,7 +293,7 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 </div>
 
 <div class="job-banner">
-  <div class="jf"><label>Company</label><input type="text" id="j_co" value=""></div>
+  <div class="jf"><label>Customer</label><input type="text" id="j_co" value=""></div>
   <div class="jf"><label>Address</label><input type="text" id="j_addr" value=""></div>
   <div class="jf"><label>City / State / Zip</label><input type="text" id="j_city" value=""></div>
   <div class="jf"><label>Phone</label><input type="text" id="j_phone" value=""></div>
@@ -1948,6 +1948,7 @@ ${managedLines.length>0?'<div style="margin-top:10pt;border:1.5pt solid #D97706;
     +'<\/script>'
     +'</head><body>'
     +html
+
     +'</body></html>'
   );
   printWin.document.close();
@@ -1955,6 +1956,26 @@ ${managedLines.length>0?'<div style="margin-top:10pt;border:1.5pt solid #D97706;
 }
 </script>
   <script>
+function adjustTopPadding() {
+  var bar = document.getElementById('action-bar');
+  var topbar = document.querySelector('.topbar');
+  var tabsBar = document.querySelector('.tabs-bar');
+  var jobBanner = document.querySelector('.job-banner');
+  if (!bar) return;
+  var h = bar.offsetHeight || 44;
+  if (topbar) topbar.style.marginTop = h + 'px';
+  if (tabsBar) {
+    tabsBar.style.top = h + 'px';
+  }
+}
+window.addEventListener('resize', adjustTopPadding);
+window.addEventListener('load', adjustTopPadding);
+document.addEventListener('DOMContentLoaded', adjustTopPadding);
+setTimeout(adjustTopPadding, 0);
+setTimeout(adjustTopPadding, 100);
+setTimeout(adjustTopPadding, 500);
+</script>
+<script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
       navigator.serviceWorker.register('../sw.js', { scope: '../' })
