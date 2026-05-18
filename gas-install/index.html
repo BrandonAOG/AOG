@@ -98,14 +98,16 @@ body.dark-mode {
    ACTION BAR
    ============================================================ */
 .action-bar {
-  position: sticky; top: 0; z-index: 1000;
+  position: fixed !important;
+  top: 0 !important; left: 0 !important; right: 0 !important;
+  z-index: 99999;
   width: 100%;
   background: var(--panel);
-  padding: 12px 16px;
-  display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;
+  padding: 4px 8px;
+  display: flex; justify-content: center; gap: 4px; flex-wrap: nowrap; align-items: center;
   box-shadow: 0 4px 18px rgba(0,0,0,0.3);
   border-bottom: 1px solid var(--border-bright);
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease; box-sizing: border-box;
 }
 body.dark-mode .action-bar {
   background: linear-gradient(90deg,rgba(15,21,53,0.9),rgba(26,40,71,0.8),rgba(15,21,53,0.9));
@@ -114,17 +116,22 @@ body.dark-mode .action-bar {
 }
 
 .btn {
-  padding: 9px 18px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
+  padding: 6px 8px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
   border: 1px solid rgba(217,119,6,0.4); background: rgba(217,119,6,0.05);
   border-radius: 0; cursor: pointer; transition: all 0.15s ease;
   font-family: Arial, sans-serif; color: var(--cyan); text-transform: uppercase;
   clip-path: polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
-  white-space: nowrap; flex-shrink: 0;
-  min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center;
+  white-space: nowrap; flex: 1; min-width: 0;
+  text-align: center; display: inline-flex; align-items: center; justify-content: center;
+  overflow: hidden; text-overflow: ellipsis;
 }
-@media (max-width: 400px) {
-  .btn { padding: 8px 10px; font-size: 10px; letter-spacing: 0; }
+@media (max-width: 480px) {
+  .action-bar { padding: 4px 4px; gap: 3px; }
+  .btn { padding: 6px 4px; font-size: 9px; }
+}
+@media (max-width: 360px) {
+  .btn { font-size: 8px; padding: 6px 3px; letter-spacing: 0; }
 }
 body.dark-mode .btn {
   background: rgba(0,255,200,0.08); border-color: rgba(0,255,200,0.25);
@@ -483,7 +490,7 @@ table.mat-table td.row-label.section-header {
 }
 table.mat-table td input[type="number"] {
   width:100%; border:none; text-align:center;
-  font-size:10px; padding:1px; background:transparent;
+  font-size:11.5px; padding:1px; background:transparent;
   color:var(--text); font-family:Arial,sans-serif; min-width:0;
   -moz-appearance:textfield;
 }
@@ -755,15 +762,15 @@ body.dark-mode .miscues-textarea {
   }
   .field-row {
     display: flex !important;
-    align-items: flex-start !important;
+    align-items: center !important;
     gap: 2pt !important;
     font-size: 9pt !important;
     margin-bottom: 0 !important;
     flex-wrap: nowrap !important;
     line-height: 1.35 !important;
     overflow: visible !important;
-    min-height: 12pt !important;
-    padding-top: 0.5pt !important;
+    min-height: 14pt !important;
+    padding-top: 0 !important;
   }
   .field-row label {
     font-size: 9pt !important;
@@ -786,8 +793,9 @@ body.dark-mode .miscues-textarea {
     min-height: 12pt !important;
     overflow: visible !important;
     -webkit-appearance: none !important;
-    vertical-align: top !important;
+    vertical-align: middle !important;
     display: inline-block !important;
+    height: auto !important;
   }
 
   /* ── 8. Two-col ── */
@@ -839,8 +847,9 @@ body.dark-mode .miscues-textarea {
     min-height: 12pt !important;
     overflow: visible !important;
     -webkit-appearance: none !important;
-    vertical-align: top !important;
+    vertical-align: middle !important;
     display: inline-block !important;
+    height: auto !important;
   }
   .full-line-input { width: 100% !important; }
 
@@ -948,6 +957,7 @@ body.dark-mode .miscues-textarea {
     visibility: visible !important;
   }
   table.mat-table thead { display: table-header-group !important; }
+  table.mat-table td input[type="number"] { font-size: 9pt !important; height: auto !important; line-height: 1.2 !important; }
   table.mat-table tr {
     display: table-row !important;
     visibility: visible !important;
@@ -1304,35 +1314,35 @@ body.dark-mode .miscues-textarea {
     overflow: visible !important; clip-path: none !important;
   }
 }
+
+@media print {
+  .action-bar { display: none !important; }
+}
 </style>
 </head>
 <body>
 
 <!-- ========== ACTION BAR ========== -->
-<div class="action-bar">
-  <div style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;">
-    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%;">
-      <button class="btn" onclick="window.location.href='../'">🏠</button>
-      <button class="btn" onclick="(function(){ document.title = buildFileName('pdf', null).replace('.pdf',''); const wasDark = document.body.classList.contains('dark-mode'); document.body.classList.remove('dark-mode'); setTimeout(function(){ window.print(); setTimeout(function(){ if(wasDark) document.body.classList.add('dark-mode'); }, 1000); }, 100); })()">📄 PRINT</button>
-      <button class="btn" onclick="clearForm()">🗑 CLEAR</button>
-      <button class="btn" onclick="saveForIPhone()">📱 iPHONE</button>
-      <button class="btn" onclick="saveForAndroid()">🤖 ANDROID</button>
-      <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle dark mode">
-        <svg class="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="5"/>
-          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-        </svg>
-        <svg class="theme-icon theme-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
-      </button>
-    </div>
-    <div id="save-status"></div>
-  </div>
+<div class="action-bar" id="action-bar">
+  <button class="btn" onclick="window.location.href='../'">🏠 HOME</button>
+  <button class="btn" onclick="(function(){ document.title = buildFileName('pdf', null).replace('.pdf',''); const wasDark = document.body.classList.contains('dark-mode'); document.body.classList.remove('dark-mode'); setTimeout(function(){ window.print(); setTimeout(function(){ if(wasDark) document.body.classList.add('dark-mode'); }, 1000); }, 100); })()">📄 PDF</button>
+  <button class="btn" onclick="clearForm()">🗑 CLEAR</button>
+  <button class="btn" id="btn-iphone" onclick="saveForIPhone()">📱 iPHONE</button>
+  <button class="btn" id="btn-android" onclick="saveForAndroid()">🤖 ANDROID</button>
+  <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
+    <svg class="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="5"/>
+      <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+    <svg class="theme-icon theme-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  </button>
 </div>
+<div id="save-status" style="position:fixed;top:44px;left:0;right:0;z-index:99998;text-align:center;font-size:10px;color:var(--text-muted);background:var(--panel);padding:2px 8px;display:none;font-family:Arial,sans-serif;"></div>
 
 <!-- ========== PAGE WRAPPER ========== -->
 <div class="page-wrapper" id="page-wrapper">
@@ -1808,8 +1818,8 @@ function injectCaptureStyles() {
   el.id = 'capture-print-styles';
   el.textContent = `
     .form-page { background:#fff!important; color:#1F2937!important; padding:16px!important; box-sizing:border-box!important; }
-    .two-col { display:flex!important; flex-direction:row!important; flex-wrap:nowrap!important; gap:0 6pt!important; }
-    .two-col > div { flex:1 1 50%!important; min-width:0!important; width:50%!important; }
+    .two-col { display:grid!important; grid-template-columns:1fr 1fr!important; gap:0 6pt!important; width:100%!important; box-sizing:border-box!important; }
+    .two-col > div { min-width:0!important; overflow:visible!important; box-sizing:border-box!important; }
     .top-fields { display:flex!important; flex-wrap:wrap!important; gap:0 10pt!important; margin-bottom:2pt!important; }
     .top-fields .field-row { flex:0 0 48%!important; min-width:0!important; font-size:9pt!important; line-height:1.35!important; min-height:12pt!important; padding-top:0.5pt!important; }
     .section-row { font-size:9pt!important; line-height:1.35!important; min-height:12pt!important; padding-top:0.5pt!important; display:flex!important; flex-wrap:nowrap!important; align-items:flex-start!important; overflow:visible!important; }
@@ -1817,6 +1827,9 @@ function injectCaptureStyles() {
     .section { margin-bottom:0.5pt!important; }
     .inline-input, .full-line-input { font-size:9pt!important; line-height:1.35!important; min-height:12pt!important; padding:1pt 2pt 0 2pt!important; overflow:visible!important; background:transparent!important; border-top:none!important; border-left:none!important; border-right:none!important; border-bottom:0.5pt solid #999!important; }
     input[type="text"], input[type="date"] { font-size:9pt!important; line-height:1.35!important; min-height:12pt!important; padding:1pt 2pt 0 2pt!important; overflow:visible!important; background:transparent!important; color:#1F2937!important; }
+    .full-line-input { width:100%!important; box-sizing:border-box!important; }
+    .field-row input[type="text"], .field-row input[type="date"] { flex:1 1 auto!important; width:auto!important; min-width:0!important; box-sizing:border-box!important; }
+    .section-row .inline-input:not(.xshort) { flex:1 1 auto!important; width:auto!important; min-width:40px!important; box-sizing:border-box!important; }
     textarea { font-size:9pt!important; line-height:1.35!important; overflow:visible!important; background:transparent!important; color:#1F2937!important; }
     .action-bar, .notice, #save-status { display:none!important; }
     .page2-tables-split { display:flex!important; flex-direction:row!important; gap:0 6pt!important; width:100%!important; }
@@ -1826,8 +1839,15 @@ function injectCaptureStyles() {
     table.mat-table { font-size:9.5pt!important; width:100%!important; border-collapse:collapse!important; table-layout:fixed!important; }
     table.mat-table th, table.mat-table td { font-size:9.5pt!important; border:0.5pt solid #333!important; padding:0.75pt 1pt!important; overflow:visible!important; }
     table.mat-table th { background:#4B5563!important; color:#fff!important; }
+    table.mat-table td { overflow:visible!important; vertical-align:middle!important; height:auto!important; padding:3px!important; }
+    table.mat-table td input[type="number"] { height:auto!important; line-height:1.2!important; overflow:visible!important; display:block!important; box-sizing:border-box!important; padding:0!important; font-size:9pt!important; }
     table.mat-table td.row-label { background:#fafafa!important; font-weight:bold!important; text-align:left!important; }
     table.mat-table td.row-label.section-header { background:#4B5563!important; color:#fff!important; }
+    .top-fields-row { display:grid!important; grid-template-columns:1fr 1fr 1fr!important; gap:0 8pt!important; }
+    .top-fields-row .field-row { font-size:9pt!important; line-height:1.35!important; min-height:14pt!important; overflow:visible!important; align-items:center!important; }
+    .top-fields-row .field-row label { font-size:9pt!important; white-space:nowrap!important; }
+    .top-fields-row .field-row input[type="text"],
+    .top-fields-row .field-row input[type="date"] { font-size:9pt!important; height:auto!important; line-height:1.4!important; overflow:visible!important; }
     .logo-area { display:flex!important; align-items:center!important; justify-content:center!important; gap:6pt!important; }
     .logo-area img { width:28pt!important; height:28pt!important; }
     .logo-text { font-size:13pt!important; }
@@ -1842,6 +1862,69 @@ function removeCaptureStyles() {
   if (el) el.remove();
 }
 
+
+function forceDesktopLayout() {
+  const saved = [];
+  function setInline(el, styles) {
+    const prev = {};
+    for (const [k, v] of Object.entries(styles)) {
+      prev[k] = el.style[k];
+      el.style.setProperty(k.replace(/([A-Z])/g, '-$1').toLowerCase(), v, 'important');
+    }
+    saved.push({ el, prev, props: Object.keys(styles) });
+  }
+  // top-fields — table layout (matches print CSS)
+  document.querySelectorAll('.top-fields').forEach(el => {
+    setInline(el, { display: 'table', width: '100%', tableLayout: 'fixed', borderCollapse: 'separate', marginBottom: '2pt' });
+  });
+  // top-fields-row — table-row
+  document.querySelectorAll('.top-fields-row').forEach(el => {
+    setInline(el, { display: 'table-row' });
+  });
+  // top-fields field-row cells
+  document.querySelectorAll('.top-fields-row .field-row').forEach(el => {
+    setInline(el, { display: 'table-cell', width: '50%', verticalAlign: 'bottom', fontSize: '9pt', lineHeight: '1.2', whiteSpace: 'nowrap', padding: '0 4pt 1pt 0' });
+  });
+  // two-col — table layout (matches print CSS exactly)
+  document.querySelectorAll('.two-col').forEach(el => {
+    setInline(el, { display: 'table', width: '100%', tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: '4pt 0', marginBottom: '2pt' });
+  });
+  // two-col children — table-cell at exactly 50%
+  document.querySelectorAll('.two-col > div').forEach(el => {
+    setInline(el, { display: 'table-cell', width: '50%', verticalAlign: 'top' });
+  });
+  // form-page
+  document.querySelectorAll('.form-page').forEach(el => {
+    setInline(el, { padding: '16px', boxSizing: 'border-box' });
+  });
+  // full-line-inputs stretch to 100%
+  document.querySelectorAll('.full-line-input').forEach(el => {
+    setInline(el, { width: '100%', boxSizing: 'border-box' });
+  });
+  // field-row inputs stretch to fill remaining space
+  document.querySelectorAll('.field-row input[type="text"], .field-row input[type="date"]').forEach(el => {
+    setInline(el, { flex: '1 1 auto', width: '100%', minWidth: '0', boxSizing: 'border-box' });
+  });
+  // inline-inputs that aren't xshort stretch to fill
+  document.querySelectorAll('.section-row .inline-input:not(.xshort)').forEach(el => {
+    setInline(el, { flex: '1 1 auto', width: '100%', minWidth: '40px', boxSizing: 'border-box' });
+  });
+  // table number inputs — force height:auto and bump font for capture
+  document.querySelectorAll('table.mat-table td input[type="number"]').forEach(el => {
+    setInline(el, { height: 'auto', lineHeight: '1.6', padding: '3px 0', overflow: 'visible', display: 'block', boxSizing: 'border-box', fontSize: '12.5px' });
+  });
+  document.querySelectorAll('table.mat-table td').forEach(el => {
+    setInline(el, { overflow: 'visible', height: 'auto', padding: '3px' });
+  });
+  return () => saved.forEach(({ el, prev, props }) => {
+    props.forEach(k => {
+      const cssProp = k.replace(/([A-Z])/g, '-$1').toLowerCase();
+      el.style.removeProperty(cssProp);
+      if (prev[k]) el.style[k] = prev[k];
+    });
+  });
+}
+
 /* ================================================================
    SAVE — iPHONE
 ================================================================ */
@@ -1852,9 +1935,9 @@ function saveForIPhone() {
   document.body.classList.remove('dark-mode');
 
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.87);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.87);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;';
   const closeBtn = document.createElement('button');
-  closeBtn.style.cssText = 'position:sticky;top:0;background:#DC2626;color:#fff;border:none;border-radius:4px;padding:8px 16px;font-size:13px;cursor:pointer;font-weight:bold;z-index:10000;margin-bottom:12px;align-self:stretch;';
+  closeBtn.style.cssText = 'position:sticky;top:60px;background:#DC2626;color:#fff;border:none;border-radius:6px;padding:12px 28px;font-size:15px;cursor:pointer;font-weight:bold;z-index:1000000;align-self:center;margin-top:60px;margin-bottom:12px;';
   closeBtn.textContent = '✕  Close';
   const container = document.createElement('div');
   container.style.cssText = 'display:flex;flex-direction:column;gap:14px;width:100%;max-width:640px;';
@@ -1867,6 +1950,7 @@ function saveForIPhone() {
 
   // Inject print-like styles so html2canvas matches print output
   injectCaptureStyles();
+  const restoreLayout = forceDesktopLayout();
 
   // Remove placeholder attributes entirely
   const placeholderEls = document.querySelectorAll('[placeholder]');
@@ -1875,7 +1959,7 @@ function saveForIPhone() {
     el.removeAttribute('placeholder');
     return { el, val };
   });
-  const restorePlaceholders = () => savedPlaceholders.forEach(({ el, val }) => el.setAttribute('placeholder', val));
+  const restorePlaceholders = () => { savedPlaceholders.forEach(({ el, val }) => el.setAttribute('placeholder', val)); restoreLayout(); };
 
   pages.forEach((page, idx) => {
     const oW = page.style.width, oM = page.style.maxWidth, om = page.style.minWidth;
@@ -2317,6 +2401,18 @@ if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
     }
   }, true);
 }
+
+// Dynamic top padding to clear fixed action bar
+function adjustTopPadding() {
+  const bar = document.getElementById('action-bar');
+  const wrapper = document.querySelector('.page-wrapper');
+  const status = document.getElementById('save-status');
+  if (bar && wrapper) wrapper.style.paddingTop = bar.offsetHeight + 'px';
+  if (bar && status) status.style.top = bar.offsetHeight + 'px';
+}
+window.addEventListener('resize', adjustTopPadding);
+window.addEventListener('load', adjustTopPadding);
+setTimeout(adjustTopPadding, 100);
 </script>
 
 
