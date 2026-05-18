@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v1.0.10';
+var CACHE_NAME = 'aog-forms-v1.1.0';
 var DEV_MODE   = false; // ← SET TRUE during development/testing
 
 // ============================================================
@@ -20,7 +20,7 @@ var CHANGELOG = [
   'better dropdown for generator section on spec viewer',
   'Fixed some spec sheets breaker sizes',
   'Added torque Values-still verifying',
-  '1.0.7-updated gas-install checklikst'
+  '1.1.0 made all card forms to look and feel like they belong'
 ];
 // ============================================================
 
