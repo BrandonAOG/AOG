@@ -101,12 +101,13 @@ body.dark-mode {
 /* ===== ACTION BAR — fixed at top, always visible ===== */
 .action-bar {
   position: fixed !important;
-  top: env(safe-area-inset-top, 0px) !important;
+  top: 0 !important;
   left: 0 !important;
   right: 0 !important;
   z-index: 99999;
   width: 100%;
   background: var(--panel); padding: 4px 8px;
+  padding-top: max(4px, env(safe-area-inset-top, 4px));
   display: flex; justify-content: center; gap: 4px; flex-wrap: nowrap; align-items: center;
   box-shadow: 0 4px 18px rgba(0,0,0,0.3);
   border-bottom: 1px solid var(--border-bright);
@@ -194,7 +195,7 @@ body.dark-mode .theme-icon.theme-icon-moon { opacity: 1; transform: rotate(0deg)
 @media (max-width: 640px) { #save-status { font-size: 9px; } }
 body.dark-mode #save-status { color: #7DD3FC; }
 
-.page-wrapper { width: 100%; max-width: 1050px; margin: 0 auto; display: flex; flex-direction: column; gap: 0; padding: 0; padding-top: calc(44px + env(safe-area-inset-top, 0px)); }
+.page-wrapper { width: 100%; max-width: 1050px; margin: 0 auto; display: flex; flex-direction: column; gap: 0; padding: 0; padding-top: 44px; }
 
 .form-page {
   width: 100%; max-width: 1050px; background: var(--panel);
@@ -668,8 +669,8 @@ body.dark-mode .notice { color: #7DD3FC; }
   #page1 .logo-generators, #page1 span.logo-generators { color: #111111 !important; }
   #page1 .section-title { font-size: 10px !important; }
   #page1 .section-row { font-size: 9px !important; margin-bottom: 2px !important; }
-  #page1 .field-row label { font-size: 9px !important; }
-  #page1 .field-row input[type="text"] { font-size: 9px !important; }
+  #page1 .field-row label { font-size: 10px !important; }
+  #page1 .field-row input[type="text"] { font-size: 10px !important; }
   #page1 .inline-input { font-size: 9px !important; border-bottom-color: #1F2937 !important; }
   #page1 .top-fields { margin-bottom: 6px !important; gap: 2px 8px !important; grid-template-columns: 1fr 1fr !important; }
   #page1 .two-col { grid-template-columns: 1fr 1fr !important; gap: 6px 12px !important; }
@@ -791,7 +792,7 @@ body.dark-mode .notice { color: #7DD3FC; }
 
   input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input[type="number"], textarea, select {
     background: #ffffff !important; background-color: #ffffff !important; color: #1F2937 !important;
-    border-bottom-color: #333 !important; border-color: #333 !important;
+    border-color: transparent !important; border-bottom-color: #333 !important;
     font-family: Arial, sans-serif !important;
     -webkit-appearance: none !important; appearance: none !important;
     -webkit-text-fill-color: #1F2937 !important; opacity: 1 !important;
@@ -1071,7 +1072,7 @@ body.dark-mode .notice { color: #7DD3FC; }
   #page2 table.mat-table td {
     padding: 1px 1px !important;
     font-size: 11px !important;
-    line-height: 1.1 !important;
+    line-height: 1.2 !important;
   }
 
   #page2 table.mat-table th { font-size: 10px !important; }
@@ -1090,18 +1091,21 @@ body.dark-mode .notice { color: #7DD3FC; }
 
   /* Compact footer */
   #page2 .footer-fields {
-    margin-top: 3px !important;
-    padding-top: 3px !important;
-    font-size: 11px !important;
+    margin-top: 1.3px !important;
+    padding-top: 1.3px !important;
+    font-size: 10.9px !important;
   }
   #page2 .footer-row {
     gap: 1px 8px !important;
     margin-bottom: 2px !important;
   }
-  #page2 .footer-field label { font-size: 11px !important; }
+  #page2 .footer-field label { font-size: 10.9px !important; }
   #page2 .footer-field input[type="text"] {
-    font-size: 11px !important;
-    height: 9px !important;
+    font-size: 10.9px !important;
+    height: auto !important;
+    line-height: 1.0 !important;
+    vertical-align: bottom !important;
+    padding-bottom: 1px !important;
     width: 45px !important;
   }
   #page2 .footer-field input.short { width: 32px !important; }
@@ -1151,6 +1155,42 @@ body.dark-mode .ft-label { color: #7DD3FC; }
 @media print {
   .action-bar { display: none !important; }
 }
+
+/* ===== iPAD PRINT FIX =====
+   Forces same compact layout as iPhone print.
+   Scoped to iPad viewport range only — never affects desktop or iPhone. */
+@media print and (min-width: 768px) and (max-width: 1366px) {
+  input[type="text"], input[type="number"], input[type="date"], input[type="email"], input[type="tel"], textarea, select { border-color: transparent !important; border-bottom-color: #333 !important; }
+  #page2 table.mat-table td input[type="text"] { border: none !important; }
+  #page2 .footer-field input[type="text"] { border-color: transparent !important; border-bottom: 1px solid #333 !important; }
+  html, body {
+    width: 8.5in !important;
+    max-width: 8.5in !important;
+  }
+  .form-page, .page {
+    width: 8.1in !important;
+    max-width: 8.1in !important;
+    margin: 0 auto !important;
+    padding: 0.15in !important;
+    box-sizing: border-box !important;
+  }
+  .page-wrapper {
+    width: 8.5in !important;
+    max-width: 8.5in !important;
+  }
+  /* Scale up all text equally for iPad */
+  #page1 .section-row { font-size: 10px !important; }
+  #page1 .field-row label { font-size: 10px !important; }
+  #page1 .field-row input[type="text"] { font-size: 10px !important; }
+  #page1 .textarea-field { font-size: 10px !important; }
+  #page1 .section-title { font-size: 12px !important; }
+  #page1 .yn-checkbox-wrap { font-size: 9px !important; }
+  #page1 input[type="checkbox"] { width: 12px !important; height: 12px !important; }
+  #page2 table.mat-table td { font-size: 7px !important; }
+  #page2 table.mat-table th { font-size: 7px !important; }
+  #page2 table.mat-table td input[type="text"] { font-size: 7.5px !important; }
+  #page2 .footer-field { font-size: 8px !important; }
+}
 </style>
 </head>
 <body>
@@ -1177,7 +1217,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
     </svg>
   </button>
 </div>
-<div id="save-status" style="position:fixed;top:calc(44px + env(safe-area-inset-top, 0px));left:0;right:0;z-index:99998;text-align:center;font-size:10px;color:var(--text-muted);background:var(--panel);padding:2px 8px;display:none;font-family:Arial,sans-serif;"></div>
+<div id="save-status" style="position:fixed;top:44px;left:0;right:0;z-index:99998;text-align:center;font-size:10px;color:var(--text-muted);background:var(--panel);padding:2px 8px;display:none;font-family:Arial,sans-serif;"></div>
 
 <div class="page-wrapper">
 
@@ -1487,7 +1527,7 @@ fittings.forEach(name => {
   document.getElementById("polaris-body").appendChild(tr);
 });
 // Re-attach autosave to JS-built table inputs
-if (typeof attachAutosave === 'function') setTimeout(attachAutosave, 100);
+if (typeof attachAutosave === 'function') setTimeout(() => { attachAutosave(); restoreFormData(); }, 100);
 
 // ===== TRANSFER SWITCH =====
 let tsCount = 0;
