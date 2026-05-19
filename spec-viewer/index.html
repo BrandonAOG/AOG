@@ -616,6 +616,7 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(circle 
         <option value="man-rtsw300-400">Owner's Manual — 300–400A Service Entrance &amp; Non-SE ATS · RTSW300A3 / RTSW400A3 / RTSC400A3 · Part 0L3203</option>
         <option value="man-rxgw20sha3">Owner's Manual — 200A Service Rated Load Center ATS w/ Pass-Through Lugs · RXGW20SHA3 · Part A0000023930</option>
         <option value="man-rtsc600-800">Owner's Manual — 600–800A Non-Service Entrance ATS · RTSC600A3 / RTSC800A3 · Part 0L3204</option>
+        <option value="man-rtsn600-800">Owner's Manual — RTS 600–800A Non-Service Entrance ATS (1-Phase &amp; 3-Phase) · RTSN600/800 · RTSZ600/800 · Part 0J0917</option>
       </select>
     </div>
 
@@ -3023,6 +3024,251 @@ function buildRTSC68_Shutdown(){
   h += mnote('The SACM Test button will work when the ATS is in either the Utility or Generator position.');
   h += mh4('Testing the SMM');
   h += mp('Refer to the SMM Owner\u2019s/Installation Manual for the SMM testing procedure.');
+  h += '</div>';
+  return h;
+}
+
+// ── RTSN/RTSZ 600–800A 1-PHASE & 3-PHASE ATS MANUAL (0J0917) ───────────────
+MANUALS['man-rtsn600-800'] = {
+  title: "Owner\u2019s Manual \u2014 RTS Automatic Transfer Switch 600\u2013800 Amp, Non-Service Entrance",
+  models: 'RTSN600A3 \u00b7 RTSN600G3 \u00b7 RTSN600J3 \u00b7 RTSN600K3 \u00b7 RTSN800A3 \u00b7 RTSN800G3 \u00b7 RTSN800J3 \u00b7 RTSN800K3 \u00b7 RTSZ600* \u00b7 RTSZ800*',
+  partNo: '0J0917 Rev. D \u00b7 07/21/2022',
+  sections: [
+    { id: 'rtsn-geninfo',   title: 'General Information &amp; Equipment Description', icon: '\u2139\uFE0F', html: buildRTSN_GenInfo() },
+    { id: 'rtsn-install',   title: 'Installation',                                   icon: '\uD83D\uDD27', html: buildRTSN_Install() },
+    { id: 'rtsn-operation', title: 'Operation &amp; Testing',                        icon: '\u25B6\uFE0F', html: buildRTSN_Operation() },
+    { id: 'rtsn-shutdown',  title: 'Shutdown &amp; Auxiliary Contacts',              icon: '\uD83D\uDD12', html: buildRTSN_Shutdown() }
+  ]
+};
+
+function buildRTSN_GenInfo(){
+  var h = '<div class="man-section">';
+  h += mh4('Equipment Description');
+  h += mp('This automatic transfer switch transfers critical electrical loads from a UTILITY (NORMAL) power source to a GENERATOR (EMERGENCY) power source. The transfer switch prevents electrical feedback between the UTILITY and EMERGENCY sources \u2014 required by code for all standby electric system installations.');
+  h += mp('When connected to the engine generator control panel, the control panel constantly monitors UTILITY voltage and controls the transfer switch. Should UTILITY voltage drop below a preset value for a preset time, the generator cranks and starts. After starting, load circuits transfer to the generator. When UTILITY returns above a preset level, load transfers back to UTILITY and the generator shuts down.');
+  h += mh4('Models Covered by This Manual');
+  h += mt(['Model','Amps','Phase/Voltage'],[
+    ['RTSN600A3','600A','120/240V \u00b7 1-Phase'],
+    ['RTSN600G3','600A','120/208V \u00b7 3-Phase'],
+    ['RTSN600J3','600A','120/240V \u00b7 3-Phase'],
+    ['RTSN600K3','600A','277/480V \u00b7 3-Phase'],
+    ['RTSN800A3','800A','120/240V \u00b7 1-Phase'],
+    ['RTSN800G3','800A','120/208V \u00b7 3-Phase'],
+    ['RTSN800J3','800A','120/240V \u00b7 3-Phase'],
+    ['RTSN800K3','800A','277/480V \u00b7 3-Phase'],
+    ['RTSN600/800*S','600/800A','Same as above \u2014 \u201cS\u201d suffix variants']
+  ]);
+  h += mh4('Transfer Switch Mechanism');
+  h += mp('Solderless, screw-type terminal lugs are standard. 3-pole mechanism used on three-phase systems \u2014 the neutral line connects to a neutral lug and is not switched.');
+  h += mt(['Switch Rating','Wire Range (per pole)'],[
+    ['600A','2 \u00d7 1/0\u2013500 MCM'],
+    ['800A','4 \u00d7 4/0\u2013500 MCM']
+  ]);
+  h += mnote('Tighten terminal lugs to the torque values noted on the decal on the inside of the enclosure door.');
+  h += mh4('Transfer Mechanism Terminals');
+  h += mt(['Terminal','Function'],[
+    ['N1, N2 (N3)','Utility (Normal) source lugs \u2014 N3 for 3-phase only'],
+    ['E1, E2 (E3)','Generator (Emergency/Standby) source lugs \u2014 E3 for 3-phase only'],
+    ['T1, T2 (T3)','Load lugs \u2014 T3 for 3-phase only'],
+    ['Neutral Block','Utility, Emergency, and Load neutral connections'],
+    ['UTILITY 1, UTILITY 2','Start circuit sensing terminals'],
+    ['23, 194','Generator control signal leads']
+  ]);
+  h += mh4('Transfer Switch Enclosure');
+  h += mp('NEMA Type 3R (indoor/outdoor rated). Protected against falling rain and sleet; undamaged by ice formation on the enclosure.');
+  h += mh4('Contents in Loose Parts Bag');
+  h += mul(['Owner\'s manual','Warranty statement']);
+  h += '</div>';
+  return h;
+}
+
+function buildRTSN_Install(){
+  var h = '<div class="man-section">';
+  h += mdanger('Turn utility and emergency power supplies to OFF before connecting power source and load lines.');
+  h += mh4('Installation Steps Overview');
+  h += mul(['Mount the enclosure','Connect power source and load leads','Connect generator start and sensing circuit','Connect any auxiliary contacts (if needed)','Test all functions']);
+  h += mh4('Mounting');
+  h += mul([
+    'Mount vertically to a rigid supporting structure as close as possible to the electrical loads.',
+    'Level all mounting points \u2014 use washers behind mounting holes if needed.',
+    'Can be mounted indoors or outdoors (NEMA Type 3R enclosure).',
+    'See Drawings and Diagrams section for mounting dimensions.'
+  ]);
+  h += mh4('Connecting Power Source &amp; Load Lines');
+  h += mol([
+    'Connect UTILITY (NORMAL) power source cables to switch terminals N1, N2 (and N3 for 3-phase).',
+    'Connect EMERGENCY (STANDBY) source power cables to switch terminals E1, E2 (and E3 for 3-phase).',
+    'Connect customer LOAD leads to switch terminals T1, T2 (and T3 for 3-phase).',
+    'Connect neutral conductors of UTILITY, EMERGENCY, and customer LOAD to the neutral block.'
+  ]);
+  h += mnote('Maintain proper electrical clearance between live metal parts and grounded metal \u2014 at least \u00bd in. through air or 1 in. over surface. Before connecting cables, remove surface oxides from cable ends with a wire brush. All power cables should enter the switch next to transfer mechanism terminals.');
+  h += mcaution('Conductor sizes must be adequate for the maximum current they will carry, based on the 75\u00b0C column of NEC tables. All installations must comply with national, state, and local codes.');
+  h += mnote('If aluminum conductors are used: apply corrosion inhibitor to conductors. After tightening terminal lugs, carefully wipe away any excess corrosion inhibitor.');
+  h += mh4('3-Pole Mechanism (3-Phase Models)');
+  h += mp('Three-phase switches use a 3-pole mechanism. The three-phase neutral line connects to a neutral lug and is NOT switched. Terminals N3, E3, and T3 are used on 3-phase systems only.');
+  h += mh4('Connecting Start Circuit Wires');
+  h += mp('Control system interconnections: UTILITY 1, UTILITY 2, and leads 23 and 194. Control wiring must run in a conduit SEPARATE from the AC power lead. Generator control wiring is a Class 1 signaling circuit. Screw torque: 3.5 in-lb (0.4 Nm). Refer to the specific engine generator instruction manual for wiring connection details.');
+  h += mt(['Recommended Wire Size','Max Wire Length (One Transfer Switch)'],[
+    ['No. 18 AWG','1\u2013115 ft (0.3\u201335 m)'],
+    ['No. 16 AWG','116\u2013185 ft (36\u201356 m)'],
+    ['No. 14 AWG','186\u2013295 ft (57\u201389 m)'],
+    ['No. 12 AWG','296\u2013460 ft (90\u2013140 m)']
+  ]);
+  h += mnote('Consult factory if operating more than one transfer switch. AC and DC circuits rated 1000V or less may share conduit per NEC 300.3(C)(1) \u2014 all conductors must have insulation rated at least to the maximum circuit voltage.');
+  h += mh4('Auxiliary Contacts');
+  h += mp('Auxiliary contacts on the transfer switch operate customer accessories, remote advisory lights, or remote annunciator devices. A suitable power source must be connected to the common terminal (D).');
+  h += mt(['Switch Position','Common to Normally Open','Common to Normally Closed'],[
+    ['Utility','Open','Closed'],
+    ['Standby','Closed','Open']
+  ]);
+  h += mcaution('Auxiliary Contacts rated 10 amps at 125 or 250 VAC. Exceeding rated voltage and current will damage the contacts. Verify specifications before energizing.');
+  h += mh4('Optional Accessories');
+  h += mp('Note any optional accessories installed on the transfer switch or to be installed in the standby electric system. Complete all necessary connections for those accessories.');
+  h += '</div>';
+  return h;
+}
+
+function buildRTSN_Operation(){
+  var h = '<div class="man-section">';
+  h += mdanger('Do NOT manually transfer under load. Disconnect transfer switch from ALL power sources prior to manual transfer.');
+  h += mcaution('Perform functional tests in the exact order presented in the manual. Do not use excessive force while manually operating the transfer switch.');
+  h += mh4('Pre-Test Inspection');
+  h += mp('After installation and interconnection, have a competent, qualified electrician inspect the entire installation. It must comply strictly with all applicable codes, standards, and regulations. Read all labels and decals on the switch before proceeding.');
+  h += mh4('Manual Operation');
+  h += mp('A manual handle (C) is shipped with the transfer switch. Manual operation must be verified BEFORE the transfer switch is operated electrically.');
+  h += mol([
+    'Verify generator is OFF.',
+    'Turn OFF (OPEN) both NORMAL and STANDBY power supplies using whatever means provided (e.g. main line circuit breakers).',
+    'Note position of transfer mechanism main contacts by observing display windows A and B.',
+    'Window A \u201cON\u201d / Window B \u201cOFF\u201d \u2014 LOAD terminals connected to Utility terminals (N1, N2).',
+    'Window A \u201cOFF\u201d / Window B \u201cON\u201d \u2014 LOAD terminals connected to Emergency terminals (E1, E2).'
+  ]);
+  h += mh4('Trip to Neutral Position');
+  h += mol([
+    'Remove handle from shaft (B) at the upper left corner of the switch.',
+    'Insert a screwdriver into the \u201cT\u201d hole and push inward.',
+    'Main contact trips to neutral position \u2014 \u201cOFF\u201d appears in both Windows A and B.'
+  ]);
+  h += mh4('Close to Emergency (Standby) Source Side');
+  h += mp('If Window B reads \u201cON\u201d, ATS is already in standby \u2014 no action needed. If Window B reads \u201cOFF\u201d and Window A reads \u201cON\u201d, trip to neutral first.');
+  h += mol([
+    'Attach manual handle to shaft \u201cD\u201d.',
+    'Insert screwdriver into hole \u201cS\u201d and push inward.',
+    'Actuate handle upward while pushing screwdriver inward.',
+    'Verify closure: Window A \u201cOFF\u201d, Window B \u201cON\u201d.',
+    'Detach the manual handle.'
+  ]);
+  h += mh4('Close to Normal (Utility) Source Side');
+  h += mp('If Window A reads \u201cON\u201d, ATS is already in utility position \u2014 no action needed. If Window A reads \u201cOFF\u201d, trip to neutral first.');
+  h += mol([
+    'Attach manual handle to shaft \u201cD\u201d.',
+    'Actuate handle upward until stopped.',
+    'Verify closure: Window A \u201cON\u201d, Window B \u201cOFF\u201d.',
+    'Detach the manual handle.'
+  ]);
+  h += mnote('Use DMM LowZ (low input impedance) setting for all voltage measurements \u2014 eliminates ghost/phantom voltage readings.');
+  h += mh4('Utility Voltage Checks');
+  h += mol([
+    'Turn ON the UTILITY power supply using the utility main line circuit breaker.',
+    '<strong>Single-phase:</strong> Measure across N1 and N2; N1 to NEUTRAL and N2 to NEUTRAL.',
+    '<strong>Three-phase:</strong> Measure across N1\u2013N2, N2\u2013N3, N1\u2013N3; then N1, N2, N3 each to NEUTRAL.',
+    '<strong>Three-phase only:</strong> Locate the 3-phase power monitor relay. Verify LED is green and ON. Factory setting is 80% of nominal voltage (208V system = 166 VAC dropout).',
+    'If LED is red or OFF: rotate the adjustment potentiometer counter-clockwise until LED turns ON (most sensitive setting).'
+  ]);
+  h += mnote('If power monitor does not operate properly, verify all three voltages are present at correct level and phase rotation. To change phase rotation: turn off utility, then interchange 2 of the utility power phases.');
+  h += mh4('Generator Voltage Checks (No Load)');
+  h += mol([
+    'On generator panel, select MANUAL mode \u2014 generator cranks and starts.',
+    'Allow generator to stabilize and warm up at no-load for at least 5 minutes.',
+    'Set generator main CB (CB1) to ON (CLOSED).',
+    '<strong>Single-phase:</strong> Measure across E1\u2013E2; E1 to NEUTRAL and E2 to NEUTRAL.',
+    '<strong>Three-phase:</strong> Measure across E1\u2013E2, E2\u2013E3, E1\u2013E3; then E1, E2, E3 each to NEUTRAL.',
+    '<strong>Three-phase only:</strong> Verify phase rotation of generator matches phase rotation of utility \u2014 use a phase rotation indicator.'
+  ]);
+  h += mt(['Measurement','Expected Value'],[
+    ['Frequency','60\u201362 Hz'],
+    ['E1 to E2 (single-phase)','240\u2013246 VAC'],
+    ['E1 to Neutral','120\u2013123 VAC'],
+    ['E2 to Neutral','120\u2013123 VAC']
+  ]);
+  h += mp('Do NOT proceed until voltage and frequency are within stated limits. If no-load voltage is correct but frequency is wrong, engine governed speed may need adjustment. If frequency is correct but voltage is wrong, voltage regulator may need adjustment.');
+  h += mol([
+    'Turn OFF generator supply to transfer switch.',
+    'Set generator main CB (CB1) to OFF (OPEN).',
+    'Select OFF on generator panel to shut down.'
+  ]);
+  h += mh4('Generator Test Under Load');
+  h += mol([
+    'Set generator main CB to OFF (OPEN).',
+    'Set utility service disconnect CB to OFF (OPEN); turn OFF all load CBs.',
+    'Manually actuate transfer switch main contacts to the emergency (standby) position.',
+    'Select MANUAL mode to start generator \u2014 allow engine to stabilize for a few minutes.',
+    'Set generator main CB to ON (CLOSED) \u2014 generator now powers all LOAD circuits.',
+    'Apply electrical loads to full rated wattage/amperage \u2014 DO NOT OVERLOAD.',
+    'At max load: verify voltage > 230 VAC (240 VAC system); frequency > 59 Hz.',
+    'Verify gas pressure remains within acceptable parameters (see generator installation manual).',
+    'Run under rated load for at least 30 minutes \u2014 watch for unusual noises, vibration, or overheating.',
+    'Set generator main CB to OFF (OPEN) when checkout is complete.',
+    'Run at no-load for several minutes, then select OFF.',
+    'Move switch contacts to utility position (handle DOWN).',
+    'Turn on the utility power supply \u2014 utility now powers loads.',
+    'Set generator AUTO/OFF/MANUAL switch to AUTO \u2014 system is set for fully automatic operation.'
+  ]);
+  h += mh4('Checking Automatic Operation');
+  h += mol([
+    'Verify generator is OFF.',
+    'Set transfer switch utility service disconnect CB to OFF (OPEN).',
+    'Verify switch is de-energized.',
+    'Install front cover of the transfer switch.',
+    'Set generator main CB to ON.',
+    'Select AUTO on generator panel.',
+    'Generator will crank and start after a 5-second delay (factory default) when utility is OFF.',
+    'Transfer switch connects loads to standby after a 5-second warm-up delay.',
+    'Set utility service disconnect CB to ON (CLOSED) \u2014 loads transfer back to utility after approximately 15 seconds.',
+    'Generator shuts down approximately 1 minute after re-transfer.'
+  ]);
+  h += mnote('Timer durations may differ between generators and settings. With generator in AUTO mode, the system is set for fully automatic operation.');
+  h += mh4('Installation Summary Checklist');
+  h += mul([
+    'Verify installation has been properly performed per manufacturer guidelines and all applicable laws and codes.',
+    'Verify proper system operation per installation and owner\u2019s manuals.',
+    'Educate end-user on proper operation, maintenance, and service call procedures.'
+  ]);
+  h += '</div>';
+  return h;
+}
+
+function buildRTSN_Shutdown(){
+  var h = '<div class="man-section">';
+  h += mdanger('Disconnect utility power and render unit inoperable before working on unit.');
+  h += mp('<strong>Important:</strong> To avoid equipment damage, follow these steps in order when shutting the generator down during utility outages. Shutdowns may be required to perform routine maintenance or to conserve fuel.');
+  h += mh4('Shutting Generator Down While Under Load (During Utility Outage)');
+  h += mp('<strong>To turn generator OFF (while running in AUTO and online):</strong>');
+  h += mol([
+    'Turn the main utility disconnect OFF.',
+    'Turn the generator MLCB (generator disconnect) to OFF (OPEN).',
+    'Run generator for approximately 1 minute for proper cooling.',
+    'Turn the generator OFF.'
+  ]);
+  h += mp('<strong>To turn generator back ON:</strong>');
+  h += mol([
+    'Put the generator into AUTO. Start generator and warm up for a few minutes.',
+    'Set the MLCB (generator disconnect) to ON (CLOSED).',
+    'System now operates in automatic mode.',
+    'Turn the main utility disconnect ON (CLOSED) when ready.',
+    'To shut the unit off again, repeat this complete process.'
+  ]);
+  h += mnote('If utility returns, the transfer switch will return to utility mode and the generator will cycle off after it times out.');
+  h += mh4('Auxiliary Contact Reference');
+  h += mt(['Terminal','Label','Function'],[
+    ['A','Auxiliary Contact (Actuated)','Active when in standby position'],
+    ['B','Auxiliary Contact (Non-Actuated)','Active when in utility position'],
+    ['C','Single Contact (Utility Position)','Closed in utility mode'],
+    ['D','Common Terminal','Power source connection point'],
+    ['E','Normally Open Terminal','Open in utility mode, closed in standby'],
+    ['F','Normally Closed Terminal','Closed in utility mode, open in standby']
+  ]);
+  h += mcaution('Auxiliary Contacts are rated 10 amps at 125 or 250 VAC. Exceeding rated voltage and current will damage the contacts.');
   h += '</div>';
   return h;
 }
