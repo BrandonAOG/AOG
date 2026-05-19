@@ -611,6 +611,11 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(circle 
         <option value="">— Select a series —</option>
         <option value="man-sr-100-200-spd">Service Rated ATS 100/200A + SPD · RXSW100A3SPD / RXSW200A3SPD</option>
         <option value="man-owner-100-200">Owner's Manual — 100–200A SE &amp; Non-SE ATS · G0099280–G0099350 · Part A0009313194</option>
+        <option value="man-rxg16">Owner's Manual — 100A Limited Circuit ATS · RXG16EZA3 · Part 10000012410</option>
+        <option value="man-rxuw-rbu">Owner's Manual — 150–200A Integrated Meter Transfer Switch · RXUW200A3 / RXUW150A3 / RBU200A3 / RBU150A3 · Part A0000243082</option>
+        <option value="man-rtsw300-400">Owner's Manual — 300–400A Service Entrance &amp; Non-SE ATS · RTSW300A3 / RTSW400A3 / RTSC400A3 · Part 0L3203</option>
+        <option value="man-rxgw20sha3">Owner's Manual — 200A Service Rated Load Center ATS w/ Pass-Through Lugs · RXGW20SHA3 · Part A0000023930</option>
+        <option value="man-rtsc600-800">Owner's Manual — 600–800A Non-Service Entrance ATS · RTSC600A3 / RTSC800A3 · Part 0L3204</option>
       </select>
     </div>
 
@@ -707,8 +712,8 @@ const GENS=[
 {id:'r48',c:'liq',lbl:'48kW Protector RG · RG04845',mdl:'48kW Protector RG',num:'RG04845',grp:'Protector RG — 48–80kW  [A0000373704]',src:'A0000373704 Rev. G',klp:48,kng:48,ilp:'200 (1-Ph)',ing:'200 (1-Ph)',cb:'200A (1-Ph)',wlb:1781,wkg:808,dims:'83.4×35.0×46.1 in / 2,119×888×1,170 mm',sn:'68 dB(A) exercise @ 23 ft',sq:'68 dB(A) exercise',ng25:201,ngh:336,ng75:447,ngf:607,ngex:101,lp25:2.9,lph:4.2,lp75:5.3,lpf:6.6,lpex:0.7,png:'3.5–14" WC',plp:'7–14" WC',bng:'1,036 BTU/ft³',blp:'91,452 BTU/gal',warr:'5 Year / 2,000 Hour Limited',bat:'Flooded Lead Acid Group 27 600 CCA min',eng:'4.5L Inline 4-Cyl, Naturally Aspirated',cyl:4,disp:'4.5L',comp:'9.9:1',blk:'—',vlv:'—',lft:'Hydraulic',ign:'—',gov:'Electronic (Isochronous)',rpm:'1,800 op / 1,500 exercise',oil:'12 qt (11 L)',strt:'12 VDC',ctrl:'Evolution™ two-line multilingual LCD',conn:'Cellular (GGCAC standard) — Mobile Link & Fleet',color:'Bisque (Aluminum)',cert:'EPA · ETL · UL 2200',inst:'18 in — SwRI Listed',fc:'1-1/4" NPT female tee through baseframe',exer:'7-day programmable',der:'3% / 1,000 ft above 600 ft',po:[{v:'120/240V 1-Phase',nk:48,na:200,lk:48,la:200},{v:'208/120V 3-Phase',nk:48,na:167,lk:48,la:167},{v:'240/120V 3-Phase',nk:48,na:144,lk:48,la:144},{v:'480/277V 3-Phase',nk:48,na:72,lk:48,la:72}],ft:['4.5L I-4 Naturally Aspirated — 1,800 RPM','Evolution™ LCD controller','Cellular (GGCAC) standard — Mobile Link & Fleet','EPA · ETL · UL 2200 · 115 mph wind','5 Year / 2,000 Hour warranty · Bisque aluminum enclosure'],pr:[{n:'Low Oil Pressure',v:'Auto Shutdown'},{n:'High Temperature',v:'Shutdown'},{n:'Overspeed (72 Hz)',v:'Shutdown'}],ac:[{p:'G0072150',n:'GGCAC Cellular Accessory',d:'Included standard on new RG04845.'},{p:'G0079910',n:'4.5L Maintenance Kit',d:'Oil filter, air filter, spark plugs.'}]},
 {id:'r60',c:'liq',lbl:'60kW Protector RG · RG06045',mdl:'60kW Protector RG',num:'RG06045',grp:'Protector RG — 48–80kW  [A0000373704]',src:'A0000373704 Rev. G',klp:60,kng:60,ilp:'250 (1-Ph)',ing:'250 (1-Ph)',cb:'300A (1-Ph)',wlb:1890,wkg:857,dims:'97.7×38×48.9 in',sn:'68 dB(A) exercise @ 23 ft',sq:'68 dB(A) exercise',ng25:257,ngh:432,ng75:618,ngf:808,ngex:103,lp25:2.1,lph:4.4,lp75:6.8,lpf:8.4,lpex:0.9,png:'3.5–14" WC',plp:'7–14" WC',bng:'1,036 BTU/ft³',blp:'91,452 BTU/gal',warr:'5 Year / 2,000 Hour Limited',bat:'Flooded Lead Acid Group 27 600 CCA min',eng:'4.5L Inline 4-Cyl, Turbocharged & Aftercooled',cyl:4,disp:'4.5L',comp:'8.9:1',blk:'—',vlv:'—',lft:'Hydraulic',ign:'—',gov:'Electronic (Isochronous)',rpm:'1,800 op / 1,500 exercise',oil:'12 qt (11 L)',strt:'12 VDC',ctrl:'Evolution™ two-line multilingual LCD',conn:'Cellular (GGCAC standard) — Mobile Link & Fleet',color:'Bisque (Aluminum)',cert:'EPA · ETL · UL 2200',inst:'18 in — SwRI Listed',fc:'1-1/4" NPT through baseframe',exer:'7-day programmable',der:'3% / 1,000 ft above 3,000 ft',po:[{v:'120/240V 1-Phase',nk:60,na:250,lk:60,la:250},{v:'208/120V 3-Phase',nk:60,na:208,lk:60,la:208},{v:'240/120V 3-Phase',nk:60,na:180,lk:60,la:180},{v:'480/277V 3-Phase',nk:60,na:90,lk:60,la:90}],ft:['4.5L I-4 Turbocharged & Aftercooled — 1,800 RPM','Evolution™ LCD — Mobile Link & Fleet','EPA · ETL · UL 2200 · 115 mph wind','5 Year / 2,000 Hour warranty'],pr:[{n:'Low Oil Pressure',v:'Auto Shutdown'},{n:'High Temperature',v:'Shutdown'},{n:'Altitude Derate',v:'3% / 1,000 ft above 3,000 ft'}],ac:[{p:'G0072150',n:'GGCAC Cellular Accessory',d:'Included standard.'},{p:'G0079910',n:'4.5L Maintenance Kit',d:'Oil filter, air filter, spark plugs.'}]},
 {id:'r80',c:'liq',lbl:'80kW Protector RG · RG08045',mdl:'80kW Protector RG',num:'RG08045',grp:'Protector RG — 48–80kW  [A0000373704]',src:'A0000373704 Rev. G',klp:75,kng:80,ilp:'312 (1-Ph)',ing:'333 (1-Ph)',cb:'400A (1-Ph)',wlb:1990,wkg:903,dims:'97.7×38×48.9 in',sn:'68 dB(A) exercise @ 23 ft',sq:'68 dB(A) exercise',ng25:292,ngh:534,ng75:799,ngf:1063,ngex:103,lp25:2.6,lph:5.7,lp75:8.3,lpf:10.8,lpex:0.9,png:'3.5–14" WC',plp:'7–14" WC',bng:'1,036 BTU/ft³',blp:'91,452 BTU/gal',warr:'5 Year / 2,000 Hour Limited',bat:'Flooded Lead Acid Group 27 600 CCA min',eng:'4.5L Inline 4-Cyl, Turbocharged & Aftercooled',cyl:4,disp:'4.5L',comp:'8.9:1',blk:'—',vlv:'—',lft:'Hydraulic',ign:'—',gov:'Electronic (Isochronous)',rpm:'1,800 op / 1,500 exercise',oil:'12 qt (11 L)',strt:'12 VDC',ctrl:'Evolution™ two-line multilingual LCD',conn:'Cellular (GGCAC standard)',color:'Bisque (Aluminum)',cert:'EPA · ETL · UL 2200',inst:'18 in — SwRI Listed',fc:'1-1/4" NPT through baseframe',exer:'7-day programmable',der:'3% / 1,000 ft above 3,000 ft',po:[{v:'120/240V 1-Phase',nk:80,na:333,lk:75,la:312},{v:'208/120V 3-Phase',nk:80,na:278,lk:75,la:260},{v:'240/120V 3-Phase',nk:80,na:241,lk:75,la:226},{v:'480/277V 3-Phase',nk:80,na:120,lk:75,la:113}],ft:['⚠ NG = 80kW · LP = 75kW','4.5L I-4 Turbocharged & Aftercooled — 1,800 RPM','Evolution™ LCD — Mobile Link & Fleet','EPA · ETL · UL 2200 · 115 mph wind','5 Year / 2,000 Hour warranty'],pr:[{n:'Low Oil Pressure',v:'Auto Shutdown'},{n:'High Temperature',v:'Shutdown'}],ac:[{p:'G0072150',n:'GGCAC Cellular Accessory',d:'Included standard.'},{p:'G0079910',n:'4.5L Maintenance Kit',d:'Oil filter, air filter, spark plugs.'}]},
-{id:'r130',c:'liq',lbl:'130kW Protector RG · RG13090',mdl:'130kW Protector RG',num:'RG13090',grp:'Protector RG — 9.0L V8 · 130/150kW  [A0002505135]',src:'A0002505135 Rev. E',klp:130,kng:130,ilp:'542 (1-Ph)',ing:'542 (1-Ph)',cb:'600A (1-Ph)',wlb:3009,wkg:1368,dims:'132.7×40.7×64.1 in / 2,771 mm OA length',sn:'72 dB(A) op / 68 dB(A) exercise @ 23 ft',sq:'68 dB(A) exercise',ng25:509,ngh:858,ng75:1204,ngf:1554,lp25:4.7,lph:7.6,lp75:10.6,lpf:13.5,png:'7–11" WC',plp:'7–11" WC',bng:'1,036 BTU/ft³',blp:'91,452 BTU/gal',warr:'5 Year / 2,000 Hour Limited',bat:'Group 31, 925 CCA Minimum (INCLUDED)',eng:'9.0L V-type 8-Cylinder, Turbocharged & Aftercooled',cyl:8,disp:'9.0L',comp:'9.1:1',blk:'—',vlv:'Hydraulic lifters',lft:'Hydraulic',ign:'—',gov:'Electronic (Isochronous ±0.25%)',rpm:'1,800 op / 1,500 exercise',oil:'10.5 qt (9.9 L)',strt:'12 VDC',ctrl:'Power Zone® 410',conn:'Cellular + Wi-Fi backup (GGCAC standard)',color:'Bisque (Aluminum)',cert:'EPA · ETL · UL 2200 · UL 6200 · CE · NFPA 110',inst:'See drawing A0001618959',fc:'2" NPT female tee through baseframe',exer:'Selectable low-speed',der:'3% / 1,000 ft above 600 ft',po:[{v:'120/240V 1-Phase',nk:130,na:542,lk:130,la:542},{v:'208/120V 3-Phase',nk:130,na:451,lk:130,la:451},{v:'240/120V 3-Phase',nk:130,na:391,lk:130,la:391},{v:'480/277V 3-Phase',nk:130,na:195,lk:130,la:195}],ft:['Power Zone® 410 — 128×64 graphical display w/ heater','Cellular + Wi-Fi backup (GGCAC standard)','9.0L V8 Turbocharged & Aftercooled — 1,800 RPM','⚠ Model-specific fuel — NG or LP — NOT interchangeable','EPA · CA & MA · UL 2200 · UL 6200 · CE · NFPA 110','Battery Group 31 925 CCA INCLUDED','5 Year / 2,000 Hour warranty'],pr:[{n:'Low Oil Pressure',v:'Auto Shutdown'},{n:'Low Coolant Level',v:'Shutdown'},{n:'Phase-to-Phase Short',v:'I²T Algorithm'},{n:'Altitude Derate',v:'3% / 1,000 ft above 600 ft'}],ac:[{p:'G0072150',n:'GGCAC Cellular Accessory',d:'Standard on new RG13090.'},{p:'G0080470',n:'NFPA 110 Controller Kit',d:'Key switch, alarm horn, E-stop.'},{p:'G0098820',n:'9.0L Maintenance Kit',d:'Oil filter, air filter, spark plugs.'}]},
-{id:'r150',c:'liq',lbl:'150kW Protector RG · RG15090',mdl:'150kW Protector RG',num:'RG15090',grp:'Protector RG — 9.0L V8 · 130/150kW  [A0002505135]',src:'A0002505135 Rev. E',klp:140,kng:150,ilp:'558 (1-Ph LP)',ing:'600 (1-Ph NG)',cb:'700A (1-Ph)',wlb:3278,wkg:1497,dims:'143×50.5×68.1 in / 2,800 mm OA length',sn:'77 dB(A) op / 71 dB(A) exercise @ 23 ft',sq:'71 dB(A) exercise',ng25:562,ngh:964,ng75:1353,ngf:1769,lp25:5.1,lph:8.4,lp75:11.9,lpf:15.3,png:'7–11" WC',plp:'7–11" WC',bng:'1,036 BTU/ft³',blp:'91,452 BTU/gal',warr:'5 Year / 2,000 Hour Limited',bat:'Group 31, 925 CCA Minimum (INCLUDED)',eng:'9.0L V-type 8-Cylinder, Turbocharged & Aftercooled',cyl:8,disp:'9.0L',comp:'9.1:1',blk:'—',vlv:'Hydraulic lifters',lft:'Hydraulic',ign:'—',gov:'Electronic (Isochronous ±0.25%)',rpm:'1,800 op / 1,500 exercise',oil:'10.5 qt (9.9 L)',strt:'12 VDC',ctrl:'Power Zone® 410',conn:'Cellular + Wi-Fi backup (GGCAC standard)',color:'Bisque (Aluminum)',cert:'EPA · ETL · UL 2200 · UL 6200 · CE · NFPA 110',inst:'See drawing A0001618957',fc:'2" NPT female tee through baseframe',exer:'Selectable low-speed',der:'2.1% / 1,000 ft above 600 ft',po:[{v:'120/240V 1-Ph (NG)',nk:144,na:600,lk:134,la:558},{v:'208/120V 3-Phase',nk:150,na:520,lk:140,la:486},{v:'240/120V 3-Phase',nk:150,na:451,lk:140,la:421},{v:'480/277V 3-Phase',nk:150,na:226,lk:140,la:210}],ft:['⚠ NG=150kW / LP=140kW · 1-Phase: NG=144kW / LP=134kW','Power Zone® 410 — graphical display w/ heater','9.0L V8 Turbocharged & Aftercooled — 1,800 RPM','⚠ Model-specific fuel — NOT interchangeable','EPA · UL 2200 · UL 6200 · CE · NFPA 110','Battery Group 31 925 CCA INCLUDED','5 Year / 2,000 Hour warranty'],pr:[{n:'Low Oil Pressure',v:'Auto Shutdown'},{n:'Low Coolant Level',v:'Shutdown'},{n:'Altitude Derate',v:'2.1% / 1,000 ft above 600 ft'}],ac:[{p:'G0072150',n:'GGCAC Cellular Accessory',d:'Standard on new RG15090.'},{p:'G0080470',n:'NFPA 110 Controller Kit',d:'Key switch, alarm horn, E-stop.'},{p:'G0098820',n:'9.0L Maintenance Kit',d:'Oil filter, air filter, spark plugs.'}]},
+{id:'r130',c:'liq',lbl:'130kW Protector RG · RG13090',mdl:'130kW Protector RG',num:'RG13090',grp:'Protector RG — 9.0L V8 · 130/150kW  [A0002505135]',src:'A0002505135 Rev. E',klp:130,kng:130,ilp:'542 (1-Ph)',ing:'542 (1-Ph)',cb:'600A',cb3:{g:'500A',j:'400A',k:'225A'},wlb:3009,wkg:1368,dims:'132.7×40.7×64.1 in / 2,771 mm OA length',sn:'72 dB(A) op / 68 dB(A) exercise @ 23 ft',sq:'68 dB(A) exercise',ng25:509,ngh:858,ng75:1204,ngf:1554,lp25:4.7,lph:7.6,lp75:10.6,lpf:13.5,png:'7–11" WC',plp:'7–11" WC',bng:'1,036 BTU/ft³',blp:'91,452 BTU/gal',warr:'5 Year / 2,000 Hour Limited',bat:'Group 31, 925 CCA Minimum (INCLUDED)',eng:'9.0L V-type 8-Cylinder, Turbocharged & Aftercooled',cyl:8,disp:'9.0L',comp:'9.1:1',blk:'—',vlv:'Hydraulic lifters',lft:'Hydraulic',ign:'—',gov:'Electronic (Isochronous ±0.25%)',rpm:'1,800 op / 1,500 exercise',oil:'10.5 qt (9.9 L)',strt:'12 VDC',ctrl:'Power Zone® 410',conn:'Cellular + Wi-Fi backup (GGCAC standard)',color:'Bisque (Aluminum)',cert:'EPA · ETL · UL 2200 · UL 6200 · CE · NFPA 110',inst:'See drawing A0001618959',fc:'2" NPT female tee through baseframe',exer:'Selectable low-speed',der:'3% / 1,000 ft above 600 ft',po:[{v:'120/240V 1-Phase',nk:130,na:542,lk:130,la:542},{v:'208/120V 3-Phase',nk:130,na:451,lk:130,la:451},{v:'240/120V 3-Phase',nk:130,na:391,lk:130,la:391},{v:'480/277V 3-Phase',nk:130,na:195,lk:130,la:195}],ft:['Power Zone® 410 — 128×64 graphical display w/ heater','Cellular + Wi-Fi backup (GGCAC standard)','9.0L V8 Turbocharged & Aftercooled — 1,800 RPM','⚠ Model-specific fuel — NG or LP — NOT interchangeable','EPA · CA & MA · UL 2200 · UL 6200 · CE · NFPA 110','Battery Group 31 925 CCA INCLUDED','5 Year / 2,000 Hour warranty'],pr:[{n:'Low Oil Pressure',v:'Auto Shutdown'},{n:'Low Coolant Level',v:'Shutdown'},{n:'Phase-to-Phase Short',v:'I²T Algorithm'},{n:'Altitude Derate',v:'3% / 1,000 ft above 600 ft'}],ac:[{p:'G0072150',n:'GGCAC Cellular Accessory',d:'Standard on new RG13090.'},{p:'G0080470',n:'NFPA 110 Controller Kit',d:'Key switch, alarm horn, E-stop.'},{p:'G0098820',n:'9.0L Maintenance Kit',d:'Oil filter, air filter, spark plugs.'}]},
+{id:'r150',c:'liq',lbl:'150kW Protector RG · RG15090',mdl:'150kW Protector RG',num:'RG15090',grp:'Protector RG — 9.0L V8 · 130/150kW  [A0002505135]',src:'A0002505135 Rev. E',klp:140,kng:150,ilp:'558 (1-Ph LP)',ing:'600 (1-Ph NG)',cb:'700A',cb3:{g:'600A',j:'500A',k:'250A'},wlb:3278,wkg:1497,dims:'143×50.5×68.1 in / 2,800 mm OA length',sn:'77 dB(A) op / 71 dB(A) exercise @ 23 ft',sq:'71 dB(A) exercise',ng25:562,ngh:964,ng75:1353,ngf:1769,lp25:5.1,lph:8.4,lp75:11.9,lpf:15.3,png:'7–11" WC',plp:'7–11" WC',bng:'1,036 BTU/ft³',blp:'91,452 BTU/gal',warr:'5 Year / 2,000 Hour Limited',bat:'Group 31, 925 CCA Minimum (INCLUDED)',eng:'9.0L V-type 8-Cylinder, Turbocharged & Aftercooled',cyl:8,disp:'9.0L',comp:'9.1:1',blk:'—',vlv:'Hydraulic lifters',lft:'Hydraulic',ign:'—',gov:'Electronic (Isochronous ±0.25%)',rpm:'1,800 op / 1,500 exercise',oil:'10.5 qt (9.9 L)',strt:'12 VDC',ctrl:'Power Zone® 410',conn:'Cellular + Wi-Fi backup (GGCAC standard)',color:'Bisque (Aluminum)',cert:'EPA · ETL · UL 2200 · UL 6200 · CE · NFPA 110',inst:'See drawing A0001618957',fc:'2" NPT female tee through baseframe',exer:'Selectable low-speed',der:'2.1% / 1,000 ft above 600 ft',po:[{v:'120/240V 1-Ph (NG)',nk:144,na:600,lk:134,la:558},{v:'208/120V 3-Phase',nk:150,na:520,lk:140,la:486},{v:'240/120V 3-Phase',nk:150,na:451,lk:140,la:421},{v:'480/277V 3-Phase',nk:150,na:226,lk:140,la:210}],ft:['⚠ NG=150kW / LP=140kW · 1-Phase: NG=144kW / LP=134kW','Power Zone® 410 — graphical display w/ heater','9.0L V8 Turbocharged & Aftercooled — 1,800 RPM','⚠ Model-specific fuel — NOT interchangeable','EPA · UL 2200 · UL 6200 · CE · NFPA 110','Battery Group 31 925 CCA INCLUDED','5 Year / 2,000 Hour warranty'],pr:[{n:'Low Oil Pressure',v:'Auto Shutdown'},{n:'Low Coolant Level',v:'Shutdown'},{n:'Altitude Derate',v:'2.1% / 1,000 ft above 600 ft'}],ac:[{p:'G0072150',n:'GGCAC Cellular Accessory',d:'Standard on new RG15090.'},{p:'G0080470',n:'NFPA 110 Controller Kit',d:'Key switch, alarm horn, E-stop.'},{p:'G0098820',n:'9.0L Maintenance Kit',d:'Oil filter, air filter, spark plugs.'}]},
 ];
 
 // ── FUEL CARD ROWS BUILDER (Gas Calc style) ────────────────────────────
@@ -883,8 +888,14 @@ function showGen(id){
   document.getElementById('fn').textContent=`BTU content: NG = ${g.bng} · LP = ${g.blp}`;
   document.getElementById('pt').innerHTML=g.po.map(r=>`<tr><td>${r.v}</td><td class="nc">${r.nk} kW</td><td>${r.na}A</td><td class="lc">${r.lk} kW</td><td>${r.la}A</td></tr>`).join('');
 
-  const ks=[{l:'Main Breaker',v:g.cb},{l:'LP Current',v:g.ilp+'A'},{l:'NG Current',v:g.ing+'A'},{l:'THD',v:'<5%'},{l:'Sound (Op)',v:g.sn},{l:'Sound (Exer)',v:g.sq},{l:'Warranty',v:g.warr},{l:'Battery',v:g.bat},{l:'Controller',v:g.ctrl},{l:'Connectivity',v:g.conn},{l:'Color',v:g.color},{l:'Certs',v:g.cert},{l:'Clearance',v:g.inst},{l:'Fuel Conn.',v:g.fc},{l:'Exerciser',v:g.exer},{l:'Alt. Derate',v:g.der}];
-  document.getElementById('ks').innerHTML=ks.map(s=>`<div class="ic"><div class="icl">${s.l}</div><div class="icv">${s.v}</div></div>`).join('');
+  const cbVal = g.cb3
+    ? [`${g.cb}`,`${g.cb3.g}`,`${g.cb3.j}`,`${g.cb3.k}`]
+        .map((v,i)=>{const lbl=['1-Ph','208V 3-Ph','240V 3-Ph','480V 3-Ph'][i];
+          return `<span style="display:block">${v} &nbsp;<span style="color:var(--dim);font-size:.6rem">${lbl}</span></span>`;})
+        .join('')
+    : g.cb;
+  const ks=[{l:'Main Breaker',v:cbVal},{l:'LP Current',v:g.ilp+'A'},{l:'NG Current',v:g.ing+'A'},{l:'THD',v:'<5%'},{l:'Sound (Op)',v:g.sn},{l:'Sound (Exer)',v:g.sq},{l:'Warranty',v:g.warr},{l:'Battery',v:g.bat},{l:'Controller',v:g.ctrl},{l:'Connectivity',v:g.conn},{l:'Color',v:g.color},{l:'Certs',v:g.cert},{l:'Clearance',v:g.inst},{l:'Fuel Conn.',v:g.fc},{l:'Exerciser',v:g.exer},{l:'Alt. Derate',v:g.der}];
+  document.getElementById('ks').innerHTML=ks.map(s=>`<div class="ic"><div class="icl">${s.l}</div><div class="icv">${s.v}</div></div>`).join('').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
   const es=[{l:'Engine',v:g.eng},{l:'Displacement',v:g.disp},{l:'Cylinders',v:String(g.cyl)},{l:'Compression',v:g.comp},{l:'Block',v:g.blk||'Aluminum'},{l:'Valve Arrangement',v:g.vlv||'OHV'},{l:'Lifters',v:g.lft||'—'},{l:'Ignition',v:g.ign||'Electronic'},{l:'Governor',v:g.gov},{l:'Operating RPM',v:g.rpm},{l:'Starter',v:g.strt},{l:'Oil Capacity',v:g.oil}];
   document.getElementById('es').innerHTML=es.map(s=>`<div class="ec"><div class="ecl">${s.l}</div><div class="ecv">${s.v}</div></div>`).join('');
   document.getElementById('dw').innerHTML=[{l:'Dimensions (L×W×H)',v:g.dims},{l:'Weight',v:`${g.wlb} lb / ${g.wkg} kg`}].map(d=>`<div class="db"><div class="dv">${d.v}</div><div class="dl">${d.l}</div></div>`).join('');
@@ -1058,9 +1069,250 @@ MANUALS['man-owner-100-200'] = {
 
 // ── OWNER'S MANUAL BUILD FUNCTIONS (A0009313194) ───────────────────────────
 
+MANUALS['man-rxg16'] = {
+  title: "Owner's Manual \u2014 100A Limited Circuit Automatic Transfer Switch",
+  models: 'RXG16EZA3',
+  partNo: '10000012410 Rev. C \u00b7 06/23/2021',
+  sections: [
+    { id: 'rxg-geninfo',   title: 'General Information',            icon: '\u2139\uFE0F', html: buildRXG_GenInfo() },
+    { id: 'rxg-install',   title: 'Installation',                   icon: '\uD83D\uDD27', html: buildRXG_Install() },
+    { id: 'rxg-operation', title: 'Operation &amp; Testing',        icon: '\u25B6\uFE0F', html: buildRXG_Operation() },
+    { id: 'rxg-shutdown',  title: 'Shutdown &amp; Fuse Service',    icon: '\uD83D\uDD12', html: buildRXG_Shutdown() }
+  ]
+};
+
+function buildRXG_GenInfo(){
+  var h = '<div class="man-section">';
+  h += mh4('Equipment Description');
+  h += mp('The RXG16EZA3 is a 100A limited circuit automatic transfer switch for use with air-cooled generators. It transfers electrical load from a utility (normal) source to a generator (standby) source automatically when utility power fails. The transfer switch consists of a transfer mechanism and an integrated PCB incorporating the transfer relay, sensing/battery charge fuses, and start circuit connection points.');
+  h += mh4('Transfer Switch Mechanism');
+  h += mp('Single-phase system. Neutral line connects to a neutral lug and is not switched. Solderless screw-type terminal lugs standard.');
+  h += mt(['Switch Rating','Wire Range','Torque','Lug Temp Rating'],[
+    ['100A','#14\u20131/0 AWG (Cu/Al)','50 in-lbs (5.6 Nm)','167\u00b0F (75\u00b0C)']
+  ]);
+  h += mnote('Suitable for use on circuits capable of 10,000 RMS symmetrical amperes, 240 VAC maximum. UL listed for optional standby systems only (NEC Article 702).');
+  h += mh4('Compatible Branch Circuit Breakers (Not Supplied)');
+  h += mp('The following 1-inch breakers are listed for use in this switch:');
+  h += mul(['Siemens (including GFCI, AFCI, and tandem up to 50A)','Murray (including GFCI, AFCI, and tandem up to 50A)','Eaton','Square D']);
+  h += mnote('For branch circuits over 50 amps, only listed Siemens or Murray circuit breakers shall be used.');
+  h += mh4('Transfer Switch Enclosure');
+  h += mp('NEMA / UL Type 3R rated (indoor/outdoor). Protected against falling rain and sleet. Undamaged by ice formation on enclosure.');
+  h += mh4('Contents in Loose Parts Bag');
+  h += mul(['Owner\'s manual','Warranty statement','Manual operating handle','Storage bracket for manual operating handle','Fault current label','Clear decal for fault current label']);
+  h += mh4('Transfer Mechanism Terminals');
+  h += mt(['Terminal','Function'],[
+    ['N1, N2','Utility (Normal) source lugs'],
+    ['E1, E2','Generator (Standby) source lugs'],
+    ['T1, T2','Load lugs']
+  ]);
+  h += '</div>';
+  return h;
+}
+
+function buildRXG_Install(){
+  var h = '<div class="man-section">';
+  h += mdanger('Turn utility and emergency power supplies OFF before connecting power source and load lines.');
+  h += mcaution('Tighten all conductors to factory-specified torque values. Failure to do so could damage the switch base.');
+  h += mh4('Installation Steps Overview');
+  h += mul(['Mount the enclosure','Install the circuit breakers','Connect power source and load leads','Connect generator control wiring','Connect branch circuit wiring']);
+  h += mh4('Mounting');
+  h += mul([
+    'Mount vertically to a rigid supporting structure.',
+    'Install as close as possible to the electrical loads.',
+    'Can be mounted indoors or outdoors (UL Type 3R).',
+    'Level all mounting points — use washers behind mounting holes if needed.'
+  ]);
+  h += mh4('Installing Breakers');
+  h += mp('Insert the tab on the breaker into the hook on the bus. Push breaker into bus until it snaps into place.');
+  h += mh4('Connecting Power Source &amp; Load Lines');
+  h += mol([
+    'Install a 2-pole, 100A breaker in the main distribution panel (utility normal source).',
+    'Install conduit between main distribution panel and transfer switch enclosure.',
+    'Run conductors from 2-pole 100A breaker through conduit.',
+    'Connect utility (normal) power cables to N1 and N2 terminals on transfer switch mechanism.',
+    'Connect generator (standby) power cables to E1 and E2 terminals.',
+    'Connect utility and generator ground cables to ground connection; neutral cables to neutral bar.',
+    'Customer LOAD leads are not pre-wired at factory \u2014 install branch circuit conductors per NEC.'
+  ]);
+  h += mnote('Neutral and Ground Bars accept #4\u2013#14 AWG Cu/Al. For larger generator neutral/ground cables, use lug kit Siemens ECLK2 or Generac P/N 10000006293 (accepts #4\u20132/0 Cu/Al).');
+  h += mnote('Aluminum conductors: apply corrosion inhibitor, wipe away excess after tightening. Conductor sizing based on 75\u00b0C column of NEC tables.');
+  h += mh4('Connecting Start Circuit Wires (Integrated PCB)');
+  h += mp('Control interconnections: N1, N2, T1, leads 23, 194, and 0. Class 1 signaling circuit. Screw torque: 3.5 in-lb (0.4 Nm). Minimum wire gauge: No. 18 AWG up to 500 ft (152.4 m). Copper conductors only.');
+  h += mt(['Terminal','Wire Color','Function'],[
+    ['T1 (fused)','BLUE*','120 VAC for battery charger'],
+    ['N1 (fused)','YELLOW','240 VAC Utility sense (dropout/pickup)'],
+    ['N2 (fused)','YELLOW/BLACK','240 VAC Utility sense (dropout/pickup)'],
+    ['0','BLACK','DC Ground (not required)'],
+    ['194','RED','+12 VDC for transfer controls'],
+    ['23','WHITE','Transfer control signal wire']
+  ]);
+  h += mnote('* Blue (T1) required to supply utility or generator voltage to the generator battery charger.');
+  h += mh4('Installing Branch Circuit Conductors — USA');
+  h += mol([
+    'Select which branch circuits will be protected by the generator.',
+    'Turn off the circuit breaker in the normal power panel board.',
+    'Remove the ungrounded (hot) conductor from the circuit breaker and neutral from the neutral bar.',
+    'If a multi-wire branch circuit: entire circuit must be relocated to the transfer switch panel (NEC 210.4).',
+    'Install NEC-approved conduit or raceway between transfer switch panel and normal power panel if using as junction box.',
+    'Install properly sized branch circuit conductors between the transfer switch panel and protected circuits.',
+    'Connect using listed wire nuts or approved termination devices.',
+    'Install provided label on existing panel indicating location of disconnecting means.',
+    'Terminate equipment ground on ground bar, neutral on neutral bar, ungrounded (hot) on circuit breaker terminal.',
+    'Size all conductors, raceways, and conduits per applicable NEC articles.'
+  ]);
+  h += mh4('Installing Branch Circuit Conductors — Canada');
+  h += mol([
+    'Select which branch circuits will be protected. Turn off the breaker in the normal power panel.',
+    'Remove ungrounded (hot) and neutral conductors from normal power panel.',
+    'Canadian Electric Code prohibits using normal power panel as junction box \u2014 relocate wiring to proper junction box or transfer switch panel.',
+    'Punch required hole(s) for cable/conduit/raceway.',
+    'Terminate ground on ground bar, neutral on neutral bar, hot on circuit breaker terminal.',
+    'Size all conductors and conduits per applicable CEC articles.'
+  ]);
+  h += mh4('Auxiliary Contact');
+  h += mp('One normally-closed auxiliary contact available to operate customer accessories, remote advisory lights, or annunciator devices. A suitable power source must be connected to the common terminal. Closed in utility mode \u2014 opens in standby mode.');
+  h += mp('<strong>Rating:</strong> 10A at 125 or 250 VAC \u00b7 0.6A at 125 VDC');
+  h += mcaution('Do not exceed rated voltage and current on auxiliary contacts.');
+  h += mh4('Fault Current Label');
+  h += mp('Per 2017 NEC: apply Fault Current Identification Label to exterior of enclosure. Fill in fault current rating and available fault current, cover with clear protective decal.');
+  h += '</div>';
+  return h;
+}
+
+function buildRXG_Operation(){
+  var h = '<div class="man-section">';
+  h += mdanger('Do NOT manually transfer under load. Disconnect transfer switch from ALL power sources prior to manual transfer.');
+  h += mcaution('Perform functional tests in exact order presented. Do not use excessive force on the manual handle.');
+  h += mh4('Manual Operation');
+  h += mp('Manual handle ships with the transfer switch. Must be verified BEFORE electrical operation.');
+  h += mol([
+    'Verify generator is in the OFF mode.',
+    'Turn OFF both utility (service disconnect CB) and emergency (generator main CB) power supplies.',
+    'Observe contact carrier arm position through narrow slot in inner cover \u2014 yellow top is easily identified.'
+  ]);
+  h += mt(['Handle Position','Load Terminals Connected To'],[
+    ['UP','Utility (N1, N2) \u2014 Normal Power'],
+    ['DOWN','Generator (E1, E2) \u2014 Standby Power']
+  ]);
+  h += mh4('Close to Utility Source Side');
+  h += mol([
+    'If handle is UP \u2014 contacts already in utility position; no action needed.',
+    'If handle is DOWN \u2014 insert handle into movable contact carrier arm, move UP. Hold firmly; handle moves quickly past center of travel.',
+    'Remove handle; return to storage bracket.'
+  ]);
+  h += mh4('Close to Generator Source Side');
+  h += mol([
+    'If handle is DOWN \u2014 contacts already in generator position; no action needed.',
+    'If handle is UP \u2014 insert handle into movable contact carrier arm, move DOWN. Hold firmly.',
+    'Remove handle; return to storage bracket.'
+  ]);
+  h += mh4('Return to Utility Source Side');
+  h += mol([
+    'Manually actuate switch to move handle to UP position.',
+    'Remove handle; return to storage bracket.'
+  ]);
+  h += mh4('Voltage Checks');
+  h += mnote('Use DMM LowZ setting to eliminate phantom/ghost voltage readings.');
+  h += mh4('Utility Voltage Checks');
+  h += mol([
+    'Turn ON utility power supply using breaker in main distribution panel.',
+    'Measure across ATS terminal lugs N1 and N2; N1 to NEUTRAL and N2 to NEUTRAL.'
+  ]);
+  h += mh4('Generator Voltage Checks');
+  h += mol([
+    'Select MANUAL mode on generator panel \u2014 engine should crank and start.',
+    'Let generator stabilize at no-load for at least 5 minutes.',
+    'Set generator main circuit breaker CB1 to ON/CLOSED.',
+    'Measure no-load voltage and frequency across ATS terminals E1\u2013E2, E1\u2013NEUTRAL, E2\u2013NEUTRAL.'
+  ]);
+  h += mt(['Measurement','Expected Value'],[
+    ['Frequency','60\u201362 Hz'],
+    ['E1 to E2','240\u2013246 VAC'],
+    ['E1 to Neutral','120\u2013123 VAC'],
+    ['E2 to Neutral','120\u2013123 VAC']
+  ]);
+  h += mp('<strong>Do NOT proceed until generator voltage and frequency are within limits.</strong>');
+  h += mol([
+    'Turn OFF generator supply to ATS.',
+    'Set generator main CB to OFF/OPEN.',
+    'Select OFF mode on generator panel.'
+  ]);
+  h += mh4('Generator Test Under Load');
+  h += mol([
+    'Set generator main CB to OFF/OPEN.',
+    'Set utility service disconnect CB to OFF/OPEN.',
+    'Manually actuate transfer switch to emergency (standby) position.',
+    'Select MANUAL on generator \u2014 let stabilize a few minutes.',
+    'Set generator main CB to ON/CLOSED \u2014 generator now powers all LOAD circuits.',
+    'Apply loads to full rated capacity \u2014 DO NOT OVERLOAD.',
+    'At max load: verify voltage &gt; 230 VAC and frequency &gt; 59 Hz.',
+    'Verify gas pressure within acceptable parameters (see generator Installation Guidelines).',
+    'Run under rated load at least 30 minutes \u2014 watch for unusual noises, vibration, overheating.',
+    'Set generator main CB to OFF/OPEN when complete.',
+    'Let generator run at no-load several minutes, then select OFF.',
+    'Move switch contacts back to utility position (handle UP).',
+    'Turn on utility power supply \u2014 utility now powers the loads.',
+    'System is now set for fully automatic operation.'
+  ]);
+  h += mh4('Checking Automatic Operation');
+  h += mol([
+    'Verify generator is OFF.',
+    'Verify switch is de-energized.',
+    'Install front cover of transfer switch.',
+    'Turn ON utility power supply using utility main line circuit breaker.',
+    'Set generator main CB to ON.',
+    'Select AUTO on generator panel.',
+    'Turn utility power supply OFF \u2014 engine should crank and start after 10-second delay (factory default).',
+    'Transfer switch connects loads to standby after 5-second warm-up delay.',
+    'Turn utility power supply back ON \u2014 after ~15 seconds loads transfer back to utility.',
+    'After ~1 minute post-retransfer, generator shuts down automatically.'
+  ]);
+  h += mh4('Installation Summary Checklist');
+  h += mul([
+    'Verify installation performed per manufacturer guidelines and all applicable laws/codes.',
+    'Verify proper system operation per installation and owner\'s manuals.',
+    'Educate end-user on proper operation, maintenance, and service call procedures.'
+  ]);
+  h += '</div>';
+  return h;
+}
+
+function buildRXG_Shutdown(){
+  var h = '<div class="man-section">';
+  h += mdanger('Disconnect utility power and render unit inoperable before working on unit.');
+  h += mp('<strong>Important:</strong> Follow these steps in order during utility outages. Shutdowns may be required to perform routine maintenance or conserve fuel.');
+  h += mh4('Shutting Generator Down While Under Load / During Utility Outage');
+  h += mp('<strong>To turn generator OFF:</strong>');
+  h += mol([
+    'Set utility MLCB to OFF (OPEN).',
+    'Set generator MLCB (generator disconnect) to OFF (OPEN).',
+    'Allow generator to run for cool-down for approximately 1 minute.',
+    'Set generator to OFF at the controller.',
+    'Remove 7.5A fuse from controller.'
+  ]);
+  h += mp('<strong>To turn generator back ON:</strong>');
+  h += mol([
+    'Install 7.5A fuse in controller.',
+    'Verify generator MLCB (generator disconnect) is OFF (OPEN).',
+    'Set generator to AUTO mode at the controller.',
+    'Allow generator to start, run, and warm up for a few minutes.',
+    'Set generator MLCB (generator disconnect) to ON (CLOSED).',
+    'Set utility MLCB to ON (CLOSED).'
+  ]);
+  h += mh4('Fuse Removal and Installation');
+  h += mp('A fuse removal and installation tool is included in the control housing. To replace a fuse:');
+  h += mol([
+    'Snap the tool free using diagonal pliers or similar insulated tool.',
+    'Use the tool to remove and replace the fuse.',
+    'Store tool in control housing retainer directly above the fuses, large thumb tab facing out.'
+  ]);
+  h += mnote('<strong>Replacement fuse:</strong> Generac P/N 10000005117 \u00b7 240 VAC \u00b7 6.3A \u00b7 10,000 AIC<br>Alternatives: Littelfuse\u00ae 021606.3MXHP \u00b7 Optifuse\u00ae FCD-6.3');
+  h += '</div>';
+  return h;
+}
+
 function buildOM_Models(){
   var h = '<div class="man-section">';
-  h += mh4('Model Numbers');
   h += mt(['Category','Model Numbers'],[
     ['Non-Service Entrance (No SPD)','G0099300 &middot; G0099350'],
     ['Service Entrance w/ Utility CB (No SPD)','G0099290 &middot; G0099320 &middot; G0099340'],
@@ -1570,6 +1822,1207 @@ function buildShutdown(){
   h += mh4('SACM Fuse Service');
   h += mp('A fuse removal/installation tool is included in the SACM housing. Store with large thumb tab facing out, directly above fuses.');
   h += mnote('<strong>Replacement fuse:</strong> Generac P/N 10000005117 &middot; 240 VAC &middot; 6.3A &middot; 10,000 AIC<br>Alternatives: Littelfuse&reg; 021606.3MXP &middot; Optifuse&reg; FCD-6.3');
+  h += '</div>';
+  return h;
+}
+
+// ── RXUW / RBU INTEGRATED METER ATS MANUAL (A0000243082) ──────────────────
+MANUALS['man-rxuw-rbu'] = {
+  title: "Owner\u2019s Manual \u2014 Automatic Transfer Switch 150\u2013200A Integrated Meter Transfer Switch, Service Entrance Rated",
+  models: 'RXUW200A3 \u00b7 RXUW150A3 \u00b7 RBU200A3 \u00b7 RBU150A3 \u00b7 G0074000 (RBU Upgrade Kit)',
+  partNo: 'A0000243082 Rev. H \u00b7 10/16/2025',
+  sections: [
+    { id: 'rxuw-geninfo',   title: 'General Information &amp; Equipment Description', icon: '\u2139\uFE0F', html: buildRXUW_GenInfo() },
+    { id: 'rxuw-sacm',      title: 'Smart A/C Module (SACM) &amp; Load Management',   icon: '\u2744\uFE0F', html: buildRXUW_SACM() },
+    { id: 'rxuw-install',   title: 'Installation',                                     icon: '\uD83D\uDD27', html: buildRXUW_Install() },
+    { id: 'rxuw-operation', title: 'Operation &amp; Testing',                          icon: '\u25B6\uFE0F', html: buildRXUW_Operation() },
+    { id: 'rxuw-shutdown',  title: 'Shutdown, Maintenance &amp; SACM Fuse Service',    icon: '\uD83D\uDD12', html: buildRXUW_Shutdown() },
+    { id: 'rxuw-acc',       title: 'Accessories',                                      icon: '\uD83D\uDCE6', html: buildRXUW_Accessories() }
+  ]
+};
+
+function buildRXUW_GenInfo(){
+  var h = '<div class="man-section">';
+  h += mh4('Equipment Description');
+  h += mp('This automatic transfer switch transfers electrical load from a utility (normal) power source to a generator (standby) power source automatically when utility power has failed or is substantially reduced and the generator voltage and frequency have reached an acceptable level. The transfer switch prevents electrical feedback between two power sources, as required by code for all standby electric system installations.');
+  h += mp('The transfer switch consists of a transfer mechanism, utility service disconnect circuit breaker (if equipped), and a Smart A/C Module (SACM) incorporating fuses and two terminal blocks. It includes a separately accessible Utility Entry cabinet housing a standard 4 Jaw Meter Socket with provision for utility lock.');
+  h += mnote('RXUW models include the transfer switch mechanism. RBU models do NOT include a transfer switch — they must be upgraded with the G0074000 Upgrade Kit. Before selecting this switch, verify it is local Utility Service Provider approved at www.generac.com/integrated-meter-approval.');
+  h += mh4('Transfer Switch Mechanism (RXUW / RBU + G0074000)');
+  h += mp('Single-phase system. Neutral line is not switched — it connects to a neutral lug. Solderless screw-type terminal lugs standard.');
+  h += mt(['Switch Rating','Wire Range','Tightening Torque'],[
+    ['150A / 200A','#6\u2013250 MCM (Cu/Al)','275 in-lbs (31 Nm)']
+  ]);
+  h += mnote('ETL listed for optional standby systems only (NEC Article 702). Rated for use on circuits capable of 22,000 RMS symmetrical amperes, 240 VAC when protected by a circuit breaker without an adjustable short time response or by fuses. Tungsten load must not exceed 30% of switch rating.');
+  h += mh4('Transfer Mechanism Terminals');
+  h += mt(['Terminal','Function'],[
+    ['N1, N2','Utility (Normal) source lugs'],
+    ['E1, E2','Generator (Standby / Emergency) source lugs'],
+    ['T1, T2','Load lugs (to subpanel)'],
+    ['S1, S2','Solar connection lugs (if applicable)'],
+    ['C1','Lower Neutral bar'],
+    ['C2','Lower Ground bar']
+  ]);
+  h += mh4('Utility Service Circuit Breaker');
+  h += mt(['Parameter','Rating'],[
+    ['Type','225AF, 2-pole'],
+    ['AIC','22,000 A/C'],
+    ['Voltage / Current','120/240 VAC \u00b7 150A or 200A'],
+    ['Frequency','50/60 Hz']
+  ]);
+  h += mh4('Transfer Switch Enclosure');
+  h += mp('NEMA and UL Type 3R rated (indoor/outdoor). Provides protection against falling rain and sleet; undamaged by ice formation on the enclosure.');
+  h += mh4('Contents in Loose Parts Bag');
+  h += mul(['Owner\'s manual','Warranty statement','Manual operating handle (RXUW models only — not in RBU)','Storage bracket for manual operating handle (RXUW only)','Fault current label','Clear decal for fault current label','Meter gasket','Top conduit cover gasket']);
+  h += '</div>';
+  return h;
+}
+
+function buildRXUW_SACM(){
+  var h = '<div class="man-section">';
+  h += mh4('Smart A/C Module (SACM)');
+  h += mp('The SACM manages up to four air conditioner loads by shedding them when generator frequency drops (overload condition). Loads are assigned to 4 priority levels (A/C 1\u20134). Internal normally-closed relays interrupt the 24 VAC thermostat control signal to disable each A/C load. Four LEDs illuminate when a load is connected and powered.');
+  h += mp('A <strong>Test button</strong> on the SACM simulates an overload condition. It operates even when the transfer signal is inactive.');
+  h += mnote('Overload detection: loads shed when frequency is less than 58 Hz for 3 seconds, or less than 50 Hz for \u00bd second (60 Hz systems).');
+  h += mh4('SACM Terminal Functions');
+  h += mt(['Terminal','Function'],[
+    ['A/C 1\u20134 (pins 1 &amp; 2 each)','24 VAC thermostat control \u2014 normally closed, opens on load shed'],
+    ['0 Ground','DC Ground'],
+    ['194','+12 VDC'],
+    ['23 Transfer','Transfer control signal'],
+    ['00','Dedicated T1 Neutral'],
+    ['T1 (fused)','Battery charge (120 VAC)'],
+    ['N1 (fused)','Utility sense'],
+    ['N2 (fused)','Utility sense'],
+    ['J (fuses)','240 VAC, 6.3A fuses']
+  ]);
+  h += mh4('Contact Ratings');
+  h += mt(['Contact','Rating'],[
+    ['A/C 1\u20134','24 VAC \u00b7 1.0 Amp Max'],
+    ['Auxiliary Contact','10A at 125 or 250 VAC \u00b7 0.6A at 125 VDC']
+  ]);
+  h += mh4('Generac Load Manager (GLM) — Sold Separately');
+  h += mp('Home loads (other than A/C) can be managed using Generac Load Managers. Up to eight individual GLMs are supported. GLMs are recommended for all non-HVAC large appliances. GLMs have individual built-in controllers.');
+  h += mh4('Priority Recovery Times (SACM + GLM Combined)');
+  h += mt(['Priority','Recovery Time','SACM','GLM'],[
+    ['1','5 min','Yes','Yes'],
+    ['2','5 min 15 sec','Yes','Yes'],
+    ['3','5 min 30 sec','Yes','Yes'],
+    ['4','5 min 45 sec','Yes','Yes'],
+    ['5','6 min','No','Yes'],
+    ['6','6 min 15 sec','No','Yes'],
+    ['7','6 min 30 sec','No','Yes'],
+    ['8','6 min 45 sec','No','Yes']
+  ]);
+  h += mnote('SACM can be combined with GLMs for a total of up to 8 managed loads (A/C 1\u20134 + GLM priorities 5\u20138). Sharing a priority between SACM and GLM allows up to 12 loads in a properly sized system.');
+  h += mh4('Auxiliary Contact');
+  h += mp('One normally-closed auxiliary contact is available to operate customer accessories, remote advisory lights, or annunciator devices. A suitable power source must be connected to the common terminal. Closed in utility mode \u2014 opens in standby (generator) mode. An extra auxiliary contact can be added if needed.');
+  h += mcaution('Verify voltage and current are within specification before energizing. Exceeding rated voltage and current will damage the auxiliary contacts.');
+  h += '</div>';
+  return h;
+}
+
+function buildRXUW_Install(){
+  var h = '<div class="man-section">';
+  h += mdanger('Turn utility and emergency power supplies to OFF before connecting power source and load lines.');
+  h += mcaution('Tighten all conductors to factory-specified torque values. Failure may damage the switch base.');
+  h += mh4('Installation Overview');
+  h += mul(['Mount the enclosure','Connect power source (utility) and load leads','Connect alternate power source (generator) — RXUW only','Connect start circuit (generator control) wires','Connect SACM (A/C thermostat wiring)','Connect auxiliary contact if needed','Perform functional tests']);
+  h += mh4('Mounting');
+  h += mp('Mount vertically to a rigid supporting structure as close as possible to the electrical loads. Level all mounting points — use washers behind mounting holes if needed. Can be mounted indoors or outdoors (UL Type 3R). This ATS contains utility metering equipment and must be installed as service equipment per NEC Article 230, unless alternate upstream service equipment is installed.');
+  h += mh4('Opening the Enclosure');
+  h += mol([
+    'Remove outer top cover: rotate latch clockwise until clear, then tilt and pull away.',
+    'Remove outer bottom cover: remove thumb screw, slide slot over retention tab, lower cover clear of flange and pull away.',
+    'Remove inner panel: loosen nut until clear of T-slot, grasp at cutouts, tilt panel passing nut through T-slot, lower until clear of retention slots and pull away.'
+  ]);
+  h += mh4('Connecting Utility Power Source (RBU and RXUW)');
+  h += mol([
+    'Select upper or lower utility cable entry point.',
+    'If NOT using upper entry: align top conduit cover gasket (A0004457710) with extruded holes; align cover; tighten wingnut finger tight.',
+    'Connect utility supply at Four Jaw Meter Socket terminals N1 and N2. Follow torque specs on the circuit breaker.',
+    'Connect utility grounded conductor to Upper Neutral and Ground terminals (bonded with jumper wire).',
+    'If applicable: connect Solar directly to Utility at S1 and S2 with lugs provided under circuit breaker cover (per local codes).',
+    'Utility authorized personnel install the meter into the meter socket.',
+    'Slide provided Meter Gasket (A0004487268) over the meter — leave final installation to utility personnel.',
+    'Install top conduit cover gasket BEFORE utility services the unit.',
+    'Install any required accessory kits (tamperproof upper cover, barrel lock, etc.) per included instructions.',
+    'Upper Utility Access Panel may now be installed and sealed per local utility.'
+  ]);
+  h += mnote('Neutral to Ground jumper wire is provided for use if required by local codes. The meter cover gasket (A0004487268) should be left for utility authorized personnel to install.');
+  h += mh4('Connecting Generator (Alternate Power Source) — RXUW Only');
+  h += mol([
+    'Connect generator to generator terminals E1 and E2 on the transfer mechanism.',
+    'Connect generator neutral wire to the neutral lug.',
+    'Connect subpanel supply to lower T1 and T2 terminals. Connect subpanel Neutral and Ground to C1 and C2 bars.'
+  ]);
+  h += mnote('A jumper wire bonds the neutral lug for optional 5th Jaw Kit installation. NEVER remove this wire. Conductor sizes must be based on the 75\u00b0C column of NEC tables. For wet locations, cable/conduit entries above live parts must use fittings listed for wet locations (NEC 312.2). Conduit entry must maintain wire bending spaces per NEC Tables 312.6(A) and (B).');
+  h += mnote('If aluminum conductors are used, apply corrosion inhibitor and wipe away excess after tightening terminal lugs.');
+  h += mh4('Connecting Start Circuit Wires');
+  h += mp('Control system interconnections: terminals 0, 194, 23, 00, T1, N1, N2. Generator control wiring is a Class 1 signaling circuit. Screw torque: 3.5 in-lb (0.4 Nm).');
+  h += mt(['Recommended Wire Size','Max Wire Length (One ATS + SACM)'],[
+    ['No. 18 AWG','1\u2013115 ft (0.3\u201335 m)'],
+    ['No. 16 AWG','116\u2013185 ft (36\u201356 m)'],
+    ['No. 14 AWG','186\u2013295 ft (57\u201389 m)'],
+    ['No. 12 AWG','296\u2013460 ft (90\u2013140 m)']
+  ]);
+  h += mnote('Generac Type TC-ER-JP power and control tray cable may be installed per 2017 and 2020 NEC. Consult factory if more than one transfer switch and SACM will be operated.');
+  h += mh4('Connecting SACM (A/C Control)');
+  h += mol([
+    'Route thermostat cable (from furnace/thermostat to outdoor A/C unit) to the transfer switch.',
+    'Connect wire to terminal strip A/C 1 on the SACM — normally closed contacts that open on load shed.',
+    'Route thermostat wire away from high voltage wires.',
+    'Connect additional A/C units to A/C 2\u20134 terminals if required.'
+  ]);
+  h += mnote('These instructions are for typical A/C installations. Heat pumps and 2-stage A/C units may require special connections or SMMs to control the loads.');
+  h += mh4('Fault Current Label');
+  h += mp('Per 2017 NEC: apply Fault Current Identification Label to the exterior of the enclosure. Fill in fault current rating and available fault current, then cover with the clear protective decal. The completed label provides the AHJ with required inspection information.');
+  h += mh4('Installing Upgrade Kit G0074000 (RBU Models Only)');
+  h += mol([
+    'Turn OFF both utility (service disconnect CB) and emergency (generator main line CB) power.',
+    'Remove front cover of transfer panel and inner dead front.',
+    'Remove screws (A) from bus bar assembly and set aside.',
+    'Remove screws (B) from bus bar assembly and remove assembly from sub-panel.',
+    'Use provided M5 screws (C) to install transfer switch assembly from kit G0074000.',
+    'Install screws (A) into bus bar mounted to contactor — tighten to 72 in-lbs onto circuit breaker.',
+    'Install SACM unit from kit G0074000 into provided bracket (D) — plastic housing snaps into sub-panel square holes.',
+    'Plug 8-pin harness connector into SACM unit (D) and harness connector (E).',
+    'Connect power and signal wiring per Connecting Power Source, Connecting Alternate Power Source, Connecting Start Circuit Wires, and Connecting SACM sections.'
+  ]);
+  h += mnote('Utility is present in the meter panel and input side of main breaker during this procedure. Do NOT remove cover of meter panel or guard on top of main breaker.');
+  h += '</div>';
+  return h;
+}
+
+function buildRXUW_Operation(){
+  var h = '<div class="man-section">';
+  h += mdanger('Do NOT manually transfer under load. Disconnect transfer switch from ALL power sources prior to manual transfer.');
+  h += mcaution('Perform functional tests in the exact order presented in the manual. Failure may cause equipment damage.');
+  h += mh4('Pre-Test Inspection');
+  h += mp('After installation and interconnection, have a competent, qualified electrician inspect the entire installation. The installation must comply strictly with all applicable codes, standards, and regulations. Read all labels and decals on the switch. Note any options or accessories installed and review their operation.');
+  h += mh4('Manual Operation');
+  h += mp('A manual handle is shipped with the loose parts kit. Manual operation must be verified BEFORE the transfer switch is operated electrically.');
+  h += mol([
+    'Verify generator main circuit breaker is in the OFF mode.',
+    'Turn OFF both utility (service disconnect CB) and emergency (generator main line CB) power.',
+    'Note position of transfer mechanism main contacts by observing the movable contact carrier arm through the narrow slot in the inside cover (yellow top for easy ID).',
+    'Handle UP: LOAD terminals (T1, T2) connected to Utility terminals (N1, N2) — connected to grid power.',
+    'Handle DOWN: LOAD terminals (T1, T2) connected to EMERGENCY terminals (E1, E2) — connected to generator power.'
+  ]);
+  h += mh4('Manual Transfer to Utility Side');
+  h += mol([
+    'Insert handle into yellow movable contact carrier rocker — move handle UP. Hold on; it moves quickly past center.',
+    'Remove handle from rocker. Return to storage bracket.',
+    'Turn ON utility service disconnect breaker.',
+    'Turn ON generator main circuit breaker.'
+  ]);
+  h += mh4('Manual Transfer to Generator Side');
+  h += mol([
+    'Insert handle into yellow movable contact carrier rocker — move handle DOWN. Hold on; it moves quickly past center.',
+    'Remove handle from rocker. Return to storage bracket.',
+    'Turn ON utility service disconnect breaker.',
+    'Turn ON generator main circuit breaker.'
+  ]);
+  h += mh4('Generator Voltage Checks (No Load)');
+  h += mol([
+    'On generator panel, select MANUAL mode — generator should crank and start.',
+    'Let generator stabilize and warm up at no-load for at least 5 minutes.',
+    'Set generator main CB (CB1) to ON/CLOSED.',
+    'With an accurate AC voltmeter and frequency meter, measure across ATS terminal lugs E1\u2013E2, E1\u2013NEUTRAL, E2\u2013NEUTRAL.'
+  ]);
+  h += mt(['Measurement','Expected Value'],[
+    ['Frequency','60\u201362 Hz'],
+    ['E1 to E2','240\u2013246 VAC'],
+    ['E1 to Neutral','120\u2013123 VAC'],
+    ['E2 to Neutral','120\u2013123 VAC']
+  ]);
+  h += mp('Do NOT proceed until voltage and frequency are within stated limits. If no-load voltage is correct but frequency is wrong, engine governed speed may need adjustment. If frequency is correct but voltage is wrong, voltage regulator may need adjustment.');
+  h += mol([
+    'Turn OFF generator supply to transfer switch.',
+    'Set generator main CB (CB1) to OFF/OPEN.',
+    'Select OFF on generator panel.'
+  ]);
+  h += mh4('Utility Voltage Checks');
+  h += mol([
+    'Turn ON utility power supply using utility service disconnect CB.',
+    'Measure across ATS terminal lugs N1 and N2; N1 to NEUTRAL and N2 to NEUTRAL.'
+  ]);
+  h += mnote('Use DMM LowZ (low input impedance) setting for accurate voltage measurements — eliminates ghost/phantom voltage readings.');
+  h += mh4('Generator Test Under Load');
+  h += mol([
+    'Set generator main CB to OFF/OPEN.',
+    'Set utility service disconnect CB to OFF/OPEN; turn OFF all load CBs.',
+    'Manually actuate transfer switch to emergency (standby) position.',
+    'Select MANUAL on generator panel — let stabilize for a few minutes.',
+    'Set generator main CB to ON/CLOSED — generator now powers all LOAD circuits.',
+    'Turn on electrical loads to full rated wattage/amperage — DO NOT OVERLOAD.',
+    'At max load: verify voltage > 230 VAC (240 VAC system); frequency > 59 Hz.',
+    'Verify gas pressure within acceptable parameters (see generator Installation Manual).',
+    'Run under rated load for at least 30 minutes — watch for unusual noises, vibration, or overheating.',
+    'Set generator main CB to OFF/OPEN when complete.',
+    'Run at no-load for several minutes, then select OFF mode.',
+    'Move switch contacts back to utility position (handle UP).',
+    'Set utility service disconnect CB to ON/CLOSED — system ready for automatic operation.'
+  ]);
+  h += mh4('Checking Automatic Operation');
+  h += mol([
+    'Verify generator is OFF.',
+    'Set utility service disconnect CB to OFF/OPEN.',
+    'Verify switch is de-energized.',
+    'Install front cover of transfer switch.',
+    'Set utility CB to ON/CLOSED.',
+    'Set generator main CB to ON.',
+    'Select AUTO on generator panel.',
+    'Set utility CB to OFF/OPEN — engine should crank and start after 5-second delay (factory default).',
+    'Transfer switch connects loads to standby after 5-second warm-up delay.',
+    'Set utility CB back to ON/CLOSED — loads transfer back to utility after ~15 seconds.',
+    'Generator shuts down approximately 1 minute after re-transfer.'
+  ]);
+  h += mnote('Timer durations may differ between generators and settings. With generator in AUTO mode, the system is now set for fully automatic operation.');
+  h += '</div>';
+  return h;
+}
+
+function buildRXUW_Shutdown(){
+  var h = '<div class="man-section">';
+  h += mdanger('Disconnect utility power and render unit inoperable before working on unit.');
+  h += mh4('Shutting Generator Down While Under Load or During a Utility Outage');
+  h += mp('<strong>To turn generator OFF:</strong>');
+  h += mol([
+    'Set utility generator main line CB (MLCB) to OFF (OPEN).',
+    'Set generator MLCB (generator disconnect) to OFF (OPEN).',
+    'Allow generator to run for cool-down for approximately 1 minute.',
+    'Set generator to OFF at the controller.',
+    'Remove 7.5A fuse from controller.'
+  ]);
+  h += mp('<strong>To turn generator back ON:</strong>');
+  h += mol([
+    'Install 7.5A fuse in controller.',
+    'Verify generator MLCB is OFF (OPEN).',
+    'Set generator to AUTO mode at the controller.',
+    'Allow generator to start, run, and warm up for a few minutes.',
+    'Set generator MLCB to ON (CLOSED).',
+    'Set utility MLCB to ON (CLOSED).'
+  ]);
+  h += mh4('Preparing for Maintenance');
+  h += mp('<strong>To turn the generator OFF:</strong>');
+  h += mol([
+    'Turn generator OFF at the controller.',
+    'Set MLCB (generator disconnect) to OFF (OPEN).',
+    'Turn main utility disconnect OFF (OPEN).',
+    'Remove 7.5A fuse from the controller.',
+    'Follow maintenance procedures.'
+  ]);
+  h += mp('<strong>To turn the generator back ON:</strong>');
+  h += mol([
+    'Turn main utility disconnect ON (CLOSED).',
+    'Install 7.5A fuse in controller.',
+    'Put generator into AUTO mode.',
+    'Set MLCB (generator disconnect) to ON (CLOSED).'
+  ]);
+  h += mh4('Testing the SACM');
+  h += mol([
+    'Turn on utility supply to the ATS.',
+    'Verify managed loads are powered — all 4 LEDs on SACM should illuminate.',
+    'Press the TEST button on the SACM.',
+    'Verify all connected loads become disabled (shed).',
+    'After 5 minutes: verify A/C 1 is energized and Status LED A/C 1 is ON.',
+    'After another 15 seconds: verify A/C 2 energized and LED ON.',
+    'After another 15 seconds: verify A/C 3 energized and LED ON.',
+    'After another 15 seconds: verify A/C 4 energized and LED ON.'
+  ]);
+  h += mh4('SACM Fuse Service');
+  h += mdanger('High voltage present at transfer switch terminals. Contact with live terminals will result in death or serious injury.');
+  h += mp('A fuse removal and installation tool is included in the SACM housing. To replace a fuse:');
+  h += mol([
+    'Snap the tool free using diagonal pliers or similar electrically insulated tool.',
+    'Use the tool to remove and replace the fuse. Do NOT touch any part of the fuse with anything other than the tool until it is fully removed from the SACM.',
+    'Store tool in SACM housing retainer directly above the fuses, large thumb tab facing out.'
+  ]);
+  h += mnote('<strong>Replacement fuse:</strong> Generac P/N 10000005117 \u00b7 240 VAC \u00b7 6.3A \u00b7 10,000 AIC<br>Alternatives: Littelfuse\u00ae 021606.3XHP \u00b7 Optifuse\u00ae FCD-6.0A');
+  h += mh4('Installation Summary Checklist');
+  h += mul([
+    'Verify installation has been properly performed per manufacturer guidelines and all applicable laws and codes.',
+    'Verify proper system operation per installation and owner\'s manuals.',
+    'Educate end-user on proper operation, maintenance, and service call procedures.'
+  ]);
+  h += mnote('The Utility Power Circuit Breaker in the transfer switch MUST be turned OFF to simulate a utility outage. Shutting off the main disconnect in a subpanel connected to the transfer switch will NOT simulate an outage.');
+  h += '</div>';
+  return h;
+}
+
+function buildRXUW_Accessories(){
+  var h = '<div class="man-section">';
+  h += mh4('Available Accessories');
+  h += mt(['Part Number','Name','Description'],[
+    ['G0074000','RBU Transfer Switch Upgrade Kit','Converts RBU Meter Main into a RXUW Transfer Switch. Includes all required pieces.'],
+    ['G0074010','Ring Style Meter Cover','Replacement outer top cover and sealing ring for ring-style meter retention. Verify type meets local code.'],
+    ['G0074020','Fifth Jaw Metering Kit','Converts standard 4-Jaw Meter Socket into a 5-Jaw Meter Socket. Verify local code requirements.'],
+    ['G0074030','Horn Bypass','Replacement meter jaws for horn bypass type meter sockets. Verify type meets local code.'],
+    ['G0074040','Meter Safety Flash Shield','Safety flash shield for standard and horn bypass meter jaws. Used with ringless style meter retention.'],
+    ['G0074050','Side Connection Lug Kit','Converts standard 4-Jaw meter socket into a socket with side lug line connections.'],
+    ['G0074060','24 in. Pedestal Extension','Extends transfer switch enclosure by 24 in. for underground service feed.'],
+    ['G0074070','48 in. Pedestal Extension','Extends transfer switch enclosure by 48 in. for underground service feed.'],
+    ['G0074080','Ringless Cover','Replacement outer top cover for ringless-style meter retention. Verify type meets local code.'],
+    ['G0074100','Tamper Proof Lid','Tamper proof assembly for ring-style meter retention. Verify type meets local code.'],
+    ['G0074130','Utility Barrel Lock','Locks a ringless upper meter cover with a utility-supplied barrel lock per local utility requirements.'],
+    ['A0000018981','Ultrasonic Cleaner Solution','Cleaning solution safe for metal and plastic. 1 gal (128 oz).'],
+    ['A0000019001','Corrosion Inhibitor &amp; Protectant','Protectant for outdoor plastic, rubber, leather, and vinyl. 0.12 gal (15 oz).']
+  ]);
+  h += mh4('Accessories Compatibility Matrix');
+  h += mt(['Part Number','RBU150A3','RBU200A3','RXUW150A3','RXUW200A3','Notes'],[
+    ['G0074000','&#x2713;','&#x2713;','N/A','N/A','ATS already included on RXUW models'],
+    ['G0074010','&#x2713;','&#x2713;','&#x2713;','&#x2713;','Included w/ purchase; not compatible with G0074040'],
+    ['G0074020','&#x2713;','&#x2713;','&#x2713;','&#x2713;',''],
+    ['G0074030','&#x2713;','&#x2713;','&#x2713;','&#x2713;',''],
+    ['G0074040','&#x2713;','&#x2713;','&#x2713;','&#x2713;','Not compatible with G0074010 Ring Cover'],
+    ['G0074050','&#x2713;','&#x2713;','&#x2713;','&#x2713;',''],
+    ['G0074060','&#x2713;','&#x2713;','&#x2713;','&#x2713;',''],
+    ['G0074070','&#x2713;','&#x2713;','&#x2713;','&#x2713;',''],
+    ['G0074080','Incl.','Incl.','Incl.','Incl.','Included with purchase'],
+    ['G0074100','&#x2713;','&#x2713;','&#x2713;','&#x2713;',''],
+    ['G0074130','&#x2713;','&#x2713;','&#x2713;','&#x2713;','']
+  ]);
+  h += '</div>';
+  return h;
+}
+
+// ── 300–400A SERVICE ENTRANCE / NON-SE ATS MANUAL (0L3203) ───────────────
+MANUALS['man-rtsw300-400'] = {
+  title: "Owner\u2019s Manual \u2014 Automatic Transfer Switch 300\u2013400 Amp, Service Entrance and Non-Service Entrance",
+  models: 'RTSW300A3 \u00b7 RTSW400A3 \u00b7 RTSC400A3',
+  partNo: '0L3203 Rev. C \u00b7 08/15/2023',
+  sections: [
+    { id: 'rtsw-geninfo',   title: 'General Information &amp; Equipment Description', icon: '\u2139\uFE0F', html: buildRTSW_GenInfo() },
+    { id: 'rtsw-sacm',      title: 'Smart A/C Module (SACM) &amp; Load Management',   icon: '\u2744\uFE0F', html: buildRTSW_SACM() },
+    { id: 'rtsw-install',   title: 'Installation',                                     icon: '\uD83D\uDD27', html: buildRTSW_Install() },
+    { id: 'rtsw-operation', title: 'Operation &amp; Testing',                          icon: '\u25B6\uFE0F', html: buildRTSW_Operation() },
+    { id: 'rtsw-shutdown',  title: 'Shutdown &amp; SACM / SMM Testing',               icon: '\uD83D\uDD12', html: buildRTSW_Shutdown() }
+  ]
+};
+
+function buildRTSW_GenInfo(){
+  var h = '<div class="man-section">';
+  h += mh4('Equipment Description');
+  h += mp('This automatic transfer switch transfers electrical load from a utility (normal) power source to a generator (standby) power source automatically when utility power has failed or is substantially reduced, and the generator voltage and frequency have reached an acceptable level. The transfer switch prevents electrical feedback between two different power sources — required by code for all standby electric system installations.');
+  h += mp('The transfer switch consists of a transfer mechanism, utility service disconnect circuit breaker (if equipped), a control relay, a Smart A/C Module (SACM), fuses, terminal strip, and fuse holder for sensing wire connections. This transfer switch is suitable for use as service equipment if equipped with a utility service circuit breaker.');
+  h += mh4('Transfer Switch Mechanism');
+  h += mp('Single-phase system. Neutral line connects to a neutral lug and is not switched. Solderless screw-type terminal lugs standard.');
+  h += mt(['Switch Rating','Wire Range','Conductor Torque'],[
+    ['300A / 400A','(1) #4\u2013600 MCM (Cu/Al)  OR  (2) 1/0\u2013250 MCM (Cu/Al)','375 in-lbs (42.4 Nm)']
+  ]);
+  h += mnote('ETL listed for optional standby systems only (NEC Article 702). Rated for use on circuits capable of 22,000 RMS symmetrical amperes, 240 VAC maximum. Tungsten load must not exceed 30% of switch rating.');
+  h += mh4('Transfer Mechanism Terminals');
+  h += mt(['Terminal','Function'],[
+    ['N1, N2','Utility (Normal) source lugs'],
+    ['E1, E2','Generator (Standby / Emergency) source lugs'],
+    ['T1, T2','Load lugs (customer loads)']
+  ]);
+  h += mh4('Utility Service Circuit Breaker');
+  h += mp('<strong>Generac 300/400AF:</strong>');
+  h += mul([
+    '120/240 VAC \u00b7 300A or 400A \u00b7 50/60 Hz',
+    'Wire range: (1) #4\u2013600 MCM or (2) 1/0\u2013250 MCM (Cu/Al)',
+    'Conductor torque: 375 in-lbs (42.4 Nm)'
+  ]);
+  h += mp('<strong>Siemens JD63B300P / JD63B400P (Siemens models only):</strong>');
+  h += mul([
+    '300A or 400A \u00b7 3-pole \u00b7 600 Volt \u00b7 50/60 Hz',
+    'Cables per lug: 1\u20132 \u00b7 Wire range: 3/0\u2013500 MCM or 4/0\u2013500 MCM (Cu/Al)',
+    'See circuit breaker markings for conductor torque specification'
+  ]);
+  h += mh4('Transfer Switch Enclosure');
+  h += mp('NEMA 3R rated (indoor/outdoor). Provides protection against falling rain and sleet; undamaged by ice formation on the enclosure.');
+  h += mh4('Contents in Loose Parts Bag');
+  h += mul(['Owner\'s manual','Warranty statement','Manual operating handle']);
+  h += '</div>';
+  return h;
+}
+
+function buildRTSW_SACM(){
+  var h = '<div class="man-section">';
+  h += mh4('Smart A/C Module (SACM) — Standard');
+  h += mp('The SACM manages up to four air conditioner loads by shedding them when generator frequency drops (overload condition). Loads are assigned to 4 priority levels (A/C 1\u20134). Internal normally-closed relays interrupt the 24 VAC thermostat control signal to disable each A/C load. Four LEDs illuminate when a load is connected and powered. A test button on the SACM simulates an overload condition and operates even when the transfer signal is inactive.');
+  h += mnote('Overload detection: loads are shed when frequency is less than 58 Hz for 3 seconds, or less than 50 Hz for \u00bd second (60 Hz systems).');
+  h += mh4('Smart Management Module (SMM) — Sold Separately');
+  h += mp('Any loads, including central air conditioners, can be managed using an optional SMM. The system can accommodate up to eight individual SMMs. SMMs are self-contained with individual built-in controllers. Refer to the SMM Owner\'s/Installation Manual for detailed specifications.');
+  h += mh4('Load Management Priority Settings');
+  h += mt(['Priority','Recovery Time','SACM','SMM'],[
+    ['1','5 min','Yes','Yes'],
+    ['2','5 min 15 sec','Yes','Yes'],
+    ['3','5 min 30 sec','Yes','Yes'],
+    ['4','5 min 45 sec','Yes','Yes'],
+    ['5','6 min','No','Yes'],
+    ['6','6 min 15 sec','No','Yes'],
+    ['7','6 min 30 sec','No','Yes'],
+    ['8','6 min 45 sec','No','Yes']
+  ]);
+  h += mnote('The SACM can be combined with SMMs for a total of up to 8 managed loads (A/C 1\u20134 via SACM + up to 4 SMMs as priorities 5\u20138). A SMM can share a priority with an A/C priority on the SACM if the generator is sized to handle the combined surge load \u2014 allowing up to 12 managed loads in a properly sized system.');
+  h += mh4('Auxiliary Contacts');
+  h += mp('Auxiliary contacts on the transfer switch operate customer accessories, remote advisory lights, or annunciator devices. A suitable power source must be connected to the common terminal (D).');
+  h += mt(['Switch Position','Common to Normally Open','Common to Normally Closed'],[
+    ['Utility (Normal)','Open','Closed'],
+    ['Standby (Generator)','Closed','Open']
+  ]);
+  h += mnote('Auxiliary Contacts rated: 10A at 125 or 250 VAC.');
+  h += mcaution('Exceeding rated voltage and current will damage the auxiliary contacts. Verify specifications before energizing.');
+  h += '</div>';
+  return h;
+}
+
+function buildRTSW_Install(){
+  var h = '<div class="man-section">';
+  h += mdanger('Turn utility and emergency power supplies to OFF before connecting power source and load lines.');
+  h += mcaution('Tighten all conductors to factory-specified torque values. Failure may damage the switch base.');
+  h += mh4('Installation Overview');
+  h += mul(['Mount the enclosure','Connect power source (utility) and load leads','Connect generator power supply','Connect generator start and sensing circuit wires','Connect SACM (A/C thermostat wiring)','Connect auxiliary contacts if needed','Perform functional tests']);
+  h += mh4('Mounting');
+  h += mp('Mount vertically to a rigid supporting structure as close as possible to the electrical loads. Level all mounting points — use washers behind mounting holes if needed. Can be mounted indoors or outdoors (NEMA 3R). Where a Generac service-rated ATS is installed downstream of utility metering that does not contain a service disconnecting means, the ATS must be installed as service equipment per NEC Article 230.');
+  h += mh4('Connecting Power Source and Generator Supply');
+  h += mol([
+    'Connect utility (normal) power source cables to the utility service disconnect circuit breaker (if equipped) or N1 and N2 lugs of the transfer switch.',
+    'Connect generator to generator terminals E1 and E2 on the transfer mechanism.',
+    'Connect customer LOAD leads to switch terminals T1 and T2.'
+  ]);
+  h += mnote('Neutral to ground jumper wire is provided for use if required by local codes. Conductor sizes must be based on the 75\u00b0C column of NEC tables. All installations must comply with national, state, and local codes. Tighten terminal lugs to torque values on the decal inside the door.');
+  h += mnote('All power cables can enter through knockouts provided. If not using knockouts, conduit entries above the level of uninsulated live parts must use fittings listed for wet locations to maintain the Type 3R rating. Conduits should be arranged to provide separation between Utility and Generator supply conductors inside the enclosure.');
+  h += mnote('If aluminum conductors are used, apply corrosion inhibitor and carefully wipe away excess after tightening terminal lugs.');
+  h += mh4('Connecting Start Circuit Wires');
+  h += mp('Control system interconnections: terminals N1, N2, T1, and leads 23 and 194. Generator control wiring is a Class 1 signaling circuit. Screw torque: 3.5 in-lb (0.4 Nm). Refer to the specific generator instruction manual for wiring connection details.');
+  h += mt(['Recommended Wire Size','Max Wire Length (One ATS + SACM)'],[
+    ['No. 18 AWG','1\u2013115 ft (0.3\u201335 m)'],
+    ['No. 16 AWG','116\u2013185 ft (36\u201356 m)'],
+    ['No. 14 AWG','186\u2013295 ft (57\u201389 m)'],
+    ['No. 12 AWG','296\u2013460 ft (90\u2013140 m)']
+  ]);
+  h += mnote('Consult factory if operating more than one transfer switch and SACM. AC and DC circuits rated 1000V or less may share conduit per NEC 300.3(C)(1) — all conductors must have insulation rated at least to the maximum circuit voltage.');
+  h += mh4('Connecting SACM (A/C Control)');
+  h += mol([
+    'Route thermostat cable (from furnace/thermostat to outdoor A/C unit) to the transfer switch.',
+    'Connect wire to terminal strip A/C 1 on the SACM. These are normally closed contacts that open on load shed conditions.',
+    'Route thermostat wire away from high voltage wires.',
+    'Connect additional A/C units to A/C 2\u20134 terminals if required.'
+  ]);
+  h += mt(['Contact','Rating'],[
+    ['A/C 1\u20134','24 VAC \u00b7 1.0 Amp Max']
+  ]);
+  h += mnote('These instructions are for typical A/C installations. Heat pumps and 2-stage A/C units may require special connections or SMMs to control the loads.');
+  h += '</div>';
+  return h;
+}
+
+function buildRTSW_Operation(){
+  var h = '<div class="man-section">';
+  h += mdanger('Do NOT manually transfer under load. Disconnect transfer switch from ALL power sources prior to manual transfer.');
+  h += mcaution('Perform functional tests in the exact order presented in the manual. Failure may cause equipment damage.');
+  h += mh4('Manual Operation');
+  h += mp('A manual handle is shipped with the transfer switch. Manual operation must be verified BEFORE the transfer switch is operated electrically.');
+  h += mol([
+    'Verify generator is OFF.',
+    'Turn OFF (OPEN) both UTILITY and EMERGENCY power supplies using whatever means provided (e.g. main line circuit breakers).',
+    'Check the position of transfer mechanism main contacts by observing display windows A and B on the switch cover.',
+    'Window A ON / Window B OFF \u2014 LOAD terminals (T1, T2) connected to utility terminals (N1, N2).',
+    'Window A OFF / Window B ON \u2014 LOAD terminals (T1, T2) connected to emergency terminals (E1, E2).'
+  ]);
+  h += mh4('Close to Normal (Utility) Source Side');
+  h += mp('Verify Window A reads "ON" (contacts closed in normal position — no action needed). If Window A reads "OFF":');
+  h += mol([
+    'Attach handle to actuating shaft.',
+    'Move handle in the direction of the arrow on the switch cover until it stops \u2014 DO NOT FORCE.',
+    'Release handle slowly to allow the spring to relax.',
+    '"ON" now appears in Window A and "OFF" in Window B.'
+  ]);
+  h += mh4('Close to Standby (Generator) Source Side');
+  h += mp('Verify Window B reads "ON" (contacts closed in standby position — no action needed). If Window B reads "OFF":');
+  h += mol([
+    'Attach handle to actuating shaft.',
+    'Move handle in the direction of the arrow on the switch cover until it stops \u2014 DO NOT FORCE.',
+    'Release handle slowly to allow the spring to relax.',
+    '"OFF" now appears in Window A and "ON" in Window B.'
+  ]);
+  h += mh4('Utility Voltage Checks');
+  h += mol([
+    'Turn ON the UTILITY power supply to the transfer switch.',
+    'With an accurate AC voltmeter, verify correct voltage across ATS terminal lugs N1 and N2; N1 to NEUTRAL and N2 to NEUTRAL.'
+  ]);
+  h += mh4('Generator Voltage Checks (No Load)');
+  h += mol([
+    'On generator panel, select MANUAL mode \u2014 generator cranks and starts.',
+    'Let generator stabilize and warm up at no-load for at least 5 minutes.',
+    'Set generator main CB (CB1) to ON (CLOSED).',
+    'With an accurate AC voltmeter and frequency meter, measure across ATS terminal lugs E1\u2013E2, E1\u2013NEUTRAL, E2\u2013NEUTRAL.'
+  ]);
+  h += mt(['Measurement','Expected Value'],[
+    ['Frequency','60\u201362 Hz'],
+    ['E1 to E2','240\u2013246 VAC'],
+    ['E1 to Neutral','120\u2013123 VAC'],
+    ['E2 to Neutral','120\u2013123 VAC']
+  ]);
+  h += mp('Do NOT proceed until voltage and frequency are within stated limits. If no-load voltage is correct but frequency is wrong, engine governed speed may need adjustment. If frequency is correct but voltage is wrong, voltage regulator may need adjustment.');
+  h += mol([
+    'Turn OFF generator supply to transfer switch.',
+    'Set generator main CB (CB1) to OFF (OPEN).',
+    'Select OFF on generator panel.'
+  ]);
+  h += mnote('Use DMM LowZ (low input impedance) setting for accurate voltage measurements — eliminates ghost/phantom voltage readings.');
+  h += mh4('Generator Test Under Load');
+  h += mol([
+    'Set generator main CB to OFF (OPEN).',
+    'Set utility service disconnect CB to OFF (OPEN); turn OFF all load CBs.',
+    'Manually actuate transfer switch to emergency (standby) position.',
+    'Select MANUAL on generator panel \u2014 let engine stabilize for a few minutes.',
+    'Set generator main CB to ON (CLOSED) \u2014 generator now powers all LOAD circuits.',
+    'Apply electrical loads to full rated wattage/amperage \u2014 DO NOT OVERLOAD.',
+    'At max load: verify voltage > 230 VAC (240 VAC system); frequency > 59 Hz.',
+    'Verify gas pressure within acceptable parameters (see generator Installation Manual).',
+    'Run under rated load for at least 30 minutes \u2014 watch for unusual noises, vibration, or overheating.',
+    'Set generator main CB to OFF (OPEN) when checkout is complete.',
+    'Run at no-load for several minutes, then select OFF.',
+    'Move switch contacts to utility position (handle DOWN per switch cover arrow).',
+    'Set utility service disconnect CB to ON (CLOSED) \u2014 system ready for automatic operation.'
+  ]);
+  h += mh4('Checking Automatic Operation');
+  h += mol([
+    'Verify generator is OFF.',
+    'Set utility service disconnect CB to OFF (OPEN).',
+    'Verify switch is de-energized.',
+    'Install front cover of transfer switch.',
+    'Set utility CB to ON (CLOSED).',
+    'Set generator main CB to ON.',
+    'Select AUTO on generator panel.',
+    'Set utility CB to OFF (OPEN) \u2014 engine should crank and start after 5-second delay (factory default).',
+    'Transfer switch connects loads to standby after 5-second warm-up delay.',
+    'Set utility CB back to ON (CLOSED) \u2014 loads transfer back to utility after ~15 seconds.',
+    'Generator shuts down approximately 1 minute after re-transfer.'
+  ]);
+  h += mnote('Timer durations may differ between generators and settings. With generator in AUTO mode, the system is now set for fully automatic operation.');
+  h += mh4('Installation Summary Checklist');
+  h += mul([
+    'Verify installation has been properly performed per manufacturer guidelines and all applicable laws and codes.',
+    'Verify proper system operation per installation and owner\'s manuals.',
+    'Educate end-user on proper operation, maintenance, and service call procedures.'
+  ]);
+  h += '</div>';
+  return h;
+}
+
+function buildRTSW_Shutdown(){
+  var h = '<div class="man-section">';
+  h += mdanger('Disconnect utility power and render unit inoperable before working on unit.');
+  h += mh4('Shutting Generator Down While Under Load (During Utility Outage)');
+  h += mp('<strong>To turn generator OFF (while running in AUTO and online):</strong>');
+  h += mol([
+    'Turn the main utility disconnect OFF.',
+    'Turn generator MLCB (generator disconnect) to OFF (OPEN).',
+    'Run the generator for approximately 1 minute for proper cooling.',
+    'Turn the generator OFF.'
+  ]);
+  h += mp('<strong>To turn generator back ON:</strong>');
+  h += mol([
+    'Put the generator into AUTO. Start generator and warm up for a few minutes.',
+    'Set the MLCB (generator disconnect) to ON (CLOSED).',
+    'The system now operates in automatic mode. Turn main utility disconnect ON (CLOSED) when ready.'
+  ]);
+  h += mh4('Testing the SACM');
+  h += mol([
+    'Turn on utility supply to the ATS.',
+    'Verify managed loads are powered \u2014 all 4 LEDs on SACM should illuminate.',
+    'Press the TEST button on the bottom of the SACM.',
+    'Verify all connected loads become disabled (shed).',
+    'After 5 minutes: verify A/C 1 is energized and Status LED A/C 1 is ON.',
+    'After another 15 seconds: verify A/C 2 energized and LED ON.',
+    'After another 15 seconds: verify A/C 3 energized and LED ON.',
+    'After another 15 seconds: verify A/C 4 energized and LED ON.'
+  ]);
+  h += mh4('Testing the SMM');
+  h += mp('Refer to the SMM Owner\'s or Installation Manual for the SMM testing procedure.');
+  h += mh4('Dimensions (from Installation Drawings)');
+  h += mt(['Model','Height','Width','Depth'],[
+    ['RTSW300A3 / RTSW400A3 (SE)','917 mm [36.1 in]','609.6 mm [24.0 in]','254 mm [10.0 in]'],
+    ['RTSC400A3 (Non-SE)','1219.3 mm [48.0 in]','424.0 mm [16.69 in]','255.5 mm [10.06 in]']
+  ]);
+  h += mnote('For NEMA 3R rating, conduits must enter below energized components. See installation drawings for full details.');
+  h += '</div>';
+  return h;
+}
+
+// ── RXGW20SHA3 — 200A SE LOAD CENTER ATS W/ PASS-THROUGH LUGS (A0000023930) ─
+MANUALS['man-rxgw20sha3'] = {
+  title: "Owner\u2019s Manual \u2014 Automatic Transfer Switch, Service Rated, 200 Amp, Single Phase, 240 VAC, 20\u201340 Circuit Load Center With Pass-Through Lugs",
+  models: 'RXGW20SHA3',
+  partNo: 'A0000023930 Rev. D \u00b7 2/8/2024',
+  sections: [
+    { id: 'rxgw-geninfo',   title: 'General Information &amp; Equipment Description', icon: '\u2139\uFE0F', html: buildRXGW_GenInfo() },
+    { id: 'rxgw-sacm',      title: 'Smart A/C Module (SACM) &amp; Load Management',   icon: '\u2744\uFE0F', html: buildRXGW_SACM() },
+    { id: 'rxgw-install',   title: 'Installation',                                     icon: '\uD83D\uDD27', html: buildRXGW_Install() },
+    { id: 'rxgw-operation', title: 'Operation &amp; Testing',                          icon: '\u25B6\uFE0F', html: buildRXGW_Operation() },
+    { id: 'rxgw-shutdown',  title: 'Shutdown, Maintenance &amp; Fuse Service',         icon: '\uD83D\uDD12', html: buildRXGW_Shutdown() }
+  ]
+};
+
+function buildRXGW_GenInfo(){
+  var h = '<div class="man-section">';
+  h += mh4('Equipment Description');
+  h += mp('This automatic transfer switch is used for transferring electrical load from a utility (normal) power source to a generator (standby) power source. Transfer occurs automatically when utility power has failed or is substantially reduced and the generator voltage and frequency have reached an acceptable level. The switch prevents electrical feedback between power sources as required by code.');
+  h += mp('The transfer switch consists of a transfer mechanism, utility service disconnect circuit breaker (if equipped), a <strong>PWRview energy monitor</strong>, and a Smart A/C Module (SACM) incorporating fuses and two terminal blocks. This product integrates a 20\u201340 circuit load center with pass-through lugs, allowing loads to be connected directly to the integrated panel. ETL listed under UL1008 standard.');
+  h += mh4('Transfer Switch Mechanism');
+  h += mp('Single-phase system. Neutral line connects to a neutral lug and is not switched. Solderless screw-type terminal lugs standard.');
+  h += mt(['Switch Rating','Wire Range','Conductor Torque'],[
+    ['100A','#14\u20131/0 AWG (Cu/Al)','50 in-lbs (5.6 Nm)'],
+    ['150A / 200A','#6\u2013250 MCM (Cu/Al)','275 in-lbs (31 Nm)']
+  ]);
+  h += mnote('200A switch: ETL listed for optional standby systems only (NEC Article 702). Rated for circuits capable of 22,000 RMS symmetrical amperes, 240 VAC when protected by a circuit breaker without an adjustable short time response or by fuses. Tungsten load must not exceed 30% of switch rating.');
+  h += mh4('Transfer Mechanism Terminals');
+  h += mt(['Terminal','Function'],[
+    ['N1, N2','Utility (Normal) source lugs'],
+    ['E1, E2','Generator (Standby / Emergency) source lugs'],
+    ['T1, T2','Load / subpanel feeder lugs (max 200A subpanel)']
+  ]);
+  h += mh4('Utility Service Circuit Breaker (If Equipped) — 200A Models');
+  h += mul([
+    'Type 225AF, 2-pole \u00b7 22,000 A/C \u00b7 120/240 VAC, 150A/200A \u00b7 50/60 Hz',
+    'Line wire range: 300 MCM\u20136 STR (Cu/Al)',
+    'Load-ATS wire range: 250 MCM\u20136 STR (Cu/Al)',
+    'See circuit breaker markings and decal on inside of door for torque specifications'
+  ]);
+  h += mh4('Transfer Switch Enclosure');
+  h += mp('NEMA 3R rated (indoor/outdoor). Provides protection against falling rain and sleet; undamaged by ice formation on the enclosure.');
+  h += mh4('Contents in Loose Parts Bag');
+  h += mul(['Owner\'s manual','Warranty statement','Manual operating handle','Storage bracket for manual operating handle','Fault current label','Clear decal for fault current label']);
+  h += mh4('Approved Branch Circuit Breaker Manufacturers');
+  h += mp('The following 1-inch circuit breaker manufacturers are permitted for installation in the integrated load center:');
+  h += mul(['Siemens','Murray','Eaton BR','Square D Homeline']);
+  h += mnote('Multi-wire branch circuits must be installed per NEC Article 210.4.');
+  h += '</div>';
+  return h;
+}
+
+function buildRXGW_SACM(){
+  var h = '<div class="man-section">';
+  h += mh4('Smart A/C Module (SACM) — Standard Equipment');
+  h += mp('The SACM manages up to four air conditioner loads by shedding them when generator frequency drops (overload condition). Loads are assigned to 4 priority levels (A/C 1\u20134). Internal normally-closed relays interrupt the 24 VAC thermostat control signal to disable each A/C load. Four LEDs illuminate when a load is connected and powered. A test button on top of the SACM simulates an overload condition and operates even when the transfer signal is inactive.');
+  h += mnote('Overload detection: loads shed when frequency is less than 58 Hz for 3 seconds, or less than 50 Hz for \u00bd second (60 Hz systems).');
+  h += mh4('SACM Terminal Functions');
+  h += mt(['Terminal','Function'],[
+    ['A/C 1\u20134 (pins 1 &amp; 2 each)','24 VAC thermostat control \u2014 normally closed, opens on load shed'],
+    ['0 DC Ground','DC Ground'],
+    ['194','+12 VDC'],
+    ['23 Transfer','Transfer control signal'],
+    ['00','Dedicated T1 Neutral'],
+    ['T1 (fused)','Battery charge (120 VAC)'],
+    ['N1 (fused)','Utility sense'],
+    ['N2 (fused)','Utility sense'],
+    ['J (fuses)','240 VAC, 6.3A fuses']
+  ]);
+  h += mt(['Contact','Rating'],[
+    ['A/C 1\u20134','24 VAC \u00b7 1.0 Amp Max'],
+    ['Auxiliary Contact','10A at 125 or 250 VAC \u00b7 0.6A at 125 VDC']
+  ]);
+  h += mh4('Smart Management Module (SMM) — Sold Separately');
+  h += mp('Any loads, including central A/C, can be managed using an optional SMM. The system supports up to eight individual SMMs. SMMs are self-contained with individual built-in controllers. Refer to SMM Owner\'s/Installation Manual for details.');
+  h += mh4('Priority Recovery Times (SACM + SMM Combined)');
+  h += mt(['Priority','Recovery Time','SACM','SMM'],[
+    ['1','5 min','Yes','Yes'],
+    ['2','5 min 15 sec','Yes','Yes'],
+    ['3','5 min 30 sec','Yes','Yes'],
+    ['4','5 min 45 sec','Yes','Yes'],
+    ['5','6 min','No','Yes'],
+    ['6','6 min 15 sec','No','Yes'],
+    ['7','6 min 30 sec','No','Yes'],
+    ['8','6 min 45 sec','No','Yes']
+  ]);
+  h += mnote('SACM can combine with SMMs for up to 8 managed loads total. A SMM can share a priority with a SACM A/C priority if the generator handles the combined surge — allowing up to 12 loads in a properly sized system.');
+  h += mh4('Auxiliary Contact');
+  h += mp('One normally-closed auxiliary contact on the transfer switch operates customer accessories, remote advisory lights, or annunciator devices. A suitable power source must be connected to the common terminal. An extra contact can be added if needed. Closed in utility mode \u2014 opens in standby (generator) mode.');
+  h += mcaution('Exceeding rated voltage and current will damage the auxiliary contacts. Verify specifications before energizing.');
+  h += '</div>';
+  return h;
+}
+
+function buildRXGW_Install(){
+  var h = '<div class="man-section">';
+  h += mdanger('Turn utility and emergency power supplies to OFF before connecting power source and load lines.');
+  h += mcaution('Tighten all conductors to factory-specified torque values. Failure may damage the switch base.');
+  h += mh4('Installation Overview');
+  h += mul(['Mount the enclosure','Open the enclosure','Install branch circuit breakers','Install branch circuit conductors','Connect utility power source and generator supply','Connect start circuit wires','Connect SACM (A/C thermostat wiring)','Connect auxiliary contact if needed','Apply fault current label','Perform functional tests']);
+  h += mh4('Mounting');
+  h += mp('Mount vertically to a rigid supporting structure as close as possible to the electrical loads. Level all mounting points — use washers behind mounting holes if needed. Can be mounted indoors or outdoors (NEMA 3R).');
+  h += mh4('Opening the Enclosure');
+  h += mol([
+    'Remove outer cover (A): remove two thumb screws (B), slide slot (C) over retention tab, lower cover clear of top flange (D) and pull away.',
+    'Remove inner panel (E): loosen nut (F), grasp at two cutouts (G \u2014 left and right), tilt panel passing nut through T-slot (H), lower until clear of retention slots (J) and pull away.'
+  ]);
+  h += mh4('Installing Breakers');
+  h += mp('Insert tab on each breaker into the hook on the bus. Push breaker into bus until it snaps into place. Approved brands: Siemens, Murray, Eaton BR, Square D Homeline (1-inch breakers only).');
+  h += mh4('Installing Branch Circuit Conductors');
+  h += mol([
+    'Install properly sized branch circuit conductors through the provided knockouts. Additional knockouts can be field-made as needed.',
+    'Connect ungrounded (hot) conductors to properly sized circuit breakers approved for this switch.',
+    'Terminate neutral and equipment grounding conductors at the neutral/equipment ground terminal bars.',
+    'Size all conductors, raceways, conduits, and junction boxes per applicable NEC articles.'
+  ]);
+  h += mh4('Connecting Utility Power Source and Generator Supply');
+  h += mol([
+    'Connect utility supply at utility service disconnect circuit breaker terminals N1 and N2. Utility supply lugs have 2017/2020 NEC required finger-safe barriers \u2014 these barriers must remain in place after installation.',
+    'Connect utility neutral conductor to grounded terminal bar. Neutral/grounding conductor terminal bars are bonded together and to the enclosure via a green main bonding jumper screw.',
+    'Connect loads to integrated load center with customer-supplied circuit breakers.',
+    'Connect generator to generator terminals E1 and E2 on the transfer mechanism.',
+    'Connect generator neutral wire to top neutral lug or side lugs on the panel board.',
+    'Connect neutral conductors to lugs and terminals along the neutral/ground bars in the panel board section.',
+    'Connect a maximum 200A subpanel feeder to lower T1 and T2 connections. Connect feeder neutral and equipment grounding conductors to the neutral/grounding terminal bar.',
+    'Connect grounding electrode conductors to neutral/ground terminal bars in the panel board portion of the transfer switch.'
+  ]);
+  h += mnote('A neutral to equipment ground main bonding screw is provided for use where the transfer switch is installed as service equipment. When installing as service-rated ATS, disconnect the bonding connection in the downstream panelboard per interconnection diagrams.');
+  h += mnote('Conductor sizes must be based on the 75\u00b0C column of NEC tables. Conduit entry must maintain wire bending spaces per NEC Tables 312.6(A) and (B). Conduits should separate utility and generator supply conductors inside the enclosure. If aluminum conductors are used, apply corrosion inhibitor and wipe away excess after tightening.');
+  h += mh4('Connecting Start Circuit Wires');
+  h += mp('Control system interconnections: terminals 0, 194, 23, 00, T1, N1, N2. Connections are color-coded on the load shed to match the Generac genset. Generac Type TC-ER-JP tray cable includes color-coded power and control wiring suitable for direct burial, overhead, and indoor wiring (see NEC Article 336 for 2017/2020 requirements). Generator control wiring is a Class 1 signaling circuit. Screw torque: 3.5 in-lb (0.4 Nm).');
+  h += mt(['Recommended Wire Size','Max Wire Length (One ATS + SACM)'],[
+    ['No. 18 AWG','1\u2013115 ft (0.3\u201335 m)'],
+    ['No. 16 AWG','116\u2013185 ft (36\u201356 m)'],
+    ['No. 14 AWG','186\u2013295 ft (57\u201389 m)'],
+    ['No. 12 AWG','296\u2013460 ft (90\u2013140 m)']
+  ]);
+  h += mh4('Connecting SACM (A/C Control)');
+  h += mol([
+    'Route thermostat cable (from furnace/thermostat to outdoor A/C unit) to the transfer switch.',
+    'Connect wire to terminal strip A/C 1 on the SACM \u2014 normally closed contacts that open on load shed conditions. Route thermostat wire away from high voltage wires.',
+    'Connect additional A/C units to A/C 2\u20134 terminals if required.'
+  ]);
+  h += mnote('Heat pumps and 2-stage A/C units may require special connections or SMMs to control the loads.');
+  h += mh4('Fault Current Label');
+  h += mp('Per 2017 NEC: apply Fault Current Identification Label to the exterior of the enclosure. Fill in fault current rating and available fault current, then cover with the clear protective decal. Provides the AHJ with required inspection information.');
+  h += mh4('Enclosure Dimensions (from Installation Drawing No. 10000047450-A)');
+  h += mt(['Dimension','Value'],[
+    ['Height','448 mm [17.6 in]'],
+    ['Width','979 mm [38.5 in]'],
+    ['Depth','204 mm [8.0 in]'],
+    ['Mounting hole spacing (H)','869 mm [34.2 in]'],
+    ['Mounting hole spacing (V)','398 mm [15.7 in]']
+  ]);
+  h += '</div>';
+  return h;
+}
+
+function buildRXGW_Operation(){
+  var h = '<div class="man-section">';
+  h += mdanger('Do NOT manually transfer under load. Disconnect transfer switch from ALL power sources prior to manual transfer.');
+  h += mcaution('Perform functional tests in the exact order presented in the manual. Failure may cause equipment damage.');
+  h += mh4('Manual Operation');
+  h += mp('A manual handle is shipped with the transfer switch. Manual operation must be verified BEFORE the transfer switch is operated electrically.');
+  h += mol([
+    'Verify generator is OFF.',
+    'Turn OFF both utility (service disconnect CB) and emergency (generator main line CB) power supplies.',
+    'Note position of transfer mechanism main contacts by observing the movable contact carrier arm through the narrow slot in the inside cover (yellow top for easy ID).',
+    'Handle UP \u2014 LOAD terminals (T1, T2) connected to Utility terminals (N1, N2).',
+    'Handle DOWN \u2014 LOAD terminals (T1, T2) connected to EMERGENCY terminals (E1, E2).'
+  ]);
+  h += mh4('Close to Utility Source Side');
+  h += mp('If handle is UP, contacts are in utility position \u2014 no action needed. If handle is DOWN:');
+  h += mol([
+    'Insert handle into movable contact carrier arm, move handle UP. Hold on \u2014 it moves quickly after center of travel.',
+    'Remove handle from carrier arm. Return to storage bracket.'
+  ]);
+  h += mh4('Close to Generator Source Side');
+  h += mp('If handle is DOWN, contacts are in generator position \u2014 no action needed. If handle is UP:');
+  h += mol([
+    'Insert handle into movable contact carrier arm, move handle DOWN. Hold on \u2014 it moves quickly after center of travel.',
+    'Remove handle from carrier arm. Return to storage bracket.'
+  ]);
+  h += mh4('Return to Utility Source Side');
+  h += mol([
+    'Manually actuate transfer switch to return handle to the UP position.',
+    'Remove handle from carrier arm. Return to storage bracket.'
+  ]);
+  h += mh4('Utility Voltage Checks');
+  h += mol([
+    'Turn ON utility power supply using utility service disconnect CB.',
+    'With accurate AC voltmeter, verify correct voltage across ATS terminal lugs N1 and N2; N1 to NEUTRAL and N2 to NEUTRAL.'
+  ]);
+  h += mh4('Generator Voltage Checks (No Load)');
+  h += mol([
+    'On generator panel, select MANUAL mode \u2014 generator cranks and starts.',
+    'Let generator stabilize and warm up at no-load for at least 5 minutes.',
+    'Set generator main CB (CB1) to ON (CLOSED).',
+    'With accurate AC voltmeter and frequency meter, measure across ATS terminal lugs E1\u2013E2, E1\u2013NEUTRAL, E2\u2013NEUTRAL.'
+  ]);
+  h += mt(['Measurement','Expected Value'],[
+    ['Frequency','60\u201362 Hz'],
+    ['E1 to E2','240\u2013246 VAC'],
+    ['E1 to Neutral','120\u2013123 VAC'],
+    ['E2 to Neutral','120\u2013123 VAC']
+  ]);
+  h += mp('Do NOT proceed until voltage and frequency are within stated limits. If no-load voltage is correct but frequency is wrong, engine governed speed may need adjustment. If frequency is correct but voltage is wrong, voltage regulator may need adjustment.');
+  h += mol([
+    'Turn OFF generator supply to transfer switch.',
+    'Set generator main CB (CB1) to OFF (OPEN).',
+    'Select OFF on generator panel.'
+  ]);
+  h += mnote('Use DMM LowZ (low input impedance) setting for accurate measurements \u2014 eliminates ghost/phantom voltage readings.');
+  h += mh4('Generator Test Under Load');
+  h += mol([
+    'Set generator MLCB to OFF (OPEN).',
+    'Set utility service disconnect CB to OFF (OPEN); turn OFF all load CBs.',
+    'Manually actuate transfer switch to emergency (standby) position.',
+    'Select MANUAL on generator panel \u2014 let stabilize for a few minutes, close lid.',
+    'Set generator MLCB to ON (CLOSED) \u2014 generator now powers all LOAD circuits.',
+    'Apply electrical loads to full rated wattage/amperage \u2014 DO NOT OVERLOAD.',
+    'At max load: verify voltage > 230 VAC (240 VAC system); frequency > 59 Hz.',
+    'Verify fuel pressure within acceptable parameters (see generator installation manual).',
+    'Run under rated load for at least 30 minutes \u2014 watch for unusual noises, vibration, or overheating.',
+    'Set generator MLCB to OFF (OPEN) when complete.',
+    'Run at no-load for several minutes, then press OFF.',
+    'Set switch contacts to utility position (handle DOWN per manual operation).',
+    'Set utility service disconnect CB to ON (CLOSED) \u2014 system ready for automatic operation.'
+  ]);
+  h += mnote('Note: for this model, the manual operation handle should be in the DOWN position when returning to utility. Verify by looking at the movable contact carrier arm position.');
+  h += mh4('Checking Automatic Operation');
+  h += mol([
+    'Verify generator is OFF.',
+    'Set utility service disconnect CB to OFF (OPEN).',
+    'Verify switch is de-energized.',
+    'Install front cover of transfer switch.',
+    'Set utility CB to ON (CLOSED).',
+    'Set generator MLCB to ON.',
+    'Select AUTO on generator control panel.',
+    'Set utility service disconnect CB to OFF (OPEN) \u2014 engine should crank and start after 5-second delay (factory default).',
+    'Transfer switch connects loads to standby after 5-second warm-up delay.',
+    'Set utility CB back to ON (CLOSED) \u2014 loads transfer back to utility after ~15 seconds.',
+    'Generator shuts down approximately 1 minute after re-transfer.'
+  ]);
+  h += mnote('Timer durations may differ between generators and settings. With generator in AUTO mode, the system is set for fully automatic operation. The Utility Power Circuit Breaker MUST be turned OFF to simulate a utility outage \u2014 shutting off a downstream subpanel disconnect will NOT simulate an outage.');
+  h += mh4('Installation Summary Checklist');
+  h += mul([
+    'Verify installation has been properly performed per manufacturer guidelines and all applicable laws and codes.',
+    'Verify proper system operation per installation and owner\'s manuals.',
+    'Educate end-user on proper operation, maintenance, and service call procedures.'
+  ]);
+  h += '</div>';
+  return h;
+}
+
+function buildRXGW_Shutdown(){
+  var h = '<div class="man-section">';
+  h += mdanger('Disconnect utility power and render unit inoperable before working on unit.');
+  h += mh4('Shutting Generator Down While Under Load (During Utility Outage)');
+  h += mp('<strong>To turn generator OFF (while running in AUTO and online):</strong>');
+  h += mol([
+    'Turn the main utility disconnect OFF.',
+    'Turn generator MLCB (generator disconnect) to OFF (OPEN).',
+    'Run generator for approximately 1 minute for proper cooling.',
+    'Turn the generator OFF.'
+  ]);
+  h += mp('<strong>To turn generator back ON:</strong>');
+  h += mol([
+    'Put the generator into AUTO. Start generator and warm up for a few minutes.',
+    'Set the MLCB (generator disconnect) to ON (CLOSED).',
+    'System now operates in automatic mode. Turn main utility disconnect ON (CLOSED) when ready.'
+  ]);
+  h += mh4('Shutting Generator Down for Maintenance');
+  h += mp('<strong>To shut down for maintenance:</strong>');
+  h += mol([
+    'Press the OFF mode button on the controller.',
+    'Turn the main utility disconnect OFF (OPEN).',
+    'Turn the MLCB (generator disconnect) to OFF (OPEN) and follow maintenance procedures.'
+  ]);
+  h += mp('<strong>To return to service:</strong>');
+  h += mol([
+    'Turn the main utility disconnect ON (CLOSED).',
+    'Put the generator into AUTO mode.',
+    'Set the MLCB (generator disconnect) to ON (CLOSED).'
+  ]);
+  h += mh4('Testing the SACM');
+  h += mol([
+    'Turn on utility supply to the ATS.',
+    'Verify managed loads are powered \u2014 all 4 LEDs on SACM should illuminate.',
+    'Press the TEST button on top of the SACM.',
+    'Verify all connected loads become disabled (shed).',
+    'After 5 minutes: verify A/C 1 is energized and Status LED A/C 1 is ON.',
+    'After another 15 seconds: verify A/C 2 energized and LED ON.',
+    'After another 15 seconds: verify A/C 3 energized and LED ON.',
+    'After another 15 seconds: verify A/C 4 energized and LED ON.'
+  ]);
+  h += mh4('Testing the SMM');
+  h += mp('Refer to the SMM Owner\'s/Installation Manual for the SMM testing procedure.');
+  h += mh4('SACM Fuse Service');
+  h += mdanger('High voltage present at transfer switch terminals. Contact with live terminals will result in death or serious injury.');
+  h += mp('A fuse removal and installation tool is included in the SACM housing. To replace a fuse:');
+  h += mol([
+    'Snap the tool free using diagonal pliers or similar appropriate tool.',
+    'Use the tool to remove and replace the fuse.',
+    'Store tool in SACM housing retainer directly above the fuses, large thumb tab facing out.'
+  ]);
+  h += mnote('<strong>Replacement fuse:</strong> Generac P/N 10000005117 \u00b7 240 VAC \u00b7 6.3A \u00b7 10,000 AIC<br>Alternatives: Littelfuse\u00ae 021606.3MXP \u00b7 Optifuse\u00ae FCD-6.3');
+  h += '</div>';
+  return h;
+}
+
+// ── 600–800A NON-SERVICE ENTRANCE ATS MANUAL (0L3204) ────────────────────────
+MANUALS['man-rtsc600-800'] = {
+  title: "Owner\u2019s Manual \u2014 Automatic Transfer Switch 600\u2013800 Amp, 600 Volts, Non-Service Entrance",
+  models: 'RTSC600A3 \u00b7 RTSC800A3',
+  partNo: '0L3204 Rev. B \u00b7 07/21/2022',
+  sections: [
+    { id: 'rtsc68-geninfo',   title: 'General Information &amp; Equipment Description', icon: '\u2139\uFE0F', html: buildRTSC68_GenInfo() },
+    { id: 'rtsc68-sacm',      title: 'Smart A/C Module (SACM) &amp; Load Management',   icon: '\u2744\uFE0F', html: buildRTSC68_SACM() },
+    { id: 'rtsc68-install',   title: 'Installation',                                     icon: '\uD83D\uDD27', html: buildRTSC68_Install() },
+    { id: 'rtsc68-operation', title: 'Operation &amp; Testing',                          icon: '\u25B6\uFE0F', html: buildRTSC68_Operation() },
+    { id: 'rtsc68-shutdown',  title: 'Shutdown &amp; SACM / SMM Testing',               icon: '\uD83D\uDD12', html: buildRTSC68_Shutdown() }
+  ]
+};
+
+function buildRTSC68_GenInfo(){
+  var h = '<div class="man-section">';
+  h += mh4('Equipment Description');
+  h += mp('This automatic transfer switch transfers electrical load from a utility (normal) power source to a generator (standby) power source automatically when utility power has failed or is substantially reduced, and the generator voltage and frequency have reached an acceptable level. The transfer switch prevents electrical feedback between two power sources \u2014 required by code for all standby electric system installations.');
+  h += mp('When connected to the engine generator control panel, the control panel constantly monitors utility voltage and controls the transfer switch. Should utility voltage drop below a preset value and remain low for a preset time, the generator cranks and starts. After starting, loads transfer to the generator. When utility returns above a preset level, loads transfer back to utility and the generator shuts down.');
+  h += mnote('Refer to the generator documentation for preset time and voltage values.');
+  h += mh4('Transfer Switch Mechanism');
+  h += mp('Single-phase system. Solderless, screw-type terminal lugs are standard.');
+  h += mt(['Switch Rating','Wire Range (per pole)','Conductor Torque'],[
+    ['600A','2 \u00d7 1/0\u2013500 MCM (Cu/Al)','375 in-lbs (42.4 Nm)'],
+    ['800A','4 \u00d7 4/0\u2013500 MCM (Cu/Al)','375 in-lbs (42.4 Nm)']
+  ]);
+  h += mnote('ETL listed for optional standby systems only (NEC Article 702). Rated for use on circuits capable of 22,000 RMS symmetrical amperes, 240 VAC maximum. Tungsten load must not exceed 30% of switch rating.');
+  h += mh4('Transfer Mechanism Terminals');
+  h += mt(['Terminal','Function'],[
+    ['N1, N2','Utility (Normal) source lugs'],
+    ['E1, E2','Generator (Standby / Emergency) source lugs'],
+    ['T1, T2','Load lugs']
+  ]);
+  h += mh4('Transfer Switch Enclosure');
+  h += mp('NEMA / UL Type 3R rated (indoor/outdoor). Provides protection against falling rain and sleet; undamaged by ice formation on the enclosure. Can be mounted outside or inside \u2014 based on installation layout, convenience, and proximity to utility supply and load center.');
+  h += mh4('Contents in Loose Parts Bag');
+  h += mul(['Owner\'s manual','Warranty statement']);
+  h += '</div>';
+  return h;
+}
+
+function buildRTSC68_SACM(){
+  var h = '<div class="man-section">';
+  h += mh4('Load Management Overview');
+  h += mp('Load management systems are designed to prevent a generator from being overloaded by large appliance loads. A Smart A/C Module (SACM) is standard in these switches. An optional Smart Management Module (SMM) is also available (sold separately).');
+  h += mh4('Smart A/C Module (SACM)');
+  h += mp('The SACM manages up to four air conditioner loads by shedding them when generator frequency drops (overload condition). Loads are assigned to four priority levels (A/C 1\u20134). Internal normally-closed relays interrupt the 24 VAC thermostat control signal to disable each A/C load. Four LEDs illuminate when a load is connected and powered.');
+  h += mp('A <strong>Test button</strong> on the SACM simulates an overload condition. It operates even when the transfer signal is inactive.');
+  h += mh4('Smart Management Module (SMM) — Sold Separately');
+  h += mp('Any loads, including central air conditioners, can be managed using optional SMMs. The system accommodates up to eight individual SMMs. SMMs are self-contained with individual built-in controllers. Refer to the SMM Owner\'s/Installation Manual for specifications and testing procedure.');
+  h += mh4('SACM Terminal Reference');
+  h += mt(['Terminal','Function'],[
+    ['0 Ground','DC Ground'],
+    ['194','+12 VDC'],
+    ['23 Transfer','Transfer control signal'],
+    ['A/C 1\u20134','24 VAC thermostat control \u2014 normally closed, opens on load shed'],
+    ['T1','Neutral (dedicated)']
+  ]);
+  h += mh4('Contact Ratings');
+  h += mt(['Contact','Rating'],[
+    ['A/C 1\u20134','24 VAC \u00b7 1.0 Amp Max']
+  ]);
+  h += mh4('Overload Detection Thresholds');
+  h += mp('Loads shed when generator frequency is less than 58 Hz for 3 seconds, or less than 50 Hz for \u00bd second (60 Hz systems).');
+  h += mh4('SACM + SMM Priority Recovery Times');
+  h += mt(['Priority','Recovery Time','SACM','SMM'],[
+    ['1','5 min','Yes','Yes'],
+    ['2','5 min 15 sec','Yes','Yes'],
+    ['3','5 min 30 sec','Yes','Yes'],
+    ['4','5 min 45 sec','Yes','Yes'],
+    ['5','6 min','No','Yes'],
+    ['6','6 min 15 sec','No','Yes'],
+    ['7','6 min 30 sec','No','Yes'],
+    ['8','6 min 45 sec','No','Yes']
+  ]);
+  h += mh4('Auxiliary Contacts');
+  h += mp('Auxiliary contacts on the transfer switch are available to operate customer accessories, remote advisory lights, or annunciator devices. A suitable power source must be connected to the common terminal (D).');
+  h += mt(['Switch Position','Common to Normally Open','Common to Normally Closed'],[
+    ['Utility','Open','Closed'],
+    ['Standby','Closed','Open']
+  ]);
+  h += mcaution('Auxiliary Contacts rated 10 amps at 125 or 250 VAC. Exceeding rated voltage and current will damage the auxiliary contacts. Verify specifications before energizing.');
+  h += '</div>';
+  return h;
+}
+
+function buildRTSC68_Install(){
+  var h = '<div class="man-section">';
+  h += mdanger('Turn utility and emergency power supplies OFF before connecting power source and load lines.');
+  h += mh4('Installation Steps Overview');
+  h += mul(['Mount the enclosure','Connect power source and load leads','Connect generator start and sensing circuit','Connect any auxiliary contacts (if needed)','Test all functions']);
+  h += mh4('Mounting');
+  h += mul([
+    'Mount vertically to a rigid supporting structure as close as possible to the electrical loads.',
+    'Level all mounting points \u2014 use washers behind mounting holes if needed.',
+    'Can be mounted indoors or outdoors (NEMA Type 3R enclosure).',
+    'See Drawings and Diagrams section for mounting dimensions.'
+  ]);
+  h += mh4('Connecting Power Source &amp; Generator');
+  h += mdanger('Turn utility and emergency power supplies to OFF before connecting power source and load lines.');
+  h += mol([
+    'Connect utility (normal) power source cables to utility service disconnect circuit breaker (if equipped), or to N1 and N2 lugs of the transfer switch.',
+    'Connect generator to the generator terminals (E1 and E2) on the transfer mechanism.',
+    'Connect customer LOAD leads to switch terminals T1, T2.'
+  ]);
+  h += mcaution('Verify all conductors are tightened to factory specified torque values. Failure to do so could result in damage to the switch base.');
+  h += mnote('Conductor sizes must be based on the 75\u00b0C column of NEC tables. All power cables can enter through knockouts provided. If not using knockouts, conduit entry above uninsulated live parts must use fittings listed for wet locations to maintain the Type 3R rating. Conduits should be arranged to provide separation between Utility and Generator supply conductors inside the enclosure.');
+  h += mnote('If aluminum conductors are used: apply corrosion inhibitor to conductors. After tightening terminal lugs, carefully wipe away any excess corrosion inhibitor.');
+  h += mnote('Tighten terminal lugs to the torque values noted on the decal located on the inside of the enclosure door.');
+  h += mh4('Connecting Start Circuit Wires');
+  h += mp('Control system interconnections consist of N1, N2, T1, and leads 23 and 194. The generator control wiring is a Class 1 signaling circuit. Screw torque: 3.5 in-lb (0.4 Nm). Reference the specific engine generator instruction manual for wiring connection details.');
+  h += mt(['Recommended Wire Size','Max Wire Length (One ATS + SACM)'],[
+    ['No. 18 AWG','1\u2013115 ft (0.3\u201335 m)'],
+    ['No. 16 AWG','116\u2013185 ft (36\u201356 m)'],
+    ['No. 14 AWG','186\u2013295 ft (57\u201389 m)'],
+    ['No. 12 AWG','296\u2013460 ft (90\u2013140 m)']
+  ]);
+  h += mnote('Consult factory if operating more than one transfer switch and SACM. AC and DC circuits rated 1000V or less may share conduit per NEC 300.3(C)(1) \u2014 all conductors must have insulation rated at least to the maximum circuit voltage.');
+  h += mh4('Connecting SACM \u2014 A/C Load Control');
+  h += mol([
+    'Route the thermostat cable (from the furnace/thermostat to the outdoor A/C unit) to the transfer switch.',
+    'Connect the wire to terminal strip A/C 1 on the SACM. These are normally closed contacts that open on load shed conditions.',
+    'Route thermostat wire away from high voltage wires.',
+    'If required, connect additional A/C units to A/C 2\u20134 terminals.'
+  ]);
+  h += mp('<strong>A/C Contact Rating:</strong> 24 VAC \u00b7 1.0 Amp Max');
+  h += mnote('These instructions are for a typical A/C installation. Control of certain heat pumps and 2-stage A/C units may require special connections or the use of SMMs to control the loads.');
+  h += '</div>';
+  return h;
+}
+
+function buildRTSC68_Operation(){
+  var h = '<div class="man-section">';
+  h += mdanger('Do NOT manually transfer under load. Disconnect transfer switch from ALL power sources prior to manual transfer.');
+  h += mcaution('Perform functional tests in the exact order presented in the manual. Failure may cause equipment damage. Do not use excessive force while manually operating the transfer switch.');
+  h += mh4('Pre-Test Inspection');
+  h += mp('After installation and interconnection, have a competent, qualified electrician inspect the entire installation. It must comply strictly with all applicable codes, standards, and regulations. Read all labels and decals on the switch before proceeding.');
+  h += mh4('Manual Operation');
+  h += mp('A manual handle is shipped with the transfer switch. Manual operation must be verified BEFORE the transfer switch is operated electrically.');
+  h += mol([
+    'Verify generator is OFF.',
+    'Turn OFF (OPEN) both UTILITY and EMERGENCY power supplies using whatever means provided (e.g. main line circuit breakers).',
+    'Note the position of transfer mechanism main contacts by observing display windows A and B on the switch cover.',
+    'Window A \u201cON\u201d / Window B \u201cOFF\u201d \u2014 LOAD terminals (T1, T2) connected to utility terminals (N1, N2).',
+    'Window A \u201cOFF\u201d / Window B \u201cON\u201d \u2014 LOAD terminals (T1, T2) connected to emergency terminals (E1, E2).'
+  ]);
+  h += mh4('Trip to Neutral Position');
+  h += mol([
+    'Remove handle from the square lug at the upper left corner of the switch.',
+    'Insert a screwdriver into the \u201cTRIP\u201d hole (E) and push inward.',
+    'The main contact should trip to the neutral position \u2014 \u201cOFF\u201d should appear in both Windows A and B.'
+  ]);
+  h += mh4('Close to Emergency (Standby) Source Side');
+  h += mol([
+    'Verify Window B position. If Window B reads \u201cON\u201d, ATS is already in standby position \u2014 no action needed.',
+    'If Window B reads \u201cOFF\u201d and Window A reads \u201cON\u201d, trip ATS to neutral position first (see above).',
+    'If Window B reads \u201cOFF\u201d: with handle attached to the actuating shaft, insert screwdriver into hole marked \u201cSELECT\u201d (F). While pushing inward on screwdriver, move manual handle upward as indicated by the arrow until it stops \u2014 DO NOT FORCE.',
+    'Confirm main contacts close to standby source \u2014 Window B \u201cON\u201d and Window A \u201cOFF\u201d.',
+    'Remove handle from switch.'
+  ]);
+  h += mh4('Close to Normal (Utility) Source Side');
+  h += mol([
+    'Verify Window A position. If Window A reads \u201cON\u201d, ATS is already in utility position \u2014 no action needed.',
+    'If Window A reads \u201cOFF\u201d and Window B reads \u201cON\u201d, trip ATS to neutral position first (see above).',
+    'If Window A reads \u201cOFF\u201d: attach handle (A) to actuating shaft (B). Move handle in the direction of the arrow on the switch cover until it stops \u2014 DO NOT FORCE.',
+    'Release handle slowly to allow spring to relax.',
+    '\u201cON\u201d now appears in Window A and \u201cOFF\u201d appears in Window B.'
+  ]);
+  h += mh4('Voltage Check Reference');
+  h += mnote('Use DMM LowZ (low input impedance) setting to eliminate phantom/ghost voltage readings. See DMM manufacturer\u2019s literature for additional information.');
+  h += mh4('Utility Voltage Checks');
+  h += mol([
+    'Turn ON the UTILITY power supply to the transfer switch using whatever means provided (e.g. utility main line circuit breaker).',
+    'With an accurate AC voltmeter, check for correct voltage. Measure across ATS terminal lugs N1 and N2; N1 to NEUTRAL and N2 to NEUTRAL.'
+  ]);
+  h += mh4('Generator Voltage Checks (No Load)');
+  h += mol([
+    'On the generator panel, select MANUAL mode. The generator will crank and start.',
+    'Allow generator to stabilize and warm up at no-load for at least 5 minutes.',
+    'Set generator main circuit breaker (CB1) to ON (CLOSED).',
+    'With an accurate AC voltmeter and frequency meter, check no-load voltage and frequency across ATS terminal lugs E1 to E2; E1 to NEUTRAL and E2 to NEUTRAL.'
+  ]);
+  h += mt(['Measurement','Expected Value'],[
+    ['Frequency','60\u201362 Hz'],
+    ['E1 to E2','240\u2013246 VAC'],
+    ['E1 to Neutral','120\u2013123 VAC'],
+    ['E2 to Neutral','120\u2013123 VAC']
+  ]);
+  h += mp('Do NOT proceed until voltage and frequency are within stated limits. If no-load voltage is correct but frequency is wrong, engine governed speed may need adjustment. If frequency is correct but voltage is wrong, voltage regulator may need adjustment.');
+  h += mol([
+    'Turn OFF generator supply to transfer switch.',
+    'Set generator main CB (CB1) to OFF (OPEN).',
+    'Select OFF on generator panel to shut down.'
+  ]);
+  h += mh4('Generator Test Under Load');
+  h += mol([
+    'Set the generator main circuit breaker to OFF (OPEN).',
+    'Set utility service disconnect CB to OFF (OPEN); turn OFF all load circuit breakers.',
+    'Manually actuate the transfer switch main contacts to the emergency (standby) position.',
+    'Select MANUAL mode to start generator. Allow engine to stabilize for a few minutes.',
+    'Set generator main CB to ON (CLOSED) \u2014 generator now powers all LOAD circuits.',
+    'Turn on electrical loads to full rated wattage/amperage \u2014 DO NOT OVERLOAD.',
+    'At maximum rated load: verify voltage > 230 VAC (240 VAC system); frequency > 59 Hz.',
+    'Run under rated load for at least 30 minutes \u2014 watch for unusual noises, vibration, or overheating.',
+    'Set generator main CB to OFF (OPEN) when checkout under load is complete.',
+    'Allow generator to run at no-load for several minutes, then shut down by selecting OFF.',
+    'Move main switch contacts to utility position (handle DOWN).',
+    'Turn on the utility power supply to the transfer switch \u2014 system ready for automatic operation.'
+  ]);
+  h += mh4('Checking Automatic Operation');
+  h += mol([
+    'Verify generator is in OFF mode.',
+    'Verify switch is de-energized.',
+    'Install front cover of the transfer switch.',
+    'Turn the utility power supply ON (CLOSED) using the utility main line circuit breaker.',
+    'Set the generator main circuit breaker to ON.',
+    'On the generator panel, select AUTO. The system is now ready for automatic operation.',
+    'Turn utility power supply to the transfer switch OFF (OPEN).',
+    'Generator should crank and start after a 5-second delay (factory default). After starting, transfer switch connects loads to standby after a 5-second warm-up delay.',
+    'Turn utility CB back to ON (CLOSED) \u2014 loads will transfer back to utility after approximately 15 seconds.',
+    'Generator shuts down approximately 1 minute after re-transfer.'
+  ]);
+  h += mnote('Timer durations may differ between generators and settings. With generator in AUTO mode, the system is set for fully automatic operation.');
+  h += mh4('Installation Summary Checklist');
+  h += mul([
+    'Verify installation has been properly performed per manufacturer guidelines and all applicable laws and codes.',
+    'Verify proper system operation per installation and owner\u2019s manuals.',
+    'Educate end-user on proper operation, maintenance, and service call procedures.'
+  ]);
+  h += '</div>';
+  return h;
+}
+
+function buildRTSC68_Shutdown(){
+  var h = '<div class="man-section">';
+  h += mdanger('Disconnect utility power and render unit inoperable before working on unit.');
+  h += mp('<strong>Important:</strong> To avoid equipment damage, follow these steps in order when shutting the generator down during utility outages. Shutdowns may be required to perform routine maintenance or to conserve fuel.');
+  h += mh4('Shutting Generator Down While Under Load (During Utility Outage)');
+  h += mp('<strong>To turn generator OFF (while running in AUTO and online):</strong>');
+  h += mol([
+    'Turn the main utility disconnect OFF.',
+    'Turn the generator MLCB (generator disconnect) to OFF (OPEN).',
+    'Run generator for approximately 1 minute for proper cooling.',
+    'Turn the generator OFF.'
+  ]);
+  h += mp('<strong>To turn generator back ON:</strong>');
+  h += mol([
+    'Put the generator into AUTO. Start generator and warm up for a few minutes.',
+    'Set the MLCB (generator disconnect) to ON (CLOSED).',
+    'System now operates in automatic mode.',
+    'The main utility disconnect can be turned ON (CLOSED) when ready.',
+    'To shut the unit off, repeat this complete process.'
+  ]);
+  h += mnote('If utility returns, the transfer switch will return to utility mode and the generator will cycle off after it times out.');
+  h += mh4('Testing the SACM');
+  h += mol([
+    'Turn on the UTILITY supply to the ATS.',
+    'Verify managed loads are powered \u2014 all LEDs should illuminate on SACM.',
+    'Press the TEST button on the bottom of the SACM.',
+    'Verify all connected loads to be \u201cshed\u201d become disabled.',
+    'After 5 minutes: verify A/C 1 is energized and Status LED A/C 1 is ON.',
+    'After another 15 seconds: verify A/C 2 is energized and LED A/C 2 is ON.',
+    'After another 15 seconds: verify A/C 3 is energized and LED A/C 3 is ON.',
+    'After another 15 seconds: verify A/C 4 is energized and LED A/C 4 is ON.'
+  ]);
+  h += mnote('The SACM Test button will work when the ATS is in either the Utility or Generator position.');
+  h += mh4('Testing the SMM');
+  h += mp('Refer to the SMM Owner\u2019s/Installation Manual for the SMM testing procedure.');
   h += '</div>';
   return h;
 }
