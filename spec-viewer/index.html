@@ -494,7 +494,7 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(circle 
       <label class="fl">Generator Series</label>
       <select class="fsel" id="gen-manual-sel" onchange="showManual(this.value)">
         <option value="">— Select a series —</option>
-        <option value="man-install-10-28kw">10–28 kW Guardian NextGen · Part A0004332575</option>
+        <option value="man-install-10-28kw" data-cooling="air">10–28 kW Guardian NextGen · Part A0004332575</option>
       </select>
     </div>
     <div id="gen-manual-content" class="hidden"></div>
@@ -830,10 +830,25 @@ function setGenMode(mode){
   setHidden('panel-gen-manual', mode!=='manual');
   if(mode==='specs') popGenModels();
   if(mode==='manual'){
+    filterGenManuals();
     document.getElementById('gen-manual-sel').value='';
     var el=document.getElementById('gen-manual-content');
     el.classList.add('hidden'); el.innerHTML='';
   }
+}
+
+function filterGenManuals(){
+  var sel = document.getElementById('gen-manual-sel');
+  var opts = sel.querySelectorAll('option[data-cooling]');
+  var hasVisible = false;
+  opts.forEach(function(o){
+    var show = o.getAttribute('data-cooling') === cooling;
+    o.style.display = show ? '' : 'none';
+    if(show) hasVisible = true;
+  });
+  sel.querySelector('option[value=""]').textContent = hasVisible
+    ? '— Select a series —'
+    : '— No manuals available for this series yet —';
 }
 
 function popGenModels(){
