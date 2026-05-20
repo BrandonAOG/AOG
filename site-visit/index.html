@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>Always On Generators – Permitting Info Request</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="manifest" href="../manifest.json">
@@ -11,6 +11,26 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="AOG Forms">
+
+<!-- Platform detection: runs before CSS so html.ios / .macos / .windows / .android
+     classes are present when the stylesheet evaluates @media print selectors. -->
+<script>
+(function(){
+  var ua  = navigator.userAgent;
+  var html = document.documentElement;
+  var isIpad    = /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  var isIphone  = /iPhone/.test(ua);
+  var isAndroid = /Android/.test(ua);
+  var isWindows = /Windows/.test(ua);
+  // macOS Safari: Macintosh in UA, not touch-based iPad masquerading as desktop
+  var isMacOS   = /Macintosh/.test(ua) && !isIpad;
+
+  if (isIpad || isIphone) html.classList.add('ios');
+  if (isMacOS)            html.classList.add('macos');
+  if (isWindows)          html.classList.add('windows');
+  if (isAndroid)          html.classList.add('android');
+})();
+</script>
 
 <style>
 :root {
@@ -100,10 +120,11 @@ body.dark-mode {
 /* ===== STICKY ACTION BAR ===== */
 .action-bar {
   position: fixed !important;
-  top: env(safe-area-inset-top, 0px) !important; left: 0 !important; right: 0 !important;
+  top: 0 !important; left: 0 !important; right: 0 !important;
   z-index: 99999;
   width: 100%;
   background: var(--panel); padding: 4px 8px;
+  padding-top: max(4px, env(safe-area-inset-top, 4px));
   display: flex; justify-content: center; gap: 4px; flex-wrap: nowrap; align-items: center;
   box-shadow: 0 4px 18px rgba(0,0,0,0.3);
   border-bottom: 1px solid var(--border-bright);
@@ -182,19 +203,20 @@ body.dark-mode #save-status { color: #7DD3FC; }
 .page-wrapper {
   width: 100%; max-width: 1050px; margin: 0 auto;
   display: flex; flex-direction: column; gap: 0; padding: 0;
-  padding-top: calc(44px + env(safe-area-inset-top, 0px));
 }
 
 .form-page {
   width: 100%; max-width: 1050px; background: var(--panel);
   padding: 24px; box-sizing: border-box; transition: all 0.3s ease;
   font-family: Arial, sans-serif; display: flex; flex-direction: column;
+  border: 1.5px solid #D97706;
 }
 @media (max-width: 768px) { .form-page { padding: 16px; } }
 @media (max-width: 480px) { .form-page { padding: 12px; } }
 body.dark-mode .form-page {
   background: linear-gradient(135deg, rgba(15,21,53,0.95) 0%, rgba(10,14,39,0.98) 100%);
   box-shadow: 0 0 1px rgba(0,255,200,0.3), 0 0 20px rgba(0,255,200,0.15);
+  border-color: #00FFC8;
 }
 
 input[type="text"], input[type="email"], input[type="tel"],
@@ -336,7 +358,7 @@ body.dark-mode table.mat-table td.row-label {
   background: rgba(36,52,88,0.6); color: #E0F7FF;
 }
 
-#fittings-table td.row-label { font-size: 10px; min-width: 130px; }
+#fittings-table td.row-label { font-size: 10px; min-width: 0; }
 #wireway-table  td.row-label { font-size: 10px; min-width: 110px; }
 #polaris-table  td.row-label { font-size: 10px; min-width: 110px; }
 
@@ -443,22 +465,25 @@ body.dark-mode .logo-area img {
 @media (max-width: 480px) { .logo-area { gap: 8px; margin-bottom: 12px; } }
 
 .checklist-title {
-  font-weight: bold; font-size: 22px;
+  font-weight: bold; font-size: 16px;
   border-top: 2px solid var(--text); padding-top: 12px;
   margin-bottom: 18px; color: var(--text);
   font-family: Arial, sans-serif; letter-spacing: 1px;
 }
-@media (max-width: 768px) { .checklist-title { font-size: 18px; margin-bottom: 14px; } }
-@media (max-width: 480px) { .checklist-title { font-size: 16px; margin-bottom: 12px; } }
+@media (max-width: 768px) { .checklist-title { font-size: 16px; margin-bottom: 14px; } }
+@media (max-width: 480px) { .checklist-title { font-size: 12px; margin-bottom: 12px; } }
 body.dark-mode .checklist-title { border-top-color: #00FFC8; color: #00FFC8; }
 
 .logo-text {
   font-family: 'Arial Black', sans-serif; font-size: 16px;
-  line-height: 1; color: #D97706; white-space: nowrap;
+  line-height: 1; color: #111; white-space: nowrap;
 }
 @media (max-width: 480px) { .logo-text { font-size: 12px; } }
-.logo-text span { color: var(--text); }
-body.dark-mode .logo-text span { color: #E0F7FF; }
+.logo-text .logo-on { color: #D97706; }
+.logo-text .logo-generators { color: #111; font-size: 10px; font-family: Arial, sans-serif; letter-spacing: 1px; }
+body.dark-mode .logo-text { color: #fff; }
+body.dark-mode .logo-text .logo-on { color: #D97706; }
+body.dark-mode .logo-text .logo-generators { color: #fff; }
 
 .permit-section { margin-bottom: 14px; width: 100%; }
 
@@ -481,6 +506,8 @@ body.dark-mode .permit-row label { color: #E0F7FF; }
 }
 @media (max-width: 480px) { .permit-input { font-size: 11px; } }
 .permit-input.flex-grow { flex: 1 1 200px; min-width: 100px; }
+.permit-row-column { flex-direction: column !important; align-items: flex-start !important; }
+.permit-row-column .permit-input { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; flex: none !important; }
 .permit-input.w-full    { flex: 1 1 100%; width: 100%; }
 .permit-input.short     { width: 80px; }
 @media (max-width: 480px) { .permit-input.short { width: 60px; } }
@@ -506,6 +533,7 @@ body.dark-mode .permit-input:focus {
   max-width: 100%; border-radius: 2px;
 }
 @media (max-width: 480px) { .permit-textarea { font-size: 11px; padding: 4px 6px; } }
+@media (max-width: 767px) { .other-special-notes { padding: 2px 3px !important; } }
 body.dark-mode .permit-textarea {
   border-color: rgba(0,255,200,0.2); background: rgba(10,14,39,0.6); color: #E0F7FF;
 }
@@ -547,7 +575,9 @@ body.dark-mode .notice { color: #7DD3FC; }
 /* ==========================================================
    PRINT STYLES — desktop (untouched from original)
    ========================================================== */
-@media print {
+@page { size: 8.5in 11in; margin: 0.2in; }
+
+@media print, body.printing {
 
   * {
     -webkit-print-color-adjust: exact !important;
@@ -555,289 +585,515 @@ body.dark-mode .notice { color: #7DD3FC; }
     color-adjust: exact !important;
   }
 
-  @page { size: 8.5in 11in; margin: 0.2in; }
-
-  html, body {
-    margin: 0 !important; padding: 0 !important;
-    width: 100% !important; max-width: 100% !important;
-    background: #ffffff !important; color: #1F2937 !important;
-    overflow: visible !important; -webkit-text-size-adjust: 100% !important;
+  /* Force light-mode CSS variables — Safari fires the print renderer before JS
+     can strip the dark-mode class, so the navy --bg/--panel values leak in as a
+     dark bar unless we override the variables themselves here. */
+  html, body, body.dark-mode {
+    --bg: #FFFFFF !important;
+    --bg2: #FFFFFF !important;
+    --bg3: #F8F8F8 !important;
+    --bg4: #F0F0F0 !important;
+    --panel: #FFFFFF !important;
+    --panel2: #FAFAFA !important;
+    --border: rgba(217,119,6,0.25) !important;
+    --border-bright: rgba(217,119,6,0.5) !important;
+    --text: #1F2937 !important;
+    --text-muted: #6B7280 !important;
+    --text-dim: #9CA3AF !important;
+    --cyan: #D97706 !important;
+    --cyan-dim: #B45309 !important;
+    --cyan-dark: #92400E !important;
+    --glow: none !important;
+    --glow-amber: none !important;
   }
 
-  .action-bar, .theme-toggle-btn, .notice { display: none !important; }
+  /* Force light mode — never print in dark */
+  body, body.dark-mode {
+    background: #ffffff !important;
+    color: #1F2937 !important;
+  }
+  /* Kill the dark-mode navy GRADIENT specifically — background:#fff alone does
+     not override a background-image, so the navy bar bleeds in otherwise. */
+  body.dark-mode {
+    background-image: none !important;
+    background-attachment: initial !important;
+    background-size: auto !important;
+  }
+  html, body {
+    background-image: none !important;
+  }
+  body.dark-mode .form-page,
+  body.dark-mode #page1,
+  body.dark-mode #page2 {
+    background: #ffffff !important;
+    color: #1F2937 !important;
+    box-shadow: none !important;
+  }
+  body.dark-mode input, body.dark-mode textarea, body.dark-mode select {
+    background: #ffffff !important;
+    color: #1F2937 !important;
+    border-color: #333 !important;
+    box-shadow: none !important;
+  }
+  body.dark-mode table.mat-table td {
+    background: #ffffff !important;
+    color: #1F2937 !important;
+    border-color: #333 !important;
+  }
+  body.dark-mode table.mat-table th {
+    background: #4B5563 !important;
+    color: #ffffff !important;
+  }
+  body.dark-mode table.mat-table td.row-label {
+    background: #f0f0f0 !important;
+    color: #1F2937 !important;
+  }
+  body.dark-mode .permit-section-header { color: #D97706 !important; }
+  body.dark-mode .permit-row, body.dark-mode .permit-row label { color: #1F2937 !important; }
+  body.dark-mode .permit-input, body.dark-mode .permit-textarea { color: #1F2937 !important; background: #ffffff !important; }
+  body.dark-mode .checklist-title { color: #1F2937 !important; border-top-color: #1F2937 !important; }
+  body.dark-mode .permit-note { color: #1F2937 !important; border-left-color: #1F2937 !important; }
+  body.dark-mode .footer-field label { color: #1F2937 !important; }
+  body.dark-mode .logo-text { color: #111 !important; }
+  body.dark-mode .logo-text .logo-generators { color: #111 !important; }
+
+  html {
+    margin: 0; padding: 0;
+    width: 100%; max-width: 100%;
+    /* Safari iOS: prevent the screen layout width (1050px) from being used
+       as the print canvas — force it to match the @page paper width instead */
+    -webkit-text-size-adjust: none;
+  }
+
+  html, body {
+    margin: 0; padding: 0;
+    width: 100% !important; max-width: 100% !important;
+    min-width: 0 !important;
+    background: #ffffff; color: #1F2937;
+    overflow: visible; -webkit-text-size-adjust: 100%;
+  }
+
+  .action-bar, .theme-toggle-btn, .notice, #save-status { display: none !important; }
 
   .page-wrapper {
-    display: block !important; width: 100% !important;
-    max-width: 100% !important; margin: 0 !important; padding: 0 !important;
+    display: block; width: 100%;
+    max-width: 100%; margin: 0; padding: 0;
   }
 
   .form-page {
-    display: block !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    background: #ffffff !important;
-    color: #1F2937 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    box-sizing: border-box !important;
-    box-shadow: none !important;
-    border: none !important;
-    overflow: visible !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    page-break-after: always !important;
-    break-after: page !important;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    background: #ffffff;
+    color: #1F2937;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+    box-shadow: none;
+    border: none;
+    overflow: visible;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    page-break-after: always;
+    break-after: page;
   }
 
   .form-page:last-child {
-    page-break-after: auto !important;
-    break-after: auto !important;
+    page-break-after: auto;
+    break-after: auto;
   }
 
   #page1 {
-    height: 10.7in !important;
-    min-height: 10.7in !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
+    height: auto;
+    min-height: 0;
+    display: block;
   }
 
   #page1 .page1-header {
-    flex: 0 0 auto !important;
-    margin-bottom: 0 !important;
-    text-align: center !important;
+    flex: 0 0 auto;
+    margin-bottom: 0;
+    text-align: center;
   }
-  #page1 .logo-area { gap: 14px !important; margin-bottom: 12px !important; justify-content: center !important; }
-  #page1 .logo-area img { width: 50px !important; height: 50px !important; }
-  #page1 .logo-text { font-size: 20px !important; color: #D97706 !important; line-height: 1.1 !important; }
-  #page1 .logo-text span:first-of-type { color: #111 !important; }
+  #page1 .logo-area { gap: 14px; margin-bottom: 12px; justify-content: center; }
+  #page1 .logo-area img { width: 50px; height: 50px; }
+  #page1 .logo-text { font-size: 12px; color: #111; line-height: 1.1; }
 
+  #page1 { border: 1.5px solid #D97706; padding: 0.15in; box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   #page1 .checklist-title {
-    border-top: 2px solid #1F2937 !important; color: #1F2937 !important;
-    font-size: 25px !important; padding-top: 12px !important;
-    margin-bottom: 0 !important; letter-spacing: 1.5px !important;
+    border-top: 2px solid #1F2937; color: #1F2937;
+    font-size: 12px; padding-top: 12px;
+    margin-bottom: 0; letter-spacing: 1.5px;
   }
 
   #page1 .permit-section {
-    flex: 1 1 auto !important;
-    display: flex !important; flex-direction: column !important;
-    justify-content: center !important;
-    padding: 5px 0 !important;
-    margin-bottom: 0 !important;
-    page-break-inside: avoid !important; break-inside: avoid !important;
+    flex: 0 0 auto;
+    display: block;
+    padding: 0;
+    margin-bottom: 10px;
   }
 
   #page1 .permit-section-header {
-    color: #1F2937 !important; border-bottom: 1px solid #1F2937 !important;
-    font-size: 14px !important; font-weight: bold !important;
-    text-shadow: none !important; margin: 0 0 8px !important;
-    padding-bottom: 4px !important; letter-spacing: 0.8px !important;
+    color: #1F2937; border-bottom: 1px solid #1F2937;
+    font-size: 11px; font-weight: bold;
+    text-shadow: none; margin: 0;
+    padding-bottom: 0; letter-spacing: 0.8px;
   }
 
   #page1 .permit-row {
-    font-size: 14px !important; line-height: 1.55 !important;
-    margin-bottom: 7px !important; gap: 7px 11px !important;
-    page-break-inside: avoid !important; break-inside: avoid !important;
+    font-size: 10px; line-height: 1.2;
+    margin-bottom: 0; gap: 2px 8px;
+    padding: 2px 0;
   }
-  #page1 .permit-row:last-child { margin-bottom: 0 !important; }
-  #page1 .permit-row label { color: #1F2937 !important; font-weight: 600 !important; font-size: 14px !important; }
+  #page1 .permit-row:last-child { margin-bottom: 0; }
+  #page1 .permit-section-header { color: #D97706; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  #page1 .checklist-title { color: #1F2937; }
+  #page1 .permit-row-column { flex-direction: column; align-items: flex-start; width: 100%; }
+  #page1 .permit-row-column .permit-input { width: 100%; max-width: 100%; box-sizing: border-box; display: block; flex: none; }
+  #page1 .permit-row label { color: #1F2937; font-weight: 600; font-size: 10px; }
 
   #page1 .permit-input {
-    border-bottom: 1px solid #1F2937 !important; color: #1F2937 !important;
-    background: #ffffff !important; font-size: 14px !important;
-    padding: 2px 4px !important; min-height: 18px !important;
+    border-bottom: 1px solid #1F2937; color: #1F2937;
+    background: #ffffff; font-size: 10px;
+    padding: 1px 4px; min-height: 0;
+    height: auto; line-height: 1.4;
   }
-  #page1 .permit-input.short     { width: 90px !important; }
-  #page1 .permit-input.medium    { width: 145px !important; }
-  #page1 .permit-input.flex-grow { flex: 1 1 220px !important; min-width: 200px !important; }
-  #page1 .permit-input.w-full    { width: 100% !important; flex: 1 1 100% !important; }
+  #page1 .permit-input.short     { width: 90px; }
+  #page1 .permit-input.medium    { width: 145px; }
+  #page1 .permit-input.flex-grow { flex: 1 1 220px; min-width: 200px; }
+  #page1 .permit-input.w-full    { width: 100%; flex: 1 1 100%; }
+  #page1 .permit-row-column .permit-input.w-full { flex: none; display: block; width: 100%; height: 16px; min-height: 0; }
 
-  #page1 .permit-textarea {
-    border: 1px solid #555 !important; background: #ffffff !important;
-    color: #1F2937 !important; font-size: 14px !important;
-    min-height: 50px !important; height: 56px !important;
-    padding: 6px 8px !important; width: 100% !important; resize: none !important;
+  #page1 .permit-textarea:not(.other-special-notes) {
+    border: 1px solid #555; background: #ffffff;
+    color: #1F2937; font-size: 10px;
+    min-height: 60px; height: auto;
+    padding: 3px 8px; width: 100%; resize: none;
+  }
+  /* Other/Special notes: print at exactly the on-screen size — no padding/resize
+     changes — on desktop and mobile. Only the color is forced for legibility. */
+  #page1 .other-special-notes {
+    font-size: 12px !important;
+    padding: 6px 8px !important;
+    min-height: 50px !important;
+    height: auto !important;
+    width: 100% !important;
+    border: 1px solid #555 !important;
+    background: #ffffff !important;
+    color: #1F2937 !important;
+    resize: none !important;
   }
 
   #page1 .permit-note {
-    color: #1F2937 !important; border-left: 2px solid #1F2937 !important;
-    font-size: 13px !important; font-style: italic !important;
-    padding: 4px 0 4px 11px !important; margin: 6px 0 !important; line-height: 1.4 !important;
+    color: #1F2937; border-left: 2px solid #1F2937;
+    font-size: 9px; font-style: italic;
+    padding: 2px 0 2px 8px; margin: 3px 0; line-height: 1.3;
   }
 
   #page1 .permit-divider { display: none !important; }
 
   #page1 .yn-checkbox-wrap {
-    font-size: 13px !important; padding: 2px 7px 2px 4px !important;
-    border: 1px solid #999 !important; color: #1F2937 !important;
-    background: transparent !important;
+    font-size: 8px; padding: 2px 6px 2px 3px;
+    border: 1px solid #999; color: #1F2937;
+    background: transparent;
   }
-  #page1 .yn-checkbox-wrap.checked          { color: #ffffff !important; }
-  #page1 .yn-checkbox-wrap.yn-yes.checked   { background: #059669 !important; border-color: #047857 !important; }
-  #page1 .yn-checkbox-wrap.yn-no.checked    { background: #DC2626 !important; border-color: #b91c1c !important; }
-  #page1 .yn-checkbox-wrap.yn-opt.checked   { background: #D97706 !important; border-color: #b45309 !important; }
+  #page1 .yn-checkbox-wrap.checked          { color: #ffffff; }
+  #page1 .yn-checkbox-wrap.yn-yes.checked   { background: #059669; border-color: #047857; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  #page1 .yn-checkbox-wrap.yn-no.checked    { background: #DC2626; border-color: #b91c1c; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  #page1 .yn-checkbox-wrap.yn-opt.checked   { background: #D97706; border-color: #b45309; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   #page1 input[type="checkbox"] {
-    -webkit-appearance: none !important; appearance: none !important;
-    width: 13px !important; height: 13px !important; min-width: 13px !important;
-    border: 1.5px solid #D97706 !important; border-radius: 2px !important;
-    background: #fff !important; position: relative !important; display: inline-block !important;
-    vertical-align: middle !important; margin: 1px 3px 1px 0 !important;
-    overflow: visible !important;
+    -webkit-appearance: none; appearance: none;
+    width: 12px; height: 12px; min-width: 12px;
+    border: 1.5px solid #D97706; border-radius: 2px;
+    background: #fff; position: relative; display: inline-block;
+    vertical-align: middle; margin: 1px 3px 1px 0;
+    overflow: visible;
     -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
   #page1 input[type="checkbox"]:checked {
-    background: #D97706 !important; border-color: #D97706 !important;
+    background: #D97706; border-color: #D97706;
     -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
   #page1 input[type="checkbox"]:checked::after {
-    content: '' !important; display: block !important; position: absolute !important;
-    left: 1px !important; top: -2px !important;
-    width: 4px !important; height: 7px !important;
-    border: 2px solid #000 !important; border-top: none !important; border-left: none !important;
-    transform: rotate(45deg) !important; -webkit-transform: rotate(45deg) !important;
+    content: ''; display: block; position: absolute;
+    left: 1px; top: -2px;
+    width: 4px; height: 7px;
+    border: 2px solid #000; border-top: none; border-left: none;
+    transform: rotate(45deg); -webkit-transform: rotate(45deg);
   }
 
-  #page2 {
-    display: block !important;
-    page-break-before: always !important;
-    break-before: page !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
+  .repeat-header { display: none !important; }
+  .no-print { display: none !important; }
+  #mobile-p2-accordions { display: none !important; }
+  #page2 .grid-section { display: block !important; overflow: visible; }
+  #page2 .footer-fields { display: block !important; }
+
+  #page2 { page-break-before: always; break-before: page; }
+
+  #page2-inner {
+    display: block;
+    width: 100%;
+    transform-origin: top left;
+    transform: none;
   }
 
-  #page2 .grid-section { margin-bottom: 4px !important; overflow: visible !important; }
+  #page2 .grid-section { margin-bottom: 3px; overflow: visible; }
 
-  #page2 table.mat-table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
+  #page2 table.mat-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 
   #page2 table.mat-table th,
   #page2 table.mat-table td {
-    border: 1px solid #333 !important;
-    padding: 2px 2px !important;
-    text-align: center !important;
-    height: auto !important;
-    min-height: 0 !important;
-    line-height: 1.15 !important;
-    overflow: hidden !important;
-    word-break: break-word !important;
-    vertical-align: middle !important;
+    border: 1px solid #333;
+    padding: 2px 2px;
+    text-align: center;
+    height: auto;
+    min-height: 0;
+    line-height: 1.2;
+    overflow: hidden;
+    word-break: break-word;
+    vertical-align: middle;
+    white-space: normal;
+    font-size: 11px;
   }
 
   #page2 table.mat-table th {
-    background: #4B5563 !important;
-    color: #FFFFFF !important;
-    font-weight: bold !important;
-    padding: 2px 2px !important;
+    background: #4B5563;
+    color: #FFFFFF;
+    font-weight: bold;
+    font-size: 11px;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  #page2 table.mat-table td { background: #ffffff !important; color: #1F2937 !important; }
+  #page2 table.mat-table td { background: #ffffff; color: #1F2937; }
 
   #page2 table.mat-table td.row-label {
-    background: #f0f0f0 !important;
-    text-align: left !important;
-    font-weight: bold !important;
-    padding: 2px 3px !important;
-    white-space: normal !important;
-    word-break: break-word !important;
+    background: #f0f0f0;
+    text-align: left;
+    font-weight: bold;
+    padding: 2px 3px;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 11px;
+    line-height: 1.2;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) { font-size: 15px !important; }
-  #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) th { font-size: 15px !important; }
-  #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td.row-label { font-size: 15px !important; width: 72px !important; min-width: 0 !important; }
-  #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td input[type="text"] { font-size: 12px !important; }
-
-  #page2 #fittings-table { font-size: 8px !important; }
-  #page2 #fittings-table th { font-size: 16px !important; }
-  #page2 #fittings-table td.row-label { font-size: 16px !important; font-weight: bold !important; width: 150px !important; min-width: 0 !important; text-align: left !important; padding: 2px 4px !important; white-space: normal !important; word-break: break-word !important; line-height: 1.2 !important; }
-  #page2 #fittings-table td input[type="text"] { font-size: 8px !important; }
-
-  #page2 #wireway-table { font-size: 8px !important; }
-  #page2 #wireway-table th { font-size: 15px !important; }
-  #page2 #wireway-table td.row-label { font-size: 15px !important; font-weight: bold !important; width: 130px !important; min-width: 0 !important; text-align: left !important; padding: 2px 4px !important; white-space: normal !important; word-break: break-word !important; line-height: 1.2 !important; }
-  #page2 #wireway-table td input[type="text"] { font-size: 8px !important; }
-
-  #page2 #polaris-table { font-size: 8px !important; }
-  #page2 #polaris-table th { font-size: 15px !important; }
-  #page2 #polaris-table td.row-label { font-size: 15px !important; font-weight: bold !important; width: 130px !important; min-width: 0 !important; text-align: left !important; padding: 2px 4px !important; white-space: normal !important; word-break: break-word !important; line-height: 1.2 !important; }
-  #page2 #polaris-table td input[type="text"] { font-size: 8px !important; }
+  #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td.row-label { width: 68px; min-width: 0; }
+  #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) th,
+  #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td { font-size: 9px; }
+  #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td input[type="text"] { font-size: 9px; }
+  #page2 #fittings-table td.row-label { width: 100px; min-width: 0; white-space: normal; word-break: break-word; }
+  #page2 #wireway-table  td.row-label { width: 85px; min-width: 0; }
+  #page2 #wireway-table th,
+  #page2 #wireway-table td { font-size: 9px; }
+  #page2 #wireway-table td input[type="text"] { font-size: 9px; }
+  #page2 #polaris-table  td.row-label { width: 85px; min-width: 0; }
+  #page2 #polaris-table th,
+  #page2 #polaris-table td { font-size: 10px; }
+  #page2 #polaris-table td input[type="text"] { font-size: 10px; }
 
   #page2 table.mat-table td input[type="text"] {
-    width: 100% !important; border: none !important;
-    background: transparent !important; color: #1F2937 !important;
-    padding: 0 !important; text-align: center !important; height: auto !important;
+    width: 100%; border: none; background: transparent;
+    color: #1F2937; padding: 0; text-align: center;
+    height: auto; line-height: 1.2; font-size: 11px;
+    display: block; box-sizing: border-box;
   }
+  #page2 .ft-cell {
+    display: flex; align-items: center; justify-content: center; gap: 1px;
+    line-height: 1.1 !important;
+  }
+  #page2 .ft-cell input[type="text"] {
+    line-height: 1.1 !important; padding: 0 !important; margin: 0 !important;
+  }
+  #page2 .ft-label { line-height: 1.1 !important; font-size: 7px !important; }
+  /* Keep wire-table rows from splitting across a page in print. */
+  #page2 table.mat-table tr { page-break-inside: avoid !important; break-inside: avoid !important; }
 
-  #page2 .footer-fields { margin-top: 5px !important; padding-top: 6px !important; border-top: 1px solid #555 !important; font-size: 17px !important; }
-  #page2 .footer-row { display: flex !important; flex-wrap: wrap !important; gap: 3px 14px !important; margin-bottom: 3px !important; align-items: flex-end !important; }
-  #page2 .footer-field { display: inline-flex !important; align-items: flex-end !important; gap: 2px !important; white-space: nowrap !important; }
-  #page2 .footer-field label { font-size: 17px !important; font-weight: bold !important; color: #1F2937 !important; white-space: nowrap !important; }
-  #page2 .footer-field input[type="text"] { border: none !important; border-bottom: 1px solid #333 !important; background: transparent !important; color: #1F2937 !important; font-size: 11px !important; padding: 0 1px !important; height: auto !important; width: 55px !important; min-width: 0 !important; }
-  #page2 .footer-field input.short { width: 40px !important; }
-  #page2 .footer-field input.wide  { width: 85px !important; }
+  #page2 .footer-fields { margin-top: 14px; padding-top: 10px; border-top: 1px solid #555; font-size: 10px; }
+  #page2 .footer-row { display: flex; flex-wrap: wrap; gap: 1px 6px; margin-bottom: 4px; align-items: center; }
+  #page2 .footer-field { display: inline-flex; align-items: center; gap: 1px; white-space: nowrap; }
+  #page2 .footer-field label { font-size: 10px; font-weight: bold; color: #1F2937; white-space: nowrap; }
+  #page2 .footer-field input[type="text"] { border: none; border-bottom: 1px solid #333; background: transparent; color: #1F2937; font-size: 10px; padding: 0 1px; height: auto; width: 60px; min-width: 0; }
+  #page2 .footer-field input.short { width: 40px; }
+  #page2 .footer-field input.wide  { width: 90px; }
 
   input[type="text"], input[type="email"], input[type="tel"],
   input[type="date"], input[type="number"], textarea, select {
-    background: #ffffff !important; color: #1F2937 !important;
-    border-bottom-color: #333 !important; border-color: #333 !important;
-    font-family: Arial, sans-serif !important; box-shadow: none !important;
+    background: #ffffff; color: #1F2937;
+    border-bottom-color: #333; border-color: #333;
+    font-family: Arial, sans-serif; box-shadow: none;
+    height: auto; line-height: 1.4;
   }
-  input::placeholder, textarea::placeholder { color: transparent !important; }
-  .form-page * { box-shadow: none !important; }
-  .logo-text { color: #D97706 !important; }
-  .logo-text span { color: #1F2937 !important; }
+  input::placeholder, textarea::placeholder { color: transparent; }
+  .form-page * { box-shadow: none; }
+  .logo-text { color: #111; }
+  .logo-text .logo-on { color: #D97706; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .logo-text .logo-always { color: #111; }
+  .logo-text .logo-generators { color: #111; font-size: 8px; }
+  #page1 .logo-on, #page1 span.logo-on { color: #D97706; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  /* Kill logo animation & filter so desktop print engines don't blank the image */
+  .logo-area img {
+    filter: none !important;
+    -webkit-filter: none !important;
+    animation: none !important;
+    -webkit-animation: none !important;
+  }
 }
 /* end @media print */
 
-/* ===== MOBILE-ONLY PRINT RULES (max-width: 767px) =====
-   Desktop print above is untouched.
-   Tightens page 2 on mobile so footer stays on page 2.
-   ===================================================== */
-@media print and (max-width: 767px) {
+/* ===== MOBILE PRINT — Safari honors @media print + max-width natively.
+   This block (copied from the proven-working sibling page) tightens page 2
+   so it fits on phones. No body.mobile-print class, no JS injection. ===== */
+@page { size: 8.5in 11in; margin: 0.05in 0.15in 0.05in 0.15in; }
 
-  @page { size: 8.5in 11in; margin: 0.15in; }
+@media print and (max-width: 767px), body.printing.mobile-printing {
 
-  #page2 .grid-section { margin-bottom: 2px !important; }
+  /* ---- PAGE 1: sized to fill one sheet at comfortable, readable proportions.
+     Tuned to use the whole page without spilling to a second sheet. The
+     Other/Special notes box prints at full screen height, so the rest of the
+     page is tightened to make room. ---- */
+  #page1 .checklist-title { font-size: 12px !important; padding-top: 3.75px !important; margin-bottom: 3.75px !important; }
+  #page1 .permit-section { margin-bottom: 2.75px !important; }
+  #page1 .permit-section-header { font-size: 11px !important; margin: 1.75px 0 1px !important; }
+  #page1 .permit-row { font-size: 10px !important; padding: 0.75px 0 !important; margin-bottom: 0 !important; gap: 1px 7px !important; line-height: 1.1875 !important; }
+  #page1 .permit-row label { font-size: 10px !important; }
+  #page1 .permit-input { font-size: 10px !important; padding: 0.75px 4px !important; line-height: 1.275 !important; }
+  #page1 .permit-note { font-size: 8.5px !important; margin: 0.75px 0 !important; padding: 0.75px 0 1px 7px !important; line-height: 1.1875 !important; }
+  #page1 .permit-textarea:not(.other-special-notes) { font-size: 10px !important; min-height: 25.5px !important; height: 25.5px !important; padding: 1.75px 5px !important; }
+  #page1 .yn-checkbox-wrap { font-size: 8px !important; padding: 1px 4px 1px 3px !important; }
+  /* Keep only the notes box from splitting across a page; applying this to every
+     section caused a tall section to be shoved down, leaving a white gap. */
+  #page1 .other-special-notes { page-break-inside: avoid !important; break-inside: avoid !important; }
+  #page1 input[type="checkbox"] { width: 10px !important; height: 10px !important; min-width: 10px !important; }
+
+  #page2 .grid-section { margin-bottom: 1.5px !important; }
 
   #page2 table.mat-table th,
   #page2 table.mat-table td {
-    padding: 1px 1px !important;
-    font-size: 8px !important;
-    line-height: 1.1 !important;
+    padding: 0.75px 1px !important;
+    font-size: 11px !important;
+    line-height: 1.15 !important;
   }
-
-  #page2 table.mat-table th { font-size: 8px !important; }
-
-  #page2 table.mat-table td.row-label {
-    font-size: 8px !important;
-    padding: 1px 2px !important;
-  }
-
-  #page2 table.mat-table td input[type="text"] { font-size: 8px !important; }
-
-  #page2 #fittings-table td.row-label { width: 80px !important; }
+  #page2 table.mat-table th { font-size: 10px !important; }
+  #page2 table.mat-table td.row-label { font-size: 11px !important; padding: 0.75px 2px !important; }
+  #page2 table.mat-table td input[type="text"] { font-size: 9px !important; }
+  #page2 #fittings-table td.row-label { width: 125px !important; }
   #page2 #wireway-table  td.row-label { width: 70px !important; }
   #page2 #polaris-table  td.row-label { width: 70px !important; }
 
-  #page2 .footer-fields {
-    margin-top: 3px !important;
-    padding-top: 3px !important;
+  #page2 .footer-fields { margin-top: 0.975px !important; padding-top: 0.975px !important; font-size: 10.9px !important; }
+  #page2 .footer-row { gap: 1px 8px !important; margin-bottom: 1.5px !important; }
+  #page2 .footer-field label { font-size: 10.9px !important; }
+  #page2 .footer-field input[type="text"] {
+    font-size: 10.9px !important; height: auto !important; line-height: 1.0 !important;
+    vertical-align: bottom !important; padding-bottom: 1px !important; width: 45px !important;
   }
-  #page2 .footer-row {
-    gap: 1px 8px !important;
-    margin-bottom: 2px !important;
-  }
+  #page2 .footer-field input.short { width: 32px !important; }
+  #page2 .footer-field input.wide  { width: 65px !important; }
 }
 
-@media print {
-  .action-bar { display: none !important; }
+
+/* =======================================================================
+   DESKTOP PRINT TIGHTENING
+   @media print and (min-width:768px) fires on desktop (paper = 8.5in = 816px)
+   but NOT on mobile Safari, which uses the phone viewport width (~390px) for
+   print media queries — so this block never touches mobile output.
+
+   body.printing:not(.mobile-printing) mirrors the same rules as regular CSS
+   selectors so that when openPrintPreview() adds the class right before
+   window.print(), Chrome / Firefox / desktop-Safari's print renderer already
+   sees a tightly-laid-out DOM and captures it faithfully.
+   On mobile, body.mobile-printing is ALSO added, so :not(.mobile-printing)
+   correctly excludes mobile from these selectors.
+   ======================================================================= */
+
+@media print and (min-width: 768px) {
+
+  /* Top padding — match iPhone Safari spacing on both pages */
+  #page1 { padding-top: 0.05in !important; }
+  #page2 { padding-top: 0.05in !important; box-sizing: border-box !important; }
+
+  /* PAGE 1 — tighten to match mobile Safari output */
+  #page1 .checklist-title          { font-size: 12px !important; padding-top: 3.75px !important; margin-bottom: 3.75px !important; }
+  #page1 .permit-section           { margin-bottom: 2.75px !important; }
+  #page1 .permit-section-header    { font-size: 11px !important; margin: 1.75px 0 1px !important; }
+  #page1 .permit-row               { font-size: 10px !important; padding: 0.75px 0 !important; margin-bottom: 0 !important; gap: 1px 7px !important; line-height: 1.1875 !important; }
+  #page1 .permit-row label         { font-size: 10px !important; }
+  #page1 .permit-input             { font-size: 10px !important; padding: 0.75px 4px !important; line-height: 1.275 !important; }
+  #page1 .permit-note              { font-size: 8.5px !important; margin: 0.75px 0 !important; padding: 0.75px 0 1px 7px !important; line-height: 1.1875 !important; }
+  #page1 .permit-textarea:not(.other-special-notes) { font-size: 10px !important; min-height: 25.5px !important; height: 25.5px !important; padding: 1.75px 5px !important; }
+  #page1 .yn-checkbox-wrap         { font-size: 8px !important; padding: 1px 4px 1px 3px !important; }
+  #page1 .other-special-notes      { page-break-inside: avoid !important; break-inside: avoid !important; }
+  #page1 input[type="checkbox"]    { width: 10px !important; height: 10px !important; min-width: 10px !important; }
+
+  /* PAGE 2 — match mobile table density */
+  #page2 .grid-section { margin-bottom: 1.5px !important; }
+  #page2 table.mat-table th,
+  #page2 table.mat-table td        { padding: 0.75px 1px !important; line-height: 1.15 !important; }
+  #page2 table.mat-table th        { font-size: 10px !important; }
+  #page2 table.mat-table td.row-label { padding: 0.75px 2px !important; }
+  #page2 .footer-fields            { margin-top: 0.975px !important; padding-top: 0.975px !important; font-size: 10.9px !important; }
+  #page2 .footer-row               { gap: 1px 8px !important; margin-bottom: 1.5px !important; }
+  #page2 .footer-field label       { font-size: 10.9px !important; }
+  #page2 .footer-field input[type="text"] {
+    font-size: 10.9px !important; height: auto !important; line-height: 1.0 !important;
+    vertical-align: bottom !important; padding-bottom: 1px !important; width: 45px !important;
+  }
+  #page2 .footer-field input.short { width: 32px !important; }
+  #page2 .footer-field input.wide  { width: 65px !important; }
 }
+
+/* -- body.printing:not(.mobile-printing) pre-capture selectors (desktop only) -- */
+
+body.printing:not(.mobile-printing) .page-wrapper {
+  padding: 0 !important;
+}
+body.printing:not(.mobile-printing) .logo-area img {
+  filter: none !important; -webkit-filter: none !important;
+  animation: none !important; -webkit-animation: none !important;
+}
+
+body.printing:not(.mobile-printing) #page1 .checklist-title          { font-size: 12px !important; padding-top: 3.75px !important; margin-bottom: 3.75px !important; }
+body.printing:not(.mobile-printing) #page1 .permit-section           { margin-bottom: 2.75px !important; }
+body.printing:not(.mobile-printing) #page1 .permit-section-header    { font-size: 11px !important; margin: 1.75px 0 1px !important; }
+body.printing:not(.mobile-printing) #page1 .permit-row               { font-size: 10px !important; padding: 0.75px 0 !important; margin-bottom: 0 !important; gap: 1px 7px !important; line-height: 1.1875 !important; }
+body.printing:not(.mobile-printing) #page1 .permit-row label         { font-size: 10px !important; }
+body.printing:not(.mobile-printing) #page1 .permit-input             { font-size: 10px !important; padding: 0.75px 4px !important; line-height: 1.275 !important; }
+body.printing:not(.mobile-printing) #page1 .permit-note              { font-size: 8.5px !important; margin: 0.75px 0 !important; padding: 0.75px 0 1px 7px !important; line-height: 1.1875 !important; }
+body.printing:not(.mobile-printing) #page1 .permit-textarea:not(.other-special-notes) { font-size: 10px !important; min-height: 25.5px !important; height: 25.5px !important; padding: 1.75px 5px !important; }
+body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap         { font-size: 8px !important; padding: 1px 4px 1px 3px !important; }
+body.printing:not(.mobile-printing) #page1 input[type="checkbox"]    { width: 10px !important; height: 10px !important; min-width: 10px !important; }
+
+body.printing:not(.mobile-printing) #page2 .grid-section             { margin-bottom: 1.5px !important; }
+body.printing:not(.mobile-printing) #page2 .footer-fields            { margin-top: 0.975px !important; padding-top: 0.975px !important; }
+body.printing:not(.mobile-printing) #page2 .footer-row               { gap: 1px 8px !important; margin-bottom: 1.5px !important; }
+body.printing:not(.mobile-printing) #page2 .footer-field label       { font-size: 10.9px !important; }
+body.printing:not(.mobile-printing) #page2 .footer-field input[type="text"] {
+  font-size: 10.9px !important; height: auto !important; padding-bottom: 1px !important; width: 45px !important;
+}
+body.printing:not(.mobile-printing) #page2 .footer-field input.short { width: 32px !important; }
+body.printing:not(.mobile-printing) #page2 .footer-field input.wide  { width: 65px !important; }
+/* end desktop print tightening */
+
+/* ===== WINDOWS — body.printing font-size overrides =====
+   body.printing:not(.mobile-printing) tightening rules above use !important,
+   so these Windows overrides must also use !important + higher specificity
+   to win during the pre-capture snapshot. ===== */
+html.windows body.printing:not(.mobile-printing) #page1 .logo-text            { font-size: 14px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .checklist-title      { font-size: 14px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-section-header { font-size: 13px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-row           { font-size: 12px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-row label     { font-size: 12px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-input         { font-size: 12px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-textarea:not(.other-special-notes) { font-size: 12px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .other-special-notes  { font-size: 14px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-note          { font-size: 11px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap     { font-size: 10px !important; }
+
+
 
 /* ===== FT. LABEL IN WIRE TABLE CELLS ===== */
 .ft-cell {
@@ -852,105 +1108,208 @@ body.dark-mode .notice { color: #7DD3FC; }
   line-height: 1; font-family: Arial, sans-serif;
 }
 body.dark-mode .ft-label { color: #7DD3FC; }
-@media print {
-  .ft-cell { display: flex !important; align-items: center !important; }
-  .ft-label { font-size: 7px !important; color: #555 !important; }
-  #page2 .ft-cell input[type="text"] { height: auto !important; line-height: 1.2 !important; }
+
+/* Repeat-header rows hide on desktop screen only (show on mobile + in print) */
+@media screen and (min-width: 768px) {
+  .repeat-header { display: none !important; }
 }
 
-/* ===== MOBILE ACCORDION — SCREEN ONLY (max-width: 767px) ===== */
+/* ===== MOBILE TABLE VIEW — SCREEN ONLY (max-width: 767px) =====
+   Shows real tables directly on mobile with compact styling.
+   ============================================================ */
 @media screen and (max-width: 767px) {
-  #page2 .grid-section { display: none !important; }
-  #page2 .footer-fields { display: none !important; }
-  #mobile-p2-accordions {
-    display: flex; flex-direction: column; gap: 0; width: 100%; margin-bottom: 8px;
-  }
-  .mob-accordion {
-    border: 1px solid var(--border-bright, rgba(217,119,6,0.5));
-    border-radius: 0; overflow: hidden; margin-bottom: 6px; background: var(--panel);
-  }
-  body.dark-mode .mob-accordion { border-color: rgba(0,255,200,0.2); background: rgba(15,21,53,0.8); }
-  .mob-acc-header {
-    display: flex; align-items: center; justify-content: space-between; width: 100%;
-    padding: 14px 16px; background: #f0f0f0; border: none; cursor: pointer;
-    font-family: Arial, sans-serif; font-size: 13px; font-weight: bold;
-    text-transform: uppercase; color: var(--text); letter-spacing: 0.5px;
-    -webkit-tap-highlight-color: transparent; touch-action: manipulation; gap: 8px;
-  }
-  body.dark-mode .mob-acc-header { background: rgba(36,52,88,0.9); color: #00FFC8; }
-  .mob-acc-header .mob-acc-title { flex: 1; }
-  .mob-acc-header .mob-acc-badge {
-    font-size: 10px; background: rgba(217,119,6,0.12); color: #D97706;
-    border: 1px solid rgba(217,119,6,0.3); border-radius: 10px;
-    padding: 2px 8px; font-weight: normal; white-space: nowrap; flex-shrink: 0;
-  }
-  body.dark-mode .mob-acc-header .mob-acc-badge {
-    background: rgba(0,255,200,0.08); color: #00FFC8; border-color: rgba(0,255,200,0.25);
-  }
-  .mob-acc-header .mob-acc-arrow { font-size: 12px; color: var(--text-muted); transition: transform 0.2s; flex-shrink: 0; }
-  .mob-acc-header.open .mob-acc-arrow { transform: rotate(180deg); }
-  .mob-acc-body { display: none; padding: 10px 12px 14px; background: var(--panel); }
-  body.dark-mode .mob-acc-body { background: transparent; }
-  .mob-acc-body.open { display: block; }
-  .mob-card-row {
-    display: flex; align-items: center; gap: 10px; padding: 10px 0;
-    border-bottom: 1px solid var(--border, rgba(217,119,6,0.25));
-  }
-  body.dark-mode .mob-card-row { border-bottom-color: rgba(0,255,200,0.1); }
-  .mob-card-row:last-child { border-bottom: none; }
-  .mob-card-label { flex: 1; font-family: Arial, sans-serif; font-size: 13px; font-weight: bold; color: var(--text); line-height: 1.3; }
-  body.dark-mode .mob-card-label { color: #E0F7FF; }
-  .mob-card-input {
-    width: 90px; min-width: 70px; height: 44px;
-    border: 1.5px solid var(--border-bright, rgba(217,119,6,0.5)) !important;
-    border-radius: 4px !important; background: var(--bg3, #F8F8F8) !important;
-    color: var(--text); font-size: 16px !important; text-align: center;
-    padding: 4px 6px; font-family: Arial, sans-serif; flex-shrink: 0;
-    outline: none;
-  }
-  body.dark-mode .mob-card-input { background: rgba(26,40,71,0.7) !important; border-color: rgba(0,255,200,0.3) !important; color: #E0F7FF; }
-  .mob-card-input:focus { border-color: var(--cyan, #D97706) !important; box-shadow: 0 0 0 2px rgba(217,119,6,0.15) !important; }
-  .mob-section-heading {
-    font-family: Arial, sans-serif; font-size: 11px; font-weight: bold;
-    text-transform: uppercase; color: #D97706; letter-spacing: 0.5px;
-    padding: 10px 0 4px; border-bottom: 1px solid rgba(217,119,6,0.2); margin-bottom: 2px;
-  }
-  body.dark-mode .mob-section-heading { color: #00FFC8; border-bottom-color: rgba(0,255,200,0.2); }
-  /* Sub-accordion for fittings rows */
-  .mob-sub-accordion { border-bottom: 1px solid var(--border, rgba(217,119,6,0.25)); }
-  .mob-sub-accordion:last-child { border-bottom: none; }
-  .mob-section-heading--toggle {
-    display: flex; align-items: center; gap: 8px; cursor: pointer;
-    padding: 12px 4px; user-select: none;
-    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
-    border-bottom: none; margin-bottom: 0;
-  }
-  body.dark-mode .mob-section-heading--toggle { color: #00FFC8; }
-  .mob-sub-arrow { font-size: 10px; color: var(--text-muted); flex-shrink: 0; width: 12px; text-align: center; }
-  body.dark-mode .mob-sub-arrow { color: #7DD3FC; }
-  .mob-sub-dot { width: 7px; height: 7px; border-radius: 50%; background: #059669; flex-shrink: 0; margin-left: auto; display: none; }
-  .mob-sub-body { display: none; padding: 0 0 8px 20px; }
-  .mob-sub-body.open { display: block; }
-  .mob-footer-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border, rgba(217,119,6,0.25)); }
-  body.dark-mode .mob-footer-row { border-bottom-color: rgba(0,255,200,0.1); }
-  .mob-footer-row:last-child { border-bottom: none; }
-  .mob-footer-label { flex: 1; font-family: Arial, sans-serif; font-size: 13px; font-weight: bold; color: var(--text); line-height: 1.3; }
-  body.dark-mode .mob-footer-label { color: #E0F7FF; }
-  .mob-acc-header .mob-filled-dot { width: 8px; height: 8px; border-radius: 50%; background: #059669; display: none; flex-shrink: 0; }
-  .mob-acc-header.has-data .mob-filled-dot { display: inline-block; }
-}
 
-
-@media screen and (max-width: 767px) {
-  #page2 .grid-section { display: none !important; }
-  #page2 .footer-fields { display: none !important; }
-}
-
-@media print {
-  #page2 .grid-section { display: block !important; }
+  /* Show real tables and footer on mobile */
+  #page2 .grid-section { display: block !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; margin-bottom: 10px !important; }
   #page2 .footer-fields { display: block !important; }
   #mobile-p2-accordions { display: none !important; }
+
+  /* Compact table styling */
+  #page2 table.mat-table {
+    font-size: 11px !important;
+    table-layout: auto !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  #page2 table.mat-table th {
+    background: #1F2937 !important;
+    color: #ffffff !important;
+    font-size: 10px !important;
+    padding: 5px 3px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    border: 1px solid #374151 !important;
+  }
+
+  #page2 table.mat-table td {
+    padding: 3px 3px !important;
+    text-align: center !important;
+    border: 1px solid #D1D5DB !important;
+    font-size: 11px !important;
+    vertical-align: middle !important;
+  }
+
+  body.dark-mode #page2 table.mat-table th {
+    background: #1E3A5F !important;
+    color: #00FFC8 !important;
+    border-color: rgba(0,255,200,0.2) !important;
+  }
+  body.dark-mode #page2 table.mat-table td {
+    border-color: rgba(0,255,200,0.15) !important;
+    background: rgba(15,21,53,0.6) !important;
+    color: #E0F7FF !important;
+  }
+
+  #page2 table.mat-table td.row-label {
+    text-align: left !important;
+    font-weight: bold !important;
+    font-size: 11px !important;
+    background: #F3F4F6 !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    min-width: 90px !important;
+    max-width: 110px !important;
+    padding: 4px 6px !important;
+  }
+
+  body.dark-mode #page2 table.mat-table td.row-label {
+    background: rgba(36,52,88,0.8) !important;
+    color: #E0F7FF !important;
+  }
+
+  #page2 table.mat-table td input[type="text"] {
+    width: 100% !important;
+    min-width: 30px !important;
+    font-size: 14px !important;
+    text-align: center !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 2px !important;
+    height: 28px !important;
+    color: var(--text) !important;
+  }
+
+  body.dark-mode #page2 table.mat-table td input[type="text"] {
+    color: #E0F7FF !important;
+  }
+
+  /* Grid section title */
+  #page2 .grid-section-title {
+    font-size: 12px !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    color: #D97706 !important;
+    padding: 8px 0 4px !important;
+    letter-spacing: 0.5px !important;
+  }
+
+  /* Footer compact on mobile */
+  #page2 .footer-fields {
+    font-size: 12px !important;
+    margin-top: 8px !important;
+  }
+  #page2 .footer-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px 12px !important;
+    margin-bottom: 6px !important;
+  }
+  #page2 .footer-field {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+  #page2 .footer-field label {
+    font-size: 12px !important;
+    font-weight: bold !important;
+    white-space: nowrap !important;
+  }
+  #page2 .footer-field input[type="text"] {
+    font-size: 14px !important;
+    height: 32px !important;
+    width: 70px !important;
+    border: 1px solid var(--border-bright) !important;
+    border-radius: 3px !important;
+    background: var(--bg3) !important;
+    padding: 2px 6px !important;
+  }
+  #page2 .footer-field input.wide { width: 100px !important; }
+  #page2 .footer-field input.short { width: 50px !important; }
+
 }
+
+/* Keep debug overlay out of any print output */
+@media print { #debug-overlay { display: none !important; } }
+
+/* ===== PLATFORM-SPECIFIC PRINT FIXES ===== */
+
+/* UNIVERSAL — kill all animations/transitions before the print renderer snapshots */
+@media print {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* iOS — transforms can shift elements off-page; text-size-adjust prevents Safari
+   from bumping font sizes when it recalculates layout for paper */
+@media print {
+  html.ios * {
+    transform: none !important;
+    -webkit-text-size-adjust: 100% !important;
+  }
+}
+
+/* macOS Safari — zoom resets prevent double-scaling when the page already
+   uses a CSS zoom for layout; Safari on macOS respects this on .page */
+@media print {
+  html.macos .page {
+    zoom: 1 !important;
+  }
+}
+
+/* Windows Desktop — explicit break rules stop Chrome/Edge from splitting a
+   .page card across two sheets; top margin offsets Chrome's default header
+   band so Page 1 content doesn't start behind it */
+@media print {
+  html.windows .page {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  html.windows #page1 {
+    margin-top: 1.25in;
+  }
+  html.windows #page2 {
+    margin-top: 1.25in;
+  }
+  html.windows #page1 .permit-section {
+    margin-bottom: 12px; /* base 10px + 2px */
+  }
+
+  /* +3.5px total font-size bump across all Page 1 text elements (1.5 + 2)
+     Requires !important to beat the desktop-tightening block at line ~1019 */
+  html.windows #page1 .logo-text               { font-size: 14px !important; }  /* 12 + 2 */
+  html.windows #page1 .checklist-title          { font-size: 14px !important; }  /* 12 + 2 */
+  html.windows #page1 .permit-section-header    { font-size: 13px !important; }  /* 11 + 2 */
+  html.windows #page1 .permit-row               { font-size: 12px !important; }  /* 10 + 2 */
+  html.windows #page1 .permit-row label         { font-size: 12px !important; }  /* 10 + 2 */
+  html.windows #page1 .permit-input             { font-size: 12px !important; }  /* 10 + 2 */
+  html.windows #page1 .permit-textarea:not(.other-special-notes) { font-size: 12px !important; } /* 10 + 2 */
+  html.windows #page1 .other-special-notes      { font-size: 14px !important; }  /* 12 + 2 */
+  html.windows #page1 .permit-note              { font-size: 11px !important; }  /*  9 + 2 */
+  html.windows #page1 .yn-checkbox-wrap         { font-size: 10px !important; }  /*  8 + 2 */
+}
+
+/* Android — forces the WebView print renderer to output actual background
+   colors/images rather than stripping them for "ink saving" */
+@media print {
+  html.android * {
+    -webkit-print-color-adjust: exact !important;
+  }
+}
+
+
 </style>
 </head>
 <body>
@@ -962,6 +1321,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
   <button class="btn" onclick="clearForm()">🗑 CLEAR</button>
   <button class="btn" id="btn-iphone" onclick="saveForIPhone()">📱 iPHONE</button>
   <button class="btn" id="btn-android" onclick="saveForAndroid()">🤖 ANDROID</button>
+  <button class="btn" onclick="showDebug()">🐛 DBG</button>
   <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
     <svg class="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="5"/>
@@ -975,7 +1335,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
     </svg>
   </button>
 </div>
-<div id="save-status" style="position:fixed;top:calc(44px + env(safe-area-inset-top, 0px));left:0;right:0;z-index:99998;text-align:center;font-size:10px;color:var(--text-muted);background:var(--panel);padding:2px 8px;display:none;font-family:Arial,sans-serif;"></div>
+<div id="save-status" style="position:fixed;top:44px;left:0;right:0;z-index:99998;text-align:center;font-size:10px;color:var(--text-muted);background:var(--panel);padding:2px 8px;display:none;font-family:Arial,sans-serif;"></div>
 
 <div class="page-wrapper">
 
@@ -984,11 +1344,12 @@ body.dark-mode .ft-label { color: #7DD3FC; }
     <div class="page1-header">
       <div class="logo-area">
         <img src="../logo.png"
+             crossorigin="anonymous"
              onerror="this.onerror=null;this.style.display='none';"
              alt="Always On Generators Logo"
              style="width:42px;height:42px;display:block;object-fit:contain;flex-shrink:0;">
-        <div class="logo-text">ALWAYS<span>ON</span><br>
-          <span style="color:#111;font-size:10px;font-family:Arial,sans-serif;letter-spacing:1px;">GENERATORS</span>
+        <div class="logo-text">ALWAYS<span class="logo-on">ON</span><br>
+          <span class="logo-generators">GENERATORS</span>
         </div>
       </div>
       <div class="checklist-title">PERMITTING INFO REQUEST</div>
@@ -1119,7 +1480,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
         <label style="margin-left:8px;">If LP job, size of tank:</label>
         <input class="permit-input medium" type="text">
       </div>
-      <div class="permit-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+      <div class="permit-row permit-row-column" style="flex-direction:column;align-items:flex-start;gap:4px;">
         <label>Please list connections (pool heater, grill, cooktop etc.) — please draw locations on site plan for connections:</label>
         <input class="permit-input w-full" type="text">
       </div>
@@ -1142,18 +1503,32 @@ body.dark-mode .ft-label { color: #7DD3FC; }
       <div class="permit-note">Let Kade know if he needs the mini.</div>
       <div class="permit-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
         <label>Please list any special circumstances about job:</label>
-        <textarea class="permit-textarea" rows="3"></textarea>
+        <input type="text" class="permit-input w-full" maxlength="300">
+      </div>
+    </div>
+
+    <hr class="permit-divider">
+
+    <div class="permit-section">
+      <div class="permit-section-header">Other / Special</div>
+      <div class="permit-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <label>Please list any other or special notes about job:</label>
+        <textarea class="permit-textarea other-special-notes" rows="5"></textarea>
       </div>
     </div>
   </div><!-- end page1 -->
 
   <!-- PAGE 2 -->
   <div class="form-page" id="page2">
+    <div id="page2-inner">
+
+    <!-- MOBILE ACCORDION UI — built by JS, screen-only -->
+    <div id="mobile-p2-accordions"></div>
 
     <div class="grid-section">
       <table class="mat-table">
         <thead><tr>
-          <th style="width:115px;">CU Wire /<br>Length</th>
+          <th style="width:80px;">CU Wire /<br>Length</th>
           <th>500 CU</th><th>350 CU</th><th>250 CU</th>
           <th>4/0 CU</th><th>3/0 CU</th><th>2/0 CU</th><th>1/0 CU</th>
           <th>#1 CU</th><th>#2 CU</th><th>#3 CU</th><th>#4 CU</th>
@@ -1161,11 +1536,11 @@ body.dark-mode .ft-label { color: #7DD3FC; }
         </tr></thead>
         <tbody><tr>
           <td class="row-label">Length</td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
         </tr></tbody>
       </table>
     </div>
@@ -1173,7 +1548,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
     <div class="grid-section">
       <table class="mat-table">
         <thead><tr>
-          <th style="width:115px;">AL Wire /<br>Length</th>
+          <th style="width:80px;">AL Wire /<br>Length</th>
           <th>500 AL</th><th>350 AL</th><th>250 AL</th>
           <th>4/0 AL</th><th>3/0 AL</th><th>2/0 AL</th><th>1/0 AL</th>
           <th>#1 AL</th><th>#2 AL</th><th>#3 AL</th><th>#4 AL</th>
@@ -1181,10 +1556,10 @@ body.dark-mode .ft-label { color: #7DD3FC; }
         </tr></thead>
         <tbody><tr>
           <td class="row-label">Length</td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
         </tr></tbody>
       </table>
     </div>
@@ -1192,16 +1567,16 @@ body.dark-mode .ft-label { color: #7DD3FC; }
     <div class="grid-section">
       <table class="mat-table">
         <thead><tr>
-          <th style="width:115px;">THHN /<br>Length</th>
+          <th style="width:80px;">THHN /<br>Length</th>
           <th>14 AWG</th><th>12 AWG</th><th>10 AWG</th>
           <th>Gen-Pro Wire</th><th>22-24kw Al</th><th>22-24kw Cu</th>
           <th>26kw Cu</th><th>26kw Al</th><th>28kw Al</th>
         </tr></thead>
         <tbody><tr>
           <td class="row-label">Length</td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
         </tr></tbody>
       </table>
     </div>
@@ -1209,7 +1584,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
     <div class="grid-section">
       <table class="mat-table" id="fittings-table">
         <thead><tr>
-          <th style="width:170px;">FITTINGS</th>
+          <th style="width:110px;">FITTINGS</th>
           <th>5"</th><th>4"</th><th>3-1/2"</th><th>3"</th><th>2-1/2"</th>
           <th>2"</th><th>1-1/2"</th><th>1-1/4"</th><th>1"</th><th>¾"</th><th>½"</th>
         </tr></thead>
@@ -1220,7 +1595,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
     <div class="grid-section">
       <table class="mat-table" id="wireway-table">
         <thead><tr>
-          <th style="width:115px;">WIREWAY</th>
+          <th style="width:100px;">WIREWAY</th>
           <th>2'</th><th>3'</th><th>4'</th><th>5'</th><th>6'</th>
         </tr></thead>
         <tbody id="wireway-body"></tbody>
@@ -1230,14 +1605,13 @@ body.dark-mode .ft-label { color: #7DD3FC; }
     <div class="grid-section">
       <table class="mat-table" id="polaris-table">
         <thead><tr>
-          <th style="width:115px;">POLARIS TAPS</th>
+          <th style="width:100px;">POLARIS TAPS</th>
           <th>Straights</th><th>2-Port</th><th>3-Port</th><th>4-Port</th><th>5-Port</th>
         </tr></thead>
         <tbody id="polaris-body"></tbody>
       </table>
     </div>
 
-    <div id="mobile-p2-accordions"></div>
     <div class="footer-fields">
       <div class="footer-row">
         <div class="footer-field"><label>12"x12"x4" JBOX PVC (Qty):</label><input type="text" class="short" inputmode="numeric"></div>
@@ -1248,7 +1622,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
       <div class="footer-row">
         <div class="footer-field"><label>Shallow Strut (length):</label><input type="text" class="wide" inputmode="numeric"></div>
         <div class="footer-field"><label>Deep Strut (length):</label><input type="text" class="wide" inputmode="numeric"></div>
-        <div class="footer-field" style="flex:1;"><label>Other:</label><input type="text" style="width:100%;min-width:120px;"></div>
+        <div class="footer-field" style="flex:1;"><label>Other:</label><input type="text" class="allow-text" style="width:100%;min-width:120px;"></div>
       </div>
       <div class="footer-row">
         <div class="footer-field"><label>100A Disconnects (Qty):</label><input type="text" class="short" inputmode="numeric"></div>
@@ -1262,12 +1636,14 @@ body.dark-mode .ft-label { color: #7DD3FC; }
       </div>
     </div>
 
+    </div><!-- end #page2-inner -->
   </div>
 </div>
 
 <p class="notice">📱 iPhone: press &amp; hold images to save &nbsp;|&nbsp; 🤖 Android: images download to gallery</p>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // ===== THEME =====
 const THEME_KEY = 'aog_forms_theme_preference';
@@ -1296,6 +1672,32 @@ function setupThemeToggle() {
 applyTheme(getInitialTheme());
 
 // ===== BUILD TABLES =====
+// Restrict an input to numbers only (digits + one optional decimal point).
+// Blocks letters/symbols on input and on paste; leaves the value usable for
+// quantities and lengths like "12" or "2.5".
+function makeNumericOnly(inp) {
+  if (inp._numericOnly) return; // already applied
+  inp.setAttribute('inputmode', 'decimal');
+  inp._numericOnly = true;
+  const clean = (v) => {
+    // keep digits and at most one dot
+    let s = v.replace(/[^0-9.]/g, '');
+    const firstDot = s.indexOf('.');
+    if (firstDot !== -1) {
+      s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '');
+    }
+    return s;
+  };
+  inp.addEventListener('input', () => {
+    const cleaned = clean(inp.value);
+    if (cleaned !== inp.value) {
+      const pos = inp.selectionStart;
+      inp.value = cleaned;
+      try { inp.setSelectionRange(pos - 1, pos - 1); } catch (e) {}
+    }
+  });
+}
+
 const fittings = [
   "PVC Pipe","Weatherproof Seals","Weatherproof Lock Rings","Fiber Bushings",
   "Lock Rings","Male Adapters","Female Adapters","Couplings","Box Adapters",
@@ -1305,13 +1707,27 @@ const fittings = [
 ];
 const fittingSizes = ['5"','4"','3-1/2"','3"','2-1/2"','2"','1-1/2"','1-1/4"','1"','¾"','½"'];
 
-fittings.forEach(name => {
+fittings.forEach((name, idx) => {
+  if (idx > 0 && idx % 5 === 0) {
+    const repeatHeader = document.createElement("tr");
+    repeatHeader.className = "repeat-header no-print";
+    const emptyTh = document.createElement("th");
+    emptyTh.className = "row-label";
+    repeatHeader.appendChild(emptyTh);
+    fittingSizes.forEach(size => {
+      const th = document.createElement("th");
+      th.textContent = size;
+      repeatHeader.appendChild(th);
+    });
+    document.getElementById("fittings-body").appendChild(repeatHeader);
+  }
   const tr = document.createElement("tr");
   const lbl = document.createElement("td");
   lbl.className = "row-label"; lbl.textContent = name; tr.appendChild(lbl);
   fittingSizes.forEach(() => {
     const td = document.createElement("td");
     const inp = document.createElement("input"); inp.type = "text";
+    makeNumericOnly(inp);
     td.appendChild(inp); tr.appendChild(td);
   });
   document.getElementById("fittings-body").appendChild(tr);
@@ -1324,6 +1740,7 @@ fittings.forEach(name => {
   ["2'","3'","4'","5'","6'"].forEach(() => {
     const td = document.createElement("td");
     const inp = document.createElement("input"); inp.type = "text";
+    makeNumericOnly(inp);
     td.appendChild(inp); tr.appendChild(td);
   });
   document.getElementById("wireway-body").appendChild(tr);
@@ -1336,12 +1753,32 @@ fittings.forEach(name => {
   ["Straights","2-Port","3-Port","4-Port","5-Port"].forEach(() => {
     const td = document.createElement("td");
     const inp = document.createElement("input"); inp.type = "text";
+    makeNumericOnly(inp);
     td.appendChild(inp); tr.appendChild(td);
   });
   document.getElementById("polaris-body").appendChild(tr);
 });
-// Re-attach autosave to JS-built table inputs
-if (typeof attachAutosave === 'function') setTimeout(attachAutosave, 100);
+// Dynamic table inputs now exist — assign their stable keys, attach autosave,
+// and restore any saved values into them. All three calls are idempotent.
+// Also restrict the footer quantity fields (everything except "Other:") and the
+// page-2 wire tables to numbers only.
+function applyNumericOnlyToPage2() {
+  // Footer fields: all except the .allow-text "Other:" field.
+  document.querySelectorAll('#page2 .footer-field input[type="text"]:not(.allow-text)').forEach(makeNumericOnly);
+  // CU/AL/THHN wire tables (the .mat-table tables that aren't fittings/wireway/polaris).
+  document.querySelectorAll('#page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td input[type="text"]').forEach(makeNumericOnly);
+  // Mobile accordion mirror inputs: all are numeric quantities EXCEPT the footer
+  // "Other" field. Identify "Other" by its row label and skip it.
+  document.querySelectorAll('.mob-card-input').forEach(mirror => {
+    if (mirror._numericOnly) return;
+    const row = mirror.closest('.mob-footer-row, .mob-card-row');
+    const labelEl = row && row.querySelector('.mob-footer-label, .mob-card-label');
+    const labelText = labelEl ? labelEl.textContent.trim().toLowerCase() : '';
+    if (labelText === 'other') return; // keep the Other field as free text
+    makeNumericOnly(mirror);
+  });
+}
+if (typeof attachAutosave === 'function') setTimeout(() => { ensureStableKeys(); attachAutosave(); restoreFormData(); applyNumericOnlyToPage2(); }, 100);
 
 // ===== YES/NO COLORS =====
 function applyYNColors() {
@@ -1369,16 +1806,41 @@ function applyYNColors() {
 }
 
 // ===== AUTOSAVE TO localStorage =====
+// NOTE: Keys are stable, position-independent identifiers (data-skey) assigned to
+// every REAL form field. The mobile accordion mirror inputs (.mob-card-input) are
+// excluded entirely — they sync into the real inputs on their own. This prevents
+// the old index-drift bug where dynamically injected inputs shifted f_0..f_N and
+// caused saved/restored/printed values to land on the wrong fields.
 const SAVE_KEY = 'aog_permitting_info_v1';
+
+// Selector for the real, savable fields (excludes accordion mirrors).
+const REAL_TEXT_SEL = 'input[type="text"]:not(.mob-card-input), input[type="email"], input[type="tel"], input[type="date"], input[type="number"], textarea:not(.mob-card-input)';
+const REAL_CHECK_SEL = 'input[type="checkbox"]';
+
+// Assign a stable key to every real field, computed once over the real-field set.
+// Safe to call repeatedly: fields that already have a key keep it, and newly built
+// table inputs get appended keys without disturbing existing ones.
+function ensureStableKeys() {
+  let ti = 0, ci = 0;
+  document.querySelectorAll(REAL_TEXT_SEL).forEach(el => {
+    if (!el.dataset.skey) el.dataset.skey = 'f_' + ti;
+    ti++;
+  });
+  document.querySelectorAll(REAL_CHECK_SEL).forEach(el => {
+    if (!el.dataset.ckey) el.dataset.ckey = 'c_' + ci;
+    ci++;
+  });
+}
 
 function saveFormData() {
   try {
+    ensureStableKeys();
     const data = {};
-    document.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input[type="number"], textarea').forEach((el, i) => {
-      data['f_' + i] = el.value;
+    document.querySelectorAll(REAL_TEXT_SEL).forEach(el => {
+      data[el.dataset.skey] = el.value;
     });
-    document.querySelectorAll('input[type="checkbox"]').forEach((el, i) => {
-      data['c_' + i] = el.checked ? '1' : '0';
+    document.querySelectorAll(REAL_CHECK_SEL).forEach(el => {
+      data[el.dataset.ckey] = el.checked ? '1' : '0';
     });
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   } catch(e) {}
@@ -1386,15 +1848,22 @@ function saveFormData() {
 
 function restoreFormData() {
   try {
+    ensureStableKeys();
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return;
     const data = JSON.parse(raw);
-    document.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input[type="number"], textarea').forEach((el, i) => {
-      if (data['f_' + i] !== undefined) el.value = data['f_' + i];
+    document.querySelectorAll(REAL_TEXT_SEL).forEach(el => {
+      const k = el.dataset.skey;
+      if (k && data[k] !== undefined) {
+        el.value = data[k];
+        // Mirror back into any visible accordion input bound to this field.
+        if (el._mobMirror) el._mobMirror.value = data[k];
+      }
     });
-    document.querySelectorAll('input[type="checkbox"]').forEach((el, i) => {
-      if (data['c_' + i] !== undefined) {
-        el.checked = data['c_' + i] === '1';
+    document.querySelectorAll(REAL_CHECK_SEL).forEach(el => {
+      const k = el.dataset.ckey;
+      if (k && data[k] !== undefined) {
+        el.checked = data[k] === '1';
         const wrap = el.parentElement;
         if (wrap && wrap.classList.contains('yn-checkbox-wrap')) {
           wrap.classList.toggle('checked', el.checked);
@@ -1405,14 +1874,19 @@ function restoreFormData() {
 }
 
 function attachAutosave() {
-  document.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input[type="number"], textarea').forEach(el => {
+  ensureStableKeys();
+  document.querySelectorAll(REAL_TEXT_SEL).forEach(el => {
+    if (el._autosaveBound) return;
+    el._autosaveBound = true;
     el.addEventListener('input', saveFormData);
   });
-  document.querySelectorAll('input[type="checkbox"]').forEach(el => {
+  document.querySelectorAll(REAL_CHECK_SEL).forEach(el => {
+    if (el._autosaveBound) return;
+    el._autosaveBound = true;
     el.addEventListener('change', saveFormData);
   });
 }
-document.addEventListener('DOMContentLoaded', () => { restoreFormData(); applyYNColors(); setupThemeToggle(); attachAutosave(); });
+document.addEventListener('DOMContentLoaded', () => { applyYNColors(); restoreFormData(); setupThemeToggle(); attachAutosave(); });
 if (document.readyState !== 'loading') setTimeout(() => { applyYNColors(); setupThemeToggle(); }, 50);
 
 // ===== CLEAR =====
@@ -1425,22 +1899,314 @@ function clearForm() {
     const wrap = el.parentElement;
     if (wrap && wrap.classList.contains('yn-checkbox-wrap')) wrap.classList.remove('checked');
   });
+  // Reset accordion header "has-data" indicators and dots.
+  document.querySelectorAll('.mob-acc-header.has-data').forEach(h => h.classList.remove('has-data'));
+  document.querySelectorAll('.mob-sub-dot').forEach(d => d.style.display = 'none');
 }
 
 // ===== PRINT =====
+function getPrintDevice() {
+  const ua = navigator.userAgent;
+  const isIpad   = /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const isMobileUA = /iPhone|Android|Mobile/.test(ua) && !isIpad;
+  // Width-based fallback: a narrow viewport means the user is filling out the
+  // mobile layout, so they need the mobile-print styling regardless of UA.
+  // This fixes desktop-devtools mobile emulation and any UA that doesn't match.
+  const narrow = window.matchMedia && window.matchMedia('screen and (max-width: 767px)').matches;
+  if (isMobileUA || (narrow && !isIpad)) return 'mobile';
+  if (isIpad)   return 'ipad';
+  return 'desktop';
+}
+
+function showPrintDebugLog(log) {
+  const existing = document.getElementById('debug-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'debug-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);color:#00FFC8;font-family:monospace;font-size:11px;padding:12px;overflow-y:auto;z-index:999999;white-space:pre-wrap;word-break:break-all;';
+  overlay.innerHTML = `<strong style="font-size:13px;color:#FBBF24;">🐛 PRINT PROCESS LOG</strong>  <span style="float:right;cursor:pointer;color:#f87171;font-size:14px;" onclick="document.getElementById('debug-overlay').remove()">✕ CLOSE</span>\n\n${log.join('\n')}`;
+  document.body.appendChild(overlay);
+}
+
+function showDebug() {
+  const log = [];
+  const device = getPrintDevice();
+  const checks = [
+    ['.page-wrapper', 'zoom'],
+    ['#page1 .logo-text', 'fontSize'],
+    ['#page1 .checklist-title', 'fontSize'],
+    ['#page1 .permit-section-header', 'fontSize'],
+    ['#page1 .permit-row', 'fontSize'],
+    ['#page1 .permit-input', 'fontSize'],
+    ['#page1 .permit-note', 'fontSize'],
+    ['#page1 .yn-checkbox-wrap', 'fontSize'],
+    ['#page1 input[type="checkbox"]', 'width'],
+  ];
+
+  function snapshot(label) {
+    log.push(`\n<strong style="color:#FBBF24">${label}</strong>`);
+    checks.forEach(([sel, prop]) => {
+      try {
+        const el = document.querySelector(sel);
+        const val = el ? window.getComputedStyle(el)[prop] : 'NOT FOUND';
+        log.push(`  ${sel} → ${prop}: <strong>${val}</strong>`);
+      } catch(e) { log.push(`  ${sel} → ERROR`); }
+    });
+  }
+
+  log.push(`<strong>Device:</strong> ${device}`);
+  log.push(`<strong>UA:</strong> ${navigator.userAgent}`);
+  log.push(`<strong>mobile-print on body:</strong> ${document.body.classList.contains('mobile-print')}`);
+
+  snapshot('BEFORE mobile-print class');
+
+  document.body.classList.add('mobile-print');
+  log.push(`\n<em>→ mobile-print class added</em>`);
+
+  snapshot('AFTER mobile-print class');
+
+  document.body.classList.remove('mobile-print');
+  log.push(`\n<em>→ mobile-print class removed</em>`);
+
+  snapshot('AFTER removal (should match BEFORE)');
+
+  showPrintDebugLog(log);
+}
+
+const MOBILE_PRINT_CSS = `
+  @page { size: 8.5in 11in; margin: 0; }
+  /* Rules moved to stylesheet @media print body.mobile-print block */
+`;
+
+const IPAD_PRINT_CSS = ``;
+
 function openPrintPreview() {
-  setStatus('Opening print preview…');
-  const wasDark = document.body.classList.contains('dark-mode');
-  if (wasDark) document.body.classList.remove('dark-mode');
+  // Native browser print on all devices. iOS Safari opens its own print preview
+  // and honors the @media print + @media print and (max-width:767px) rules
+  // (the same proven approach as the sibling page that prints correctly).
   const bar  = document.querySelector('.action-bar');
   const note = document.querySelector('.notice');
-  if (bar)  bar.style.display  = 'none';
-  if (note) note.style.display = 'none';
-  window.print();
-  if (bar)  bar.style.display  = '';
-  if (note) note.style.display = '';
-  if (wasDark) document.body.classList.add('dark-mode');
-  setStatus('');
+  const status = document.getElementById('save-status');
+  const wasDark = document.body.classList.contains('dark-mode');
+  if (wasDark) document.body.classList.remove('dark-mode');
+  if (bar)    bar.style.display    = 'none';
+  if (note)   note.style.display   = 'none';
+  if (status) status.style.display = 'none';
+
+  let restored = false;
+  function restore() {
+    if (restored) return;
+    restored = true;
+    if (bar)    bar.style.display    = '';
+    if (note)   note.style.display   = '';
+    if (status) status.style.display = '';
+    if (wasDark) document.body.classList.add('dark-mode');
+    document.body.classList.remove('printing', 'mobile-printing');
+    // Restore the wrapper's top padding that we cleared before printing.
+    if (wrapper) wrapper.style.paddingTop = origWrapperPaddingTop;
+    window.removeEventListener('afterprint', restore);
+    if (mql && mql.removeEventListener) mql.removeEventListener('change', onMqlChange);
+  }
+
+  // Only restore the dark background once the print preview/dialog actually
+  // CLOSES — not on a timer — so it stays white the entire time the preview is
+  // open. afterprint fires when the user exits the dialog.
+  window.addEventListener('afterprint', restore);
+  // Backup signal: the print media query flips back to non-matching on close.
+  const mql = window.matchMedia ? window.matchMedia('print') : null;
+  function onMqlChange(e) { if (!e.matches) restore(); }
+  if (mql && mql.addEventListener) mql.addEventListener('change', onMqlChange);
+
+  // iOS Safari measures page count BEFORE the above layout changes have reflowed,
+  // so it shows a stale (too-tall) count like 3 pages until a pinch-zoom forces a
+  // recalc. Force a synchronous reflow now, then wait two animation frames so the
+  // layout is fully settled before opening the print dialog.
+  //
+  // Additionally: Safari on iOS uses the *screen* layout width (body max-width:1050px)
+  // as the print canvas, making the preview appear tiny/zoomed-out. Temporarily
+  // clear max-width so the @page paper width is the sole layout reference.
+  const origMaxWidth = document.body.style.maxWidth;
+  const origWidth    = document.body.style.width;
+  document.body.style.maxWidth = '100%';
+  document.body.style.width    = '100%';
+
+  // Apply print styles directly to the DOM so Safari's preview renderer sees
+  // the correct layout — not the screen layout. body.printing triggers the same
+  // rules as @media print; body.printing.mobile-printing adds the mobile overrides.
+  const isMobilePrint = window.matchMedia && window.matchMedia('screen and (max-width: 767px)').matches;
+  document.body.classList.add('printing');
+  if (isMobilePrint) document.body.classList.add('mobile-printing');
+
+  void document.body.offsetHeight;            // force reflow
+  const wrapper = document.querySelector('.page-wrapper');
+  if (wrapper) void wrapper.offsetHeight;     // force reflow of the printed content
+
+  // On desktop the wrapper has a JS-set inline paddingTop equal to the action-bar
+  // height. Inline styles beat @media print rules without !important, so it shows
+  // up as a blank gap at the top of every printed page. Clear it before printing
+  // and restore it once the dialog closes (via afterprint → restore()).
+  const origWrapperPaddingTop = wrapper ? wrapper.style.paddingTop : '';
+  if (wrapper && !isMobilePrint) wrapper.style.paddingTop = '0';
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      // Mobile Safari has a rendering issue on first print pop-up —
+      // a 2-second delay gives the layout time to fully settle before
+      // the print sheet appears.
+      const ua = navigator.userAgent;
+      const isMobileSafari = /iPhone|iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+      const printDelay = isMobileSafari ? 900 : 0;
+
+      setTimeout(() => {
+        window.print();
+        // Mobile Safari blocks on window.print() so the class is already active
+        // the whole time the dialog is open — safe to remove immediately after return.
+        // Desktop browsers render asynchronously, so we leave the class on and let
+        // restore() (afterprint) remove it once the dialog actually closes.
+        if (isMobilePrint) document.body.classList.remove('printing', 'mobile-printing');
+        document.body.style.maxWidth = origMaxWidth;
+        document.body.style.width    = origWidth;
+      }, printDelay);
+    });
+  });
+}
+
+// Build a true multi-page PDF from canvas renders of each .form-page.
+function generatePDF() {
+  const jspdfNS = window.jspdf || window.jsPDF;
+  const JsPDF = jspdfNS && (jspdfNS.jsPDF || jspdfNS);
+
+  // Build a visible overlay IMMEDIATELY so the user never sees a blank screen.
+  const overlay = document.createElement('div');
+  overlay.id = 'pdf-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,14,39,0.97);z-index:1000000;display:flex;flex-direction:column;align-items:center;padding:14px;overflow-y:auto;-webkit-overflow-scrolling:touch;font-family:Arial,sans-serif;';
+  const topBar = document.createElement('div');
+  topBar.style.cssText = 'position:sticky;top:0;display:flex;gap:8px;align-items:center;justify-content:center;width:100%;max-width:620px;padding:8px 0 10px;flex-wrap:wrap;';
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕ Close';
+  closeBtn.style.cssText = 'background:#DC2626;color:#fff;border:none;border-radius:6px;padding:10px 18px;font-size:14px;font-weight:bold;cursor:pointer;';
+  const shareBtn = document.createElement('button');
+  shareBtn.textContent = '🖨 Print / Share';
+  shareBtn.style.cssText = 'background:#D97706;color:#fff;border:none;border-radius:6px;padding:10px 18px;font-size:14px;font-weight:bold;cursor:pointer;display:none;';
+  const dlBtn = document.createElement('a');
+  dlBtn.textContent = '⬇ Download PDF';
+  dlBtn.style.cssText = 'background:#059669;color:#fff;border:none;border-radius:6px;padding:10px 18px;font-size:14px;font-weight:bold;cursor:pointer;text-decoration:none;display:none;';
+  topBar.appendChild(shareBtn); topBar.appendChild(dlBtn); topBar.appendChild(closeBtn);
+  const statusEl = document.createElement('div');
+  statusEl.style.cssText = 'color:#7DD3FC;font-size:13px;margin:4px 0 10px;text-align:center;width:100%;max-width:620px;';
+  statusEl.textContent = 'Preparing…';
+  const container = document.createElement('div');
+  container.style.cssText = 'display:flex;flex-direction:column;gap:14px;width:100%;max-width:620px;';
+  overlay.appendChild(topBar); overlay.appendChild(statusEl); overlay.appendChild(container);
+  document.body.appendChild(overlay);
+
+  const ostat = (m) => { statusEl.textContent = m; };
+
+  if (typeof html2canvas !== 'function') {
+    ostat('Rendering library (html2canvas) did not load. Check your connection and reload.');
+    closeBtn.onclick = () => overlay.remove();
+    return;
+  }
+
+  const wasDark = document.body.classList.contains('dark-mode');
+  if (wasDark) document.body.classList.remove('dark-mode');
+  showRealTablesForCapture();
+  const restoreLayout = forceDesktopLayout();
+
+  let cleanedUp = false;
+  function cleanup() {
+    if (cleanedUp) return; cleanedUp = true;
+    hideRealTablesAfterCapture();
+    restoreLayout();
+    if (wasDark) document.body.classList.add('dark-mode');
+  }
+  closeBtn.onclick = () => { cleanup(); overlay.remove(); setStatus(''); };
+
+  const pages = Array.from(document.querySelectorAll('.form-page'));
+
+  (async () => {
+    const canvases = [];
+    try {
+      for (let i = 0; i < pages.length; i++) {
+        ostat(`Rendering page ${i + 1} of ${pages.length}…`);
+        // Yield so the overlay paints before the heavy render.
+        await new Promise(r => setTimeout(r, 30));
+        const canvas = await html2canvas(pages[i], {
+          scale: 2, useCORS: true, backgroundColor: '#fff',
+          logging: false, width: 1050, windowWidth: 1050,
+          ignoreElements: (el) => el.id === 'pdf-overlay' || el.classList.contains('action-bar')
+        });
+        canvases.push(canvas);
+        // Show each page image in the overlay as it finishes.
+        const lbl = document.createElement('div');
+        lbl.style.cssText = 'color:#ccc;font-size:11px;margin-bottom:4px;text-align:center;';
+        lbl.textContent = `Page ${i + 1} of ${pages.length}`;
+        const img = document.createElement('img');
+        img.src = canvas.toDataURL('image/jpeg', 0.9);
+        img.style.cssText = 'width:100%;border:2px solid #555;border-radius:4px;display:block;';
+        const wrap = document.createElement('div');
+        wrap.appendChild(lbl); wrap.appendChild(img);
+        container.appendChild(wrap);
+      }
+      cleanup();
+
+      // Try to assemble a downloadable PDF if jsPDF is present.
+      if (JsPDF) {
+        try {
+          const pdf = new JsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait' });
+          const pageW = pdf.internal.pageSize.getWidth();
+          const pageH = pdf.internal.pageSize.getHeight();
+          canvases.forEach((canvas, i) => {
+            const imgData = canvas.toDataURL('image/jpeg', 0.9);
+            const imgW = pageW;
+            const imgH = canvas.height * (pageW / canvas.width);
+            if (i > 0) pdf.addPage();
+            if (imgH > pageH) {
+              const fitW = canvas.width * (pageH / canvas.height);
+              pdf.addImage(imgData, 'JPEG', (pageW - fitW) / 2, 0, fitW, pageH);
+            } else {
+              pdf.addImage(imgData, 'JPEG', 0, 0, imgW, imgH);
+            }
+          });
+          const blob = pdf.output('blob');
+          const url = URL.createObjectURL(blob);
+          dlBtn.href = url;
+          dlBtn.setAttribute('download', 'AlwaysOn_Generators_Permitting_Info.pdf');
+          dlBtn.style.display = 'inline-block';
+
+          // Native iOS share sheet (includes Print, Save to Files, AirDrop).
+          // Must be triggered by a user tap, so it lives on this button.
+          const pdfFile = (typeof File !== 'undefined')
+            ? new File([blob], 'AlwaysOn_Generators_Permitting_Info.pdf', { type: 'application/pdf' })
+            : null;
+          const canShareFile = pdfFile && navigator.canShare && navigator.canShare({ files: [pdfFile] });
+          if (canShareFile) {
+            shareBtn.style.display = 'inline-block';
+            shareBtn.onclick = async () => {
+              try {
+                await navigator.share({ files: [pdfFile], title: 'Permitting Info Request' });
+              } catch (e) { /* user cancelled or unsupported — download still available */ }
+            };
+            ostat('Done. Tap "Print / Share" for the print/save menu, or "Download PDF".');
+          } else {
+            // No Web Share for files — opening the PDF lets the user use the
+            // browser's own share/print menu instead.
+            shareBtn.style.display = 'inline-block';
+            shareBtn.textContent = '🖨 Open PDF to Print';
+            shareBtn.onclick = () => { window.open(url, '_blank'); };
+            ostat('Done. Tap "Open PDF to Print" for the print menu, or "Download PDF".');
+          }
+        } catch (perr) {
+          ostat('Pages rendered below. (PDF build failed: ' + (perr && perr.message ? perr.message : 'unknown') + ') Long-press an image to save it.');
+        }
+      } else {
+        ostat('Pages rendered below. Long-press an image to save to Photos. (PDF library not loaded.)');
+      }
+    } catch (err) {
+      cleanup();
+      ostat('Render error: ' + (err && err.message ? err.message : String(err)) + ' — tap Close and try again.');
+    }
+  })();
 }
 
 
@@ -1459,7 +2225,11 @@ function showRealTablesForCapture() {
     '.footer-field { align-items: center !important; overflow: visible !important; }',
     '.permit-input { height: 22px !important; line-height: 22px !important; overflow: visible !important; box-sizing: border-box !important; }',
     '.permit-row { overflow: visible !important; align-items: center !important; }',
-    '.permit-section { overflow: visible !important; }'
+    '.permit-section { overflow: visible !important; }',
+    // --- Crash-proofing for html2canvas: it chokes on filters/animations and
+    //     can hang on cross-origin images. Flatten all of it during capture. ---
+    '.form-page *, .form-page { filter: none !important; -webkit-filter: none !important; animation: none !important; transition: none !important; box-shadow: none !important; clip-path: none !important; -webkit-clip-path: none !important; text-shadow: none !important; }',
+    '.form-page { background: #ffffff !important; }'
   ].join('\n');
   document.head.appendChild(style);
 }
@@ -1661,9 +2431,11 @@ function buildMobileAccordions() {
           inp.className = 'mob-card-input'; inp.placeholder = '\u2014';
           const realInput = realInputs[i];
           if (realInput) {
+            realInput._mobMirror = inp;
             inp.value = realInput.value;
             inp.addEventListener('input', () => {
               realInput.value = inp.value;
+              if (typeof saveFormData === 'function') saveFormData();
               const hasRow = Array.from(subBody.querySelectorAll('.mob-card-input')).some(el => el.value.trim() !== '');
               subDot.style.display = hasRow ? 'inline-block' : 'none';
               const hasAny = Array.from(body.querySelectorAll('.mob-card-input')).some(el => el.value.trim() !== '');
@@ -1700,9 +2472,11 @@ function buildMobileAccordions() {
         ftSuffix.style.cssText = 'font-size:11px;color:var(--text-muted);flex-shrink:0;font-family:Arial,sans-serif;';
         const realInput = realInputs[i];
         if (realInput) {
+          realInput._mobMirror = inp;
           inp.value = realInput.value;
           inp.addEventListener('input', () => {
             realInput.value = inp.value;
+            if (typeof saveFormData === 'function') saveFormData();
             const hasAny = Array.from(body.querySelectorAll('.mob-card-input')).some(el => el.value.trim() !== '');
             headerBtn.classList.toggle('has-data', hasAny);
           });
@@ -1729,9 +2503,11 @@ function buildMobileAccordions() {
         const inp = document.createElement('input');
         inp.type = 'text'; inp.inputMode = realInput.inputMode || 'text';
         inp.className = 'mob-card-input mob-footer-input'; inp.placeholder = '\u2014';
+        realInput._mobMirror = inp;
         inp.value = realInput.value;
         inp.addEventListener('input', () => {
           realInput.value = inp.value;
+          if (typeof saveFormData === 'function') saveFormData();
           const hasAny = Array.from(body.querySelectorAll('.mob-card-input')).some(el => el.value.trim() !== '');
           headerBtn.classList.toggle('has-data', hasAny);
         });
@@ -1761,15 +2537,20 @@ function initMobileAccordions() {
     buildMobileAccordions();
   }
 }
-function initMobileAccordions() {
-  if (window.matchMedia && window.matchMedia('screen and (max-width: 767px)').matches) {
-    buildMobileAccordions();
-  }
+// Ensure real inputs hold restored values BEFORE accordions mirror from them,
+// then attach autosave (idempotent), then build the mobile UI.
+function initFormAndAccordions() {
+  ensureStableKeys();
+  restoreFormData();
+  attachAutosave();
+  initMobileAccordions();
+  // After accordions exist, restrict numeric fields (real inputs + mirrors).
+  if (typeof applyNumericOnlyToPage2 === 'function') applyNumericOnlyToPage2();
 }
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initMobileAccordions);
+  document.addEventListener('DOMContentLoaded', initFormAndAccordions);
 } else {
-  setTimeout(() => { initMobileAccordions(); attachAutosave(); }, 0);
+  setTimeout(initFormAndAccordions, 0);
 }
 
 </script>
