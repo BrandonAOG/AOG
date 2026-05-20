@@ -601,6 +601,7 @@ body.dark-mode .notice { color: #7DD3FC; }
     box-shadow: none !important;
     border: none !important;
     overflow: visible !important;
+    -webkit-page-break-after: always !important;
     page-break-after: always !important;
     break-after: page !important;
     height: auto !important;
@@ -713,7 +714,6 @@ body.dark-mode .notice { color: #7DD3FC; }
   .yn-checkbox-wrap.checked input[type="checkbox"]:checked::after { border-color: #000 !important; }
 
   /* ── PAGE 2 ── */
-  #page2 { page-break-before: always !important; break-before: page !important; }
 
   /* Scale page2-inner to fill the print page on desktop.
      On mobile Safari this wrapper is ignored — the proven-working
@@ -1080,6 +1080,18 @@ body.dark-mode .ft-label { color: #7DD3FC; }
   #page2 table.mat-table th { font-size: 7px !important; }
   #page2 table.mat-table td input[type="text"] { font-size: 7.5px !important; }
   #page2 .footer-field { font-size: 8px !important; }
+}
+/* ===== macOS SAFARI PRINT — Page 2 font reduction =====
+   min-width: 1367px sits above the iPad block (max 1366px),
+   so this ONLY fires on desktop Mac. Mobile & iPad untouched. */
+@media print and (min-width: 1367px) {
+  #page2 table.mat-table th               { font-size: 8.5px !important; }
+  #page2 table.mat-table td               { font-size: 8.5px !important; }
+  #page2 table.mat-table td.row-label     { font-size: 8.5px !important; }
+  #page2 table.mat-table td input[type="text"] { font-size: 8.5px !important; }
+  #page2 .footer-field label              { font-size: 8.5px !important; }
+  #page2 .footer-field input[type="text"] { font-size: 8.5px !important; }
+  #page2 .grid-section-title              { font-size: 8.5px !important; }
 }
 </style>
 </head>
