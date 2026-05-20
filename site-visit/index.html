@@ -22,7 +22,6 @@
   var isIphone  = /iPhone/.test(ua);
   var isAndroid = /Android/.test(ua);
   var isWindows = /Windows/.test(ua);
-  // macOS Safari: Macintosh in UA, not touch-based iPad masquerading as desktop
   var isMacOS   = /Macintosh/.test(ua) && !isIpad;
 
   if (isIpad || isIphone) html.classList.add('ios');
@@ -34,6 +33,7 @@
 
 <style>
 :root {
+  color-scheme: light;
   --cyan: #D97706;
   --cyan-dim: #B45309;
   --cyan-dark: #92400E;
@@ -63,6 +63,7 @@
 }
 
 body.dark-mode {
+  color-scheme: dark;
   --bg: #0A0E27;
   --bg2: #0F1535;
   --bg3: #1A2847;
@@ -221,12 +222,15 @@ body.dark-mode .form-page {
 
 input[type="text"], input[type="email"], input[type="tel"],
 input[type="date"], input[type="number"], textarea, select {
-  font-family: Arial, sans-serif; font-size: 11px; color: var(--text);
-  background: var(--panel); border: none;
+  font-family: Arial, sans-serif; font-size: 11px; color: #1F2937;
+  background: #ffffff; border: none;
   border-bottom: 1px solid rgba(217,119,6,0.25);
   padding: 2px 4px; outline: none; width: 100%;
   transition: all 0.2s; -webkit-appearance: none; appearance: none;
+  -webkit-text-fill-color: #1F2937;
   caret-color: var(--cyan); max-width: 100%;
+  /* Prevent Safari from applying system dark/grey appearance to form fields */
+  color-scheme: light;
 }
 @media (max-width: 480px) {
   input[type="text"], input[type="email"], input[type="tel"],
@@ -238,7 +242,9 @@ body.dark-mode input[type="text"], body.dark-mode input[type="email"],
 body.dark-mode input[type="tel"], body.dark-mode input[type="date"],
 body.dark-mode input[type="number"], body.dark-mode textarea, body.dark-mode select {
   background: rgba(10,14,39,0.6); border-bottom-color: rgba(0,255,200,0.2);
-  color: #E0F7FF; caret-color: #00FFC8; box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+  color: #E0F7FF; -webkit-text-fill-color: #E0F7FF;
+  caret-color: #00FFC8; box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+  color-scheme: dark;
 }
 input::placeholder, textarea::placeholder { color: var(--text-dim) !important; opacity: 1; }
 body.dark-mode input::placeholder, body.dark-mode textarea::placeholder {
@@ -328,6 +334,12 @@ table.mat-table th, table.mat-table td {
   border: 1px solid #555; padding: 3px 3px; text-align: center;
   height: auto; min-height: 20px; word-break: break-word; font-family: Arial, sans-serif;
 }
+table.mat-table td {
+  background: #ffffff;
+  color: #1F2937;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
 @media (max-width: 480px) {
   table.mat-table th, table.mat-table td { padding: 2px 2px; min-height: 18px; }
 }
@@ -371,11 +383,12 @@ body.dark-mode #polaris-table  td.row-label {
 table.mat-table td input[type="text"] {
   width: 100%; height: 18px; border: none; border-bottom: none;
   text-align: center; font-size: 10px; padding: 0;
-  line-height: 18px; background: transparent; color: var(--text); font-family: Arial, sans-serif;
+  line-height: 18px; background: #ffffff; color: #1F2937;
+  -webkit-text-fill-color: #1F2937; font-family: Arial, sans-serif;
   display: block; box-sizing: border-box; overflow: visible;
 }
 @media (max-width: 480px) { table.mat-table td input[type="text"] { font-size: 9px; } }
-body.dark-mode table.mat-table td input[type="text"] { color: #E0F7FF; }
+body.dark-mode table.mat-table td input[type="text"] { color: #E0F7FF; -webkit-text-fill-color: #E0F7FF; background: transparent; }
 
 /* ===== FOOTER FIELDS ===== */
 .footer-fields {
@@ -498,11 +511,13 @@ body.dark-mode .permit-row label { color: #E0F7FF; }
 
 .permit-input {
   display: inline-block; border: none;
-  border-bottom: 1px solid var(--text); outline: none;
+  border-bottom: 1px solid #1F2937; outline: none;
   font-size: 12px; font-family: Arial, sans-serif;
-  background: transparent; padding: 2px 4px;
-  color: var(--text); flex-shrink: 0; max-width: 100%; transition: all 0.2s;
+  background: #ffffff; padding: 2px 4px;
+  color: #1F2937; -webkit-text-fill-color: #1F2937;
+  flex-shrink: 0; max-width: 100%; transition: all 0.2s;
   height: 22px; line-height: 22px; box-sizing: border-box; overflow: visible;
+  color-scheme: light;
 }
 @media (max-width: 480px) { .permit-input { font-size: 11px; } }
 .permit-input.flex-grow { flex: 1 1 200px; min-width: 100px; }
@@ -515,7 +530,7 @@ body.dark-mode .permit-row label { color: #E0F7FF; }
 @media (max-width: 480px) { .permit-input.medium { width: 100px; } }
 .permit-input.long      { width: 220px; }
 @media (max-width: 480px) { .permit-input.long { width: 160px; } }
-body.dark-mode .permit-input { border-bottom-color: rgba(0,255,200,0.4); color: #E0F7FF; }
+body.dark-mode .permit-input { border-bottom-color: rgba(0,255,200,0.4); color: #E0F7FF; -webkit-text-fill-color: #E0F7FF; background: rgba(10,14,39,0.6); }
 .permit-input:focus {
   border-bottom-color: var(--cyan); background: rgba(217,119,6,0.04);
   box-shadow: 0 2px 0 0 rgba(217,119,6,0.2);
@@ -529,13 +544,14 @@ body.dark-mode .permit-input:focus {
   width: 100%; border: 1px solid rgba(217,119,6,0.25);
   resize: vertical; font-family: Arial, sans-serif; font-size: 12px;
   padding: 6px 8px; min-height: 50px; outline: none;
-  background: var(--panel); color: var(--text); transition: all 0.3s ease;
-  max-width: 100%; border-radius: 2px;
+  background: #ffffff; color: #1F2937; -webkit-text-fill-color: #1F2937;
+  transition: all 0.3s ease; max-width: 100%; border-radius: 2px;
+  color-scheme: light;
 }
-@media (max-width: 480px) { .permit-textarea { font-size: 11px; padding: 4px 6px; } }
-@media (max-width: 767px) { .other-special-notes { padding: 2px 3px !important; } }
+@media (max-width: 480px) { .permit-textarea { font-size: 11px; padding: 4px 6px 1px; } }
+@media (max-width: 767px) { .other-special-notes { padding-bottom: 1px !important; } }
 body.dark-mode .permit-textarea {
-  border-color: rgba(0,255,200,0.2); background: rgba(10,14,39,0.6); color: #E0F7FF;
+  border-color: rgba(0,255,200,0.2); background: rgba(10,14,39,0.6); color: #E0F7FF; -webkit-text-fill-color: #E0F7FF;
 }
 .permit-textarea:focus { border-color: var(--cyan); box-shadow: 0 0 8px rgba(217,119,6,0.15); }
 body.dark-mode .permit-textarea:focus {
@@ -583,6 +599,7 @@ body.dark-mode .notice { color: #7DD3FC; }
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
+    color-scheme: light !important;
   }
 
   /* Force light-mode CSS variables — Safari fires the print renderer before JS
@@ -947,7 +964,7 @@ body.dark-mode .notice { color: #7DD3FC; }
 /* ===== MOBILE PRINT — Safari honors @media print + max-width natively.
    This block (copied from the proven-working sibling page) tightens page 2
    so it fits on phones. No body.mobile-print class, no JS injection. ===== */
-@page { size: 8.5in 11in; margin: 0.05in 0.15in 0.05in 0.15in; }
+@page { size: 8.5in 11in; margin: 0.15in; }
 
 @media print and (max-width: 767px), body.printing.mobile-printing {
 
@@ -1013,8 +1030,8 @@ body.dark-mode .notice { color: #7DD3FC; }
 @media print and (min-width: 768px) {
 
   /* Top padding — match iPhone Safari spacing on both pages */
-  #page1 { padding-top: 0.05in !important; }
-  #page2 { padding-top: 0.05in !important; box-sizing: border-box !important; }
+  #page1 { padding-top: 0.15in !important; }
+  #page2 { padding-top: 0.15in !important; box-sizing: border-box !important; }
 
   /* PAGE 1 — tighten to match mobile Safari output */
   #page1 .checklist-title          { font-size: 12px !important; padding-top: 3.75px !important; margin-bottom: 3.75px !important; }
@@ -1078,21 +1095,133 @@ body.printing:not(.mobile-printing) #page2 .footer-field input.short { width: 32
 body.printing:not(.mobile-printing) #page2 .footer-field input.wide  { width: 65px !important; }
 /* end desktop print tightening */
 
-/* ===== WINDOWS — body.printing font-size overrides =====
-   body.printing:not(.mobile-printing) tightening rules above use !important,
-   so these Windows overrides must also use !important + higher specificity
-   to win during the pre-capture snapshot. ===== */
-html.windows body.printing:not(.mobile-printing) #page1 .logo-text            { font-size: 14px !important; }
-html.windows body.printing:not(.mobile-printing) #page1 .checklist-title      { font-size: 14px !important; }
-html.windows body.printing:not(.mobile-printing) #page1 .permit-section-header { font-size: 13px !important; }
-html.windows body.printing:not(.mobile-printing) #page1 .permit-row           { font-size: 12px !important; }
-html.windows body.printing:not(.mobile-printing) #page1 .permit-row label     { font-size: 12px !important; }
-html.windows body.printing:not(.mobile-printing) #page1 .permit-input         { font-size: 12px !important; }
-html.windows body.printing:not(.mobile-printing) #page1 .permit-textarea:not(.other-special-notes) { font-size: 12px !important; }
-html.windows body.printing:not(.mobile-printing) #page1 .other-special-notes  { font-size: 14px !important; }
-html.windows body.printing:not(.mobile-printing) #page1 .permit-note          { font-size: 11px !important; }
-html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap     { font-size: 10px !important; }
+/* ===== macOS SAFARI — force light mode in inputs & tables during pre-capture =====
+   macOS Safari takes its print snapshot while body.printing is set. The @media print
+   dark-mode overrides don't always fire in time on macOS, so these body.printing
+   selectors force white backgrounds and dark text directly. The
+   -webkit-text-fill-color property is required because macOS Safari uses it
+   for actual text rendering and ignores color alone in some contexts. ===== */
+body.printing input[type="text"],
+body.printing input[type="email"],
+body.printing input[type="tel"],
+body.printing input[type="date"],
+body.printing input[type="number"],
+body.printing textarea,
+body.printing select {
+  background: #ffffff !important;
+  color: #1F2937 !important;
+  -webkit-text-fill-color: #1F2937 !important;
+  border-color: #333 !important;
+  box-shadow: none !important;
+}
+body.printing table.mat-table td {
+  background: #ffffff !important;
+  color: #1F2937 !important;
+  -webkit-text-fill-color: #1F2937 !important;
+  border-color: #333 !important;
+}
+body.printing table.mat-table th {
+  background: #4B5563 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+body.printing table.mat-table td.row-label {
+  background: #f0f0f0 !important;
+  color: #1F2937 !important;
+  -webkit-text-fill-color: #1F2937 !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+body.printing table.mat-table td input[type="text"] {
+  background: transparent !important;
+  color: #1F2937 !important;
+  -webkit-text-fill-color: #1F2937 !important;
+}
+body.printing .permit-input {
+  background: #ffffff !important;
+  color: #1F2937 !important;
+  -webkit-text-fill-color: #1F2937 !important;
+  border-bottom-color: #333 !important;
+}
 
+/* ===== SAFARI PRINT: force white on every element that could carry a dark bg =====
+   Safari (macOS + iOS) snapshots the DOM before CSS variables fully reset, so
+   rgba() dark backgrounds from dark-mode or mobile-screen rules can bleed through.
+   These explicit hex overrides use both @media print AND body.printing to cover
+   both the native print renderer and the pre-capture pass. ===== */
+@media print {
+  table.mat-table, table.mat-table tbody, table.mat-table tr {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  table.mat-table td {
+    background: #ffffff !important;
+    color: #1F2937 !important;
+    -webkit-text-fill-color: #1F2937 !important;
+    border-color: #333 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  table.mat-table th {
+    background: #4B5563 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  table.mat-table td.row-label {
+    background: #f0f0f0 !important;
+    color: #1F2937 !important;
+    -webkit-text-fill-color: #1F2937 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  table.mat-table td input[type="text"] {
+    background: transparent !important;
+    color: #1F2937 !important;
+    -webkit-text-fill-color: #1F2937 !important;
+  }
+  .form-page, .permit-section, .permit-row, .permit-note,
+  .footer-fields, .footer-row, .footer-field,
+  .grid-section, #page1, #page2, #page2-inner {
+    background: #ffffff !important;
+    color: #1F2937 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  input[type="text"], input[type="email"], input[type="tel"],
+  input[type="date"], input[type="number"], textarea, select,
+  .permit-input, .permit-textarea {
+    background: #ffffff !important;
+    color: #1F2937 !important;
+    -webkit-text-fill-color: #1F2937 !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+/* Mirror the above for the body.printing pre-capture pass */
+body.printing table.mat-table tbody,
+body.printing table.mat-table tr {
+  background: #ffffff !important;
+}
+body.printing .form-page,
+body.printing .permit-section,
+body.printing .permit-row,
+body.printing .permit-note,
+body.printing .footer-fields,
+body.printing .footer-row,
+body.printing .footer-field,
+body.printing .grid-section,
+body.printing #page1,
+body.printing #page2,
+body.printing #page2-inner {
+  background: #ffffff !important;
+  color: #1F2937 !important;
+}
 
 
 /* ===== FT. LABEL IN WIRE TABLE CELLS ===== */
@@ -1239,39 +1368,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
 
 }
 
-/* Keep debug overlay out of any print output */
-@media print { #debug-overlay { display: none !important; } }
-
-/* ===== PLATFORM-SPECIFIC PRINT FIXES ===== */
-
-/* UNIVERSAL — kill all animations/transitions before the print renderer snapshots */
-@media print {
-  * {
-    animation: none !important;
-    transition: none !important;
-  }
-}
-
-/* iOS — transforms can shift elements off-page; text-size-adjust prevents Safari
-   from bumping font sizes when it recalculates layout for paper */
-@media print {
-  html.ios * {
-    transform: none !important;
-    -webkit-text-size-adjust: 100% !important;
-  }
-}
-
-/* macOS Safari — zoom resets prevent double-scaling when the page already
-   uses a CSS zoom for layout; Safari on macOS respects this on .page */
-@media print {
-  html.macos .page {
-    zoom: 1 !important;
-  }
-}
-
-/* Windows Desktop — explicit break rules stop Chrome/Edge from splitting a
-   .page card across two sheets; top margin offsets Chrome's default header
-   band so Page 1 content doesn't start behind it */
+/* ===== WINDOWS — @media print rules ===== */
 @media print {
   html.windows .page {
     break-inside: avoid;
@@ -1286,9 +1383,8 @@ body.dark-mode .ft-label { color: #7DD3FC; }
   html.windows #page1 .permit-section {
     margin-bottom: 12px; /* base 10px + 2px */
   }
-
-  /* +3.5px total font-size bump across all Page 1 text elements (1.5 + 2)
-     Requires !important to beat the desktop-tightening block at line ~1019 */
+  /* +2px font-size bump across all Page 1 text elements
+     Requires !important to beat the desktop-tightening block */
   html.windows #page1 .logo-text               { font-size: 14px !important; }  /* 12 + 2 */
   html.windows #page1 .checklist-title          { font-size: 14px !important; }  /* 12 + 2 */
   html.windows #page1 .permit-section-header    { font-size: 13px !important; }  /* 11 + 2 */
@@ -1301,13 +1397,19 @@ body.dark-mode .ft-label { color: #7DD3FC; }
   html.windows #page1 .yn-checkbox-wrap         { font-size: 10px !important; }  /*  8 + 2 */
 }
 
-/* Android — forces the WebView print renderer to output actual background
-   colors/images rather than stripping them for "ink saving" */
-@media print {
-  html.android * {
-    -webkit-print-color-adjust: exact !important;
-  }
-}
+/* ===== WINDOWS — body.printing font-size overrides =====
+   body.printing:not(.mobile-printing) tightening rules use !important,
+   so these must also use !important + higher specificity to win. ===== */
+html.windows body.printing:not(.mobile-printing) #page1 .logo-text             { font-size: 14px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .checklist-title       { font-size: 14px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-section-header { font-size: 13px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-row            { font-size: 12px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-row label      { font-size: 12px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-input          { font-size: 12px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-textarea:not(.other-special-notes) { font-size: 12px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .other-special-notes   { font-size: 14px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .permit-note           { font-size: 11px !important; }
+html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap      { font-size: 10px !important; }
 
 
 </style>
@@ -1321,7 +1423,6 @@ body.dark-mode .ft-label { color: #7DD3FC; }
   <button class="btn" onclick="clearForm()">🗑 CLEAR</button>
   <button class="btn" id="btn-iphone" onclick="saveForIPhone()">📱 iPHONE</button>
   <button class="btn" id="btn-android" onclick="saveForAndroid()">🤖 ANDROID</button>
-  <button class="btn" onclick="showDebug()">🐛 DBG</button>
   <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
     <svg class="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="5"/>
@@ -1918,61 +2019,6 @@ function getPrintDevice() {
   return 'desktop';
 }
 
-function showPrintDebugLog(log) {
-  const existing = document.getElementById('debug-overlay');
-  if (existing) existing.remove();
-  const overlay = document.createElement('div');
-  overlay.id = 'debug-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);color:#00FFC8;font-family:monospace;font-size:11px;padding:12px;overflow-y:auto;z-index:999999;white-space:pre-wrap;word-break:break-all;';
-  overlay.innerHTML = `<strong style="font-size:13px;color:#FBBF24;">🐛 PRINT PROCESS LOG</strong>  <span style="float:right;cursor:pointer;color:#f87171;font-size:14px;" onclick="document.getElementById('debug-overlay').remove()">✕ CLOSE</span>\n\n${log.join('\n')}`;
-  document.body.appendChild(overlay);
-}
-
-function showDebug() {
-  const log = [];
-  const device = getPrintDevice();
-  const checks = [
-    ['.page-wrapper', 'zoom'],
-    ['#page1 .logo-text', 'fontSize'],
-    ['#page1 .checklist-title', 'fontSize'],
-    ['#page1 .permit-section-header', 'fontSize'],
-    ['#page1 .permit-row', 'fontSize'],
-    ['#page1 .permit-input', 'fontSize'],
-    ['#page1 .permit-note', 'fontSize'],
-    ['#page1 .yn-checkbox-wrap', 'fontSize'],
-    ['#page1 input[type="checkbox"]', 'width'],
-  ];
-
-  function snapshot(label) {
-    log.push(`\n<strong style="color:#FBBF24">${label}</strong>`);
-    checks.forEach(([sel, prop]) => {
-      try {
-        const el = document.querySelector(sel);
-        const val = el ? window.getComputedStyle(el)[prop] : 'NOT FOUND';
-        log.push(`  ${sel} → ${prop}: <strong>${val}</strong>`);
-      } catch(e) { log.push(`  ${sel} → ERROR`); }
-    });
-  }
-
-  log.push(`<strong>Device:</strong> ${device}`);
-  log.push(`<strong>UA:</strong> ${navigator.userAgent}`);
-  log.push(`<strong>mobile-print on body:</strong> ${document.body.classList.contains('mobile-print')}`);
-
-  snapshot('BEFORE mobile-print class');
-
-  document.body.classList.add('mobile-print');
-  log.push(`\n<em>→ mobile-print class added</em>`);
-
-  snapshot('AFTER mobile-print class');
-
-  document.body.classList.remove('mobile-print');
-  log.push(`\n<em>→ mobile-print class removed</em>`);
-
-  snapshot('AFTER removal (should match BEFORE)');
-
-  showPrintDebugLog(log);
-}
-
 const MOBILE_PRINT_CSS = `
   @page { size: 8.5in 11in; margin: 0; }
   /* Rules moved to stylesheet @media print body.mobile-print block */
@@ -1989,6 +2035,12 @@ function openPrintPreview() {
   const status = document.getElementById('save-status');
   const wasDark = document.body.classList.contains('dark-mode');
   if (wasDark) document.body.classList.remove('dark-mode');
+  // Belt-and-suspenders for Safari: force inline white background on both html and
+  // body so the print renderer never inherits a dark computed background-color.
+  const origHtmlBg = document.documentElement.style.background;
+  const origBodyBg = document.body.style.background;
+  document.documentElement.style.background = '#ffffff';
+  document.body.style.background = '#ffffff';
   if (bar)    bar.style.display    = 'none';
   if (note)   note.style.display   = 'none';
   if (status) status.style.display = 'none';
@@ -2002,6 +2054,9 @@ function openPrintPreview() {
     if (status) status.style.display = '';
     if (wasDark) document.body.classList.add('dark-mode');
     document.body.classList.remove('printing', 'mobile-printing');
+    restoreInlineStyles();
+    document.documentElement.style.background = origHtmlBg;
+    document.body.style.background = origBodyBg;
     // Restore the wrapper's top padding that we cleared before printing.
     if (wrapper) wrapper.style.paddingTop = origWrapperPaddingTop;
     window.removeEventListener('afterprint', restore);
@@ -2048,14 +2103,99 @@ function openPrintPreview() {
   const origWrapperPaddingTop = wrapper ? wrapper.style.paddingTop : '';
   if (wrapper && !isMobilePrint) wrapper.style.paddingTop = '0';
 
+  // ── SAFARI INLINE-STYLE NUKE ──────────────────────────────────────────────
+  // Safari ignores @media print and body.printing stylesheet rules for
+  // background-color on form elements and table cells — it re-applies its own
+  // system appearance layer. The ONLY reliable fix is inline style="" attributes
+  // set directly on each element immediately before window.print() fires.
+  // We collect every original inline style so we can restore them on afterprint.
+  const _printOverrides = [];
+
+  function forceWhiteInline() {
+    // All inputs, textareas, selects
+    document.querySelectorAll(
+      'input[type="text"], input[type="email"], input[type="tel"], ' +
+      'input[type="date"], input[type="number"], textarea, select'
+    ).forEach(el => {
+      _printOverrides.push([el, el.getAttribute('style') || '']);
+      el.style.setProperty('background', '#ffffff', 'important');
+      el.style.setProperty('background-color', '#ffffff', 'important');
+      el.style.setProperty('color', '#1F2937', 'important');
+      el.style.setProperty('-webkit-text-fill-color', '#1F2937', 'important');
+      el.style.setProperty('box-shadow', 'none', 'important');
+      el.style.setProperty('-webkit-appearance', 'none', 'important');
+      el.style.setProperty('color-scheme', 'light', 'important');
+    });
+
+    // Checkboxes
+    document.querySelectorAll('input[type="checkbox"]').forEach(el => {
+      _printOverrides.push([el, el.getAttribute('style') || '']);
+      el.style.setProperty('background', el.checked ? '#D97706' : '#ffffff', 'important');
+      el.style.setProperty('background-color', el.checked ? '#D97706' : '#ffffff', 'important');
+      el.style.setProperty('-webkit-appearance', 'none', 'important');
+      el.style.setProperty('color-scheme', 'light', 'important');
+    });
+
+    // Table cells — data cells white, header cells grey, row-label cells off-white
+    document.querySelectorAll('table.mat-table td').forEach(el => {
+      _printOverrides.push([el, el.getAttribute('style') || '']);
+      const isLabel = el.classList.contains('row-label');
+      el.style.setProperty('background', isLabel ? '#f0f0f0' : '#ffffff', 'important');
+      el.style.setProperty('background-color', isLabel ? '#f0f0f0' : '#ffffff', 'important');
+      el.style.setProperty('color', '#1F2937', 'important');
+      el.style.setProperty('-webkit-text-fill-color', '#1F2937', 'important');
+      el.style.setProperty('color-scheme', 'light', 'important');
+    });
+    document.querySelectorAll('table.mat-table th').forEach(el => {
+      _printOverrides.push([el, el.getAttribute('style') || '']);
+      el.style.setProperty('background', '#4B5563', 'important');
+      el.style.setProperty('background-color', '#4B5563', 'important');
+      el.style.setProperty('color', '#ffffff', 'important');
+      el.style.setProperty('-webkit-text-fill-color', '#ffffff', 'important');
+      el.style.setProperty('color-scheme', 'light', 'important');
+    });
+
+    // Form pages, sections, wrappers
+    document.querySelectorAll(
+      '.form-page, .permit-section, .permit-row, .permit-note, ' +
+      '.footer-fields, .footer-row, .footer-field, ' +
+      '.grid-section, #page1, #page2, #page2-inner, .page-wrapper'
+    ).forEach(el => {
+      _printOverrides.push([el, el.getAttribute('style') || '']);
+      el.style.setProperty('background', '#ffffff', 'important');
+      el.style.setProperty('background-color', '#ffffff', 'important');
+      el.style.setProperty('color-scheme', 'light', 'important');
+    });
+
+    // html and body
+    _printOverrides.push([document.documentElement, document.documentElement.getAttribute('style') || '']);
+    _printOverrides.push([document.body, document.body.getAttribute('style') || '']);
+    document.documentElement.style.setProperty('background', '#ffffff', 'important');
+    document.documentElement.style.setProperty('background-color', '#ffffff', 'important');
+    document.documentElement.style.setProperty('color-scheme', 'light', 'important');
+    document.body.style.setProperty('background', '#ffffff', 'important');
+    document.body.style.setProperty('background-color', '#ffffff', 'important');
+    document.body.style.setProperty('color-scheme', 'light', 'important');
+  }
+
+  function restoreInlineStyles() {
+    _printOverrides.forEach(([el, orig]) => {
+      if (orig) {
+        el.setAttribute('style', orig);
+      } else {
+        el.removeAttribute('style');
+      }
+    });
+    _printOverrides.length = 0;
+  }
+  // ── END SAFARI INLINE-STYLE NUKE ───────────────────────────────────────────
+
+  // Switch to light mode now (visible on screen), wait 1.5 s so Safari's
+  // renderer fully paints the white layout, then open the print dialog.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      // Mobile Safari has a rendering issue on first print pop-up —
-      // a 2-second delay gives the layout time to fully settle before
-      // the print sheet appears.
-      const ua = navigator.userAgent;
-      const isMobileSafari = /iPhone|iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-      const printDelay = isMobileSafari ? 900 : 0;
+      forceWhiteInline();
+      void document.body.offsetHeight; // force reflow — Safari paints light mode here
 
       setTimeout(() => {
         window.print();
@@ -2063,10 +2203,13 @@ function openPrintPreview() {
         // the whole time the dialog is open — safe to remove immediately after return.
         // Desktop browsers render asynchronously, so we leave the class on and let
         // restore() (afterprint) remove it once the dialog actually closes.
-        if (isMobilePrint) document.body.classList.remove('printing', 'mobile-printing');
+        if (isMobilePrint) {
+          document.body.classList.remove('printing', 'mobile-printing');
+          restoreInlineStyles();
+        }
         document.body.style.maxWidth = origMaxWidth;
         document.body.style.width    = origWidth;
-      }, printDelay);
+      }, 1500); // 1.5 s in light mode before print dialog opens
     });
   });
 }
