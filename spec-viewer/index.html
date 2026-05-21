@@ -891,14 +891,14 @@ function popGenModels(){
   var f    = GENS.filter(function(g){ return g.c === cooling; });
   var grps = [];
   f.forEach(function(g){ if(grps.indexOf(g.grp) === -1) grps.push(g.grp); });
+  window._genGrps = grps;
 
   var html = '';
-  grps.forEach(function(grp){
+  grps.forEach(function(grp, i){
     var meta     = GEN_SERIES[grp] || {};
     var grpLabel = grp.replace(/\s*\[.*?\]/, '').trim();
-    var models   = f.filter(function(g){ return g.grp === grp; });
-    var cnt      = models.length;
-    html += '<div class="ats-pick" id="spick-' + grp.replace(/[^a-z0-9]/gi,'_') + '" onclick="selectGenSeries(' + JSON.stringify(grp) + ')">'
+    var cnt      = f.filter(function(g){ return g.grp === grp; }).length;
+    html += '<div class="ats-pick" id="spick-' + i + '" onclick="selectGenSeries(' + i + ')">'
           + '<div class="aps-amps">' + (meta.kw || '') + '</div>'
           + '<div class="aps-name">' + grpLabel + '</div>'
           + '<div class="aps-pn">' + (meta.eng || '') + ' &nbsp;&middot;&nbsp; ' + cnt + ' model' + (cnt !== 1 ? 's' : '') + '</div>'
@@ -917,18 +917,17 @@ function popGenModels(){
   clearSpecs();
 }
 
-function selectGenSeries(grp){
-  // highlight selected series card
+function selectGenSeries(i){
+  var grp = (window._genGrps || [])[i];
+  if(!grp) return;
+
   document.querySelectorAll('#series-card-grid .ats-pick').forEach(function(el){ el.classList.remove('active'); });
-  var sid = 'spick-' + grp.replace(/[^a-z0-9]/gi,'_');
-  var sc = document.getElementById(sid);
+  var sc = document.getElementById('spick-' + i);
   if(sc) sc.classList.add('active');
 
-  // clear any selected model
   clearSpecs();
 
-  // build model cards for this series
-  var f      = GENS.filter(function(g){ return g.c === cooling && g.grp === grp; });
+  var f        = GENS.filter(function(g){ return g.c === cooling && g.grp === grp; });
   var grpLabel = grp.replace(/\s*\[.*?\]/, '').trim();
   document.getElementById('model-sub-label').textContent = grpLabel;
 
