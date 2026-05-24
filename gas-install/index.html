@@ -2294,29 +2294,65 @@ function setStatus(msg) {
    in case afterprint never fires on Mobile Safari)
 ================================================================ */
 (function() {
-  let wasDark = false;
-  let restoreTimer = null;
+  var wasDark = false;
+  var restoreTimer = null;
+  var restored = false;
 
   function forceLightForPrint() {
     wasDark = document.body.classList.contains('dark-mode');
-    if (wasDark) {
-      document.body.classList.remove('dark-mode');
-    }
-    // Fallback: restore dark mode after 30s if afterprint never fires
+    restored = false;
+    if (wasDark) document.body.classList.remove('dark-mode');
+    // Safety fallback in case all events fail
     clearTimeout(restoreTimer);
-    restoreTimer = setTimeout(restoreDarkAfterPrint, 30000);
+    restoreTimer = setTimeout(restoreDark, 8000);
   }
 
-  function restoreDarkAfterPrint() {
+  function restoreDark() {
+    if (restored) return;
+    restored = true;
     clearTimeout(restoreTimer);
     if (wasDark) {
       document.body.classList.add('dark-mode');
       wasDark = false;
     }
+    // Clean up Safari-specific listeners
+    document.removeEventListener('visibilitychange', onVisibility);
+    window.removeEventListener('focus', onFocus);
+    window.removeEventListener('pageshow', onPageShow);
   }
 
-  window.addEventListener('beforeprint', forceLightForPrint);
-  window.addEventListener('afterprint', restoreDarkAfterPrint);
+  // afterprint — works on Chrome/desktop, unreliable on Safari
+  window.addEventListener('afterprint', restoreDark);
+
+  // beforeprint — set up Safari-specific restore triggers
+  window.addEventListener('beforeprint', function() {
+    forceLightForPrint();
+    var wentHidden = false;
+
+    // visibilitychange fires when print dialog opens/closes on most iOS
+    function onVisibility() {
+      if (document.hidden) { wentHidden = true; }
+      else if (wentHidden) { restoreDark(); }
+    }
+    // focus fires on iPhone when returning from print dialog
+    function onFocus() { if (wentHidden) restoreDark(); }
+    // pageshow fires on return in some Safari versions
+    function onPageShow() { setTimeout(restoreDark, 200); }
+
+    // Store as named refs so we can remove them in restoreDark
+    window.onVisibility = onVisibility;
+    window.onFocus = onFocus;
+    window.onPageShow = onPageShow;
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('pageshow', onPageShow, { once: true });
+  });
+
+  // Make refs accessible to restoreDark cleanup
+  function onVisibility() {}
+  function onFocus() {}
+  function onPageShow() {}
 })();
 
 /* ================================================================
