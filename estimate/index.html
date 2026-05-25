@@ -898,7 +898,7 @@ input.tiny  { width: 40px; min-width: 40px; text-align: center; }
 input.med   { width: 120px; min-width: 80px; }
 input.long  { flex: 1; min-width: 100px; }
 
-textarea { width: 100%; resize: vertical; border: 1px solid rgba(217,119,6,0.2); padding: var(--pd-phone-textarea); margin-top: 3px; min-height: 44px; height: 44px; background: rgba(255,255,255,0.55); color: var(--text); transition: all 0.3s ease; box-sizing: border-box; }
+textarea { width: 100%; resize: vertical; border: 1px solid rgba(217,119,6,0.2); padding: var(--pd-phone-textarea); margin-top: 3px; min-height: 44px; height: 44px; background: rgba(255,255,255,0.55); color: var(--text); transition: all 0.3s ease; box-sizing: border-box; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
 body.dark-mode textarea { background: rgba(10,14,39,0.6); border-color: rgba(0,255,200,0.15); color: #E0F7FF; }
 textarea:focus { border-color: var(--cyan); box-shadow: 0 0 8px rgba(217,119,6,0.1); }
 body.dark-mode textarea:focus { border-color: #00FFC8; box-shadow: 0 0 8px rgba(0,255,200,0.2); }
@@ -2616,6 +2616,7 @@ function capturePageToCanvas() {
       '#transfer-switch-row .section-body { padding-bottom: 0px !important; }',
       '#transfer-switch-row .inline-row:last-child { min-height: 0 !important; height: auto !important; max-height: fit-content !important; margin-bottom: 0 !important; padding-bottom: 0 !important; flex-wrap: nowrap !important; overflow: hidden !important; }',
       '#precast-pad-row .section-body { padding-top: 0px !important; }',
+      'textarea { white-space: pre-wrap !important; word-wrap: break-word !important; overflow-wrap: break-word !important; overflow: hidden !important; }',
     ].join('\n');
     document.head.appendChild(forceStyle);
 
@@ -2672,6 +2673,43 @@ function capturePageToCanvas() {
             clonedDoc.documentElement.classList.remove('dark-mode');
             var seasonalSt = clonedDoc.getElementById('seasonal-styles');
             if (seasonalSt) seasonalSt.parentNode.removeChild(seasonalSt);
+
+            // Replace textareas with divs — html2canvas renders textarea value as one long
+            // single line regardless of wrapping. A div with the same computed styles and
+            // white-space:pre-wrap will wrap exactly as the user sees on screen.
+            clonedDoc.querySelectorAll('textarea').forEach(function(ta) {
+              var computed = window.getComputedStyle(ta);
+              var div = clonedDoc.createElement('div');
+              // Copy geometry / box model
+              div.style.cssText = [
+                'width:'          + computed.width,
+                'min-height:'     + computed.height,
+                'height:'         + computed.height,
+                'max-height:'     + computed.maxHeight,
+                'padding:'        + computed.padding,
+                'margin:'         + computed.margin,
+                'margin-top:'     + computed.marginTop,
+                'margin-bottom:'  + computed.marginBottom,
+                'border:'         + computed.border,
+                'border-radius:'  + computed.borderRadius,
+                'box-sizing:'     + computed.boxSizing,
+                'font-family:'    + computed.fontFamily,
+                'font-size:'      + computed.fontSize,
+                'font-weight:'    + computed.fontWeight,
+                'line-height:'    + computed.lineHeight,
+                'color:'          + computed.color,
+                'background:'     + computed.backgroundColor,
+                'box-shadow:'     + computed.boxShadow,
+                // Critical: allow text to wrap the same way it does on screen
+                'white-space:pre-wrap',
+                'word-wrap:break-word',
+                'overflow-wrap:break-word',
+                'overflow:hidden',
+                'display:block'
+              ].join(';') + ';';
+              div.textContent = ta.value;
+              ta.parentNode.replaceChild(div, ta);
+            });
 
             // Replace checkboxes/radios with amber spans — html2canvas ignores accent-color
             clonedDoc.querySelectorAll('.check-item input[type=checkbox], .check-item input[type=radio]').forEach(function(input) {
