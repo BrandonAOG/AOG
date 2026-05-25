@@ -1,6 +1,6 @@
 // ============================================================
 //  Always On Generators – Field Hub
-//  Service Worker  |  sw.js  |  Version: aog-forms-v1.0.0
+//  Service Worker  |  sw.js  |  Version: aog-forms-v2.0.0
 //  Scope: root (../)
 //
 //  ⚠ WHEN YOU UPDATE ANY TOOL:
@@ -8,8 +8,11 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v1.1.0';
-var DEV_MODE   = false; // ← SET TRUE during development/testing
+var CACHE_NAME = 'aog-forms-v2.0.0';
+var DEV_MODE   = false;
+
+// Stores last known cache progress so late-loading pages can request it
+var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE during development/testing
 
 // ============================================================
 //  CHANGELOG — Update this every time you bump CACHE_NAME.
@@ -17,28 +20,54 @@ var DEV_MODE   = false; // ← SET TRUE during development/testing
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  'better dropdown for generator section on spec viewer',
-  'Fixed some spec sheets breaker sizes',
-  'Added torque Values-still verifying',
-  '1.1.0 made all card forms to look and feel like they belong'
+  'Major hub redesign — new dark industrial UI',
+  'Added 40 random animated background themes',
+  'Cards now fully transparent with no blur',
+  'All cards uniform size across every device & category',
+  'Full mobile & tablet responsive fixes across all themes',
+  'Added QC Checklist form',
+  'Added Service Work form',
+  'Added Site Plan / Annotator tool',
+  'Offline page updated to match new hub design',
 ];
 // ============================================================
 
 var PRECACHE_URLS = [
-  '../',
-  '../index.html',
-  '../offline.html',
-  '../logo.png',
-  '../sw.js',
-  '../maintenance/',
-  '../site-visit/',
-  '../gas-install/',
-  '../elect-install/',
-  '../load-calcs/',
-  '../breaker-conductor/',
-  '../conduit-fill/',
-  '../sketch-pad/',
-  '../gas-calc/'
+  './',
+  './index.html',
+  './offline.html',
+  './manifest.json',
+  './logo.png',
+  './sw.js',
+  './estimate/',
+  './maintenance/',
+  './site-visit/',
+  './gas-install/',
+  './elect-install/',
+  './qc-checklist/',
+  './service-work/',
+  './site-annotator/',
+  './load-calcs/',
+  './breaker-conductor/',
+  './conduit-fill/',
+  './sketch-pad/',
+  './gas-calc/',
+  './spec-viewer/'
+];
+
+// CDN assets that must be cached on install for 100% offline support
+var PRECACHE_CDN = [
+  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+];
+
+// Google Fonts CSS URLs — cached on install so fonts load offline
+// Font files themselves are cached on first visit via staleWhileRevalidate
+var PRECACHE_FONTS = [
+  'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap',
+  'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600;700&display=swap',
+  'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap',
+  'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap',
+  'https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Share+Tech+Mono&display=swap',
 ];
 
 var CACHE_CDN = [
@@ -67,21 +96,50 @@ self.addEventListener('install', function(event) {
     caches.open(CACHE_NAME)
       .then(function(cache) {
         console.log('[SW] Pre-caching core files');
-        return Promise.all(
-          PRECACHE_URLS.map(function(url) {
-            return cache.add(url).catch(function(err) {
-              console.warn('[SW] Pre-cache skipped:', url, err);
-            });
-          })
-        );
+        var total = PRECACHE_URLS.length;
+        var completed = 0;
+        var scope = self.registration.scope; // e.g. https://brandonaog.github.io/AOGTEST/
+
+        // Combine all URLs to cache: app pages + CDN assets + fonts
+        var allUrls = PRECACHE_URLS.concat(PRECACHE_CDN).concat(PRECACHE_FONTS);
+        total = allUrls.length;
+
+        // Sequential caching so progress is accurate and stored for polling
+        return allUrls.reduce(function(chain, url) {
+          return chain.then(function() {
+            // CDN and font URLs are already absolute; convert relative ones using scope
+            var absUrl = url.startsWith('http') ? url : new URL(url, scope).href;
+            var label = absUrl.replace(scope,'').replace(/\/$/,'') || absUrl.split('/').pop() || 'cdn';
+            return cache.add(absUrl)
+              .then(function() {
+                completed++;
+                cacheProgress = {
+                  percent: Math.round((completed / total) * 100),
+                  label: label,
+                  done: completed === total
+                };
+                console.log('[SW] Cached (' + cacheProgress.percent + '%):', absUrl);
+              })
+              .catch(function(err) {
+                completed++;
+                cacheProgress = {
+                  percent: Math.round((completed / total) * 100),
+                  label: 'skipped: ' + label,
+                  done: completed === total
+                };
+                console.warn('[SW] Pre-cache skipped:', absUrl, err);
+              });
+          });
+        }, Promise.resolve());
       })
       .then(function() {
+        cacheProgress = { percent: 100, label: 'All files cached', done: true };
         console.log('[SW] Install complete — waiting for user to approve update');
-        // ← No skipWaiting() here on purpose. SW sits in "waiting"
-        //   state until the user taps "Update Now".
+        // No skipWaiting() on purpose — user taps Update Now to activate
       })
   );
 });
+
 
 // ============================================================
 //  ACTIVATE — Delete old caches, claim clients
@@ -114,7 +172,25 @@ self.addEventListener('activate', function(event) {
 self.addEventListener('fetch', function(event) {
 
   var request = event.request;
-  var url     = new URL(request.url);
+
+  // Safari fix: wrap URL parsing in try/catch — malformed URLs throw and
+  // crash the entire fetch handler, causing the respondWith error
+  var url;
+  try { url = new URL(request.url); } catch(e) { return; }
+
+  // Only handle GET requests over http/https — let everything else pass through
+  if (request.method !== 'GET') return;
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
+  // Safari fix: skip cross-origin requests that aren't in our CDN list —
+  // Safari throws on certain cross-origin fetches inside the SW
+  var isSameOrigin = url.origin === self.location.origin;
+  var isAllowedCDN = url.hostname.includes('fonts.googleapis.com') ||
+                     url.hostname.includes('fonts.gstatic.com')    ||
+                     url.hostname.includes('cdnjs.cloudflare.com') ||
+                     url.hostname.includes('mapbox.com')           ||
+                     url.hostname.includes('mapbox.cn');
+  if (!isSameOrigin && !isAllowedCDN) return;
 
   if (DEV_MODE) {
     event.respondWith(
@@ -128,9 +204,6 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  if (request.method !== 'GET') return;
-  if (!url.protocol.startsWith('http')) return;
-
   if (url.hostname.includes('mapbox.com') || url.hostname.includes('mapbox.cn')) {
     event.respondWith(
       fetch(request).catch(function() {
@@ -140,7 +213,9 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  if (request.headers.get('Accept') && request.headers.get('Accept').includes('text/html')) {
+  var accept = request.headers.get('Accept') || '';
+
+  if (accept.includes('text/html')) {
     event.respondWith(networkFirst(request));
     return;
   }
@@ -152,8 +227,9 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  if (request.destination === 'image' ||
-      url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/i)) {
+  // Safari fix: request.destination can be empty string — use || '' guard
+  var dest = request.destination || '';
+  if (dest === 'image' || url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/i)) {
     event.respondWith(cacheFirst(request));
     return;
   }
@@ -184,9 +260,34 @@ function networkFirst(request) {
       return caches.match(request)
         .then(function(cachedResponse) {
           if (cachedResponse) return cachedResponse;
-          if (request.headers.get('Accept') &&
-              request.headers.get('Accept').includes('text/html')) {
-            return caches.match('../offline.html');
+          var accept = request.headers.get('Accept') || '';
+          if (accept.includes('text/html')) {
+            // Build offline URL relative to SW scope — matches how it was cached
+            var offlineUrl = self.registration.scope + 'offline.html';
+            console.log('[SW] Looking for offline page at:', offlineUrl);
+            return caches.match(offlineUrl)
+              .then(function(r) {
+                if (r) return r;
+                // Fallback: search all caches for offline.html
+                return caches.keys().then(function(cacheNames) {
+                  return Promise.all(
+                    cacheNames.map(function(name) {
+                      return caches.open(name).then(function(c) {
+                        return c.match(offlineUrl);
+                      });
+                    })
+                  ).then(function(results) {
+                    for (var i = 0; i < results.length; i++) {
+                      if (results[i]) return results[i];
+                    }
+                    // Last resort inline fallback
+                    return new Response(
+                      '<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=viewport content=width=device-width,initial-scale=1><title>Offline</title></head><body style=background:#060913;color:#FBBF24;font-family:monospace;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center><div><div style=font-size:3rem>⚡</div><h2 style=margin:16px 0>You are offline</h2><p style=color:#7A8BA8>Connect to the internet and try again</p><br><button onclick=location.reload() style=background:#FBBF24;color:#060913;border:none;padding:12px 28px;border-radius:8px;font-weight:bold;font-size:1rem;cursor:pointer>Try Again</button></div></body></html>',
+                      { headers: { 'Content-Type': 'text/html' } }
+                    );
+                  });
+                });
+              });
           }
           return new Response('Service Unavailable', { status: 503 });
         });
@@ -206,6 +307,8 @@ function staleWhileRevalidate(request) {
         return networkResponse;
       }).catch(function(err) {
         console.log('[SW] Revalidate failed:', err);
+        // Return a valid empty response so respondWith never gets undefined
+        return new Response('', { status: 503 });
       });
       return cachedResponse || networkFetch;
     });
@@ -227,7 +330,7 @@ function cacheFirst(request) {
       }
       return networkResponse;
     }).catch(function() {
-      return new Response('', { status: 404 });
+      return new Response('', { status: 503 });
     });
   });
 }
@@ -256,6 +359,18 @@ self.addEventListener('message', function(event) {
       version:   CACHE_NAME,
       changelog: CHANGELOG
     });
+  }
+
+  // Page requests current cache progress (for late-loading pages that missed broadcasts)
+  if (event.data && event.data.action === 'GET_CACHE_PROGRESS') {
+    if (event.ports[0]) {
+      event.ports[0].postMessage({
+        action:  'CACHE_PROGRESS',
+        percent: cacheProgress.percent,
+        label:   cacheProgress.label,
+        done:    cacheProgress.done
+      });
+    }
   }
 
 });
