@@ -127,6 +127,7 @@
   --fs-print-phone-label:          0.85rem;  /* field labels in PDF (Name, Phone, Best Email…)   */
   --fs-print-phone-inline-label:   0.85rem;  /* inline labels in PDF                             */
   --fs-print-phone-input:          0.9rem;  /* text inside input fields in PDF                  */
+  --fs-print-phone-date:           0.8rem;  /* date fields (Today's Date, Estimate Date, Est. Done On) in PDF */
   --fs-print-phone-notes:          0.8rem;  /* text inside note boxes (gen/pad/gas/ready) in PDF */
   --fs-print-phone-yn-label:       0.8rem;  /* Y / N toggle buttons in PDF                      */
   --fs-print-phone-check-item:     0.8rem;  /* checkbox & radio options in PDF                  */
@@ -135,14 +136,15 @@
   /* ---- PRINT : iPAD ---- */
   --fs-print-ipad-company-name:    1.2rem;  /* "Always On Generators" in iPad PDF               */
   --fs-print-ipad-doc-title:       1.2rem;  /* "Generator Installation Estimate" in iPad PDF    */
-  --fs-print-ipad-section-header:  0.9rem;  /* section title bars in iPad PDF                   */
-  --fs-print-ipad-col-label:       0.9rem;  /* column label pills in iPad PDF                   */
-  --fs-print-ipad-label:           0.85rem;  /* field labels in iPad PDF                         */
-  --fs-print-ipad-inline-label:    0.85rem;  /* inline labels in iPad PDF                        */
-  --fs-print-ipad-input:           1.4rem;   /* text inside input fields in iPad PDF             */
+  --fs-print-ipad-section-header:  0.95rem;  /* section title bars in iPad PDF                   */
+  --fs-print-ipad-col-label:       0.95rem;  /* column label pills in iPad PDF                   */
+  --fs-print-ipad-label:           0.93rem;  /* field labels in iPad PDF                         */
+  --fs-print-ipad-inline-label:    0.93rem;  /* inline labels in iPad PDF                        */
+  --fs-print-ipad-input:           1.57rem;   /* text inside input fields in iPad PDF             */
+  --fs-print-ipad-date:            1.25rem;  /* date fields (Today's Date, Estimate Date, Est. Done On) in iPad PDF */
   --fs-print-ipad-notes:           1.25rem;  /* text inside note boxes (gen/pad/gas/ready) in iPad PDF */
-  --fs-print-ipad-yn-label:        0.8rem;  /* Y / N toggle buttons in iPad PDF                 */
-  --fs-print-ipad-check-item:      0.8rem;  /* checkbox & radio options in iPad PDF             */
+  --fs-print-ipad-yn-label:        0.80rem;  /* Y / N toggle buttons in iPad PDF                 */
+  --fs-print-ipad-check-item:      0.80rem;  /* checkbox & radio options in iPad PDF             */
   --fs-print-ipad-gas-label:       0.75rem;  /* gas appliances label in iPad PDF                 */
 
   /* ---- PRINT : DESKTOP ---- */
@@ -153,6 +155,7 @@
   --fs-print-desktop-label:          0.8rem;  /* field labels in desktop PDF                      */
   --fs-print-desktop-inline-label:   0.8rem;  /* inline labels in desktop PDF                     */
   --fs-print-desktop-input:          0.88rem;  /* text inside input fields in desktop PDF          */
+  --fs-print-desktop-date:           0.75rem;  /* date fields (Today's Date, Estimate Date, Est. Done On) in desktop PDF */
   --fs-print-desktop-notes:         0.88rem;  /* text inside note boxes (gen/pad/gas/ready) in desktop PDF */
   --fs-print-desktop-yn-label:       0.75rem;  /* Y / N toggle buttons in desktop PDF              */
   --fs-print-desktop-check-item:     0.75rem;  /* checkbox & radio options in desktop PDF          */
@@ -233,7 +236,7 @@
   --pd-print-ipad-section-header:    4px 12px;        /* section title bars in iPad PDF                       */
   --pd-print-ipad-section-body:      4px 12px;        /* inside section content in iPad PDF                   */
   --pd-print-ipad-top-col:           5px 13px;        /* Customer Info & Property Info columns in iPad PDF     */
-  --pd-print-ipad-col-label:         2px 10px 2px 7px; /* column label pill in iPad PDF                       */
+  --pd-print-ipad-col-label:         2px 10px 1px 7px; /* column label pill in iPad PDF                       */
   --pd-print-ipad-input:             7px 5px 0px 5px;  /* inside text fields in iPad PDF — large top pushes text onto the bottom line */
   --pd-print-ipad-textarea:          2px 8px;         /* inside note boxes in iPad PDF                        */
   --pd-print-ipad-yn-label:          0 11px;          /* Y / N buttons in iPad PDF                            */
@@ -318,7 +321,7 @@
   --h-print-phone-ready-notes:  40px;   /* Install Details ready/notes box in PDF        */
 
   /* ---- PRINT HEIGHTS : iPAD ---- */
-  --h-print-ipad-input:         28px;  /* text fields in iPad PDF                          */
+  --h-print-ipad-input:         26.5px;  /* text fields in iPad PDF                          */
   --h-print-ipad-field-row:     30px;  /* row container in iPad PDF                        */
   --h-print-ipad-inline-row:    31px;  /* inline row in iPad PDF                           */
   --h-print-ipad-yn-label:      27px;  /* Y/N button height in iPad PDF                    */
@@ -582,7 +585,7 @@
   /* ---- TRANSFER SWITCH BOTTOM PADDING ---- */
   --pd-ts-bottom-screen:           1px;   /* bottom padding of Transfer Switch section body (screen)        */
   --pd-ts-bottom-print:            1px;   /* bottom padding of Transfer Switch section body (phone print)   */
-  --pd-ts-bottom-print-ipad:       0.5px;   /* bottom padding of Transfer Switch section body (iPad print)    */
+  --pd-ts-bottom-print-ipad:       0px;   /* bottom padding of Transfer Switch section body (iPad print)    */
 
   /* ---- PAD NOTES BOTTOM MARGIN ---- */
   --mb-pad-notes-phone:        4px;   /* space below Precast Pad notes box to section border (phone screen)   */
@@ -800,13 +803,13 @@ body.dark-mode .btn-gold:hover { background: rgba(217,119,6,0.25) !important; bo
 .content { padding: var(--pd-phone-content); padding-bottom: var(--pb-content-phone); display: flex; flex-direction: column; flex: 1; width: 100%; box-sizing: border-box; min-height: 0; overflow-y: auto; position: relative; z-index: 1; }
 @media (max-width: 480px) { .content { padding: 10px 8px; } }
 
-.section { border: 1px solid var(--border); margin-bottom: var(--mb-section-phone); background: var(--panel); position: relative; transition: all 0.3s ease; }
+.section { border: 1px solid var(--border); margin-bottom: var(--mb-section-phone); background: rgba(255,255,255,0.55); position: relative; transition: all 0.3s ease; }
 body.dark-mode .section { background: linear-gradient(135deg, rgba(26,40,71,0.6) 0%, rgba(15,21,53,0.8) 100%); border-color: rgba(0,255,200,0.15); box-shadow: 0 0 1px rgba(0,255,200,0.1), inset 0 0 20px rgba(0,255,200,0.02); }
 .section::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, var(--cyan), transparent 60%); transition: all 0.3s ease; }
 body.dark-mode .section::before { background: linear-gradient(90deg, #00FFC8, rgba(0,255,200,0.3) 40%, transparent 100%); opacity: 0.7; }
 
 .section-header {
-  background: var(--bg3); color: var(--cyan); font-family: var(--font-display);
+  background: rgba(248,248,248,0.6); color: var(--cyan); font-family: var(--font-display);
   font-size: var(--fs-phone-section-header); letter-spacing: 4px; padding: var(--pd-phone-section-header);
   border-bottom: 1px solid var(--border); text-shadow: 0 0 6px rgba(217,119,6,0.15);
   font-weight: 500; display: flex; align-items: center; gap: 8px; transition: all 0.3s ease;
@@ -821,7 +824,7 @@ body.dark-mode .section-header::before { background: #00FFC8; box-shadow: 0 0 8p
 .section-body { padding: var(--pd-phone-section-body); transition: all 0.3s ease; }
 @media (max-width: 480px) { .section-body { padding: 8px 8px; } }
 
-.top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--border); margin-bottom: var(--mb-section-phone); background: var(--panel); position: relative; transition: all 0.3s ease; }
+.top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--border); margin-bottom: var(--mb-section-phone); background: rgba(255,255,255,0.55); position: relative; transition: all 0.3s ease; }
 body.dark-mode .top-grid { background: linear-gradient(135deg, rgba(26,40,71,0.6) 0%, rgba(15,21,53,0.8) 100%); border-color: rgba(0,255,200,0.15); }
 .top-grid::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, var(--cyan), transparent 60%); transition: all 0.3s ease; }
 body.dark-mode .top-grid::before { background: linear-gradient(90deg, #00FFC8, rgba(0,255,200,0.3) 40%, transparent 100%); opacity: 0.7; }
@@ -832,7 +835,7 @@ body.dark-mode .top-grid::before { background: linear-gradient(90deg, #00FFC8, r
 body.dark-mode .top-col { border-color: rgba(0,255,200,0.1); background: transparent; }
 .top-col:first-child { border-right: 1px solid var(--border); }
 
-.col-label { display: inline-flex; align-items: center; gap: 6px; background: var(--bg3); border: 1px solid rgba(217,119,6,0.3); border-left: 3px solid var(--cyan); color: var(--cyan); font-family: var(--font-display); font-size: var(--fs-phone-col-label); letter-spacing: 3px; padding: var(--pd-phone-col-label); margin-bottom: 12px; text-shadow: 0 0 6px rgba(217,119,6,0.1); font-weight: 500; transition: all 0.3s ease; }
+.col-label { display: inline-flex; align-items: center; gap: 4px; background: var(--bg3); border: 1px solid rgba(217,119,6,0.3); border-left: 3px solid var(--cyan); color: var(--cyan); font-family: var(--font-display); font-size: var(--fs-phone-col-label); letter-spacing: 3px; padding: var(--pd-phone-col-label); margin-bottom: 12px; text-shadow: 0 0 6px rgba(217,119,6,0.1); font-weight: 500; transition: all 0.3s ease; }
 body.dark-mode .col-label { background: linear-gradient(90deg, rgba(26,40,71,0.7) 0%, rgba(36,52,88,0.5) 100%); color: #00FFC8; border-color: rgba(0,255,200,0.2); border-left-color: #00FFC8; text-shadow: 0 0 8px rgba(0,255,200,0.3); }
 .col-label::before { content: ''; display: inline-block; width: 6px; height: 6px; background: var(--icon-color-section); box-shadow: 0 0 6px var(--icon-color-section); flex-shrink: 0; animation: pulse 2s ease-in-out infinite; transition: all 0.3s ease; }
 body.dark-mode .col-label::before { background: #00FFC8; box-shadow: 0 0 6px #00FFC8, 0 0 12px rgba(0,255,200,0.4); }
@@ -853,11 +856,17 @@ body.dark-mode label { color: #7DD3FC; }
 body.dark-mode .survey-legend { color: #7DD3FC; }
 
 input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input[type="number"], textarea, select {
-  font-family: var(--font-mono); font-size: var(--fs-phone-input); color: var(--text); background: var(--panel);
+  font-family: var(--font-mono); font-size: var(--fs-phone-input); color: var(--text); background: rgba(255,255,255,0.55);
   border: none; border-bottom: 2px solid rgba(217,119,6,0.25); padding: var(--pd-phone-input);
   outline: none; width: 100%; transition: all 0.2s; border-radius: 0;
   min-height: var(--h-phone-input); height: var(--h-phone-input); -webkit-appearance: none; appearance: none;
   caret-color: var(--cyan); box-sizing: border-box;
+}
+input[type="text"]:-webkit-autofill, input[type="email"]:-webkit-autofill,
+input[type="tel"]:-webkit-autofill, input[type="number"]:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0px 1000px rgba(255,255,255,0.55) inset !important;
+  -webkit-text-fill-color: var(--text) !important;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 body.dark-mode input[type="text"], body.dark-mode input[type="email"], body.dark-mode input[type="tel"],
@@ -889,7 +898,7 @@ input.tiny  { width: 40px; min-width: 40px; text-align: center; }
 input.med   { width: 120px; min-width: 80px; }
 input.long  { flex: 1; min-width: 100px; }
 
-textarea { width: 100%; resize: vertical; border: 1px solid rgba(217,119,6,0.2); padding: var(--pd-phone-textarea); margin-top: 3px; min-height: 44px; height: 44px; background: var(--panel); color: var(--text); transition: all 0.3s ease; box-sizing: border-box; }
+textarea { width: 100%; resize: vertical; border: 1px solid rgba(217,119,6,0.2); padding: var(--pd-phone-textarea); margin-top: 3px; min-height: 44px; height: 44px; background: rgba(255,255,255,0.55); color: var(--text); transition: all 0.3s ease; box-sizing: border-box; }
 body.dark-mode textarea { background: rgba(10,14,39,0.6); border-color: rgba(0,255,200,0.15); color: #E0F7FF; }
 textarea:focus { border-color: var(--cyan); box-shadow: 0 0 8px rgba(217,119,6,0.1); }
 body.dark-mode textarea:focus { border-color: #00FFC8; box-shadow: 0 0 8px rgba(0,255,200,0.2); }
@@ -946,7 +955,7 @@ body.dark-mode .divider::before { color: #7DD3FC; background: rgba(10,14,39,0.95
 
 .flood-bar { display: flex; border: 1px solid var(--border); border-top: none; margin-bottom: var(--mb-section-phone); flex-wrap: wrap; background: var(--panel); transition: all 0.3s ease; }
 body.dark-mode .flood-bar { background: linear-gradient(90deg, rgba(15,21,53,0.8) 0%, rgba(26,40,71,0.6) 50%, rgba(15,21,53,0.8) 100%); border-color: rgba(0,255,200,0.1); }
-.flood-item { flex: 1; min-width: 130px; padding: var(--pd-phone-flood-item); border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; transition: all 0.3s ease; }
+.flood-item { flex: 1; min-width: 130px; padding: var(--pd-phone-flood-item); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; transition: all 0.3s ease; }
 body.dark-mode .flood-item { border-color: rgba(0,255,200,0.08); background: transparent; }
 .flood-item:last-child { border-right: none; }
 
@@ -1057,7 +1066,9 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
   .col-label::before { background: #D97706 !important; box-shadow: none !important; animation: none !important; }
   .col-label svg, .col-label svg * { stroke: #D97706 !important; color: #D97706 !important; }
   .flood-bar { display: flex !important; background: #ffffff !important; border: 1px solid #D97706 !important; border-top: none !important; margin-bottom: 0 !important; flex-shrink: 0 !important; }
-  .flood-item { border-right-color: #D97706 !important; background: #ffffff !important; padding: var(--pd-print-phone-flood-item) !important; }
+  .flood-item { border-right-color: #D97706 !important; background: #ffffff !important; padding: var(--pd-print-phone-flood-item) !important; align-items: flex-start !important; }
+  .flood-item label { align-self: flex-start !important; }
+  #est_done_on { width: auto !important; min-width: 0 !important; align-self: flex-start !important; }
   .section { background: #ffffff !important; border: 1px solid #D97706 !important; margin-bottom: 0 !important; flex-shrink: 0 !important; flex-grow: 0 !important; page-break-inside: avoid !important; break-inside: avoid !important; }
   .section::before { background: none !important; }
   .section-header { background: #f5f5f5 !important; color: #D97706 !important; border-bottom: 1px solid #D97706 !important; text-shadow: none !important; padding: var(--pd-print-phone-section-header) !important; font-size: var(--fs-print-phone-section-header) !important; }
@@ -1077,14 +1088,15 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
   label { color: #6B7280 !important; font-size: var(--fs-print-phone-label) !important; white-space: nowrap !important; }
   legend { font-size: var(--fs-print-phone-label) !important; color: #6B7280 !important; font-weight: 500 !important; font-family: var(--font-display) !important; letter-spacing: 1.5px !important; text-transform: uppercase !important; }
   .inline-label { color: #6B7280 !important; white-space: nowrap !important; font-size: var(--fs-print-phone-inline-label) !important; }
-  input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input[type="number"] { background: #ffffff !important; border-bottom: 2px solid #D97706 !important; border-top: none !important; border-left: none !important; border-right: none !important; color: #1F2937 !important; padding: var(--pd-print-phone-input) !important; min-height: var(--h-print-phone-input) !important; height: var(--h-print-phone-input) !important; font-size: var(--fs-print-phone-input) !important; box-shadow: none !important; }
+  input[type="text"], input[type="email"], input[type="tel"], input[type="number"] { background: #ffffff !important; border-bottom: 2px solid #D97706 !important; border-top: none !important; border-left: none !important; border-right: none !important; color: #1F2937 !important; padding: var(--pd-print-phone-input) !important; min-height: var(--h-print-phone-input) !important; height: var(--h-print-phone-input) !important; font-size: var(--fs-print-phone-input) !important; box-shadow: none !important; }
+  input[type="date"] { background: #ffffff !important; border-bottom: 2px solid #D97706 !important; border-top: none !important; border-left: none !important; border-right: none !important; color: #1F2937 !important; padding: var(--pd-print-phone-input) !important; min-height: var(--h-print-phone-input) !important; height: var(--h-print-phone-input) !important; font-size: var(--fs-print-phone-date) !important; box-shadow: none !important; }
   input::placeholder, textarea::placeholder { color: transparent !important; opacity: 0 !important; }
   input::-webkit-input-placeholder, textarea::-webkit-input-placeholder { color: transparent !important; opacity: 0 !important; }
   input::-moz-placeholder, textarea::-moz-placeholder { color: transparent !important; opacity: 0 !important; }
   #address { padding-right: 6px !important; }
-  #today { width: var(--w-print-ipad-today) !important; min-width: var(--w-print-ipad-today) !important; }
-  #est_date { width: var(--w-print-ipad-est-date) !important; min-width: var(--w-print-ipad-est-date) !important; }
-  #est_done_on { width: var(--w-print-ipad-est-done-on) !important; min-width: var(--w-print-ipad-est-done-on) !important; }
+  #today { width: auto !important; min-width: 0 !important; align-self: flex-start !important; font-size: var(--fs-print-phone-date) !important; }
+  #est_date { width: auto !important; min-width: 0 !important; align-self: flex-start !important; font-size: var(--fs-print-phone-date) !important; }
+  #est_done_on { width: auto !important; min-width: 0 !important; align-self: flex-start !important; font-size: var(--fs-print-phone-date) !important; }
   body.mobile-safari input[type="date"] { min-width: 0 !important; width: auto !important; flex-shrink: 1 !important; }
   textarea { border: 1px solid #D97706 !important; resize: none !important; overflow: hidden !important; padding: var(--pd-print-phone-textarea) !important; margin-top: 3px !important; font-size: var(--fs-print-phone-notes) !important; background: #ffffff !important; color: #1F2937 !important; box-shadow: none !important; }
   #gen_notes  { min-height: var(--h-print-phone-gen-notes) !important; height: var(--h-print-phone-gen-notes) !important; max-height: var(--h-print-phone-gen-notes) !important; }
@@ -1304,7 +1316,9 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
   .content               { padding: var(--pd-ipad-content) !important; padding-bottom: var(--pb-content-ipad) !important; }
   .section-body          { padding: var(--pd-ipad-section-body) !important; }
   .top-col               { padding: var(--pd-ipad-top-col) !important; }
-  .flood-item            { padding: var(--pd-ipad-flood-item) !important; }
+  .flood-item            { padding: var(--pd-ipad-flood-item) !important; min-width: 180px !important; }
+  label[for="flood_zone"] { padding-left: -25px !important; }
+  label[for="parcel"]     { padding-left: -12px !important; }
   .section, .top-grid, .flood-bar { margin-bottom: var(--mb-section-ipad) !important; }
 }
 
@@ -1346,8 +1360,10 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
 
 /* ===== iPAD PRINT — all elements ===== */
 @media print and (min-width: 768px) {
-  html { font-size: var(--fs-print-ipad-base) !important; }
-  @page { margin-bottom: 0in !important; }
+  html { font-size: var(--fs-print-ipad-base) !important; zoom: 0.777; margin: 0 !important; padding: 0 !important; }
+  body { width: 1050px !important; max-width: none !important; }
+  .page { width: 1050px !important; max-width: none !important; }
+  @page { margin: 0in !important; }
   .company-name          { font-size: var(--fs-print-ipad-company-name) !important; }
   .doc-title             { font-size: var(--fs-print-ipad-doc-title) !important; }
   .section-header        { font-size: var(--fs-print-ipad-section-header) !important; padding: var(--pd-print-ipad-section-header) !important; }
@@ -1356,7 +1372,8 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
   legend                 { font-size: var(--fs-print-ipad-label) !important; color: #6B7280 !important; font-weight: 500 !important; font-family: var(--font-display) !important; letter-spacing: 1.5px !important; text-transform: uppercase !important; }
   .inline-label          { font-size: var(--fs-print-ipad-inline-label) !important; }
   input[type="text"], input[type="email"], input[type="tel"],
-  input[type="date"], input[type="number"]              { font-size: var(--fs-print-ipad-input) !important; padding: var(--pd-print-ipad-input) !important; }
+  input[type="number"]              { font-size: var(--fs-print-ipad-input) !important; padding: var(--pd-print-ipad-input) !important; }
+  input[type="date"]                { font-size: var(--fs-print-ipad-date) !important; padding: var(--pd-print-ipad-input) !important; }
   textarea               { font-size: var(--fs-print-ipad-notes) !important; padding: var(--pd-print-ipad-textarea) !important; }
   .yn-group .yn-label    { font-size: var(--fs-print-ipad-yn-label) !important; padding: var(--pd-print-ipad-yn-label) !important; }
   .check-item            { padding: var(--pd-print-ipad-check-item) !important; min-height: var(--h-print-ipad-check-item) !important; height: var(--h-print-ipad-check-item) !important; }
@@ -1372,7 +1389,11 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
   .content               { padding: var(--pd-print-ipad-content) !important; padding-bottom: var(--pb-content-print-ipad) !important; }
   .section-body          { padding: var(--pd-print-ipad-section-body) !important; }
   .top-col               { padding: var(--pd-print-ipad-top-col) !important; }
-  .flood-item            { padding: var(--pd-print-ipad-flood-item) !important; }
+  .flood-item            { padding: var(--pd-print-ipad-flood-item) !important; align-items: flex-start !important; }
+  .flood-item label      { align-self: flex-start !important; }
+  #est_done_on           { width: auto !important; min-width: 0 !important; align-self: flex-start !important; font-size: var(--fs-print-ipad-date) !important; }
+  #today                 { font-size: var(--fs-print-ipad-date) !important; }
+  #est_date              { font-size: var(--fs-print-ipad-date) !important; }
   .footer                { padding: var(--pd-print-ipad-footer) !important; position: relative !important; z-index: 50 !important; }
   .footer-text           { font-size: var(--fs-print-ipad-footer) !important; }
   #ver-span              { font-size: var(--fs-print-ipad-ver-span) !important; }
@@ -1404,7 +1425,7 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
   #install-difficulty-row .section-body { padding-top: 2px !important; }
   #install-difficulty-row + * { margin-top: 0 !important; }
   .section:has(+ #install-difficulty-row) .section-body { padding-bottom: 2px !important; }
-  #precast-pad-row .section-body { padding-bottom: 2px !important; }
+  #precast-pad-row .section-body { padding-top: 0px !important; padding-bottom: 2px !important; }
   .section:has(+ #precast-pad-row) .section-body { padding-bottom: 2px !important; }
   /* Note boxes — flush to section border on print */
   .section:has(#gen_notes) .section-body   { padding-bottom: 0 !important; }
@@ -1414,8 +1435,8 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
   #gen_notes, #pad_notes, #gas_notes, #ready_notes { margin-bottom: 0 !important; }
   /* Transfer Switch — bottom padding only */
   #transfer-switch-row .section-body,
-  body.mobile-safari #transfer-switch-row .section-body { padding: 4px 12px var(--pd-ts-bottom-print-ipad) 12px !important; }
-  #transfer-switch-row .inline-row:last-child { min-height: 0 !important; margin-bottom: 0 !important; }
+  body.mobile-safari #transfer-switch-row .section-body { padding: 4px 12px 0px 12px !important; }
+  #transfer-switch-row .inline-row:last-child { min-height: 0 !important; height: auto !important; max-height: fit-content !important; margin-bottom: 0 !important; padding-bottom: 0 !important; flex-wrap: nowrap !important; overflow: hidden !important; }
 }
 
 /* ===== DESKTOP PRINT — all elements ===== */
@@ -1427,7 +1448,8 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
   label                  { font-size: var(--fs-print-desktop-label) !important; }
   .inline-label          { font-size: var(--fs-print-desktop-inline-label) !important; }
   input[type="text"], input[type="email"], input[type="tel"],
-  input[type="date"], input[type="number"]              { font-size: var(--fs-print-desktop-input) !important; padding: var(--pd-print-desktop-input) !important; }
+  input[type="number"]              { font-size: var(--fs-print-desktop-input) !important; padding: var(--pd-print-desktop-input) !important; }
+  input[type="date"]                { font-size: var(--fs-print-desktop-date) !important; padding: var(--pd-print-desktop-input) !important; }
   textarea               { font-size: var(--fs-print-desktop-notes) !important; padding: var(--pd-print-desktop-textarea) !important; }
   .yn-group .yn-label    { font-size: var(--fs-print-desktop-yn-label) !important; padding: var(--pd-print-desktop-yn-label) !important; }
   .check-item            { padding: var(--pd-print-desktop-check-item) !important; min-height: var(--h-print-desktop-check-item) !important; height: var(--h-print-desktop-check-item) !important; }
@@ -1760,9 +1782,9 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
           <div class="field-block" style="margin-top:var(--mt-notes-box-phone);"><textarea id="gas_notes" rows="1" style="resize:none;overflow:hidden;" name="gas_notes" title="Gas appliance notes — list unlisted appliances, BTU load concerns, meter size" placeholder="List other gas appliances or notes…" aria-label="Gas appliance notes"></textarea></div>
         </div>
         <div class="inline-row" id="fuel-run-row" style="margin-bottom:var(--mb-fuel-run-phone);flex-wrap:wrap;gap:8px 16px;">
-          <div class="field-block" style="flex:1;min-width:80px;"><label for="fuel_underground" style="margin-bottom:-20px;font-size:var(--fs-fuel-label);">Underground (ft)</label><input type="number" id="fuel_underground" name="fuel_underground" title="Underground gas line run in feet from tank/meter to generator" inputmode="numeric" autocomplete="off" aria-label="Underground fuel run in feet"></div>
-          <div class="field-block" style="flex:1;min-width:80px;"><label for="fuel_aboveground" style="margin-bottom:-20px;font-size:var(--fs-fuel-label);">Above Ground (ft)</label><input type="number" id="fuel_aboveground" name="fuel_aboveground" title="Above-ground gas line run in feet" inputmode="numeric" autocomplete="off" aria-label="Above ground fuel run in feet"></div>
-          <div class="field-block" style="flex:1;min-width:80px;"><label for="fuel_attic" style="margin-bottom:-20px;font-size:var(--fs-fuel-label);">Attic (ft)</label><input type="number" id="fuel_attic" name="fuel_attic" title="Gas line run through attic in feet" inputmode="numeric" autocomplete="off" aria-label="Attic fuel run in feet"></div>
+          <div class="field-block" style="flex:1;min-width:80px;"><label for="fuel_underground" style="margin-bottom:-20px;font-size:var(--fs-fuel-label);font-family:var(--font-body);-webkit-font-smoothing:antialiased;">Underground (ft)</label><input type="number" id="fuel_underground" name="fuel_underground" title="Underground gas line run in feet from tank/meter to generator" inputmode="numeric" autocomplete="off" aria-label="Underground fuel run in feet"></div>
+          <div class="field-block" style="flex:1;min-width:80px;"><label for="fuel_aboveground" style="margin-bottom:-20px;font-size:var(--fs-fuel-label);font-family:var(--font-body);-webkit-font-smoothing:antialiased;">Above Ground (ft)</label><input type="number" id="fuel_aboveground" name="fuel_aboveground" title="Above-ground gas line run in feet" inputmode="numeric" autocomplete="off" aria-label="Above ground fuel run in feet"></div>
+          <div class="field-block" style="flex:1;min-width:80px;"><label for="fuel_attic" style="margin-bottom:-20px;font-size:var(--fs-fuel-label);font-family:var(--font-body);-webkit-font-smoothing:antialiased;">Attic (ft)</label><input type="number" id="fuel_attic" name="fuel_attic" title="Gas line run through attic in feet" inputmode="numeric" autocomplete="off" aria-label="Attic fuel run in feet"></div>
           <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;">
             <label style="font-size:var(--fs-bore-label-phone);white-space:nowrap;">Bore</label>
             <div class="yn-group" role="group" aria-label="Fuel bore required" style="width:fit-content;min-width:0;flex-shrink:0;">
@@ -2397,7 +2419,8 @@ function printForm() {
       '  /* Counter iPad bleed — force phone values */',
       '  .field-row { min-height:var(--h-print-phone-field-row)!important; }',
       '  .inline-row { min-height:var(--h-print-phone-inline-row)!important; }',
-      '  input[type=text],input[type=email],input[type=tel],input[type=date],input[type=number] { min-height:var(--h-print-phone-input)!important;height:var(--h-print-phone-input)!important;font-size:var(--fs-print-phone-input)!important; }',
+      '  input[type=text],input[type=email],input[type=tel],input[type=number] { min-height:var(--h-print-phone-input)!important;height:var(--h-print-phone-input)!important;font-size:var(--fs-print-phone-input)!important; }',
+      '  input[type=date] { min-height:var(--h-print-phone-input)!important;height:var(--h-print-phone-input)!important;font-size:var(--fs-print-phone-date)!important; }',
       '  .yn-group,.yn-group .yn-label { height:var(--h-print-phone-yn-label)!important;min-height:var(--h-print-phone-yn-label)!important;line-height:var(--h-print-phone-yn-label)!important; }',
       '  .check-item { height:var(--h-print-phone-check-item)!important;min-height:var(--h-print-phone-check-item)!important; }',
       '  .section-body { padding:var(--pd-print-phone-section-body)!important; }',
@@ -2427,10 +2450,12 @@ function printForm() {
       '.inline-row { flex-wrap:wrap!important; overflow:visible!important; }',
       '.section-body,.section,.page { overflow:visible!important; }',
       '.section-body { padding:var(--pd-print-ipad-section-body)!important; }',
-      '#transfer-switch-row .section-body { padding:4px 12px var(--pd-ts-bottom-print-ipad) 12px!important; }',
-      '#transfer-switch-row .inline-row:last-child { min-height:0!important;margin-bottom:0!important; }',
+      '#transfer-switch-row .section-body { padding:4px 12px 0px 12px!important; }',
+      '#transfer-switch-row .inline-row:last-child { min-height:0!important;height:auto!important;max-height:fit-content!important;margin-bottom:0!important;padding-bottom:0!important;flex-wrap:nowrap!important;overflow:hidden!important; }',
+      '#precast-pad-row .section-body { padding-top:0px!important; }',
       'input[type=date] { min-width:0!important;flex-shrink:1!important;width:auto!important; }',
-      'input[type=text],input[type=email],input[type=tel],input[type=date],input[type=number] { min-height:var(--h-print-ipad-input)!important;height:var(--h-print-ipad-input)!important; }',
+      'input[type=text],input[type=email],input[type=tel],input[type=number] { min-height:var(--h-print-ipad-input)!important;height:var(--h-print-ipad-input)!important; }',
+      'input[type=date] { min-height:var(--h-print-ipad-input)!important;height:var(--h-print-ipad-input)!important;font-size:var(--fs-print-ipad-date)!important; }',
       '.yn-group,.yn-group .yn-label { height:var(--h-print-ipad-yn-label)!important;min-height:var(--h-print-ipad-yn-label)!important;line-height:var(--h-print-ipad-yn-label)!important; }',
       '.check-item { height:var(--h-print-ipad-check-item)!important;min-height:var(--h-print-ipad-check-item)!important; }',
       '#gen_notes  { height:var(--h-print-ipad-gen-notes)!important;min-height:var(--h-print-ipad-gen-notes)!important;max-height:var(--h-print-ipad-gen-notes)!important; }',
@@ -2588,6 +2613,9 @@ function capturePageToCanvas() {
       '.grid-4 { grid-template-columns: repeat(4, 1fr) !important; }',
       '.logo-img { width: 48px !important; height: 48px !important; object-fit: contain !important; display: block !important; }',
       '.section-header::before, .col-label::before { display: none !important; content: none !important; }',
+      '#transfer-switch-row .section-body { padding-bottom: 0px !important; }',
+      '#transfer-switch-row .inline-row:last-child { min-height: 0 !important; height: auto !important; max-height: fit-content !important; margin-bottom: 0 !important; padding-bottom: 0 !important; flex-wrap: nowrap !important; overflow: hidden !important; }',
+      '#precast-pad-row .section-body { padding-top: 0px !important; }',
     ].join('\n');
     document.head.appendChild(forceStyle);
 
