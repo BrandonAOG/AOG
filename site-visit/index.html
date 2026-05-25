@@ -374,6 +374,50 @@ body.dark-mode table.mat-table td.row-label {
 #wireway-table  td.row-label { font-size: 10px; min-width: 110px; }
 #polaris-table  td.row-label { font-size: 10px; min-width: 110px; }
 
+/* Wireway + Polaris side-by-side on desktop, stacked on mobile */
+.wireway-polaris-row { display: flex; gap: 10px; align-items: flex-start; }
+.wireway-polaris-row .grid-section { flex: 1; min-width: 0; }
+
+/* Compact qty inputs for wireway and polaris */
+#wireway-table td input[type="text"],
+#polaris-table td input[type="text"] {
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+  text-align: center;
+}
+
+/* Full-width Other field — last item on page 2 */
+.footer-other-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+  width: 100%;
+}
+.footer-other-label {
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--text);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: Arial, sans-serif;
+}
+.footer-other-input {
+  flex: 1;
+  width: 100% !important;
+  min-width: 0;
+  border: none !important;
+  border-bottom: 1px solid rgba(217,119,6,0.4) !important;
+  background: transparent !important;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  color: var(--text);
+  padding: 2px 4px;
+}
+body.dark-mode .footer-other-label { color: #E0F7FF; }
+body.dark-mode .footer-other-input { border-bottom-color: rgba(0,255,200,0.3) !important; color: #E0F7FF; }
+
 body.dark-mode #fittings-table td.row-label,
 body.dark-mode #wireway-table  td.row-label,
 body.dark-mode #polaris-table  td.row-label {
@@ -401,7 +445,7 @@ body.dark-mode .footer-fields { border-top-color: rgba(0,255,200,0.15); }
 
 .footer-row {
   display: flex; gap: 12px; flex-wrap: wrap;
-  align-items: flex-end; margin-bottom: 8px; width: 100%;
+  align-items: flex-end; margin-bottom: 8px; width: 100%; padding: 1px 0;
 }
 @media (max-width: 768px) { .footer-row { gap: 8px; } }
 @media (max-width: 480px) { .footer-row { gap: 6px; margin-bottom: 6px; } }
@@ -902,14 +946,23 @@ body.dark-mode .notice { color: #7DD3FC; }
   #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td { font-size: 9px; }
   #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td input[type="text"] { font-size: 9px; }
   #page2 #fittings-table td.row-label { width: 100px; min-width: 0; white-space: normal; word-break: break-word; }
-  #page2 #wireway-table  td.row-label { width: 85px; min-width: 0; }
+  #page2 #wireway-table  td.row-label { width: 80px !important; min-width: 0 !important; }
   #page2 #wireway-table th,
   #page2 #wireway-table td { font-size: 9px; }
   #page2 #wireway-table td input[type="text"] { font-size: 9px; }
-  #page2 #polaris-table  td.row-label { width: 85px; min-width: 0; }
+  #page2 #polaris-table  td.row-label { width: 80px !important; min-width: 0 !important; }
   #page2 #polaris-table th,
   #page2 #polaris-table td { font-size: 10px; }
   #page2 #polaris-table td input[type="text"] { font-size: 10px; }
+
+  /* Keep wireway + polaris side by side in print */
+  #page2 .wireway-polaris-row { display: flex !important; gap: 8px !important; align-items: flex-start !important; }
+  #page2 .wireway-polaris-row .grid-section { flex: 1 !important; min-width: 0 !important; overflow: visible !important; }
+
+  /* Other row in print */
+  #page2 .footer-other-row { display: flex !important; align-items: flex-end !important; gap: 4px !important; width: 100% !important; margin-top: 3px !important; }
+  #page2 .footer-other-label { font-size: 10px !important; font-weight: bold !important; white-space: nowrap !important; flex-shrink: 0 !important; color: #1F2937 !important; }
+  #page2 .footer-other-input { flex: 1 !important; width: 100% !important; border: none !important; border-bottom: 1px solid #333 !important; background: transparent !important; font-size: 10px !important; color: #1F2937 !important; padding: 0 !important; }
 
   #page2 table.mat-table td input[type="text"] {
     width: 100%; border: none; background: transparent;
@@ -929,7 +982,7 @@ body.dark-mode .notice { color: #7DD3FC; }
   #page2 table.mat-table tr { page-break-inside: avoid !important; break-inside: avoid !important; }
 
   #page2 .footer-fields { margin-top: 14px; padding-top: 10px; border-top: 1px solid #555; font-size: 10px; }
-  #page2 .footer-row { display: flex; flex-wrap: wrap; gap: 1px 6px; margin-bottom: 4px; align-items: center; }
+  #page2 .footer-row { display: flex; flex-wrap: wrap; gap: 1px 6px; margin-bottom: 4px; align-items: center; padding: 1px 0; }
   #page2 .footer-field { display: inline-flex; align-items: center; gap: 1px; white-space: nowrap; }
   #page2 .footer-field label { font-size: 10px; font-weight: bold; color: #1F2937; white-space: nowrap; }
   #page2 .footer-field input[type="text"] { border: none; border-bottom: 1px solid #333; background: transparent; color: #1F2937; font-size: 10px; padding: 0 1px; height: auto; width: 60px; min-width: 0; }
@@ -1002,7 +1055,7 @@ body.dark-mode .notice { color: #7DD3FC; }
   #page2 #polaris-table  td.row-label { width: 70px !important; }
 
   #page2 .footer-fields { margin-top: 0.975px !important; padding-top: 0.975px !important; font-size: 10.9px !important; }
-  #page2 .footer-row { gap: 1px 8px !important; margin-bottom: 1.5px !important; }
+  #page2 .footer-row { gap: 1px 8px !important; margin-bottom: 1.5px !important; padding: 1px 0 !important; }
   #page2 .footer-field label { font-size: 10.9px !important; }
   #page2 .footer-field input[type="text"] {
     font-size: 10.9px !important; height: auto !important; line-height: 1.0 !important;
@@ -1053,7 +1106,7 @@ body.dark-mode .notice { color: #7DD3FC; }
   #page2 table.mat-table th        { font-size: 10px !important; }
   #page2 table.mat-table td.row-label { padding: 0.75px 2px !important; }
   #page2 .footer-fields            { margin-top: 0.975px !important; padding-top: 0.975px !important; font-size: 10.9px !important; }
-  #page2 .footer-row               { gap: 1px 8px !important; margin-bottom: 1.5px !important; }
+  #page2 .footer-row               { gap: 1px 8px !important; margin-bottom: 1.5px !important; padding: 1px 0 !important; }
   #page2 .footer-field label       { font-size: 10.9px !important; }
   #page2 .footer-field input[type="text"] {
     font-size: 10.9px !important; height: auto !important; line-height: 1.0 !important;
@@ -1086,7 +1139,7 @@ body.printing:not(.mobile-printing) #page1 input[type="checkbox"]    { width: 10
 
 body.printing:not(.mobile-printing) #page2 .grid-section             { margin-bottom: 1.5px !important; }
 body.printing:not(.mobile-printing) #page2 .footer-fields            { margin-top: 0.975px !important; padding-top: 0.975px !important; }
-body.printing:not(.mobile-printing) #page2 .footer-row               { gap: 1px 8px !important; margin-bottom: 1.5px !important; }
+body.printing:not(.mobile-printing) #page2 .footer-row               { gap: 1px 8px !important; margin-bottom: 1.5px !important; padding: 1px 0 !important; }
 body.printing:not(.mobile-printing) #page2 .footer-field label       { font-size: 10.9px !important; }
 body.printing:not(.mobile-printing) #page2 .footer-field input[type="text"] {
   font-size: 10.9px !important; height: auto !important; padding-bottom: 1px !important; width: 45px !important;
@@ -1252,6 +1305,9 @@ body.dark-mode .ft-label { color: #7DD3FC; }
   #page2 .grid-section { display: block !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; margin-bottom: 10px !important; }
   #page2 .footer-fields { display: block !important; }
   #mobile-p2-accordions { display: none !important; }
+
+  /* Stack wireway above polaris on mobile */
+  .wireway-polaris-row { flex-direction: column !important; }
 
   /* Compact table styling */
   #page2 table.mat-table {
@@ -1693,24 +1749,28 @@ html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap      {
       </table>
     </div>
 
-    <div class="grid-section">
-      <table class="mat-table" id="wireway-table">
-        <thead><tr>
-          <th style="width:100px;">WIREWAY</th>
-          <th>2'</th><th>3'</th><th>4'</th><th>5'</th><th>6'</th>
-        </tr></thead>
-        <tbody id="wireway-body"></tbody>
-      </table>
-    </div>
+    <div class="wireway-polaris-row">
 
-    <div class="grid-section">
-      <table class="mat-table" id="polaris-table">
-        <thead><tr>
-          <th style="width:100px;">POLARIS TAPS</th>
-          <th>Straights</th><th>2-Port</th><th>3-Port</th><th>4-Port</th><th>5-Port</th>
-        </tr></thead>
-        <tbody id="polaris-body"></tbody>
-      </table>
+      <div class="grid-section" style="flex:1;min-width:0;">
+        <table class="mat-table" id="wireway-table">
+          <thead><tr>
+            <th style="width:80px;">WIREWAY</th>
+            <th>2'</th><th>3'</th><th>4'</th><th>5'</th><th>6'</th>
+          </tr></thead>
+          <tbody id="wireway-body"></tbody>
+        </table>
+      </div>
+
+      <div class="grid-section" style="flex:1;min-width:0;">
+        <table class="mat-table" id="polaris-table">
+          <thead><tr>
+            <th style="width:80px;">POLARIS TAPS</th>
+            <th>Straights</th><th>2-Port</th><th>3-Port</th><th>4-Port</th><th>5-Port</th>
+          </tr></thead>
+          <tbody id="polaris-body"></tbody>
+        </table>
+      </div>
+
     </div>
 
     <div class="footer-fields">
@@ -1723,7 +1783,6 @@ html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap      {
       <div class="footer-row">
         <div class="footer-field"><label>Shallow Strut (length):</label><input type="text" class="wide" inputmode="numeric"></div>
         <div class="footer-field"><label>Deep Strut (length):</label><input type="text" class="wide" inputmode="numeric"></div>
-        <div class="footer-field" style="flex:1;"><label>Other:</label><input type="text" class="allow-text" style="width:100%;min-width:120px;"></div>
       </div>
       <div class="footer-row">
         <div class="footer-field"><label>100A Disconnects (Qty):</label><input type="text" class="short" inputmode="numeric"></div>
@@ -1734,6 +1793,10 @@ html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap      {
         <div class="footer-field"><label>Surge Protectors (Qty):</label><input type="text" class="short" inputmode="numeric"></div>
         <div class="footer-field"><label>PSP Load Shed Modules(60A) (Qty):</label><input type="text" class="short" inputmode="numeric"></div>
         <div class="footer-field"><label>PSP Load Shed Modules(100A) (Qty):</label><input type="text" class="short" inputmode="numeric"></div>
+      </div>
+      <div class="footer-other-row">
+        <label class="footer-other-label">Other:</label>
+        <input type="text" class="footer-other-input allow-text">
       </div>
     </div>
 
