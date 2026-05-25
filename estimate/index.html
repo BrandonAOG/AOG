@@ -140,7 +140,7 @@
   --fs-print-ipad-label:           0.85rem;  /* field labels in iPad PDF                         */
   --fs-print-ipad-inline-label:    0.85rem;  /* inline labels in iPad PDF                        */
   --fs-print-ipad-input:           1.4rem;   /* text inside input fields in iPad PDF             */
-  --fs-print-ipad-notes:           0.8rem;  /* text inside note boxes (gen/pad/gas/ready) in iPad PDF */
+  --fs-print-ipad-notes:           1.25rem;  /* text inside note boxes (gen/pad/gas/ready) in iPad PDF */
   --fs-print-ipad-yn-label:        0.8rem;  /* Y / N toggle buttons in iPad PDF                 */
   --fs-print-ipad-check-item:      0.8rem;  /* checkbox & radio options in iPad PDF             */
   --fs-print-ipad-gas-label:       0.75rem;  /* gas appliances label in iPad PDF                 */
@@ -232,10 +232,10 @@
   --pd-print-ipad-content:           4px 14px;        /* outer page margins in iPad PDF                       */
   --pd-print-ipad-section-header:    4px 12px;        /* section title bars in iPad PDF                       */
   --pd-print-ipad-section-body:      4px 12px;        /* inside section content in iPad PDF                   */
-  --pd-print-ipad-top-col:           6px 12px;        /* Customer Info & Property Info columns in iPad PDF     */
+  --pd-print-ipad-top-col:           5px 13px;        /* Customer Info & Property Info columns in iPad PDF     */
   --pd-print-ipad-col-label:         2px 10px 2px 7px; /* column label pill in iPad PDF                       */
   --pd-print-ipad-input:             7px 5px 0px 5px;  /* inside text fields in iPad PDF — large top pushes text onto the bottom line */
-  --pd-print-ipad-textarea:          5px 8px;         /* inside note boxes in iPad PDF                        */
+  --pd-print-ipad-textarea:          2px 8px;         /* inside note boxes in iPad PDF                        */
   --pd-print-ipad-yn-label:          0 11px;          /* Y / N buttons in iPad PDF                            */
   --pd-print-ipad-check-item:        0 8px 0 6px;     /* checkbox/radio pills in iPad PDF                     */
   --pd-print-ipad-flood-item:        3px 12px;        /* flood bar items in iPad PDF                          */
@@ -313,13 +313,13 @@
   --h-print-phone-yn-label:     27px;   /* Y/N button height in PDF                      */
   --h-print-phone-check-item:   26px;   /* checkbox/radio pill height in PDF             */
   --h-print-phone-gen-notes:    40px;   /* Generator notes text box height in PDF        */
-  --h-print-phone-pad-notes:    32px;   /* Precast Pad notes text box height in PDF      */
+  --h-print-phone-pad-notes:    40px;   /* Precast Pad notes text box height in PDF      */
   --h-print-phone-gas-notes:    40px;   /* Fuel Tank / gas appliances notes box in PDF   */
-  --h-print-phone-ready-notes:  38px;   /* Install Details ready/notes box in PDF        */
+  --h-print-phone-ready-notes:  40px;   /* Install Details ready/notes box in PDF        */
 
   /* ---- PRINT HEIGHTS : iPAD ---- */
-  --h-print-ipad-input:         32px;  /* text fields in iPad PDF                          */
-  --h-print-ipad-field-row:     32px;  /* row container in iPad PDF                        */
+  --h-print-ipad-input:         28px;  /* text fields in iPad PDF                          */
+  --h-print-ipad-field-row:     30px;  /* row container in iPad PDF                        */
   --h-print-ipad-inline-row:    31px;  /* inline row in iPad PDF                           */
   --h-print-ipad-yn-label:      27px;  /* Y/N button height in iPad PDF                    */
   --h-print-ipad-check-item:    26px;  /* checkbox/radio pill height in iPad PDF           */
@@ -363,7 +363,7 @@
 
   /* ---- PRINT FOOTER : iPAD ---- */
   --fs-print-ipad-footer:          0.55rem;  /* confidential text in iPad PDF                    */
-  --fs-print-ipad-ver-span:        0.72rem;  /* "Ver. 1.1" in iPad PDF                           */
+  --fs-print-ipad-ver-span:        0.55rem;  /* "Ver. 1.1" in iPad PDF                           */
 
   /* ---- PRINT FOOTER : DESKTOP ---- */
   --fs-print-desktop-footer:       0.55rem;  /* confidential text in desktop PDF                 */
@@ -562,8 +562,8 @@
   --pb-content-phone:          14px;  /* screen phone — space below last section to footer   */
   --pb-content-ipad:           14px;  /* screen iPad                                         */
   --pb-content-desktop:        14px;  /* screen desktop                                      */
-  --pb-content-print-phone:     4px;  /* print phone                                         */
-  --pb-content-print-ipad:      4px;  /* print iPad                                          */
+  --pb-content-print-phone:    2px;  /* print phone                                         */
+  --pb-content-print-ipad:      2px;  /* print iPad                                          */
   --pb-content-print-desktop:   4px;  /* print desktop                                       */
 
   /* ---- ACTION BAR CLEARANCE ---- */
@@ -576,13 +576,13 @@
   --mt-notes-box-ipad:       10px;   /* (iPad)                                           */
   --mt-notes-box-desktop:    10px;   /* (desktop)                                        */
   --mt-notes-box-print:      10px;   /* (phone PDF)                                      */
-  --mt-notes-box-print-ipad: 8px;   /* (iPad PDF)                                       */
+  --mt-notes-box-print-ipad: 6px;   /* (iPad PDF)                                       */
   --mt-notes-box-print-desktop:10px; /* (desktop PDF)                                    */
 
   /* ---- TRANSFER SWITCH BOTTOM PADDING ---- */
   --pd-ts-bottom-screen:           1px;   /* bottom padding of Transfer Switch section body (screen)        */
   --pd-ts-bottom-print:            1px;   /* bottom padding of Transfer Switch section body (phone print)   */
-  --pd-ts-bottom-print-ipad:       1px;   /* bottom padding of Transfer Switch section body (iPad print)    */
+  --pd-ts-bottom-print-ipad:       0.5px;   /* bottom padding of Transfer Switch section body (iPad print)    */
 
   /* ---- PAD NOTES BOTTOM MARGIN ---- */
   --mb-pad-notes-phone:        4px;   /* space below Precast Pad notes box to section border (phone screen)   */
@@ -597,7 +597,7 @@
   --mb-fuel-run-ipad:         4px;   /* space below Underground/Above Ground/Attic row to section border (iPad screen)    */
   --mb-fuel-run-desktop:      4px;   /* space below Underground/Above Ground/Attic row to section border (desktop screen) */
   --mb-fuel-run-print:        4px;   /* space below Underground/Above Ground/Attic row to section border (iPhone PDF)     */
-  --mb-fuel-run-print-ipad:   4px;   /* space below Underground/Above Ground/Attic row to section border (iPad PDF)       */
+  --mb-fuel-run-print-ipad:   2px;   /* space below Underground/Above Ground/Attic row to section border (iPad PDF)       */
   --mb-fuel-run-print-desktop:4px;   /* space below Underground/Above Ground/Attic row to section border (desktop PDF)    */
 
   --icon-color-primary: #D97706;
@@ -763,7 +763,7 @@ body.offline { padding-top: 0; }
 .toolbar {
   background: var(--panel); border-bottom: 1px solid var(--border);
   padding: 4px 8px; display: flex; gap: 4px; align-items: center;
-  padding-top: calc(env(safe-area-inset-top, 0px) + 4px);
+  padding-top: max(4px, env(safe-area-inset-top, 4px));
   flex-wrap: wrap; flex-shrink: 0; transition: all 0.3s ease;
   position: relative; z-index: 1;
 }
@@ -2421,7 +2421,7 @@ function printForm() {
     var safariPageFix = document.createElement('style');
     safariPageFix.id = 'safari-page-fix';
     safariPageFix.textContent = [
-      '@page { size: 8.5in 11.1in; margin: 0.0in; }',
+      '@page { size: 8.5in 11in; margin: 0.0in; }',
       '.field-row,.inline-row { min-height:var(--h-print-ipad-field-row)!important; }',
       '.field-row { flex-wrap:nowrap!important; }',
       '.inline-row { flex-wrap:wrap!important; overflow:visible!important; }',
@@ -4026,35 +4026,13 @@ document.addEventListener('DOMContentLoaded', function() {
 // ── SINGLE-LINE NOTES — prevent Enter key wrapping to second line ──
 (function() {
   var noteIds = ['gen_notes', 'pad_notes', 'gas_notes', 'ready_notes'];
-  var MAX_SIZE = 14;  // px — starting font size when field is empty or short
-  var MIN_SIZE = 9;   // px — smallest font allowed (keeps print readable)
-
-  function fitNotes(el) {
-    var size = MAX_SIZE;
-    el.style.fontSize = size + 'px';
-    while (el.scrollHeight > el.clientHeight && size > MIN_SIZE) {
-      size -= 0.5;
-      el.style.fontSize = size + 'px';
-    }
-  }
-
   document.addEventListener('DOMContentLoaded', function() {
     noteIds.forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
-
-      // Prevent Enter key wrapping to second line
       el.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') e.preventDefault();
       });
-
-      // Shrink font as text grows, restore when text is deleted
-      el.addEventListener('input', function() {
-        fitNotes(el);
-      });
-
-      // Run on load in case a saved draft is restored with text already in it
-      fitNotes(el);
     });
   });
 })();
