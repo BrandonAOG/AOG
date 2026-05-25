@@ -138,13 +138,13 @@
   --fs-print-ipad-doc-title:       1.2rem;  /* "Generator Installation Estimate" in iPad PDF    */
   --fs-print-ipad-section-header:  0.95rem;  /* section title bars in iPad PDF                   */
   --fs-print-ipad-col-label:       0.95rem;  /* column label pills in iPad PDF                   */
-  --fs-print-ipad-label:           0.93rem;  /* field labels in iPad PDF                         */
-  --fs-print-ipad-inline-label:    0.93rem;  /* inline labels in iPad PDF                        */
-  --fs-print-ipad-input:           1.57rem;   /* text inside input fields in iPad PDF             */
-  --fs-print-ipad-date:            1.25rem;  /* date fields (Today's Date, Estimate Date, Est. Done On) in iPad PDF */
-  --fs-print-ipad-notes:           1.25rem;  /* text inside note boxes (gen/pad/gas/ready) in iPad PDF */
-  --fs-print-ipad-yn-label:        0.80rem;  /* Y / N toggle buttons in iPad PDF                 */
-  --fs-print-ipad-check-item:      0.80rem;  /* checkbox & radio options in iPad PDF             */
+  --fs-print-ipad-label:           0.85rem;  /* field labels in iPad PDF                         */
+  --fs-print-ipad-inline-label:    0.85rem;  /* inline labels in iPad PDF                        */
+  --fs-print-ipad-input:           1.2rem;   /* text inside input fields in iPad PDF             */
+  --fs-print-ipad-date:            1.2rem;  /* date fields (Today's Date, Estimate Date, Est. Done On) in iPad PDF */
+  --fs-print-ipad-notes:           1.1rem;  /* text inside note boxes (gen/pad/gas/ready) in iPad PDF */
+  --fs-print-ipad-yn-label:        0.85rem;  /* Y / N toggle buttons in iPad PDF                 */
+  --fs-print-ipad-check-item:      0.85rem;  /* checkbox & radio options in iPad PDF             */
   --fs-print-ipad-gas-label:       0.75rem;  /* gas appliances label in iPad PDF                 */
 
   /* ---- PRINT : DESKTOP ---- */
@@ -326,10 +326,10 @@
   --h-print-ipad-inline-row:    31px;  /* inline row in iPad PDF                           */
   --h-print-ipad-yn-label:      27px;  /* Y/N button height in iPad PDF                    */
   --h-print-ipad-check-item:    26px;  /* checkbox/radio pill height in iPad PDF           */
-  --h-print-ipad-gen-notes:     42px;   /* Generator notes text box height in PDF        */
-  --h-print-ipad-pad-notes:     42px;   /* Precast Pad notes text box height in PDF      */
-  --h-print-ipad-gas-notes:     41px;   /* Fuel Tank / gas appliances notes box in PDF   */
-  --h-print-ipad-ready-notes:   42px;   /* Install Details ready/notes box in PDF        */
+  --h-print-ipad-gen-notes:     43px;   /* Generator notes text box height in PDF        */
+  --h-print-ipad-pad-notes:     43px;   /* Precast Pad notes text box height in PDF      */
+  --h-print-ipad-gas-notes:     42px;   /* Fuel Tank / gas appliances notes box in PDF   */
+  --h-print-ipad-ready-notes:   43px;   /* Install Details ready/notes box in PDF        */
 
   /* ---- PRINT HEIGHTS : DESKTOP ---- */
   --h-print-desktop-input:      31px;  /* text fields in desktop PDF                       */
@@ -433,7 +433,7 @@
 
   /* ---- DESKTOP PRINT BASE FONT ---- */
   --fs-print-phone-base:         13.08px; /* base html font-size for phone print             */
-  --fs-print-ipad-base:          13.08px; /* base html font-size for iPad print              */
+  --fs-print-ipad-base:          16.7px; /* base html font-size for iPad print              */
   --fs-print-desktop-base:       13.08px; /* base html font-size for desktop print           */
 
   /* ---- INPUT FIELD WIDTHS — PHONE ---- */
@@ -488,7 +488,7 @@
   --w-print-ipad-ts-placement:   25ch;
   --w-print-ipad-circuits:       5ch;
   --w-print-ipad-stand-height:   4ch;
-  --w-print-ipad-tank-size:      11ch;
+  --w-print-ipad-tank-size:      12ch;
   --w-print-ipad-install-days:   12ch;
 
   /* ---- INPUT FIELD WIDTHS — PRINT DESKTOP ---- */
@@ -1051,7 +1051,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
   body::before, body::after, body[class*="seasonal-"]::before, body[class*="seasonal-"]::after { display: none !important; content: none !important; }
   html { zoom: 0.758; margin: 0 !important; padding: 0 !important; }
   body { margin: 0 auto !important; padding: 0 !important; width: 1050px !important; max-width: none !important; background: #ffffff !important; background-image: none !important; color: #1F2937 !important; --icon-color-section: #D97706 !important; --cyan: #D97706 !important; }
-  .page { width: 1050px !important; max-width: none !important; height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important; display: flex !important; flex-direction: column !important; overflow: visible !important; background: #ffffff !important; border: 1.5pt solid #D97706 !important; box-shadow: none !important; position: static !important; outline: none !important; }
+  .page { width: 1050px !important; max-width: none !important; height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; padding-top: 0 !important; box-sizing: border-box !important; display: flex !important; flex-direction: column !important; overflow: visible !important; background: #ffffff !important; border: 1.5pt solid #D97706 !important; box-shadow: none !important; position: static !important; outline: none !important; }
   .content { flex: 1 !important; min-height: 0 !important; overflow: visible !important; padding: var(--pd-print-phone-content) !important; padding-bottom: var(--pb-content-print-phone) !important; background: #ffffff !important; display: flex !important; flex-direction: column !important; gap: 0 !important; justify-content: space-between !important; height: 0 !important; }
   .page::before, .page::after, .page-corner-bl, .page-corner-br { display: none !important; }
   .header { background: #ffffff !important; border-bottom: 1px solid #D97706 !important; padding: var(--pd-print-phone-header) !important; min-height: auto !important; height: auto !important; display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; }
@@ -1145,7 +1145,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
   #elec_run_ft { width: 9ch !important; min-width: 9ch !important; max-width: 9ch !important; flex-shrink: 0 !important; }
   #gen_size { width: 15ch !important; min-width: 15ch !important; max-width: 15ch !important; flex-shrink: 0 !important; }
   #circuits_60a, #circuits_100a { width: 5ch !important; min-width: 5ch !important; max-width: 5ch !important; flex-shrink: 0 !important; }
-  .footer { background: #ffffff !important; border-top: 1px solid #D97706 !important; padding: var(--pd-print-phone-footer) !important; margin-top: auto !important; display: flex !important; justify-content: space-between !important; align-items: center !important; flex-shrink: 0 !important; width: 100% !important; min-height: auto !important; height: auto !important; }
+  .footer { background: #ffffff !important; border-top: 1px solid #D97706 !important; padding: var(--pd-print-phone-footer) !important; margin-top: 0 !important; display: flex !important; justify-content: space-between !important; align-items: center !important; flex-shrink: 0 !important; width: 100% !important; min-height: auto !important; height: auto !important; }
   .footer-text { color: #D97706 !important; text-shadow: none !important; font-size: var(--fs-print-phone-footer) !important; }
   #ver-span { color: #9CA3AF !important; font-size: var(--fs-print-phone-ver-span) !important; text-shadow: none !important; }
   body.dark-mode .page, body.dark-mode .header, body.dark-mode .section, body.dark-mode .section-header,
@@ -1254,7 +1254,7 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
   body.mobile-safari .gas-appliances-box               { padding: var(--pd-ipad-gas-box) !important; }
   body.mobile-safari .footer-text                      { font-size: var(--fs-ipad-footer) !important; }
   body.mobile-safari #ver-span                         { font-size: var(--fs-ipad-ver-span) !important; }
-  body.mobile-safari .page, .page { padding-top: var(--action-bar-clearance-ipad) !important; }
+  body.mobile-safari .page { padding-top: var(--action-bar-clearance-ipad) !important; }
 
   /* ---- misc overrides : ipad ---- */
   .logo-img { width: var(--logo-size-screen-ipad) !important; height: var(--logo-size-screen-ipad) !important; }
@@ -1360,7 +1360,7 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
 
 /* ===== iPAD PRINT — all elements ===== */
 @media print and (min-width: 768px) {
-  html { font-size: var(--fs-print-ipad-base) !important; zoom: 0.777; margin: 0 !important; padding: 0 !important; }
+  html { font-size: var(--fs-print-ipad-base) !important; zoom: 1; margin: 0 !important; padding: 0 !important; }
   body { width: 1050px !important; max-width: none !important; }
   .page { width: 1050px !important; max-width: none !important; }
   @page { margin: 0in !important; }
@@ -1394,7 +1394,7 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
   #est_done_on           { width: auto !important; min-width: 0 !important; align-self: flex-start !important; font-size: var(--fs-print-ipad-date) !important; }
   #today                 { font-size: var(--fs-print-ipad-date) !important; }
   #est_date              { font-size: var(--fs-print-ipad-date) !important; }
-  .footer                { padding: var(--pd-print-ipad-footer) !important; position: relative !important; z-index: 50 !important; }
+  .footer                { padding: var(--pd-print-ipad-footer) !important; position: relative !important; z-index: 50 !important; margin-top: 0 !important; }
   .footer-text           { font-size: var(--fs-print-ipad-footer) !important; }
   #ver-span              { font-size: var(--fs-print-ipad-ver-span) !important; }
   #gen_notes   { min-height: var(--h-print-ipad-gen-notes) !important; height: var(--h-print-ipad-gen-notes) !important; max-height: var(--h-print-ipad-gen-notes) !important; }
@@ -4116,6 +4116,22 @@ function adjustTopPadding() {
 window.addEventListener('resize', adjustTopPadding);
 window.addEventListener('load', adjustTopPadding);
 setTimeout(adjustTopPadding, 100);
+
+// ── PRINT: strip inline padding-top so Safari iPad doesn't generate a blank page 2 ──
+var _savedPagePaddingTop = '';
+window.addEventListener('beforeprint', function() {
+  var page = document.getElementById('page');
+  if (page) {
+    _savedPagePaddingTop = page.style.paddingTop;
+    page.style.paddingTop = '';
+  }
+});
+window.addEventListener('afterprint', function() {
+  var page = document.getElementById('page');
+  if (page) {
+    page.style.paddingTop = _savedPagePaddingTop;
+  }
+});
 </script>
 </body>
 </html>
