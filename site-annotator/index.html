@@ -214,9 +214,10 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 }
 #font-size-sel:focus{border-color:var(--acc)}
 /* SELECTION OVERLAY CANVAS */
+#img-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:10}
 #shapes-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:1}
 #txt-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:2}
-#sel-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:3}
+#sel-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:11}
 
 /* SAVE INDICATOR */
 #save-indicator{
@@ -738,6 +739,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   </div>
   <div class="sb-group">
     <button class="ic-btn" id="btn-presets" title="AOG Presets" style="width:auto;padding:0 8px;font-size:10px;font-weight:700;letter-spacing:.5px;white-space:nowrap;">⚡ Labels</button>
+    <button class="ic-btn" id="btn-add-img" title="Add image overlay" style="width:auto;padding:0 8px;font-size:11px;font-weight:700">📷 Img</button>
     <button class="ic-btn" id="btn-shortcuts" title="Keyboard shortcuts (?)">?</button>
   </div>
   <div class="sb-group">
@@ -848,7 +850,28 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
   <!-- VIEWPORT -->
   <div id="viewport">
-    <div id="drop-zone">
+    <div id="img-sel-bar" style="display:none;position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(14,14,20,0.96);border:1.5px solid rgba(0,212,255,0.55);border-radius:14px;padding:8px 14px;align-items:center;gap:10px;z-index:50;pointer-events:auto;white-space:nowrap;box-shadow:0 4px 24px rgba(0,0,0,0.6);backdrop-filter:blur(8px);">
+  <!-- Drag handle / label -->
+  <span style="font-size:10px;font-weight:700;color:#00D4FF;text-transform:uppercase;letter-spacing:.08em;user-select:none;">✦ Image</span>
+  <div style="width:1px;height:20px;background:rgba(255,255,255,0.12);flex-shrink:0"></div>
+  <!-- Opacity -->
+  <span style="font-size:10px;color:#8888aa">Opacity</span>
+  <input type="range" id="img-op-sl" min="5" max="100" value="100" style="width:72px">
+  <span id="img-op-val" style="font-size:10px;color:#f0f0f2;min-width:28px;text-align:right">100%</span>
+  <div style="width:1px;height:20px;background:rgba(255,255,255,0.12);flex-shrink:0"></div>
+  <!-- Flip -->
+  <button id="img-flip-h" title="Flip horizontal" style="font-size:12px;padding:3px 9px;background:rgba(108,99,255,.18);border:1px solid rgba(108,99,255,.5);color:#9d97ff;border-radius:7px;cursor:pointer;line-height:1.3">↔</button>
+  <button id="img-flip-v" title="Flip vertical" style="font-size:12px;padding:3px 9px;background:rgba(108,99,255,.18);border:1px solid rgba(108,99,255,.5);color:#9d97ff;border-radius:7px;cursor:pointer;line-height:1.3">↕</button>
+  <div style="width:1px;height:20px;background:rgba(255,255,255,0.12);flex-shrink:0"></div>
+  <!-- Layer order -->
+  <button id="img-to-front" title="Bring to front" style="font-size:10px;padding:3px 8px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.35);color:#00D4FF;border-radius:7px;cursor:pointer;white-space:nowrap">↑ Front</button>
+  <button id="img-to-back"  title="Send to back"  style="font-size:10px;padding:3px 8px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.35);color:#00D4FF;border-radius:7px;cursor:pointer;white-space:nowrap">↓ Back</button>
+  <div style="width:1px;height:20px;background:rgba(255,255,255,0.12);flex-shrink:0"></div>
+  <!-- Delete / Done -->
+  <button id="img-del"   title="Delete image" style="font-size:12px;padding:3px 9px;background:rgba(255,60,60,.15);border:1px solid rgba(255,60,60,.4);color:#ff6060;border-radius:7px;cursor:pointer">🗑</button>
+  <button id="img-desel" title="Deselect" style="font-size:10px;padding:3px 10px;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:#6ee7b7;border-radius:7px;cursor:pointer;font-weight:700">✓ Done</button>
+</div>
+<div id="drop-zone">
       <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="8" y="8" width="48" height="48" rx="6"/>
         <polyline points="24 28 32 20 40 28"/>
@@ -861,6 +884,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       <div id="canvas-wrap">
         <canvas id="base-cv"></canvas>
         <canvas id="draw-cv"></canvas>
+        <canvas id="img-cv"></canvas>
         <canvas id="shapes-cv"></canvas>
         <canvas id="txt-cv"></canvas>
         <canvas id="sel-cv"></canvas>
@@ -1177,6 +1201,13 @@ function releaseCanvas(c){
 
 // ── DOM ──
 var openBtn=document.getElementById('open-btn');
+// ── IMAGE OVERLAY FILE INPUT ─────────────────────────────────
+var _imgFileInput=(function(){
+  var inp=document.createElement('input');
+  inp.type='file'; inp.accept='image/*'; inp.style.display='none';
+  document.body.appendChild(inp);
+  return inp;
+})();
 var fileIn=document.getElementById('file-in');
 var clrSwatch=document.getElementById('clr-swatch');
 var clrInput=document.getElementById('clr-input');
@@ -1906,7 +1937,7 @@ function updateLegend(){
 }
 
 // ── ZOOM/PAN ──
-function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(_editingComment) repositionCommentEditor(_editingComment); }
+function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(_editingComment) repositionCommentEditor(_editingComment); if(_pendingImg&&_pendingImgPos) _drawImgGhost(_pendingImgPos.x,_pendingImgPos.y); }
 
 function clampPan(){
   var vw=viewport.clientWidth,vh=viewport.clientHeight;
@@ -2232,7 +2263,9 @@ function renderPDFPage(n){
 
 function resize(w,h){
   baseCv.width=drawCv.width=gridCv.width=tCv.width=shCv.width=w;
+  if(typeof imgCv!=='undefined'){ imgCv.width=w; }
   baseCv.height=drawCv.height=gridCv.height=tCv.height=shCv.height=h;
+  if(typeof imgCv!=='undefined'){ imgCv.height=h; }
   selCv.width=1; selCv.height=1;
   canvasWrap.style.width=w+'px'; canvasWrap.style.height=h+'px';
 }
@@ -2363,11 +2396,66 @@ function onDown(e){
 
   // Compute canvas position ONCE at top — used by both the selection block and shape re-select
   var sp=snapPt(getPos(e).x,getPos(e).y);
+  // Raw (unsnapped) position for image overlay hit-testing — handles must never snap
+  var spRaw=getPos(e);
   // Capture pre-operation state for undo (before anything changes)
   if(tool!=='pan'&&!spaceDown) captureState();
 
   // ── If a shape is selected, handle transform interaction first ──
   var _isTouchEvt = !!(e.touches && e.touches.length);
+
+  // ── Image overlay interaction — uses same selHandle/selDragStart pipeline as shapes ──
+  if(selImg){
+    // Flip buttons
+    if(_ptInFlipBtn(selImg._flipHBtn, spRaw.x, spRaw.y)){
+      selImg.flipH=!selImg.flipH; renderImgOverlays(); renderImgSelection(); pushImgUndo(); return;
+    }
+    if(_ptInFlipBtn(selImg._flipVBtn, spRaw.x, spRaw.y)){
+      selImg.flipV=!selImg.flipV; renderImgOverlays(); renderImgSelection(); pushImgUndo(); return;
+    }
+    var _imgHi = _imgHandleAt(selImg, spRaw.x, spRaw.y, _isTouchEvt);
+    if(_imgHi >= 8){
+      // Rotation handle
+      e.preventDefault();
+      selImgHandle=_imgHi;
+      selImgDrag={hi:_imgHi,startX:spRaw.x,startY:spRaw.y,cx:selImg.cx,cy:selImg.cy,angle:selImg.angle||0};
+      return;
+    }
+    if(_imgHi >= 0){
+      // Resize handle (0-7) — store in selImgDrag for onMove
+      e.preventDefault();
+      selImgHandle = _imgHi;
+      var _ov = selImg;
+      var _a = _ov.angle||0, _cos=Math.cos(_a), _sin=Math.sin(_a);
+      var _fx=0, _fy=0;
+      if(_imgHi===0){_fx= _ov.w/2;_fy= _ov.h/2;}
+      else if(_imgHi===1){_fx=0;_fy= _ov.h/2;}
+      else if(_imgHi===2){_fx=-_ov.w/2;_fy= _ov.h/2;}
+      else if(_imgHi===3){_fx=-_ov.w/2;_fy=0;}
+      else if(_imgHi===4){_fx=-_ov.w/2;_fy=-_ov.h/2;}
+      else if(_imgHi===5){_fx=0;_fy=-_ov.h/2;}
+      else if(_imgHi===6){_fx= _ov.w/2;_fy=-_ov.h/2;}
+      else if(_imgHi===7){_fx= _ov.w/2;_fy=0;}
+      selImgDrag={hi:_imgHi,startX:spRaw.x,startY:spRaw.y,cx:_ov.cx,cy:_ov.cy,w:_ov.w,h:_ov.h,angle:_a,
+        fixedCx:_ov.cx+_fx*_cos-_fy*_sin,fixedCy:_ov.cy+_fx*_sin+_fy*_cos,
+        fixedLocalX:_fx,fixedLocalY:_fy,
+        perpW:(_imgHi===1||_imgHi===5)?_ov.w:null,perpH:(_imgHi===3||_imgHi===7)?_ov.h:null};
+      return;
+    }
+    if(_imgHitTest(selImg, spRaw.x, spRaw.y)){
+      e.preventDefault();
+      selImgHandle=-1;
+      selImgDrag={hi:-1,startX:spRaw.x,startY:spRaw.y,cx:selImg.cx,cy:selImg.cy,angle:selImg.angle||0};
+      return;
+    }
+    // Click outside image — deselect
+    commitImgSelection();
+    var _hit2=findImgAt(spRaw.x,spRaw.y,_isTouchEvt);
+    if(_hit2){ selImg=_hit2; renderImgOverlays(); renderImgSelection(); return; }
+  } else {
+    var _imgHit=findImgAt(spRaw.x,spRaw.y,_isTouchEvt);
+    if(_imgHit){ selImg=_imgHit; renderImgOverlays(); renderImgSelection(); return; }
+  }
 
   // Tapping any existing text object with non-text/non-eraser tools → enter transform mode
   if(!selectedShape && tool!=='text' && tool!=='eraser' && tool!=='pan' && !drawing){
@@ -2489,6 +2577,13 @@ function onDown(e){
 }
 
 function onMove(e){
+  // ── Image overlay drag — handled inline (same as shapes) ──
+  if(selImg && selImgDrag){
+    if(e.cancelable) e.preventDefault();
+    var _sp = getPos(e);
+    handleImgPointerMove(e, _sp);
+    return;
+  }
   // ── Measure endpoint/body drag ──
   if(selectedMeasure && measureDragHandle!==-1 && measureDragStart && !pinching){
     if(e.cancelable) e.preventDefault();
@@ -2632,6 +2727,8 @@ function onMove(e){
 }
 
 function onUp(e){
+  // ── Image overlay drag end — handled inline (same as shapes) ──
+  if(selImg && selImgDrag){ handleImgPointerUp(); return; }
   // ── Comment tool: finish drawing or move ──────────────────────
   if(tool==='comment'&&drawing){
     drawing=false;
@@ -3867,9 +3964,9 @@ function showTextHover(x, y){
 }
 
 function clearTextHover(){
-  // Only collapse selCv if no shape/text selection is currently being displayed.
-  // Collapsing it while selectedShape is active wipes the selection overlay.
-  if(!_txtCursorActive && !selectedShape && selCv.width > 1){ selCv.width=1; selCv.height=1; }
+  // Only collapse selCv if no shape/text/image selection is currently being displayed.
+  // Collapsing it while selectedShape OR selImg is active wipes the selection overlay.
+  if(!_txtCursorActive && !selectedShape && !selImg && selCv.width > 1){ selCv.width=1; selCv.height=1; }
 }
 
 // ── END TEXT CURSOR INDICATOR ────────────────────────────────
@@ -4427,7 +4524,7 @@ function commitSelection(){
       textOv.style.whiteSpace='pre'; textOv.style.overflow='hidden';
     }
     selectedShape=null; selHandle=-1; selDragStart=null;
-    selCv.width=1; selCv.height=1;
+    if(!selImg){ selCv.width=1; selCv.height=1; }
     renderShapeAndMeasure(); composite(); pushUndo();
     return;
   }
@@ -4447,7 +4544,7 @@ function commitSelection(){
     obj._editing=false; // unhide so txt-cv renders it
     renderTextObjs();
     selectedShape=null; selHandle=-1; selDragStart=null;
-    selCv.width=1; selCv.height=1;
+    if(!selImg){ selCv.width=1; selCv.height=1; }
     composite(); pushUndo();
     return;
   }
@@ -4472,7 +4569,7 @@ function commitSelection(){
     });
   }
   selectedShape=null; selHandle=-1; selDragStart=null;
-  selCv.width=1; selCv.height=1;
+  if(!selImg){ selCv.width=1; selCv.height=1; }
   renderShapeObjs();
   composite(); pushUndo();
 }
@@ -4498,7 +4595,7 @@ function cancelSelection(){
     }
   }
   selectedShape=null; selHandle=-1; selDragStart=null;
-  selCv.width=1; selCv.height=1;
+  if(!selImg){ selCv.width=1; selCv.height=1; }
   renderShapeObjs(); renderShapeAndMeasure(); composite();
 }
 
@@ -4652,7 +4749,7 @@ drawCv.addEventListener('mousedown', function(e){
 });
 drawCv.addEventListener('mousemove',function(e){ holdCancel(); onMove(e); });
 drawCv.addEventListener('mouseup',function(e){ holdCancel(); onUp(e); });
-drawCv.addEventListener('mouseleave',function(e){ holdCancel(); onUp(e); });
+drawCv.addEventListener('mouseleave',function(e){ holdCancel(); if(selImg&&selImgDrag) return; onUp(e); });
 
 // ── HOLD-TO-DELETE ─────────────────────────────────────────────
 // Press and hold 600ms on any drawn item to delete it.
@@ -5878,6 +5975,676 @@ initSaveDB(checkForSavedSession);
 // END AUTO-SAVE ENGINE
 // ══════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════
+// IMAGE OVERLAY SYSTEM
+// ══════════════════════════════════════════════════════════════
+var imgCv  = document.getElementById('img-cv');
+var imgCtx = imgCv.getContext('2d');
+var imgOverlays = [];          // [{img,cx,cy,w,h,angle,flipH,flipV,opacity}, ...]
+var selImg      = null;        // currently selected overlay
+var selImgHandle= -1;          // which handle is being dragged
+var selImgDrag  = null;        // drag start state
+var IMG_HANDLE  = 8;           // handle size px (screen)
+
+// Sync img-cv size whenever canvas changes
+function syncImgCv(){
+  var w=baseCv.width||1, h=baseCv.height||1;
+  if(imgCv.width!==w||imgCv.height!==h){ imgCv.width=w; imgCv.height=h; }
+}
+
+function renderImgOverlays(){
+  syncImgCv();
+  imgCtx.clearRect(0,0,imgCv.width,imgCv.height);
+  imgOverlays.forEach(function(ov){
+    if(ov===selImg) return; // selected one drawn on selCv
+    _drawImgOv(imgCtx, ov);
+  });
+}
+
+function _drawImgOv(ctx, ov){
+  ctx.save();
+  ctx.globalAlpha = ov.opacity!==undefined ? ov.opacity : 1;
+  ctx.translate(ov.cx, ov.cy);
+  ctx.rotate(ov.angle||0);
+  ctx.scale(ov.flipH?-1:1, ov.flipV?-1:1);
+  ctx.drawImage(ov.img, -ov.w/2, -ov.h/2, ov.w, ov.h);
+  ctx.restore();
+}
+
+// Returns 8 resize handles + 4 rotation handles for an image overlay
+function _imgHandles(ov){
+  var hw=ov.w/2, hh=ov.h/2, a=ov.angle||0;
+  var cos=Math.cos(a), sin=Math.sin(a);
+  function rot(lx,ly){ return {x:ov.cx+lx*cos-ly*sin, y:ov.cy+lx*sin+ly*cos}; }
+  var ROT_OFF = 18; // px in canvas space
+  return [
+    rot(-hw,-hh), rot(0,-hh), rot(hw,-hh),  // 0 TL, 1 TC, 2 TR
+    rot(hw,0),                                // 3 MR
+    rot(hw,hh), rot(0,hh), rot(-hw,hh),     // 4 BR, 5 BC, 6 BL
+    rot(-hw,0),                              // 7 ML
+    // rotation handles outside corners
+    rot(-hw-ROT_OFF,-hh-ROT_OFF), rot(hw+ROT_OFF,-hh-ROT_OFF),
+    rot(hw+ROT_OFF,hh+ROT_OFF),  rot(-hw-ROT_OFF,hh+ROT_OFF)
+  ];
+}
+
+function _imgHandleAt(ov, x, y, isTouch){
+  var handles=_imgHandles(ov);
+  var slop=(isTouch?18:9)/zoom;
+  for(var i=handles.length-1;i>=0;i--){
+    var h=handles[i];
+    if(Math.hypot(x-h.x,y-h.y)<slop) return i;
+  }
+  return -1;
+}
+
+function _imgHitTest(ov, x, y){
+  // Transform point into local space
+  var a=-(ov.angle||0);
+  var dx=x-ov.cx, dy=y-ov.cy;
+  var lx= dx*Math.cos(a)-dy*Math.sin(a);
+  var ly= dx*Math.sin(a)+dy*Math.cos(a);
+  return Math.abs(lx)<=ov.w/2 && Math.abs(ly)<=ov.h/2;
+}
+
+function findImgAt(x,y,isTouch){
+  for(var i=imgOverlays.length-1;i>=0;i--){
+    if(_imgHitTest(imgOverlays[i],x,y)) return imgOverlays[i];
+  }
+  return null;
+}
+
+// Draw selected image overlay + handles on sel-cv
+function renderImgSelection(){
+  if(!selImg){ return; }
+  if(selCv.width!==drawCv.width||selCv.height!==drawCv.height){
+    selCv.width=drawCv.width; selCv.height=drawCv.height;
+  }
+  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  // Draw image itself
+  _drawImgOv(selCtx, selImg);
+  // Dashed bounding box
+  var lw=1.5/zoom, ov=selImg, a=ov.angle||0;
+  selCtx.save();
+  selCtx.translate(ov.cx,ov.cy); selCtx.rotate(a);
+  selCtx.strokeStyle='rgba(0,212,255,0.85)';
+  selCtx.lineWidth=lw; selCtx.setLineDash([4/zoom,3/zoom]); selCtx.globalAlpha=1;
+  var pad=6/zoom;
+  selCtx.strokeRect(-ov.w/2-pad,-ov.h/2-pad,ov.w+pad*2,ov.h+pad*2);
+  selCtx.restore();
+  // Handles
+  var handles=_imgHandles(ov);
+  var hs=IMG_HANDLE/zoom;
+  selCtx.setLineDash([]); selCtx.globalAlpha=1;
+  // Resize handles 0-7
+  for(var i=0;i<=7;i++){
+    var h=handles[i];
+    selCtx.save();
+    selCtx.fillStyle='#fff'; selCtx.strokeStyle='#00D4FF';
+    selCtx.lineWidth=lw*1.5;
+    selCtx.beginPath();
+    if(selCtx.roundRect) selCtx.roundRect(h.x-hs/2,h.y-hs/2,hs,hs,hs*.25);
+    else selCtx.rect(h.x-hs/2,h.y-hs/2,hs,hs);
+    selCtx.fill(); selCtx.stroke();
+    selCtx.restore();
+  }
+  // Rotation handles 8-11
+  var ROT_COLOR='#DB2777';
+  for(var i=8;i<=11;i++){
+    var h=handles[i], r=hs*0.7;
+    selCtx.save();
+    selCtx.fillStyle=ROT_COLOR; selCtx.strokeStyle='#fff';
+    selCtx.lineWidth=lw*1.5;
+    selCtx.shadowColor=ROT_COLOR; selCtx.shadowBlur=6/zoom;
+    selCtx.beginPath(); selCtx.arc(h.x,h.y,r,0,Math.PI*2);
+    selCtx.fill(); selCtx.stroke();
+    selCtx.restore();
+  }
+  // Flip buttons — rendered as small pill buttons in canvas space above the image
+  _drawImgFlipButtons(selCtx, ov);
+}
+
+function _drawImgFlipButtons(ctx, ov){
+  // Draw ↔ and ↕ flip pill buttons above the bounding box top-center
+  var a=ov.angle||0, cos=Math.cos(a), sin=Math.sin(a);
+  var lw=1.5/zoom;
+  var bw=32/zoom, bh=16/zoom, gap=4/zoom;
+  // Position: top-center of bounding box, offset outward
+  var tcx=ov.cx + (-ov.w*0*cos - (-ov.h/2-28/zoom)*sin);
+  var tcy=ov.cy + (-ov.w*0*sin + (-ov.h/2-28/zoom)*cos);
+
+  // Store screen positions for hit testing (in canvas coords)
+  ov._flipHBtn = {cx:tcx - (bw/2+gap/2)*cos, cy:tcy - (bw/2+gap/2)*sin, w:bw, h:bh, a:a};
+  ov._flipVBtn = {cx:tcx + (bw/2+gap/2)*cos, cy:tcy + (bw/2+gap/2)*sin, w:bw, h:bh, a:a};
+
+  [
+    {btn:ov._flipHBtn, label:'↔ H'},
+    {btn:ov._flipVBtn, label:'↕ V'}
+  ].forEach(function(item){
+    var b=item.btn;
+    ctx.save();
+    ctx.translate(b.cx, b.cy); ctx.rotate(b.a);
+    ctx.fillStyle='rgba(30,30,40,0.85)';
+    ctx.strokeStyle='#00D4FF'; ctx.lineWidth=lw;
+    if(ctx.roundRect) ctx.roundRect(-b.w/2,-b.h/2,b.w,b.h,b.h/2);
+    else ctx.rect(-b.w/2,-b.h/2,b.w,b.h);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#fff';
+    ctx.font='bold '+(10/zoom)+'px system-ui,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(item.label, 0, 0);
+    ctx.restore();
+  });
+}
+
+function _ptInFlipBtn(btn, x, y){
+  if(!btn) return false;
+  var a=-btn.a, dx=x-btn.cx, dy=y-btn.cy;
+  var lx=dx*Math.cos(a)-dy*Math.sin(a);
+  var ly=dx*Math.sin(a)+dy*Math.cos(a);
+  return Math.abs(lx)<=btn.w/2 && Math.abs(ly)<=btn.h/2;
+}
+
+// ── Image overlay pointer events (plugged into draw-cv pointerdown) ──
+function handleImgPointerDown(e, sp, isTouch){
+  if(!selImg){
+    var hit=findImgAt(sp.x,sp.y,isTouch);
+    if(hit){ selImg=hit; renderImgOverlays(); renderImgSelection(); return true; }
+    return false;
+  }
+
+  // Flip buttons (drawn in canvas space above image)
+  if(_ptInFlipBtn(selImg._flipHBtn, sp.x, sp.y)){
+    selImg.flipH=!selImg.flipH;
+    renderImgOverlays(); renderImgSelection(); pushImgUndo(); return true;
+  }
+  if(_ptInFlipBtn(selImg._flipVBtn, sp.x, sp.y)){
+    selImg.flipV=!selImg.flipV;
+    renderImgOverlays(); renderImgSelection(); pushImgUndo(); return true;
+  }
+
+  var hi=_imgHandleAt(selImg,sp.x,sp.y,isTouch);
+  if(hi>=0){
+    // Store everything needed for drag in selImgDrag, including handle index
+    selImgHandle=hi;
+    var ov=selImg;
+    // For resize: pre-compute the fixed opposite corner in canvas coords
+    var a=ov.angle||0, cos=Math.cos(a), sin=Math.sin(a);
+    // Local coords of the fixed (opposite) corner
+    var fixedLocalX=0, fixedLocalY=0;
+    if(hi===0){ fixedLocalX= ov.w/2; fixedLocalY= ov.h/2; }  // TL → fixed=BR
+    else if(hi===1){ fixedLocalX=0;       fixedLocalY= ov.h/2; }  // TC → fixed=BC
+    else if(hi===2){ fixedLocalX=-ov.w/2; fixedLocalY= ov.h/2; }  // TR → fixed=BL
+    else if(hi===3){ fixedLocalX=-ov.w/2; fixedLocalY=0;       }  // MR → fixed=ML
+    else if(hi===4){ fixedLocalX=-ov.w/2; fixedLocalY=-ov.h/2; }  // BR → fixed=TL
+    else if(hi===5){ fixedLocalX=0;       fixedLocalY=-ov.h/2; }  // BC → fixed=TC
+    else if(hi===6){ fixedLocalX= ov.w/2; fixedLocalY=-ov.h/2; }  // BL → fixed=TR
+    else if(hi===7){ fixedLocalX= ov.w/2; fixedLocalY=0;       }  // ML → fixed=MR
+    selImgDrag={
+      hi:hi,
+      startX:sp.x, startY:sp.y,
+      cx:ov.cx, cy:ov.cy, w:ov.w, h:ov.h, angle:a,
+      // Fixed corner in canvas space (stays anchored during resize)
+      fixedCx: ov.cx + fixedLocalX*cos - fixedLocalY*sin,
+      fixedCy: ov.cy + fixedLocalX*sin + fixedLocalY*cos,
+      fixedLocalX:fixedLocalX, fixedLocalY:fixedLocalY,
+      // For edges that only resize one axis, remember the perpendicular size
+      perpW: hi===1||hi===5 ? ov.w : null,
+      perpH: hi===3||hi===7 ? ov.h : null,
+    };
+    return true;
+  }
+
+  if(_imgHitTest(selImg,sp.x,sp.y)){
+    selImgHandle=-1;
+    selImgDrag={hi:-1, startX:sp.x, startY:sp.y, cx:selImg.cx, cy:selImg.cy, angle:selImg.angle||0};
+    return true;
+  }
+
+  // Click outside — deselect, then check if another overlay was hit
+  commitImgSelection();
+  var hit2=findImgAt(sp.x,sp.y,isTouch);
+  if(hit2){ selImg=hit2; renderImgOverlays(); renderImgSelection(); return true; }
+  return false;
+}
+
+function handleImgPointerMove(e, sp){
+  if(!selImg||!selImgDrag) return false;
+  var d=selImgDrag;
+  var hi=d.hi;
+
+  if(hi===-1){
+    // Move: simple delta from drag start
+    selImg.cx = d.cx + (sp.x - d.startX);
+    selImg.cy = d.cy + (sp.y - d.startY);
+
+  } else if(hi>=8){
+    // Rotate: angle from centre to current cursor
+    var angle = Math.atan2(sp.y - d.cy, sp.x - d.cx);
+    var startAngle = Math.atan2(d.startY - d.cy, d.startX - d.cx);
+    selImg.angle = d.angle + (angle - startAngle);
+
+  } else {
+    // Resize: the fixed corner stays put; the dragged corner follows the cursor.
+    // Work entirely in rotated local space so axis-aligned resize is clean.
+    var a = -(d.angle);
+    var cos = Math.cos(a), sin = Math.sin(a);
+
+    // Cursor in local space (relative to original centre)
+    var dcx = sp.x - d.cx, dcy = sp.y - d.cy;
+    var cursorLocal = { x: dcx*cos - dcy*sin, y: dcx*sin + dcy*cos };
+
+    // Fixed corner in local space — always stays at d.fixedLocalX/Y
+    var fx = d.fixedLocalX, fy = d.fixedLocalY;
+
+    // New size = distance from fixed corner to cursor, per axis
+    var rawW = cursorLocal.x - fx;  // signed
+    var rawH = cursorLocal.y - fy;  // signed
+
+    // Edge handles: lock the perpendicular axis
+    if(hi===1||hi===5){ rawW = d.perpW===null ? (cursorLocal.x - fx) : (d.perpW * (fx<0?-1:1)); }
+    if(hi===3||hi===7){ rawH = d.perpH===null ? (cursorLocal.y - fy) : (d.perpH * (fy<0?-1:1)); }
+
+    // For TC/BC only resize height
+    if(hi===1||hi===5){ rawW = d.w; }
+    // For MR/ML only resize width
+    if(hi===3||hi===7){ rawH = d.h; }
+
+    // Minimum size 20px
+    var newW = Math.max(20, Math.abs(rawW));
+    var newH = Math.max(20, Math.abs(rawH));
+
+    // New centre in local space = midpoint between fixed corner and cursor
+    var newCx_local = fx + (rawW)/2;
+    var newCy_local = fy + (rawH)/2;
+
+    // Convert new centre back to canvas space using original rotation
+    var cosA = Math.cos(d.angle), sinA = Math.sin(d.angle);
+    selImg.w = newW;
+    selImg.h = newH;
+    selImg.cx = d.cx + newCx_local*cosA - newCy_local*sinA;
+    selImg.cy = d.cy + newCx_local*sinA + newCy_local*cosA;
+  }
+
+  renderImgOverlays(); renderImgSelection();
+  return true;
+}
+
+function handleImgPointerUp(){
+  if(!selImg||!selImgDrag) return false;
+  selImgDrag=null; selImgHandle=-1;
+  pushImgUndo();
+  return true;
+}
+
+function commitImgSelection(){
+  selImg=null; selImgDrag=null; selImgHandle=-1;
+  if(selCv.width>1){ selCv.width=1; selCv.height=1; }
+  renderImgOverlays();
+}
+
+// ── Undo integration for image overlays ──
+// Piggyback on the existing undo system by serialising imgOverlays state
+// into captureState/applySnap via monkey-patch
+var _origCaptureState=captureState;
+captureState=function(){
+  _origCaptureState();
+  if(_preOp) _preOp.imgOverlays=imgOverlays.map(function(ov){
+    return {img:ov.img,cx:ov.cx,cy:ov.cy,w:ov.w,h:ov.h,angle:ov.angle,
+            flipH:ov.flipH,flipV:ov.flipV,opacity:ov.opacity};
+  });
+};
+var _origApplySnap=applySnap;
+applySnap=function(snap){
+  _origApplySnap(snap);
+  if(snap.imgOverlays!==undefined){
+    imgOverlays=snap.imgOverlays; // img refs are kept, fine for in-session undo
+    renderImgOverlays();
+  }
+};
+function pushImgUndo(){ captureState(); pushUndo(); }
+
+// ── Click-to-place image overlay system ─────────────────────────
+// When an image is loaded, it enters "placement mode": a semi-transparent
+// ghost follows the cursor and the user clicks to stamp it down.
+// Size is zoom-aware: the ghost appears the same on-screen size regardless
+// of zoom level, so what-you-see is what-you-get at any magnification.
+
+var _pendingImg     = null;   // Image element awaiting placement
+var _pendingImgPos  = null;   // {x,y} canvas coords of current ghost position
+
+// How wide the ghost appears on SCREEN (px) — kept constant across zoom levels
+var _IMG_GHOST_SCREEN_PX = 280;
+
+function _pendingImgCanvasSize(img){
+  // At the current zoom, _IMG_GHOST_SCREEN_PX screen-px = N canvas-px
+  var canvasW = _IMG_GHOST_SCREEN_PX / zoom;
+  var canvasH = canvasW * (img.naturalHeight / img.naturalWidth);
+  // Don't exceed 50% of the canvas in either axis
+  var maxW = baseCv.width  * 0.5;
+  var maxH = baseCv.height * 0.5;
+  if(canvasW > maxW){ canvasW = maxW; canvasH = canvasW * (img.naturalHeight / img.naturalWidth); }
+  if(canvasH > maxH){ canvasH = maxH; canvasW = canvasH * (img.naturalWidth / img.naturalHeight); }
+  return {w: canvasW, h: canvasH};
+}
+
+function _drawImgGhost(cx, cy){
+  // Ensure selCv is canvas-sized
+  if(selCv.width !== drawCv.width || selCv.height !== drawCv.height){
+    selCv.width  = drawCv.width;
+    selCv.height = drawCv.height;
+  }
+  selCtx.clearRect(0, 0, selCv.width, selCv.height);
+  if(!_pendingImg) return;
+
+  var sz  = _pendingImgCanvasSize(_pendingImg);
+  var x   = cx - sz.w / 2;
+  var y   = cy - sz.h / 2;
+  var lw  = Math.max(1, 1.5 / zoom);   // line stays crisp at any zoom
+
+  selCtx.save();
+
+  // Drop-shadow so ghost is visible over any background
+  selCtx.shadowColor   = 'rgba(0,0,0,0.5)';
+  selCtx.shadowBlur    = 8 / zoom;
+  selCtx.shadowOffsetX = 2 / zoom;
+  selCtx.shadowOffsetY = 2 / zoom;
+
+  // Semi-transparent image
+  selCtx.globalAlpha = 0.72;
+  selCtx.drawImage(_pendingImg, x, y, sz.w, sz.h);
+
+  selCtx.shadowColor = 'transparent';
+
+  // Dashed selection border — cyan like Acrobat blue selection
+  selCtx.globalAlpha = 1;
+  selCtx.strokeStyle = '#00D4FF';
+  selCtx.lineWidth   = lw;
+  selCtx.setLineDash([5 / zoom, 3 / zoom]);
+  selCtx.strokeRect(x, y, sz.w, sz.h);
+  selCtx.setLineDash([]);
+
+  // Corner tick marks (like Acrobat placement reticle)
+  var tk = Math.min(sz.w, sz.h) * 0.08;
+  selCtx.strokeStyle = '#ffffff';
+  selCtx.lineWidth   = lw * 1.5;
+  [ [x,       y,       1,  1],
+    [x+sz.w,  y,      -1,  1],
+    [x,       y+sz.h,  1, -1],
+    [x+sz.w,  y+sz.h, -1, -1]
+  ].forEach(function(c){
+    selCtx.beginPath();
+    selCtx.moveTo(c[0]+c[2]*tk, c[1]);
+    selCtx.lineTo(c[0], c[1]);
+    selCtx.lineTo(c[0], c[1]+c[3]*tk);
+    selCtx.stroke();
+  });
+
+  // Centre crosshair
+  var ch = 6 / zoom;
+  selCtx.strokeStyle = '#00D4FF';
+  selCtx.lineWidth   = lw;
+  selCtx.beginPath();
+  selCtx.moveTo(cx - ch, cy); selCtx.lineTo(cx + ch, cy);
+  selCtx.moveTo(cx, cy - ch); selCtx.lineTo(cx, cy + ch);
+  selCtx.stroke();
+
+  selCtx.restore();
+}
+
+function _clearImgGhost(){
+  if(selCv.width > 1) selCtx.clearRect(0, 0, selCv.width, selCv.height);
+}
+
+function _enterImgPlacementMode(img){
+  _pendingImg    = img;
+  _pendingImgPos = null;
+  // Crosshair cursor for the whole viewport
+  drawCv.style.cursor  = 'crosshair';
+  viewport.style.cursor = 'crosshair';
+  // Show persistent instruction toast (dismissed manually on place/cancel)
+  var _toastEl = document.getElementById('toast');
+  if(_toastEl){ _toastEl.textContent='Click to place image · Esc to cancel'; _toastEl.className='show ok'; clearTimeout(_toastTimer); }
+}
+
+function _cancelImgPlacement(){
+  _pendingImg    = null;
+  _pendingImgPos = null;
+  _clearImgGhost();
+  drawCv.style.cursor   = '';
+  viewport.style.cursor = '';
+  // Clear the placement toast
+  var el = document.getElementById('toast');
+  if(el){ el.classList.remove('show','ok','warn','err'); }
+}
+
+function _commitImgPlacement(cx, cy){
+  if(!_pendingImg) return;
+  var img = _pendingImg;
+  var sz  = _pendingImgCanvasSize(img);
+  _pendingImg    = null;
+  _pendingImgPos = null;
+  _clearImgGhost();
+  drawCv.style.cursor   = '';
+  viewport.style.cursor = '';
+  var el = document.getElementById('toast');
+  if(el){ el.classList.remove('show','ok','warn','err'); }
+
+  captureState();
+  var ov = {img:img, cx:cx, cy:cy, w:sz.w, h:sz.h, angle:0, flipH:false, flipV:false, opacity:1};
+  imgOverlays.push(ov);
+  selImg = ov;
+  renderImgOverlays();
+  renderImgSelection();
+  pushImgUndo();
+  showImgBar(ov);
+  // Switch toolbar to rect WITHOUT calling _rectBtn.click() which fires commitSelection
+  // and wipes selCv. Set tool state directly so selImg+selCv stay intact.
+  tool = 'rect';
+  document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
+  var _rb = document.querySelector('.tb-btn[data-tool="rect"]');
+  if(_rb) _rb.classList.add('active');
+  if(typeof updateToolbarForTool === 'function') updateToolbarForTool('rect');
+  drawCv.style.cursor = 'crosshair';
+}
+
+// ── Ghost tracking: follow mouse over the canvas ──
+drawCv.addEventListener('mousemove', function(e){
+  if(!_pendingImg) return;
+  var p = vpToCanvas(e.clientX, e.clientY);
+  _pendingImgPos = p;
+  _drawImgGhost(p.x, p.y);
+}, { passive: true });
+
+// ── Click to place ──
+drawCv.addEventListener('mousedown', function(e){
+  if(!_pendingImg) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var p = vpToCanvas(e.clientX, e.clientY);
+  _commitImgPlacement(p.x, p.y);
+}, true);
+
+// ── Touch: move ghost on touchmove, place on touchend ──
+drawCv.addEventListener('touchmove', function(e){
+  if(!_pendingImg) return;
+  e.preventDefault();
+  var t = e.touches[0];
+  var p = vpToCanvas(t.clientX, t.clientY);
+  _drawImgGhost(p.x, p.y);
+}, { passive: false });
+
+drawCv.addEventListener('touchend', function(e){
+  if(!_pendingImg) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var t = e.changedTouches[0];
+  var p = vpToCanvas(t.clientX, t.clientY);
+  _commitImgPlacement(p.x, p.y);
+}, true);
+
+// ── Esc to cancel ──
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape' && _pendingImg) _cancelImgPlacement();
+}, true);
+
+// ── Load image into overlay ──
+function addImgOverlay(file){
+  if(!baseLoaded){ toast('Open a site plan first','warn'); return; }
+  var url = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = function(){
+    URL.revokeObjectURL(url);
+    _enterImgPlacementMode(img);
+  };
+  img.onerror = function(){ toast('Could not load image','err'); };
+  img.src = url;
+}
+
+// ── Sync img-cv size when canvas is resized ──
+var _origAfterLoad_imgCv = null; // handled by patching composite
+var _origComposite=composite;
+composite=function(){
+  _origComposite();
+  syncImgCv();
+  renderImgOverlays();
+};
+
+// ── Wire button ──
+document.getElementById('btn-add-img').addEventListener('click',function(){
+  if(!baseLoaded){ toast('Open a site plan first','warn'); return; }
+  _imgFileInput.click();
+});
+_imgFileInput.addEventListener('change',function(){
+  if(this.files&&this.files[0]) addImgOverlay(this.files[0]);
+  this.value='';
+});
+
+// ── Include imgOverlays in compositeExport ──
+(function(){
+  var _origCompExp=compositeExport;
+  compositeExport=function(maxPx){
+    var out=_origCompExp(maxPx);
+    if(!out||!imgOverlays.length) return out;
+    // Draw overlays below everything else — re-draw in correct order
+    // Actually we need them between base and draw layers.
+    // Rebuild: base → imgOverlays → layers → shapes
+    var w=out.width, h=out.height;
+    var sc=w/(baseCv.width||w);
+    var tmp=document.createElement('canvas'); tmp.width=w; tmp.height=h;
+    var tc=tmp.getContext('2d');
+    // Base
+    tc.drawImage(baseCv,0,0,w,h);
+    // Image overlays (scaled)
+    imgOverlays.forEach(function(ov){
+      tc.save();
+      tc.globalAlpha=ov.opacity!==undefined?ov.opacity:1;
+      tc.translate(ov.cx*sc, ov.cy*sc);
+      tc.rotate(ov.angle||0);
+      tc.scale(ov.flipH?-1:1, ov.flipV?-1:1);
+      tc.drawImage(ov.img, -ov.w/2*sc, -ov.h/2*sc, ov.w*sc, ov.h*sc);
+      tc.restore();
+    });
+    // Draw layers
+    layers.forEach(function(l){ if(l.visible) tc.drawImage(l.canvas,0,0,w,h); });
+    // Shapes, text, measures are in out already — just composite on top
+    tc.drawImage(out,0,0);
+    return tmp;
+  };
+})();
+
+// ══════════════════════════════════════════════════════════════
+// END IMAGE OVERLAY SYSTEM
+// ══════════════════════════════════════════════════════════════
+
+// ── Image overlay selection bar ───────────────────────────────
+var _imgSelBar     = document.getElementById('img-sel-bar');
+var _imgOpSl       = document.getElementById('img-op-sl');
+var _imgOpVal      = document.getElementById('img-op-val');
+var _imgFlipHBtn   = document.getElementById('img-flip-h');
+var _imgFlipVBtn   = document.getElementById('img-flip-v');
+var _imgDelBtn     = document.getElementById('img-del');
+var _imgDeselBtn   = document.getElementById('img-desel');
+var _imgToFrontBtn = document.getElementById('img-to-front');
+var _imgToBackBtn  = document.getElementById('img-to-back');
+
+function showImgBar(ov){
+  _imgSelBar.style.display='flex';
+  _imgOpSl.value=Math.round((ov.opacity!==undefined?ov.opacity:0.75)*100);
+  _imgOpVal.textContent=_imgOpSl.value+'%';
+}
+function hideImgBar(){ _imgSelBar.style.display='none'; }
+
+_imgOpSl.addEventListener('input',function(){
+  if(!selImg) return;
+  selImg.opacity=parseInt(this.value)/100;
+  _imgOpVal.textContent=this.value+'%';
+  renderImgOverlays(); renderImgSelection();
+});
+_imgOpSl.addEventListener('change',function(){ pushImgUndo(); });
+_imgOpSl.addEventListener('mousedown',function(e){ e.stopPropagation(); });
+_imgOpSl.addEventListener('touchstart',function(e){ e.stopPropagation(); },{passive:true});
+
+_imgFlipHBtn.addEventListener('click',function(){
+  if(!selImg) return;
+  selImg.flipH=!selImg.flipH;
+  renderImgOverlays(); renderImgSelection(); pushImgUndo();
+});
+_imgFlipVBtn.addEventListener('click',function(){
+  if(!selImg) return;
+  selImg.flipV=!selImg.flipV;
+  renderImgOverlays(); renderImgSelection(); pushImgUndo();
+});
+
+// Bring selected image to front of the overlay stack
+if(_imgToFrontBtn) _imgToFrontBtn.addEventListener('click',function(){
+  if(!selImg) return;
+  var idx=imgOverlays.indexOf(selImg);
+  if(idx>-1 && idx<imgOverlays.length-1){
+    imgOverlays.splice(idx,1);
+    imgOverlays.push(selImg);
+    renderImgOverlays(); renderImgSelection(); pushImgUndo();
+    toast('Image moved to front','ok',1500);
+  }
+});
+
+// Send selected image to back of the overlay stack
+if(_imgToBackBtn) _imgToBackBtn.addEventListener('click',function(){
+  if(!selImg) return;
+  var idx=imgOverlays.indexOf(selImg);
+  if(idx>0){
+    imgOverlays.splice(idx,1);
+    imgOverlays.unshift(selImg);
+    renderImgOverlays(); renderImgSelection(); pushImgUndo();
+    toast('Image moved to back','ok',1500);
+  }
+});
+
+_imgDelBtn.addEventListener('click',function(){
+  if(!selImg) return;
+  captureState();
+  var idx=imgOverlays.indexOf(selImg);
+  if(idx>-1) imgOverlays.splice(idx,1);
+  commitImgSelection(); hideImgBar(); pushUndo();
+});
+_imgDeselBtn.addEventListener('click',function(){
+  commitImgSelection(); hideImgBar();
+});
+
+// Monkey-patch renderImgSelection and commitImgSelection to sync the bar
+var _origRenderImgSel = renderImgSelection;
+renderImgSelection = function(){
+  _origRenderImgSel();
+  if(selImg) showImgBar(selImg);
+};
+var _origCommitImgSel = commitImgSelection;
+commitImgSelection = function(){
+  _origCommitImgSel();
+  hideImgBar();
+};
+
+
+
 // ── KEYBOARD ──
 document.addEventListener('keydown',function(e){
   // Block tool shortcuts whenever the text textarea is active (focused or visible)
@@ -5901,6 +6668,7 @@ document.addEventListener('keydown',function(e){
   }
   if(e.code==='Space'&&e.target===document.body){ e.preventDefault(); spaceDown=true; viewport.style.cursor='grab'; showHint(); return; }
   if(e.key==='Escape'){
+    if(selImg){ commitImgSelection(); return; }
     stopTextCursor(); clearTextHover();
     if(selectedMeasure){ commitMeasureSelection(); return; }
     if(tool==='pathmeasure'&&pmActive){ closePathMeasure(); return; }
@@ -5918,6 +6686,14 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Enter'&&selectedShape){ commitSelection(); return; }
   if(e.key==='Enter'&&tool==='pathmeasure'&&pmActive){ closePathMeasure(); return; }
   if(e.key==='Enter'&&tool==='polyline'&&plActive){ closePolyline(); return; }
+  if((e.key==='Delete'||e.key==='Backspace')&&selImg&&document.activeElement===document.body){
+    e.preventDefault();
+    captureState();
+    var idx=imgOverlays.indexOf(selImg);
+    if(idx>-1) imgOverlays.splice(idx,1);
+    commitImgSelection(); pushUndo();
+    return;
+  }
   var map={q:'pen',l:'line',a:'arrow',r:'rect',e:'ellipse',c:'cloud',m:'measure',v:'pathmeasure',g:'polygon',w:'polyline',t:'text',n:'comment',x:'eraser',h:'pan'};
   if(map[e.key]){ var b=document.querySelector('.tb-btn[data-tool="'+map[e.key]+'"]'); if(b) b.click(); }
 });
@@ -6115,6 +6891,112 @@ if('serviceWorker' in navigator){
     }
   });
 }
+
+// ══════════════════════════════════════════════════════════════
+// IMAGE OVERLAY — ACROBAT-STYLE DRAG/RESIZE/ROTATE
+// All mouse movement is routed through WINDOW-level listeners so
+// the drag never stops when the cursor leaves the canvas boundary.
+// onMove / onUp in the canvas handlers are short-circuited while
+// a drag is in progress (see patches above).
+// ══════════════════════════════════════════════════════════════
+
+// Directional cursors for each of the 8 edge/corner handles + 4 rotate handles
+var _IMG_RES_CURSORS = [
+  'nw-resize','n-resize','ne-resize','e-resize',
+  'se-resize','s-resize','sw-resize','w-resize'
+];
+
+// Compute the correct CSS cursor for the current selImg state
+function _imgCursorForHandle(hi){
+  if(hi >= 8)  return 'crosshair';  // rotate handle
+  if(hi >= 0)  return _IMG_RES_CURSORS[hi];
+  return 'move';                     // body drag (hi === -1)
+}
+
+// Update cursor while hovering (no drag active)
+function _imgHoverCursor(clientX, clientY){
+  if(!selImg){ drawCv.style.cursor=''; return; }
+  var p = vpToCanvas(clientX, clientY);
+  var hi = _imgHandleAt(selImg, p.x, p.y, false);
+  if(hi >= 0){
+    drawCv.style.cursor = _imgCursorForHandle(hi);
+  } else if(_imgHitTest(selImg, p.x, p.y)){
+    drawCv.style.cursor = 'move';
+  } else {
+    drawCv.style.cursor = 'crosshair';
+  }
+}
+
+// Apply drag cursor to the whole document so it never flickers
+function _imgSetDragCursor(hi){
+  var cur = _imgCursorForHandle(hi);
+  document.body.style.cursor = cur;
+  // Inject a <style> that forces cursor everywhere, overriding all elements
+  var tag = document.getElementById('_imgDragStyle');
+  if(!tag){ tag=document.createElement('style'); tag.id='_imgDragStyle'; document.head.appendChild(tag); }
+  tag.textContent = '*, *::before, *::after { cursor: '+cur+' !important; }';
+}
+
+function _imgClearDragCursor(){
+  document.body.style.cursor = '';
+  var tag = document.getElementById('_imgDragStyle');
+  if(tag) tag.textContent = '';
+}
+
+// ── Global move handler (fires even when cursor is outside canvas) ──
+function _imgGlobalMove(e){
+  if(!selImg || !selImgDrag) return;
+  e.preventDefault();
+  var p = vpToCanvas(e.clientX, e.clientY);
+  handleImgPointerMove(e, p);
+}
+
+// ── Global up handler ──
+function _imgGlobalUp(e){
+  if(!selImg || !selImgDrag){ _imgClearDragCursor(); _imgDetachGlobal(); return; }
+  handleImgPointerUp();
+  _imgClearDragCursor();
+  _imgDetachGlobal();
+  // Re-check hover cursor right where the mouse ended up
+  if(selImg){ _imgHoverCursor(e.clientX, e.clientY); }
+  else { drawCv.style.cursor = ''; }
+}
+
+function _imgAttachGlobal(){
+  window.addEventListener('mousemove', _imgGlobalMove);
+  window.addEventListener('mouseup',   _imgGlobalUp);
+}
+function _imgDetachGlobal(){
+  window.removeEventListener('mousemove', _imgGlobalMove);
+  window.removeEventListener('mouseup',   _imgGlobalUp);
+}
+
+// ── handleImgPointerDown is no longer called from onDown ──
+// Drag handling is now inline in onDown/onMove/onUp (same pipeline as shapes).
+// The global mouse listener attach is therefore not needed.
+
+// ── Hover cursor: update as mouse moves over the canvas (no drag) ──
+drawCv.addEventListener('mousemove', function(e){
+  if(selImg && !selImgDrag){
+    _imgHoverCursor(e.clientX, e.clientY);
+  } else if(!selImg){
+    // Clear any lingering image cursor when no image is selected
+    drawCv.style.cursor = '';
+  }
+}, { passive: true });
+
+// Clear image cursor when mouse leaves the canvas entirely and no drag is active
+drawCv.addEventListener('mouseleave', function(){
+  if(!selImgDrag) drawCv.style.cursor = '';
+});
+
+// ── commitImgSelection: also clear any cursor state ──
+var _origCommitImgSel = commitImgSelection;
+commitImgSelection = function(){
+  _origCommitImgSel();
+  _imgClearDragCursor();
+  drawCv.style.cursor = '';
+};
 
 // ── THEME TOGGLE ──────────────────────────────────────────────
 function toggleTheme(){
