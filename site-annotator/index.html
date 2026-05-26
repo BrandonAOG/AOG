@@ -4885,7 +4885,9 @@ var _pendingLabel = null; // label text waiting to be placed by tap
 function placePreset(text, cx, cy){
   if(!baseLoaded){ toast('Open a site plan first','warn'); return; }
   captureState();
-  var fs=Math.max(24, FONT_SIZE);
+  // Target ~48 screen pixels tall regardless of zoom level.
+  // canvas_px = screen_px / zoom, clamped to sensible bounds.
+  var fs = Math.round(Math.max(10, Math.min(300, 48 / zoom)));
   var obj={
     id:Date.now(), x:cx, y:cy, text:text,
     angle:0, color:color, fontSize:fs,
