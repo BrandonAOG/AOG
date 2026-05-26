@@ -495,6 +495,26 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 /* body flex is already set in base styles */
 #toolbar{flex-shrink:0}
 
+/* RIGHT-CLICK CONTEXT MENU */
+#ctx-menu{
+  position:fixed;z-index:9999;
+  background:var(--surf);border:1px solid var(--b2);
+  border-radius:9px;padding:5px;
+  box-shadow:0 8px 32px rgba(0,0,0,.55);
+  display:none;min-width:140px;
+  font-family:'Segoe UI',system-ui,sans-serif;
+}
+#ctx-menu.show{display:block;}
+.ctx-item{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;border-radius:6px;
+  font-size:13px;color:var(--txt);cursor:pointer;
+  transition:background .12s;white-space:nowrap;
+}
+.ctx-item:hover{background:rgba(239,68,68,.18);color:#fca5a5;}
+.ctx-item svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
+.ctx-sep{height:1px;background:var(--b1);margin:4px 0;}
+
 @media(max-width:480px){
   #aog-nav{padding:4px 4px;gap:3px;}
   .ab-btn{padding:6px 4px;font-size:9px;}
@@ -562,7 +582,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   <input type="file" id="camera-in" accept="image/*" capture="environment" style="display:none">
   <div class="sep"></div>
   <!-- DRAW TOOLS -->
-  <button class="tb-btn active" data-tool="pen" title="Pen — draw freehand curves. Arc length is shown after each stroke."><svg viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg><span class="lbl">Pen</span></button>
+  <button class="tb-btn" data-tool="pen" title="Pen — draw freehand curves. Arc length is shown after each stroke."><svg viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg><span class="lbl">Pen</span></button>
   <button class="tb-btn" data-tool="line"><svg viewBox="0 0 24 24"><line x1="5" y1="19" x2="19" y2="5"/></svg><span class="lbl">Line</span></button>
   <button class="tb-btn" data-tool="arrow"><svg viewBox="0 0 24 24"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg><span class="lbl">Arrow</span></button>
   <button class="tb-btn" data-tool="polyline" title="Polyline — click to add points, double-click or Enter to finish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,20 8,10 14,15 21,5"/><circle cx="3" cy="20" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="10" r="1.5" fill="currentColor" stroke="none"/><circle cx="14" cy="15" r="1.5" fill="currentColor" stroke="none"/><circle cx="21" cy="5" r="1.5" fill="currentColor" stroke="none"/></svg><span class="lbl">Polyline</span></button>
@@ -588,7 +608,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <option value="240">240</option><option value="300">300</option>
   </select>
   <button class="tb-btn" data-tool="eraser"><svg viewBox="0 0 24 24"><path d="M20 20H7L3 16l10-10 7 7-3 3"/><path d="M6 10l8 8"/></svg><span class="lbl">Erase</span></button>
-  <button class="tb-btn" data-tool="pan"><svg viewBox="0 0 24 24"><path d="M18 11V8a2 2 0 0 0-4 0v3"/><path d="M14 11V6a2 2 0 0 0-4 0v5"/><path d="M10 11V5a2 2 0 0 0-4 0v9"/><path d="M6 14a4 4 0 0 0 3.67 4h2.5c1.74 0 3.83-.82 3.83-4v-3"/></svg><span class="lbl">Pan</span></button>
+  <button class="tb-btn active" data-tool="pan"><svg viewBox="0 0 24 24"><path d="M18 11V8a2 2 0 0 0-4 0v3"/><path d="M14 11V6a2 2 0 0 0-4 0v5"/><path d="M10 11V5a2 2 0 0 0-4 0v9"/><path d="M6 14a4 4 0 0 0 3.67 4h2.5c1.74 0 3.83-.82 3.83-4v-3"/></svg><span class="lbl">Pan</span></button>
   <div class="sep"></div>
   <!-- LINE STYLE -->
   <div class="ls-group">
@@ -844,6 +864,11 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       </div>
     </div>
   </div>
+</div>
+
+<!-- RIGHT-CLICK CONTEXT MENU -->
+<div id="ctx-menu">
+  <div class="ctx-item" id="ctx-delete"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>Delete</div>
 </div>
 
 <!-- STAMP PICKER -->
@@ -1124,7 +1149,7 @@ document.addEventListener('touchmove', function(e){
 },{passive:false});
 
 // ── APP STATE ──
-var tool='pen', color='#ef4444', strokeW=2, opacity=1, lineStyle='solid', fillShape=false;
+var tool='pan', color='#ef4444', strokeW=2, opacity=1, lineStyle='solid', fillShape=false;
 var fillColor='#ef4444', fillOpacity=0.4; // separate fill (inner) color and opacity
 var stampType='north';
 var layers=[], activeLayerIdx=0;
@@ -1441,11 +1466,22 @@ viewport.addEventListener('wheel',function(e){
   // Normalise for deltaMode: 0=pixels (trackpad), 1=lines (mouse), 2=pages
   if(e.deltaMode===1) dy*=20;   // typical line height
   if(e.deltaMode===2) dy*=300;
-  // Exponential factor — 0.0015 gives ~5% zoom per 100px of scroll delta
-  var factor=Math.pow(0.9985, dy);
-  // Clamp to ±15% per event so a fast spin can't jump too far
-  factor=Math.max(0.85, Math.min(1.15, factor));
-  zoomAt(factor, e.clientX-r.left, e.clientY-r.top);
+  if(e.ctrlKey){
+    // Ctrl + scroll wheel → zoom centred on cursor
+    var factor=Math.pow(0.9985, dy);
+    // Clamp to ±15% per event so a fast spin can't jump too far
+    factor=Math.max(0.85, Math.min(1.15, factor));
+    zoomAt(factor, e.clientX-r.left, e.clientY-r.top);
+  } else if(e.shiftKey){
+    // Shift + scroll wheel → pan left/right
+    panX -= dy;
+    clampPan(); applyTransform();
+  } else {
+    // Plain scroll wheel → pan vertically (also support horizontal via deltaX)
+    panX -= e.deltaX * (e.deltaMode===0 ? 1 : 20);
+    panY -= dy;
+    clampPan(); applyTransform();
+  }
 },{passive:false});
 
 function startPan(x,y){ isPanning=true; lastPanX=x; lastPanY=y; }
@@ -1481,6 +1517,48 @@ document.addEventListener('touchmove',function(e){
 },{passive:false});
 
 document.addEventListener('touchend',function(e){ if(e.touches.length<2) pinching=false; if(e.touches.length===0) endPan(); },{passive:true});
+
+// ── THREE-FINGER GESTURE: tap = undo ────────────────────────────────────
+(function(){
+  var _t3Start = 0;
+  var _t3Active = false;
+
+  var _t4Start = 0;
+  var _t4Active = false;
+
+  document.addEventListener('touchstart', function(e){
+    if(e.touches.length === 4){
+      _t4Start = Date.now();
+      _t4Active = true;
+      _t3Active = false; // 4 fingers overrides 3-finger
+    } else if(e.touches.length === 3){
+      _t3Start = Date.now();
+      _t3Active = true;
+      _t4Active = false;
+    } else {
+      _t3Active = false;
+      _t4Active = false;
+    }
+  }, {passive:true});
+
+  document.addEventListener('touchend', function(e){
+    if(!_t4Active) return;
+    if(e.touches.length !== 0) return;
+    var elapsed = Date.now() - _t4Start;
+    if(elapsed > 400){ _t4Active = false; return; }
+    _t4Active = false;
+    redoFn(); toast('Redo ↩','ok',1200);
+  }, {passive:true});
+
+  document.addEventListener('touchend', function(e){
+    if(!_t3Active) return;
+    if(e.touches.length !== 0) return;
+    var elapsed = Date.now() - _t3Start;
+    if(elapsed > 400){ _t3Active = false; return; }
+    _t3Active = false;
+    undoFn(); toast('Undo ↩','ok',1200);
+  }, {passive:true});
+})();
 
 viewport.addEventListener('touchstart',function(e){ if(e.touches.length===1&&!pinching&&tool==='pan') startPan(e.touches[0].clientX,e.touches[0].clientY); },{passive:true});
 
@@ -4049,6 +4127,12 @@ document.querySelectorAll('.tb-btn[data-tool]').forEach(function(btn){
   });
 });
 
+// Helper to switch tool programmatically (mirrors the button click logic)
+function switchTool(name){
+  var btn=document.querySelector('.tb-btn[data-tool="'+name+'"]');
+  if(btn) btn.click();
+}
+
 // ── STAMP PICKER ──
 document.getElementById('stamp-overlay').addEventListener('click',closeStampPicker);
 document.getElementById('stamp-cancel').addEventListener('click',closeStampPicker);
@@ -4759,13 +4843,12 @@ document.addEventListener('keyup',function(e){ if(e.code==='Space'){ spaceDown=f
 
 
 // ── PRESET LABELS ────────────────────────────────────────────
-function placePreset(text){
+var _pendingLabel = null; // label text waiting to be placed by tap
+
+function placePreset(text, cx, cy){
   if(!baseLoaded){ toast('Open a site plan first','warn'); return; }
-  // Place in center of current viewport view
-  var cx=(viewport.clientWidth/2 - panX)/zoom;
-  var cy=(viewport.clientHeight/2 - panY)/zoom;
   captureState();
-  var fs=Math.max(24, FONT_SIZE); // presets default to at least 24px
+  var fs=Math.max(24, FONT_SIZE);
   var obj={
     id:Date.now(), x:cx, y:cy, text:text,
     angle:0, color:color, fontSize:fs,
@@ -4775,13 +4858,55 @@ function placePreset(text){
   renderTextObjs();
   pushUndo();
   enterTextTransformMode(obj);
-  toast(text+' placed — drag to position, handles to resize/rotate','ok',3000);
+  toast(text+' placed','ok',1800);
 }
 
-// Wire preset buttons
+function armLabelPlacement(text){
+  if(!baseLoaded){ toast('Open a site plan first','warn'); return; }
+  _pendingLabel = text;
+  viewport.style.cursor = 'crosshair';
+  toast('Tap where you want to place "'+text+'"','ok',0); // 0 = stay until dismissed
+}
+
+function cancelLabelPlacement(){
+  _pendingLabel = null;
+  viewport.style.cursor = (tool==='pan') ? 'grab' : '';
+  // Clear the sticky toast
+  var el=document.getElementById('toast');
+  if(el) el.className='';
+}
+
+// Intercept canvas tap/click to place pending label
+viewport.addEventListener('click', function(e){
+  if(!_pendingLabel) return;
+  var cp = vpToCanvas(e.clientX, e.clientY);
+  var lbl = _pendingLabel;
+  cancelLabelPlacement();
+  placePreset(lbl, cp.x, cp.y);
+  switchTool('rect');
+}, true); // capture phase so it fires before drawing handlers
+
+viewport.addEventListener('touchend', function(e){
+  if(!_pendingLabel) return;
+  if(e.changedTouches.length !== 1) return;
+  var t = e.changedTouches[0];
+  var cp = vpToCanvas(t.clientX, t.clientY);
+  var lbl = _pendingLabel;
+  cancelLabelPlacement();
+  placePreset(lbl, cp.x, cp.y);
+  switchTool('rect');
+  e.preventDefault();
+}, {capture:true, passive:false});
+
+// Cancel on Escape
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape' && _pendingLabel) cancelLabelPlacement();
+}, true);
+
+// Wire preset buttons — arm placement mode instead of placing immediately
 document.querySelectorAll('.label-item[data-preset]').forEach(function(btn){
   btn.addEventListener('click',function(){
-    placePreset(btn.dataset.preset);
+    armLabelPlacement(btn.dataset.preset);
   });
 });
 
@@ -4985,6 +5110,60 @@ function updateWatermark(){
 })();
 
 // ── No top padding JS needed — nav and customer bar are in the flex flow ──
+// ── RIGHT-CLICK CONTEXT MENU ──────────────────────────────────────────────
+(function(){
+  var menu = document.getElementById('ctx-menu');
+  var _ctxHit = null;
+
+  function hideMenu(){ menu.classList.remove('show'); _ctxHit = null; }
+
+  viewport.addEventListener('contextmenu', function(e){
+    e.preventDefault();
+    var cp = vpToCanvas(e.clientX, e.clientY);
+
+    var hit =
+      findShapeObjAt(cp.x, cp.y, false) ||
+      findTextObjAt(cp.x, cp.y) ||
+      findMeasureObjAt(cp.x, cp.y, false) ||
+      findPathMeasureObjAt(cp.x, cp.y, false) ||
+      findPolylineObjAt(cp.x, cp.y, false);
+
+    if(!hit){ hideMenu(); return; }
+    _ctxHit = hit;
+
+    var mx = e.clientX, my = e.clientY;
+    if(mx + 170 > window.innerWidth)  mx = window.innerWidth  - 170;
+    if(my + 55  > window.innerHeight) my = window.innerHeight - 55;
+    menu.style.left = mx + 'px';
+    menu.style.top  = my + 'px';
+    menu.classList.add('show');
+  });
+
+  document.getElementById('ctx-delete').addEventListener('click', function(){
+    if(!_ctxHit){ hideMenu(); return; }
+    var obj = _ctxHit;
+    hideMenu();
+    var idx;
+    idx = shapeObjs.indexOf(obj);
+    if(idx > -1){ shapeObjs.splice(idx,1); renderShapeObjs(); renderShapeAndMeasure(); return; }
+    idx = textObjs.indexOf(obj);
+    if(idx > -1){ textObjs.splice(idx,1); renderTextObjs(); return; }
+    idx = measureObjs.indexOf(obj);
+    if(idx > -1){ measureObjs.splice(idx,1); renderShapeAndMeasure(); return; }
+    idx = pathMeasureObjs.indexOf(obj);
+    if(idx > -1){ pathMeasureObjs.splice(idx,1); renderShapeAndMeasure(); return; }
+    idx = polylineObjs.indexOf(obj);
+    if(idx > -1){ polylineObjs.splice(idx,1); renderShapeAndMeasure(); return; }
+  });
+
+  document.addEventListener('click', function(e){
+    if(!menu.contains(e.target)) hideMenu();
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape') hideMenu();
+  });
+})();
 </script>
+
 </body>
 </html>
