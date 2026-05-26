@@ -1063,8 +1063,11 @@ var IS_IPAD   = /iPad/.test(navigator.userAgent) ||
 var IS_IOS    = IS_IPHONE || IS_IPAD;
 // 2400px on iPhone = good zoom quality, keeps 5 layers ~33MB each (~165MB total).
 // iPad gets no cap (16384 = effectively unlimited).
-var IOS_MAX_PX = IS_IPHONE ? 2900 : 16384;
-var MAX_UNDO   = IS_IPHONE ? 5 : (IS_IPAD ? 12 : 25);
+// iPad canvas capped at 4096px — prevents multi-layer snapshots from
+// filling Safari's memory and crashing on reload.
+var IOS_MAX_PX = IS_IPHONE ? 2900 : (IS_IPAD ? 4096 : 16384);
+// iPad undo kept at 5 — each snapshot is ~50MB+ per layer at full res.
+var MAX_UNDO   = IS_IPHONE ? 5 : (IS_IPAD ? 5 : 20);
 
 // releaseCanvas: forces Safari to free canvas memory immediately.
 // Safari hoards canvases even after JS references are gone.
@@ -1531,7 +1534,21 @@ window.addEventListener('mouseup',function(){ if(isPanning){ endPan(); viewport.
 
 // Two-finger touch
 document.addEventListener('touchstart',function(e){
-  if(e.touches.length>=2){ e.preventDefault(); isPanning=false; if(!pinching){ if(drawing){drawing=false;if(compositedSnap){dCtx.putImageData(compositedSnap,0,0);}dCtx.beginPath();try{lctx().beginPath();}catch(ex){}} pinching=true; pinchDist0=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); pinchZoom0=zoom; twoMidX=(e.touches[0].clientX+e.touches[1].clientX)/2; twoMidY=(e.touches[0].clientY+e.touches[1].clientY)/2; } }
+  if(e.touches.length>=2){
+    e.preventDefault(); isPanning=false;
+    // Track 3/4-finger taps for undo/redo (must be inside passive:false handler
+    // so e.preventDefault() blocks iPadOS system gestures before we detect them)
+    if(e.touches.length===4){
+      _t4Start=Date.now(); _t4Active=true; _t3Active=false;
+    } else if(e.touches.length===3){
+      _t3Start=Date.now(); _t3Active=true; _t4Active=false;
+    } else {
+      _t3Active=false; _t4Active=false;
+    }
+    if(!pinching){ if(drawing){drawing=false;if(compositedSnap){dCtx.putImageData(compositedSnap,0,0);}dCtx.beginPath();try{lctx().beginPath();}catch(ex){}} pinching=true; pinchDist0=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); pinchZoom0=zoom; twoMidX=(e.touches[0].clientX+e.touches[1].clientX)/2; twoMidY=(e.touches[0].clientY+e.touches[1].clientY)/2; }
+  } else {
+    _t3Active=false; _t4Active=false;
+  }
 },{passive:false});
 
 document.addEventListener('touchmove',function(e){
@@ -1553,49 +1570,20 @@ document.addEventListener('touchmove',function(e){
   }
 },{passive:false});
 
-document.addEventListener('touchend',function(e){ if(e.touches.length<2) pinching=false; if(e.touches.length===0) endPan(); },{passive:true});
+document.addEventListener('touchend',function(e){
+  if(e.touches.length<2) pinching=false;
+  if(e.touches.length===0){
+    endPan();
+    // Fire undo/redo when all fingers lift
+    if(_t4Active && (Date.now()-_t4Start)<400){ _t4Active=false; _t3Active=false; redoFn(); toast('Redo ↩','ok',1200); return; }
+    if(_t3Active && (Date.now()-_t3Start)<400){ _t3Active=false; undoFn(); toast('Undo ↩','ok',1200); return; }
+    _t3Active=false; _t4Active=false;
+  }
+},{passive:true});
 
-// ── THREE-FINGER GESTURE: tap = undo ────────────────────────────────────
-(function(){
-  var _t3Start = 0;
-  var _t3Active = false;
-
-  var _t4Start = 0;
-  var _t4Active = false;
-
-  document.addEventListener('touchstart', function(e){
-    if(e.touches.length === 4){
-      _t4Start = Date.now();
-      _t4Active = true;
-      _t3Active = false; // 4 fingers overrides 3-finger
-    } else if(e.touches.length === 3){
-      _t3Start = Date.now();
-      _t3Active = true;
-      _t4Active = false;
-    } else {
-      _t3Active = false;
-      _t4Active = false;
-    }
-  }, {passive:true});
-
-  document.addEventListener('touchend', function(e){
-    if(!_t4Active) return;
-    if(e.touches.length !== 0) return;
-    var elapsed = Date.now() - _t4Start;
-    if(elapsed > 400){ _t4Active = false; return; }
-    _t4Active = false;
-    redoFn(); toast('Redo ↩','ok',1200);
-  }, {passive:true});
-
-  document.addEventListener('touchend', function(e){
-    if(!_t3Active) return;
-    if(e.touches.length !== 0) return;
-    var elapsed = Date.now() - _t3Start;
-    if(elapsed > 400){ _t3Active = false; return; }
-    _t3Active = false;
-    undoFn(); toast('Undo ↩','ok',1200);
-  }, {passive:true});
-})();
+// Gesture state — set inside the main non-passive touchstart below
+var _t3Start=0, _t3Active=false;
+var _t4Start=0, _t4Active=false;
 
 viewport.addEventListener('touchstart',function(e){ if(e.touches.length===1&&!pinching&&tool==='pan') startPan(e.touches[0].clientX,e.touches[0].clientY); },{passive:true});
 
