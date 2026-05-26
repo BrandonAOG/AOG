@@ -1033,16 +1033,23 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <div class="sc-row"><span class="sc-desc">Redo</span><span class="sc-key" id="sc-redo">⌘Y</span></div>
         <div class="sc-row"><span class="sc-desc">Redo (alt)</span><span class="sc-key" id="sc-redo2">⌘⇧Z</span></div>
         <div class="sc-row"><span class="sc-desc">Save PNG</span><span class="sc-key" id="sc-save">⌘S</span></div>
+        <div class="sc-row"><span class="sc-desc">Print</span><span class="sc-key" id="sc-print">⌘P</span></div>
       </div>
 
       <div class="sc-section-title">VIEW</div>
       <div class="sc-grid">
         <div class="sc-row"><span class="sc-desc">Fit to screen</span><span class="sc-key" id="sc-fit">⌘0</span></div>
-        <div class="sc-row"><span class="sc-desc">Zoom in / out</span><span class="sc-key" id="sc-zin">Ctrl + Scroll wheel</span></div>
+        <div class="sc-row"><span class="sc-desc">Zoom in</span><span class="sc-key">= or ⌘=</span></div>
+        <div class="sc-row"><span class="sc-desc">Zoom out</span><span class="sc-key">- or ⌘-</span></div>
+        <div class="sc-row"><span class="sc-desc">Zoom (mouse)</span><span class="sc-key" id="sc-zin">Ctrl + Scroll wheel</span></div>
         <div class="sc-row"><span class="sc-desc">Pan up / down</span><span class="sc-key">Scroll wheel</span></div>
         <div class="sc-row"><span class="sc-desc">Pan left / right</span><span class="sc-key">⇧ + Scroll</span></div>
         <div class="sc-row"><span class="sc-desc">Pan (hold key)</span><span class="sc-key">Space + drag</span></div>
         <div class="sc-row"><span class="sc-desc">Pan (middle btn)</span><span class="sc-key">Middle click + drag</span></div>
+        <div class="sc-row"><span class="sc-desc">Rotate left</span><span class="sc-key">[</span></div>
+        <div class="sc-row"><span class="sc-desc">Rotate right</span><span class="sc-key">]</span></div>
+        <div class="sc-row"><span class="sc-desc">Toggle grid</span><span class="sc-key">` (backtick)</span></div>
+        <div class="sc-row"><span class="sc-desc">Toggle snap</span><span class="sc-key">\ (backslash)</span></div>
       </div>
 
       <div class="sc-section-title">ACTIONS</div>
@@ -5494,8 +5501,11 @@ function exportToBlob(maxPx, mimeType, quality, cb){
       ['sc-redo2', 'Ctrl+⇧Z'],
       ['sc-save',  'Ctrl+S'],
       ['sc-fit',   'Ctrl+0'],
+      ['sc-print', 'Ctrl+P'],
       ['sc-zin',   'Ctrl + Scroll wheel'],
     ];
+    // Also update zoom key labels for Windows (same keys, just clarify no ⌘)
+    var zInEl = document.querySelector('.sc-desktop-only .sc-row .sc-key');
     pairs.forEach(function(p){
       var el = document.getElementById(p[0]);
       if(el) el.textContent = p[1];
@@ -5877,6 +5887,17 @@ document.addEventListener('keydown',function(e){
     if(e.key==='y'){ e.preventDefault(); redoFn(); return; }
     if(e.key==='s'){ e.preventDefault(); btnPng.click(); return; }
     if(e.key==='0'){ e.preventDefault(); fitToVP(); return; }
+    if(e.key==='p'){ e.preventDefault(); btnPrint.click(); return; }
+    if(e.key==='='||e.key==='+'){ e.preventDefault(); zoomAt(1.25,viewport.clientWidth/2,viewport.clientHeight/2); return; }
+    if(e.key==='-'){ e.preventDefault(); zoomAt(0.8,viewport.clientWidth/2,viewport.clientHeight/2); return; }
+  }
+  if(!e.ctrlKey&&!e.metaKey&&!e.altKey){
+    if(e.key==='='||e.key==='+'){ if(document.activeElement&&document.activeElement.tagName==='INPUT') return; e.preventDefault(); zoomAt(1.25,viewport.clientWidth/2,viewport.clientHeight/2); return; }
+    if(e.key==='-'){ if(document.activeElement&&document.activeElement.tagName==='INPUT') return; e.preventDefault(); zoomAt(0.8,viewport.clientWidth/2,viewport.clientHeight/2); return; }
+    if(e.key==='['){ e.preventDefault(); btnRotL.click(); return; }
+    if(e.key===']'){ e.preventDefault(); btnRotR.click(); return; }
+    if(e.key==='`'){ e.preventDefault(); btnGrid.click(); return; }
+    if(e.key==='\\'){ e.preventDefault(); btnSnap.click(); return; }
   }
   if(e.code==='Space'&&e.target===document.body){ e.preventDefault(); spaceDown=true; viewport.style.cursor='grab'; showHint(); return; }
   if(e.key==='Escape'){
