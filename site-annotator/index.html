@@ -45,7 +45,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .clr-wrap{position:relative;flex-shrink:0;width:30px;height:30px;}
 #clr-swatch{width:30px;height:30px;border-radius:50%;border:2.5px solid var(--b2);cursor:pointer;transition:border-color .15s;display:block;}
 #clr-swatch:hover{border-color:var(--txt)}
-#clr-input, #fill-clr-input{
+#clr-input, #fill-clr-input, #cmt-bg-input, #cmt-txt-input, #cmt-bd-input{
   position:absolute;inset:0;
   opacity:0.01;         /* NOT 0 — iOS needs >0 to allow tap */
   width:100%;height:100%;
@@ -596,7 +596,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   <button class="tb-btn" data-tool="leader"><svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="14" y2="10"/><polyline points="14 4 14 10 8 10"/></svg><span class="lbl">Leader</span></button>
   <button class="tb-btn" data-tool="stamp" id="stamp-tool-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20h16v-2a8 8 0 0 0-16 0v2z"/></svg><span class="lbl">Stamp</span></button>
   <button class="tb-btn" data-tool="text"><svg viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg><span class="lbl">Text</span></button>
-  <select id="font-size-sel" title="Font size">
+  <button class="tb-btn" data-tool="comment" title="Comment box — drag to place, click to edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="13" x2="13" y2="13"/></svg><span class="lbl">Note</span></button>
+  <div id="tb-font-size-grp"><select id="font-size-sel" title="Font size">
     <option value="10">10</option><option value="12">12</option>
     <option value="14">14</option><option value="16">16</option>
     <option value="18" selected>18</option><option value="20">20</option>
@@ -607,20 +608,71 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <option value="120">120</option><option value="144">144</option>
     <option value="180">180</option><option value="216">216</option>
     <option value="240">240</option><option value="300">300</option>
-  </select>
+  </select></div>
   <button class="tb-btn" data-tool="eraser"><svg viewBox="0 0 24 24"><path d="M20 20H7L3 16l10-10 7 7-3 3"/><path d="M6 10l8 8"/></svg><span class="lbl">Erase</span></button>
   <button class="tb-btn active" data-tool="pan"><svg viewBox="0 0 24 24"><path d="M18 11V8a2 2 0 0 0-4 0v3"/><path d="M14 11V6a2 2 0 0 0-4 0v5"/><path d="M10 11V5a2 2 0 0 0-4 0v9"/><path d="M6 14a4 4 0 0 0 3.67 4h2.5c1.74 0 3.83-.82 3.83-4v-3"/></svg><span class="lbl">Pan</span></button>
   <div class="sep"></div>
+  <!-- COMMENT COLORS — only shown when Note/Comment tool is active -->
+  <div id="cmt-clr-grp" style="display:none;align-items:center;gap:3px;flex-shrink:0">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
+      <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">BOX</span>
+      <div class="clr-wrap">
+        <div id="cmt-bg-swatch" style="background:#FBBF24;border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer"></div>
+        <input type="color" id="cmt-bg-input" value="#FBBF24">
+      </div>
+    </div>
+    <div class="sl-wrap" style="min-width:44px">
+      <input type="range" id="cmt-bg-op-sl" min="10" max="100" value="90">
+      <span id="cmt-bg-op-val" style="font-size:8px">90%</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
+      <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">BORDER</span>
+      <div class="clr-wrap">
+        <div id="cmt-bd-swatch" style="background:#4B5563;border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer"></div>
+        <input type="color" id="cmt-bd-input" value="#4B5563">
+      </div>
+    </div>
+    <div class="sl-wrap" style="min-width:44px">
+      <input type="range" id="cmt-bd-w-sl" min="1" max="12" value="2">
+      <span id="cmt-bd-w-val" style="font-size:8px">2px</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
+      <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">TEXT</span>
+      <div class="clr-wrap">
+        <div id="cmt-txt-swatch" style="background:#1a1a2e;border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer"></div>
+        <input type="color" id="cmt-txt-input" value="#1a1a2e">
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
+      <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">SIZE</span>
+      <select id="cmt-font-size-sel" title="Note font size" style="background:var(--surf2);border:1.5px solid var(--b2);color:var(--txt);border-radius:6px;padding:2px 3px;font-size:11px;outline:none;cursor:pointer;height:30px;width:56px;-webkit-appearance:none;text-align:center;">
+        <option value="8">8</option><option value="9">9</option>
+        <option value="10">10</option><option value="11">11</option>
+        <option value="12">12</option><option value="13" selected>13</option>
+        <option value="14">14</option><option value="16">16</option>
+        <option value="18">18</option><option value="20">20</option>
+        <option value="22">22</option><option value="24">24</option>
+        <option value="28">28</option><option value="32">32</option>
+        <option value="36">36</option><option value="42">42</option>
+        <option value="48">48</option><option value="56">56</option>
+        <option value="64">64</option><option value="72">72</option>
+        <option value="84">84</option><option value="96">96</option>
+        <option value="108">108</option><option value="120">120</option>
+      </select>
+    </div>
+    <div class="sep"></div>
+  </div>
   <!-- LINE STYLE -->
-  <div class="ls-group">
+  <div id="tb-ls-grp" style="display:flex;gap:2px;flex-shrink:0"><div class="ls-group">
     <button class="ls-btn active" data-ls="solid" title="Solid"><svg viewBox="0 0 20 10"><line x1="1" y1="5" x2="19" y2="5" stroke-width="2"/></svg></button>
     <button class="ls-btn" data-ls="dashed" title="Dashed"><svg viewBox="0 0 20 10"><line x1="1" y1="5" x2="19" y2="5" stroke-width="2" stroke-dasharray="4 3"/></svg></button>
     <button class="ls-btn" data-ls="dotted" title="Dotted"><svg viewBox="0 0 20 10"><line x1="1" y1="5" x2="19" y2="5" stroke-width="2" stroke-dasharray="1.5 3"/></svg></button>
   </div>
   <button id="fill-btn" title="Fill shape">Fill</button>
-  <div class="sep"></div>
+  </div><!-- /tb-ls-grp -->
+  <div class="sep" id="tb-ls-sep"></div>
   <!-- STROKE COLOR -->
-  <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
+  <div id="tb-stroke-grp" style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
     <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">STROKE</span>
     <div class="clr-wrap">
       <div id="clr-swatch" style="background:#ef4444"></div>
@@ -628,6 +680,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     </div>
   </div>
   <!-- FILL COLOR + OPACITY -->
+  <div id="tb-fill-grp" style="display:contents">
   <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
     <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">FILL</span>
     <div class="clr-wrap" id="fill-clr-wrap" title="Fill color">
@@ -639,19 +692,20 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <input type="range" id="fill-op-sl" min="0" max="100" value="40">
     <span id="fill-op-val" style="font-size:8px">40%</span>
   </div>
+  </div><!-- /tb-fill-grp -->
   <div class="sep"></div>
   <!-- STROKE WIDTH -->
-  <div class="sl-wrap">
+  <div id="tb-sw-grp" class="sl-wrap">
     <input type="range" id="sw-sl" min="1" max="30" value="2">
     <span id="sw-val">2px</span>
   </div>
-  <div class="sep"></div>
+  <div class="sep" id="tb-sw-sep"></div>
   <!-- OPACITY -->
-  <div class="sl-wrap">
+  <div id="tb-op-grp" class="sl-wrap">
     <input type="range" id="op-sl" min="10" max="100" value="100">
     <span id="op-val">100%</span>
   </div>
-  <div class="sep"></div>
+  <div class="sep" id="tb-op-sep"></div>
   <button class="tb-btn" id="btn-undo"><svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg><span class="lbl">Undo</span></button>
   <button class="tb-btn" id="btn-redo"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.5"/></svg><span class="lbl">Redo</span></button>
   <button class="tb-btn" id="btn-clear"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg><span class="lbl">Clear</span></button>
@@ -961,6 +1015,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       <div class="sc-row"><span class="sc-desc">Area / Polygon</span><span class="sc-key">G</span></div>
       <div class="sc-row"><span class="sc-desc">Polyline</span><span class="sc-key">W</span></div>
       <div class="sc-row"><span class="sc-desc">Text</span><span class="sc-key">T</span></div>
+      <div class="sc-row"><span class="sc-desc">Note / Comment</span><span class="sc-key">N</span></div>
       <div class="sc-row"><span class="sc-desc">Eraser</span><span class="sc-key">X</span></div>
       <div class="sc-row"><span class="sc-desc">Pan</span><span class="sc-key">H</span></div>
     </div>
@@ -1136,6 +1191,336 @@ var tCv=document.getElementById('txt-cv');
 var tCtx=tCv.getContext('2d');
 var shCv=document.getElementById('shapes-cv');
 var shCtx=shCv.getContext('2d');
+
+// ── Accurate text width using real canvas measurement ────────────
+// Replaces the inaccurate "chars * fontSize * 0.6" estimate.
+// The canvas font must match what renderTextObjs uses: bold Npx Arial.
+function measureLinesW(lines, fontSize){
+  tCtx.save();
+  tCtx.font='bold '+fontSize+'px Arial,sans-serif';
+  var maxW=0;
+  for(var _i=0;_i<lines.length;_i++){
+    var _w=tCtx.measureText(lines[_i]).width;
+    if(_w>maxW) maxW=_w;
+  }
+  tCtx.restore();
+  return maxW;
+}
+// Factor by which the ellipse semi-axes exceed the text bounding box,
+// so that text corners (at ±textW/2, ±textH/2) fall inside the ellipse.
+// For text to fit inside ellipse: (textW/2/a)^2+(textH/2/b)^2 <= 1
+// Using a=textW/2*k, b=textH/2*k → 2/k^2 <= 1 → k >= sqrt(2) ≈ 1.42.
+// We use 1.5 for a comfortable margin.
+var TEXT_ELLIPSE_K = 1.5;
+
+// ══════════════════════════════════════════════════════════════
+// COMMENT BOX SYSTEM (Acrobat-style sticky notes)
+// Drag to draw, click to edit text, separate box/text color pickers.
+// ══════════════════════════════════════════════════════════════
+var commentObjs     = [];
+var _cBgColor       = '#FBBF24';
+var _cBgOpacity     = 0.9;
+var _cBorderColor   = '#4B5563';
+var _cBorderW       = 2;          // border stroke width in canvas px
+var _cTxtColor      = '#1a1a2e';
+var _cFontSize      = 13;
+var _editingComment = null;       // comment whose text is being edited
+var _movingComment  = null;       // comment being dragged
+var _moveCmtStart   = null;       // {x,y,cx,cy} at drag start
+
+// Darken a hex color by `amt` (0–1)
+function darkenHex(hex, amt){
+  var n=parseInt((hex||'#888888').replace('#','').padStart(6,'0'),16);
+  var r=Math.max(0,((n>>16)&0xff)-Math.round(255*amt));
+  var g=Math.max(0,((n>>8)&0xff)-Math.round(255*amt));
+  var b=Math.max(0,(n&0xff)-Math.round(255*amt));
+  return '#'+(((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1));
+}
+
+// Word-wrap `text` into lines fitting `maxW` pixels in the current ctx font
+function cmtWrapLines(ctx, text, maxW){
+  var out=[];
+  text.split('\n').forEach(function(para){
+    if(!para){ out.push(''); return; }
+    var words=para.split(' '), cur='';
+    words.forEach(function(w){
+      var test=cur?cur+' '+w:w;
+      if(ctx.measureText(test).width>maxW&&cur){ out.push(cur); cur=w; }
+      else cur=test;
+    });
+    if(cur) out.push(cur);
+  });
+  return out;
+}
+
+// Draw one comment box on any canvas context (sc = scale for export, skipText = hide text during edit)
+function drawCommentBox(ctx, c, sc, skipText){
+  sc=sc||1;
+  ctx.save();
+  var x=(c.cx-c.w/2)*sc, y=(c.cy-c.h/2)*sc, w=c.w*sc, h=c.h*sc;
+  var r=Math.min(7*sc, w/5, h/5);
+  var bgCol=c.bgColor||'#FBBF24';
+  // Border: use explicit stored color if set, otherwise fall back to a derived shade.
+  // New notes always store borderColor, so fallback only applies to legacy objects.
+  var bdCol=c.borderColor||darkenHex(bgCol,0.35);
+  // Fill opacity: only the background, not the border
+  var fillAlpha=(c.bgOpacity!==undefined?c.bgOpacity:0.9);
+
+  // ── Filled background (with opacity) ──
+  ctx.globalAlpha=fillAlpha;
+  ctx.fillStyle=bgCol;
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── Border — full opacity, not affected by fillAlpha ──
+  ctx.globalAlpha=1;
+  ctx.strokeStyle=bdCol;
+  ctx.lineWidth=Math.max(1,(c.borderStrokeW||2)*sc);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+  ctx.stroke();
+
+  // ── Body text (word-wrapped) — skipped while textOv overlay is active ──
+  if(!skipText && c.text && c.text.trim()){
+    var fs=Math.max(8,Math.round((c.fontSize||13)*sc));
+    ctx.globalAlpha=1;
+    ctx.fillStyle=c.textColor||'#1a1a2e';
+    ctx.font=fs+'px Arial,sans-serif';
+    ctx.textBaseline='top'; ctx.textAlign='left';
+    var pad=8*sc;
+    var maxW=w-2*pad;
+    var lineH=fs*1.4;
+    var lines=cmtWrapLines(ctx,c.text,maxW);
+    lines.forEach(function(line,i){
+      var ty=y+pad+i*lineH;
+      if(ty+lineH<=y+h-2) ctx.fillText(line,x+pad,ty,maxW);
+    });
+  }
+  ctx.restore();
+}
+
+// Hit test for comment objects (returns comment or null)
+function findCommentObjAt(x,y,isTouch){
+  var pad=isTouch?14:4;
+  for(var i=commentObjs.length-1;i>=0;i--){
+    var c=commentObjs[i];
+    var layer=layers[c.layerIdx]; if(layer&&!layer.visible) continue;
+    if(x>=c.cx-c.w/2-pad&&x<=c.cx+c.w/2+pad&&
+       y>=c.cy-c.h/2-pad&&y<=c.cy+c.h/2+pad) return c;
+  }
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════════
+// COMMENT INTERACTION — Acrobat-style state machine
+//   Single click  → select (resize handles visible, no textOv)
+//   Double click  → text edit (textOv opens inside box)
+//   Resize handle → resize while editing or selected
+//   Escape        → exit text edit (keep handles)
+//   Click outside → deselect (saves text if editing)
+//   Enter         → newline inside comment  (not commit)
+//   Ctrl+Enter    → commit and deselect
+//   New box drawn → immediately enter text edit
+//   Paste/type    → box auto-grows vertically
+// ══════════════════════════════════════════════════════════════
+
+var _cmtLastTap = 0, _cmtLastHit = null;  // double-click tracking
+
+// ── Helper: sync all comment toolbar controls to a note's values ──
+function _syncCommentPickers(c){
+  _cBgColor    = c.bgColor    || '#FBBF24';
+  _cBgOpacity  = c.bgOpacity  !== undefined ? c.bgOpacity : 0.9;
+  _cBorderColor= c.borderColor|| '#4B5563';
+  _cBorderW    = c.borderStrokeW !== undefined ? c.borderStrokeW : 2;
+  _cTxtColor   = c.textColor  || '#1a1a2e';
+  _cFontSize   = c.fontSize   || 13;
+  var el;
+  el=document.getElementById('cmt-bg-swatch');   if(el) el.style.background=_cBgColor;
+  el=document.getElementById('cmt-bg-input');    if(el) el.value=_cBgColor;
+  el=document.getElementById('cmt-bd-swatch');   if(el) el.style.background=_cBorderColor;
+  el=document.getElementById('cmt-bd-input');    if(el) el.value=_cBorderColor;
+  el=document.getElementById('cmt-txt-swatch');  if(el) el.style.background=_cTxtColor;
+  el=document.getElementById('cmt-txt-input');   if(el) el.value=_cTxtColor;
+  el=document.getElementById('cmt-bg-op-sl');    if(el) el.value=Math.round(_cBgOpacity*100);
+  el=document.getElementById('cmt-bg-op-val');   if(el) el.textContent=Math.round(_cBgOpacity*100)+'%';
+  el=document.getElementById('cmt-bd-w-sl');     if(el) el.value=_cBorderW;
+  el=document.getElementById('cmt-bd-w-val');    if(el) el.textContent=_cBorderW+'px';
+  el=document.getElementById('cmt-font-size-sel'); if(el) el.value=_cFontSize;
+}
+
+// ── Select a comment: show handles, sync pickers, NO textOv ──────
+function enterCommentSelectMode(c){
+  _syncCommentPickers(c);
+  if(selCv.width!==drawCv.width||selCv.height!==drawCv.height){
+    selCv.width=drawCv.width; selCv.height=drawCv.height;
+  }
+  selectedShape={
+    type:'comment', _commentObj:c,
+    cx:c.cx, cy:c.cy, w:c.w, h:c.h, angle:0,
+    color:c.borderColor||'#4B5563', strokeW:c.borderStrokeW||2,
+    opacity:1, fill:false, lineStyle:'solid'
+  };
+  selHandle=-1; selDragStart=null;
+  renderShapeAndMeasure(); composite();
+  renderSelection();
+}
+
+// ── Open textOv inside selected comment for text editing ─────────
+// Uses transform:scale so the visual font size EXACTLY matches what the
+// canvas will render, even at low zoom levels. The regular text tool
+// uses the same technique in repositionTextOverlay().
+function startCommentTextEdit(c){
+  _editingComment=c;
+
+  // Always render the textarea at a comfortable reading size (min 13px on screen).
+  // The canvas draws text at (fontSize * zoom) screen px, but the editing overlay
+  // just needs to be legible — exact visual match to the canvas is not required here.
+  // Use the note's font size directly — this is an HTML overlay, not canvas, so no zoom math needed.
+  var renderPx = (c.fontSize || _cFontSize);
+  var scale = 1;
+
+  var pad = 8;
+  var cx  = c.cx - c.w/2 + pad;
+  var cy  = c.cy - c.h/2 + pad;
+  var cw  = c.w - 2*pad;
+  var vv  = window.visualViewport;
+  var vvL = vv ? vv.offsetLeft : 0;
+  var vvT = vv ? vv.offsetTop  : 0;
+  var sx  = panX + cx*zoom + vvL;
+  var sy  = panY + cy*zoom + vvT;
+  // Width matches the visible box interior at current zoom
+  var visualW = Math.max(cw*zoom, 40);
+  var layoutW = Math.round(visualW);
+
+  textOv.style.display      = 'block';
+  textOv.style.left         = Math.round(sx) + 'px';
+  textOv.style.top          = Math.round(sy) + 'px';
+  textOv.style.width        = layoutW + 'px';
+  textOv.style.maxWidth     = layoutW + 'px';
+  textOv.style.minWidth     = layoutW + 'px';
+  textOv.style.height       = 'auto';
+  textOv.style.minHeight    = '16px';
+  textOv.style.maxHeight    = 'none';
+  textOv.style.fontSize     = renderPx + 'px';
+  textOv.style.lineHeight   = '1.4';
+  textOv.style.transform    = 'none';
+  textOv.style.transformOrigin = 'top left';
+  textOv.style.color        = _cTxtColor;
+  textOv.style.background   = 'transparent';
+  textOv.style.borderBottom = 'none';
+  textOv.style.whiteSpace   = 'pre-wrap';
+  textOv.style.overflow     = 'hidden';
+  textOv.value = c.text || '';
+
+  // Measure existing content height and trigger auto-grow
+  setTimeout(function(){
+    if(_editingComment !== c) return;
+    textOv.style.height = 'auto';
+    var sh = Math.max(textOv.scrollHeight || 20, 20);
+    textOv.style.height = sh + 'px';
+    _cmtAutoGrow(c);
+  }, 0);
+
+  if(document.activeElement !== textOv) textOv.focus();
+}
+
+// ── Auto-grow box to fit textOv content (accounts for transform:scale) ──
+function _cmtAutoGrow(c){
+  if(_editingComment !== c) return;
+  textOv.style.height = 'auto';
+  var scrollH = Math.max(textOv.scrollHeight || 20, 20);
+  textOv.style.height = scrollH + 'px';
+
+  // Convert textarea scroll height (screen px) to canvas px.
+  var visualH  = scrollH;                  // no scale transform any more
+  var pad      = 8;
+  var neededH  = Math.ceil(visualH / zoom) + 2*pad + 4;
+
+  if(neededH > c.h){
+    c.h = neededH;
+    if(selectedShape && selectedShape._commentObj === c) selectedShape.h = neededH;
+    renderShapeAndMeasure(); composite();
+    if(selectedShape) renderSelection();
+  }
+}
+
+// ── Save text, close textOv, KEEP selection handles ──────────────
+function commitCommentEdit(){
+  if(!_editingComment) return;
+  var c = _editingComment;
+  _editingComment = null;
+  c.text = textOv.value;
+  if(selectedShape && selectedShape.type==='comment' && selectedShape._commentObj===c){
+    c.cx=selectedShape.cx; c.cy=selectedShape.cy;
+    c.w=selectedShape.w; c.h=selectedShape.h;
+  }
+  textOv.style.display = 'none'; textOv.blur();
+  // Fully restore textOv to default state for next use (clear all comment-specific styles)
+  textOv.style.background      = '';
+  textOv.style.borderBottom    = '';
+  textOv.style.width           = '';
+  textOv.style.height          = '';
+  textOv.style.minWidth        = '';
+  textOv.style.minHeight       = '';
+  textOv.style.maxWidth        = '';
+  textOv.style.maxHeight       = '';
+  textOv.style.whiteSpace      = 'pre';
+  textOv.style.overflow        = 'hidden';
+  textOv.style.transform       = 'none';
+  textOv.style.transformOrigin = '';
+  renderShapeAndMeasure(); composite(); pushUndo();
+  if(selectedShape) renderSelection();
+}
+
+// Legacy compatibility — called when a new box is drawn
+function openCommentEditor(c){
+  enterCommentSelectMode(c);
+  startCommentTextEdit(c);
+}
+
+// Reposition textOv when box is resized while editing
+function repositionCommentEditor(c){
+  if(_editingComment !== c || textOv.style.display === 'none') return;
+  var pad = 8;
+  var cx2 = c.cx - c.w/2 + pad;
+  var cy2 = c.cy - c.h/2 + pad;
+  var cw2 = c.w - 2*pad;
+  var vv  = window.visualViewport;
+  var vvL = vv ? vv.offsetLeft : 0;
+  var vvT = vv ? vv.offsetTop  : 0;
+  var visualW = Math.max(cw2*zoom, 40);
+  var layoutW  = Math.round(visualW);
+
+  textOv.style.left     = Math.round(panX + cx2*zoom + vvL) + 'px';
+  textOv.style.top      = Math.round(panY + cy2*zoom + vvT) + 'px';
+  textOv.style.width    = layoutW + 'px';
+  textOv.style.maxWidth = layoutW + 'px';
+  textOv.style.minWidth = layoutW + 'px';
+  // Re-measure height after width change (word-wrap may shift)
+  setTimeout(function(){ if(_editingComment === c) _cmtAutoGrow(c); }, 0);
+}
+
+// Render all comment objects (called as part of renderShapeAndMeasure)
+function renderCommentObjs(ctx){
+  commentObjs.forEach(function(c){
+    var layer=layers[c.layerIdx]; if(layer&&!layer.visible) return;
+    // Always draw the box shell (fill + border).
+    // When editing, pass skipText=true so textOv overlay shows the text instead.
+    drawCommentBox(ctx, c, 1, c===_editingComment);
+  });
+}
+// ══════════════════════════════════════════════════════════════
+// END COMMENT BOX SYSTEM
+// ══════════════════════════════════════════════════════════════
 var fontSizeSel=document.getElementById('font-size-sel');
 var fillClrSwatch=document.getElementById('fill-clr-swatch');
 var fillClrInput=document.getElementById('fill-clr-input');
@@ -1284,7 +1669,8 @@ function captureState(){
       shapeObjs:  JSON.parse(JSON.stringify(shapeObjs)),
       measureObjs:JSON.parse(JSON.stringify(measureObjs)),
       pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
-      polylineObjs:JSON.parse(JSON.stringify(polylineObjs))
+      polylineObjs:JSON.parse(JSON.stringify(polylineObjs)),
+      commentObjs:JSON.parse(JSON.stringify(commentObjs))
     };
   }catch(ex){ _preOp=null; }
 }
@@ -1306,7 +1692,8 @@ function pushUndo(){
           shapeObjs:  JSON.parse(JSON.stringify(shapeObjs)),
           measureObjs:JSON.parse(JSON.stringify(measureObjs)),
           pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
-          polylineObjs:JSON.parse(JSON.stringify(polylineObjs))
+          polylineObjs:JSON.parse(JSON.stringify(polylineObjs)),
+          commentObjs:JSON.parse(JSON.stringify(commentObjs))
         };
       }catch(ex2){ return; }
     }
@@ -1344,7 +1731,9 @@ function _snapCurrentState(){
     textObjs:   JSON.parse(JSON.stringify(textObjs)),
     shapeObjs:  JSON.parse(JSON.stringify(shapeObjs)),
     measureObjs:JSON.parse(JSON.stringify(measureObjs)),
-    pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs))
+    pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
+    polylineObjs:JSON.parse(JSON.stringify(polylineObjs)),
+    commentObjs:JSON.parse(JSON.stringify(commentObjs))
   };
 }
 
@@ -1368,6 +1757,7 @@ function undoFn(){
     if(snap.measureObjs!==undefined){ measureObjs=snap.measureObjs; renderMeasureObjs(); }
     if(snap.pathMeasureObjs!==undefined){ pathMeasureObjs=snap.pathMeasureObjs; }
     if(snap.polylineObjs!==undefined){ polylineObjs=snap.polylineObjs; }
+    if(snap.commentObjs!==undefined){ commentObjs=snap.commentObjs; }
     renderShapeAndMeasure();
     composite();
   }catch(ex){ console.warn('undoFn failed:',ex); }
@@ -1391,6 +1781,7 @@ function redoFn(){
     if(snap.measureObjs!==undefined){ measureObjs=snap.measureObjs; renderMeasureObjs(); }
     if(snap.pathMeasureObjs!==undefined){ pathMeasureObjs=snap.pathMeasureObjs; }
     if(snap.polylineObjs!==undefined){ polylineObjs=snap.polylineObjs; }
+    if(snap.commentObjs!==undefined){ commentObjs=snap.commentObjs; }
     renderShapeAndMeasure();
     composite();
   }catch(ex){ console.warn('redoFn failed:',ex); }
@@ -1411,6 +1802,7 @@ function clearFn(){
   polylineObjs    = polylineObjs.filter(function(pl){ return pl.layerIdx!==activeLayerIdx; });
   pathMeasureObjs = pathMeasureObjs.filter(function(pm){ return pm.layerIdx!==activeLayerIdx; });
   polylineObjs    = polylineObjs.filter(function(pl){ return pl.layerIdx!==activeLayerIdx; });
+  commentObjs     = commentObjs.filter(function(c){ return c.layerIdx!==activeLayerIdx; });
   // Cancel any in-progress selection on the cleared layer
   if(selectedShape){
     var tobj=selectedShape._textObj;
@@ -1471,7 +1863,7 @@ function updateLegend(){
 }
 
 // ── ZOOM/PAN ──
-function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; }
+function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(_editingComment) repositionCommentEditor(_editingComment); }
 
 function clampPan(){
   var vw=viewport.clientWidth,vh=viewport.clientHeight;
@@ -1921,7 +2313,7 @@ function onDown(e){
   if(tool==='text' && baseLoaded && e.touches && e.touches.length){
     textOv.style.display='block';
     textOv.focus();
-  } else if(tool!=='text' && document.activeElement===textOv){
+  } else if(tool!=='text' && tool!=='comment' && document.activeElement===textOv){
     textOv.blur();
     textOv.style.display='none';
   }
@@ -1946,40 +2338,45 @@ function onDown(e){
   }
 
   if(selectedShape && tool!=='measure'){
-    var sh=getHandleAt(sp.x,sp.y,_isTouchEvt);
-    if(sh>=0){
-      e.preventDefault();
-      selHandle=sh;
-      var snapObj={type:selectedShape.type,cx:selectedShape.cx,cy:selectedShape.cy,
-               w:selectedShape.w,h:selectedShape.h,angle:selectedShape.angle,
-               color:selectedShape.color,strokeW:selectedShape.strokeW,
-               opacity:selectedShape.opacity,fill:selectedShape.fill,lineStyle:selectedShape.lineStyle};
-      // For rotation handles (8-11): store initial angle offset so shape doesn't jump
-      var rotOff=0;
-      if(sh>=8){
-        rotOff=Math.atan2(sp.y-selectedShape.cy, sp.x-selectedShape.cx)-selectedShape.angle;
+    // Comments have their own full interaction logic in handleCommentDown — skip the
+    // generic selected-shape block so interior clicks can open the text editor.
+    if(selectedShape.type!=='comment'){
+      var sh=getHandleAt(sp.x,sp.y,_isTouchEvt);
+      if(sh>=0){
+        e.preventDefault();
+        selHandle=sh;
+        var snapObj={type:selectedShape.type,cx:selectedShape.cx,cy:selectedShape.cy,
+                 w:selectedShape.w,h:selectedShape.h,angle:selectedShape.angle,
+                 color:selectedShape.color,strokeW:selectedShape.strokeW,
+                 opacity:selectedShape.opacity,fill:selectedShape.fill,lineStyle:selectedShape.lineStyle};
+        // For rotation handles (8-11): store initial angle offset so shape doesn't jump
+        var rotOff=0;
+        if(sh>=8){
+          rotOff=Math.atan2(sp.y-selectedShape.cy, sp.x-selectedShape.cx)-selectedShape.angle;
+        }
+        selDragStart={x:sp.x,y:sp.y,shape:snapObj,rotAngleOffset:rotOff,
+          origFontSize:(selectedShape.type==='text'&&selectedShape._textObj)?selectedShape._textObj.fontSize:null,
+          origH:selectedShape.h};
+        return;
       }
-      selDragStart={x:sp.x,y:sp.y,shape:snapObj,rotAngleOffset:rotOff,
-        origFontSize:(selectedShape.type==='text'&&selectedShape._textObj)?selectedShape._textObj.fontSize:null,
-        origH:selectedShape.h};
-      return;
+      if(isInsideShape(selectedShape,sp.x,sp.y,_isTouchEvt)){
+        // Start move
+        e.preventDefault();
+        selHandle=-2;
+        selDragStart={x:sp.x,y:sp.y,
+          shape:{type:selectedShape.type,cx:selectedShape.cx,cy:selectedShape.cy,
+                 w:selectedShape.w,h:selectedShape.h,angle:selectedShape.angle,
+                 color:selectedShape.color,strokeW:selectedShape.strokeW,
+                 opacity:selectedShape.opacity,fill:selectedShape.fill,lineStyle:selectedShape.lineStyle}};
+        return;
+      }
+      // Clicked outside — commit shape. User taps again to draw new shape.
+      commitSelection(); return;
     }
-    if(isInsideShape(selectedShape,sp.x,sp.y,_isTouchEvt)){
-      // Start move
-      e.preventDefault();
-      selHandle=-2;
-      selDragStart={x:sp.x,y:sp.y,
-        shape:{type:selectedShape.type,cx:selectedShape.cx,cy:selectedShape.cy,
-               w:selectedShape.w,h:selectedShape.h,angle:selectedShape.angle,
-               color:selectedShape.color,strokeW:selectedShape.strokeW,
-               opacity:selectedShape.opacity,fill:selectedShape.fill,lineStyle:selectedShape.lineStyle}};
-      return;
-    }
-    // Clicked outside — commit shape. User taps again to draw new shape.
-    commitSelection(); return;
   }
 
   if(tool==='text'){ handleText(e); return; }
+  if(tool==='comment'){ handleCommentDown(e,sp,_isTouchEvt); return; }
   if(tool==='polygon'){ return; }
   if(tool==='pathmeasure'){ return; }
   if(tool==='leader'){ return; }
@@ -2076,6 +2473,13 @@ function onMove(e){
       // Move
       selectedShape.cx=orig.cx+(tp.x-selDragStart.x);
       selectedShape.cy=orig.cy+(tp.y-selDragStart.y);
+      // Sync comment object position live
+      if(selectedShape.type==='comment'&&selectedShape._commentObj){
+        selectedShape._commentObj.cx=selectedShape.cx;
+        selectedShape._commentObj.cy=selectedShape.cy;
+        renderShapeAndMeasure(); composite();
+        repositionCommentEditor(selectedShape._commentObj);
+      }
     } else if(selHandle>=8){
       // Rotate from any corner — use stored angle offset so shape doesn't jump
       var rawA=Math.atan2(tp.y-selectedShape.cy, tp.x-selectedShape.cx);
@@ -2118,13 +2522,28 @@ function onMove(e){
       var wcos=Math.cos(orig.angle), wsin=Math.sin(orig.angle);
       selectedShape.cx=orig.cx+clx*wcos-cly*wsin;
       selectedShape.cy=orig.cy+clx*wsin+cly*wcos;
-      // If resizing a text object, scale fontSize with height
+      // If resizing a text object, scale fontSize with height AND
+      // update the bubble width so text stays inside the ellipse at the new size.
       if(selectedShape.type==='text'&&selectedShape._textObj&&selDragStart.origFontSize&&selDragStart.origH>0){
         var ratio=selectedShape.h/selDragStart.origH;
         var newFs=Math.max(6,Math.round(selDragStart.origFontSize*ratio));
         selectedShape._textObj.fontSize=newFs;
+        var _tlines=selectedShape._textObj.text.split('\n');
+        var _newTextW=measureLinesW(_tlines,newFs);
+        var _newTextH=_tlines.length*newFs*1.35;
+        selectedShape.w=Math.max(_newTextW*TEXT_ELLIPSE_K,40);
+        selectedShape.h=Math.max(_newTextH*TEXT_ELLIPSE_K,newFs*1.5);
         renderTextObjs();
       }
+    }
+    // ── For comment: sync live bounds back to the comment object ──
+    if(selectedShape.type==='comment'&&selectedShape._commentObj){
+      var _cobj=selectedShape._commentObj;
+      _cobj.cx=selectedShape.cx; _cobj.cy=selectedShape.cy;
+      _cobj.w=Math.max(selectedShape.w,60); _cobj.h=Math.max(selectedShape.h,40);
+      selectedShape.w=_cobj.w; selectedShape.h=_cobj.h;
+      renderShapeAndMeasure(); composite();
+      repositionCommentEditor(_cobj); // keep textOv inside resized box
     }
     renderSelection();
     return;
@@ -2134,6 +2553,22 @@ function onMove(e){
   e.preventDefault();
   var p=snapPt(getPos(e).x,getPos(e).y); var x=p.x,y=p.y;
   var lc=lctx();
+  if(tool==='comment'&&compositedSnap){
+    // Live preview of comment box being drawn
+    dCtx.putImageData(compositedSnap,0,0);
+    var pw=Math.abs(x-startX), ph=Math.abs(y-startY);
+    if(pw>8&&ph>20){
+      drawCommentBox(dCtx,{
+        cx:(startX+x)/2, cy:(startY+y)/2,
+        w:pw, h:Math.max(ph,60),
+        bgColor:_cBgColor, textColor:_cTxtColor,
+        bgOpacity:_cBgOpacity, borderColor:_cBorderColor,
+        borderStrokeW:_cBorderW, fontSize:_cFontSize,
+        text:'', opacity:opacity
+      },1);
+    }
+    return;
+  }
   if(tool==='pen'){
     var mx=(lastPenX+x)/2, my=(lastPenY+y)/2;
     setupCtx(lc); lc.quadraticCurveTo(lastPenX,lastPenY,mx,my); lc.stroke(); resetCtx(lc);
@@ -2154,9 +2589,40 @@ function onMove(e){
 }
 
 function onUp(e){
+  // ── Comment tool: finish drawing or move ──────────────────────
+  if(tool==='comment'&&drawing){
+    drawing=false;
+    var p=snapPt(getPos(e).x,getPos(e).y);
+    if(compositedSnap) dCtx.putImageData(compositedSnap,0,0);
+    var w=Math.abs(p.x-startX), h=Math.abs(p.y-startY);
+    if(w>15&&h>25){
+      captureState();
+      var nc={
+        id:Date.now(),
+        cx:(startX+p.x)/2, cy:(startY+p.y)/2,
+        w:w, h:Math.max(h,80),
+        text:'', textColor:_cTxtColor,
+        bgColor:_cBgColor, bgOpacity:_cBgOpacity,
+        borderColor:_cBorderColor, borderStrokeW:_cBorderW,
+        fontSize:_cFontSize,
+        opacity:opacity,
+        layerIdx:activeLayerIdx
+      };
+      commentObjs.push(nc);
+      renderShapeAndMeasure();
+      composite();
+      openCommentEditor(nc);
+      pushUndo();
+    }
+    return;
+  }
+  if(tool==='comment'&&_movingComment){
+    _movingComment=null; _moveCmtStart=null;
+    // handled by selectedShape system now — just clear stale refs
+    return;
+  }
   // End measure endpoint drag
-  if(selectedMeasure && measureDragHandle!==-1){
-    measureDragHandle=-1; measureDragStart=null;
+  if(selectedMeasure && measureDragHandle!==-1){    measureDragHandle=-1; measureDragStart=null;
     var isTouch=!!(e.changedTouches&&e.changedTouches.length);
     // Commit on release for both touch and desktop (drop on release)
     if(isTouch && tool==='line'){
@@ -2170,6 +2636,15 @@ function onUp(e){
   }
   // End shape transform drag
   if(selHandle!==-1){
+    // For comment resize/move: push undo on release so the resize is undoable
+    if(selectedShape&&selectedShape.type==='comment'&&selectedShape._commentObj){
+      var _rc=selectedShape._commentObj;
+      _rc.cx=selectedShape.cx; _rc.cy=selectedShape.cy;
+      _rc.w=selectedShape.w; _rc.h=selectedShape.h;
+      renderShapeAndMeasure(); composite();
+      repositionCommentEditor(_rc);
+      pushUndo();
+    }
     selHandle=-1; selDragStart=null;
     return;
   }
@@ -2489,6 +2964,8 @@ function renderShapeAndMeasure(){
     if(layer&&!layer.visible) return;
     drawPolylineOnCtx(shCtx, pl, 1);
   });
+  // Comment objects (sticky notes)
+  renderCommentObjs(shCtx);
 }
 
 // Hit test: find measure object near a canvas point
@@ -3184,7 +3661,7 @@ function findTextObjAt(x,y){
     var o=textObjs[i];
     if(o._editing) continue;
     var lines=o.text.split('\n');
-    var estW=lines.reduce(function(m,l){ return Math.max(m,l.length); },0)*o.fontSize*0.62;
+    var estW=measureLinesW(lines,o.fontSize);
     var estH=lines.length*o.fontSize*1.3;
     var pad=Math.max(8,12/zoom);
     if(x>=o.x-pad&&x<=o.x+estW+pad&&y>=o.y-o.fontSize-pad&&y<=o.y+estH+pad){
@@ -3321,7 +3798,7 @@ function showTextHover(x, y){
     // Highlight existing text object with edit indicator
     drawCv.style.cursor='text';
     var lines=overExisting.text.split('\n');
-    var estW=lines.reduce(function(m,l){ return Math.max(m,l.length); },0)*overExisting.fontSize*0.62;
+    var estW=measureLinesW(lines,overExisting.fontSize);
     var estH=lines.length*overExisting.fontSize*1.3;
     var pad=6/zoom;
     selCtx.save();
@@ -3354,7 +3831,140 @@ function clearTextHover(){
 
 // ── END TEXT CURSOR INDICATOR ────────────────────────────────
 
-// ── TEXT TOOL ──
+// ── COMMENT TOOL INTERACTION ──────────────────────────────────
+// ── Returns true if (x,y) is on the border zone of comment shape s ──
+// "Border zone" = within BORDER_THRESH canvas-px of any edge, but NOT at an
+// 8-point handle.  This is the drag-to-move strip, matching Acrobat Pro.
+var COMMENT_BORDER_THRESH = 10; // canvas px — the grabbable border strip width
+function isOnCommentBorder(s, x, y, isTouch){
+  // Rotate point into local (axis-aligned) space
+  var cos=Math.cos(-s.angle), sin=Math.sin(-s.angle);
+  var lx=(x-s.cx)*cos-(y-s.cy)*sin;
+  var ly=(x-s.cx)*sin+(y-s.cy)*cos;
+  var hw=s.w/2, hh=s.h/2;
+  var thresh = Math.max(COMMENT_BORDER_THRESH/zoom, isTouch ? 18/zoom : 6/zoom);
+  // Must be inside (or very close to) the outer boundary
+  if(Math.abs(lx)>hw+thresh||Math.abs(ly)>hh+thresh) return false;
+  // Must be within thresh of at least one edge
+  var nearLeft  = (lx+hw)   <= thresh;
+  var nearRight = (hw-lx)   <= thresh;
+  var nearTop   = (ly+hh)   <= thresh;
+  var nearBot   = (hh-ly)   <= thresh;
+  return nearLeft||nearRight||nearTop||nearBot;
+}
+
+function handleCommentDown(e, sp, isTouch){
+  var now=Date.now();
+
+  // ── If a comment is already selected, check handles first ────
+  if(selectedShape&&selectedShape.type==='comment'){
+    var sh=getHandleAt(sp.x,sp.y,isTouch);
+    if(sh>=0){
+      // Resize handle: grab it (works whether or not we're editing)
+      e.preventDefault();
+      selHandle=sh;
+      selDragStart={x:sp.x,y:sp.y,
+        shape:{type:'comment',cx:selectedShape.cx,cy:selectedShape.cy,
+               w:selectedShape.w,h:selectedShape.h,angle:0,
+               color:selectedShape.color,strokeW:selectedShape.strokeW,
+               opacity:1,fill:false,lineStyle:'solid'},
+        rotAngleOffset:0,origFontSize:null,origH:selectedShape.h};
+      return;
+    }
+
+    if(isInsideShape(selectedShape,sp.x,sp.y,isTouch)){
+      // ── Acrobat-style: border strip → move; interior → type ──
+      var onBorder = isOnCommentBorder(selectedShape, sp.x, sp.y, isTouch);
+
+      if(onBorder){
+        // Drag on the border (between handles) = move, even while editing
+        e.preventDefault();
+        selHandle=-2;
+        selDragStart={x:sp.x,y:sp.y,
+          shape:{type:'comment',cx:selectedShape.cx,cy:selectedShape.cy,
+                 w:selectedShape.w,h:selectedShape.h,angle:0,
+                 color:selectedShape.color,strokeW:selectedShape.strokeW,
+                 opacity:1,fill:false,lineStyle:'solid'},
+          rotAngleOffset:0,origFontSize:null,origH:selectedShape.h};
+        return;
+      }
+
+      // Interior click
+      _cmtLastTap=now; _cmtLastHit=selectedShape._commentObj;
+
+      if(_editingComment){
+        // Already editing — place the text cursor at the click/tap position.
+        // drawCv captures all pointer events so we must forward manually.
+        e.preventDefault();
+        textOv.focus();
+        var cx2 = e.clientX !== undefined ? e.clientX
+                : (e.touches && e.touches[0] ? e.touches[0].clientX : undefined);
+        var cy2 = e.clientY !== undefined ? e.clientY
+                : (e.touches && e.touches[0] ? e.touches[0].clientY : undefined);
+        if(cx2 !== undefined && cy2 !== undefined){
+          if(document.caretPositionFromPoint){
+            try{
+              var pos = document.caretPositionFromPoint(cx2, cy2);
+              if(pos){ textOv.setSelectionRange(pos.offset, pos.offset); }
+            }catch(err){}
+          } else if(document.caretRangeFromPoint){
+            try{
+              var rng = document.caretRangeFromPoint(cx2, cy2);
+              if(rng){
+                var off = Math.max(0, Math.min(rng.startOffset, textOv.value.length));
+                textOv.setSelectionRange(off, off);
+              }
+            }catch(err){}
+          }
+        }
+        return;
+      }
+
+      // Single click in interior → immediately open text editor (Acrobat behavior)
+      e.preventDefault();
+      startCommentTextEdit(selectedShape._commentObj);
+      return;
+    }
+
+    // Clicked outside: save text if editing, deselect
+    if(_editingComment) commitCommentEdit();
+    commitSelection();
+    // Fall through to check if another note was hit
+  }
+
+  // ── Check for a note hit ──────────────────────────────────────
+  var hit=findCommentObjAt(sp.x,sp.y,isTouch);
+  if(hit){
+    _cmtLastTap=now; _cmtLastHit=hit;
+    e.preventDefault();
+    // Select + immediately enter text edit on first click (Acrobat-style)
+    enterCommentSelectMode(hit);
+    // Check if click landed on border → don't open editor, set up for potential move
+    var tempSel=selectedShape;
+    if(tempSel && isOnCommentBorder(tempSel, sp.x, sp.y, isTouch)){
+      selHandle=-2;
+      selDragStart={x:sp.x,y:sp.y,
+        shape:{type:'comment',cx:tempSel.cx,cy:tempSel.cy,
+               w:tempSel.w,h:tempSel.h,angle:0,
+               color:tempSel.color,strokeW:tempSel.strokeW,
+               opacity:1,fill:false,lineStyle:'solid'},
+        rotAngleOffset:0,origFontSize:null,origH:tempSel.h};
+    } else {
+      // Interior of a previously-unselected note → select and start editing
+      startCommentTextEdit(hit);
+    }
+    return;
+  }
+
+  // ── No note hit: commit+deselect, start drawing new box ───────
+  if(_editingComment) commitCommentEdit();
+  if(selectedShape&&selectedShape.type==='comment') commitSelection();
+  _cmtLastTap=0; _cmtLastHit=null;
+  e.preventDefault();
+  drawing=true;
+  startX=sp.x; startY=sp.y;
+  compositedSnap=dCtx.getImageData(0,0,drawCv.width,drawCv.height);
+}
 var _txtTapTime=0, _txtTapObj=null;
 function handleText(e){
   var p=getPos(e);
@@ -3445,20 +4055,39 @@ if(window.visualViewport){
 
 // Stop mousedown on the textarea from propagating to canvas handlers
 textOv.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+textOv.addEventListener('mouseup',   function(e){ e.stopPropagation(); });
+textOv.addEventListener('click',     function(e){ e.stopPropagation(); });
 textOv.addEventListener('keydown',function(e){
-  // Stop ALL propagation from the textarea — prevents document keydown
-  // handler from seeing Enter (which would call commitSelection and double the shape).
   e.stopPropagation();
+  // ── Comment editing: different key behaviour ──────────────────
+  if(_editingComment){
+    if(e.key==='Escape'){ e.preventDefault(); commitCommentEdit(); return; }
+    if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); commitCommentEdit(); commitSelection(); return; }
+    // Regular Enter = newline — let browser handle it (no preventDefault)
+    return;
+  }
+  // ── Regular text object ────────────────────────────────────────
   if(e.key==='Escape'){ commitText(); return; }
   if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); commitText(); }
+});
+
+// ── Auto-grow comment box when user types or pastes ───────────
+textOv.addEventListener('input', function(){
+  if(!_editingComment) return;
+  _cmtAutoGrow(_editingComment);
 });
 
 function commitText(){
   if(textOv.style.display==='none') return;
   stopTextCursor();
+
+  // ── COMMENT PATH: route to dedicated handler ──────────────────
+  if(_editingComment){ commitCommentEdit(); return; }
+  // ── END COMMENT PATH ──────────────────────────────────────────
+
   var val=textOv.value;
   textOv.style.display='none';
-  textOv.blur(); // release focus so keyboard shortcuts work again
+  textOv.blur();
 
   if(editingObj){
     editingObj._editing=false;
@@ -3489,12 +4118,17 @@ function enterTextTransformMode(obj){
   obj._editing=true;
   renderTextObjs();
   var lines=obj.text.split('\n');
-  var estW=lines.reduce(function(m,l){ return Math.max(m,l.length); },0)*obj.fontSize*0.6;
-  var estH=lines.length*obj.fontSize*1.35;
+  // Use actual canvas measurement so the ellipse fits the real rendered text.
+  var textW=measureLinesW(lines,obj.fontSize);
+  var textH=lines.length*obj.fontSize*1.35;
+  // Ellipse must be TEXT_ELLIPSE_K× larger than the text bounding box so that
+  // all four text corners sit inside the ellipse (see TEXT_ELLIPSE_K comment above).
+  var estW=textW*TEXT_ELLIPSE_K;
+  var estH=textH*TEXT_ELLIPSE_K;
   selectedShape={
     type:'text', _textObj:obj,
-    cx: obj.x+estW/2, cy: obj.y-obj.fontSize+estH/2,
-    w: Math.max(estW,30), h: Math.max(estH,obj.fontSize),
+    cx: obj.x+textW/2, cy: obj.y-obj.fontSize+textH/2,
+    w: Math.max(estW,40), h: Math.max(estH,obj.fontSize*1.5),
     angle: obj.angle||0,
     color: obj.color, strokeW:1.5, opacity:obj.opacity,
     fill:false, lineStyle:'solid'
@@ -3549,6 +4183,12 @@ function getHandleAt(x,y,isTouch){
   // way too small for a fingertip. Guarantee at least 28 screen-px in canvas units.
   var minSlop = isTouch ? Math.max((HANDLE_SIZE+5)/zoom, 28/zoom) : (HANDLE_SIZE+5)/zoom;
   var hitR = minSlop;
+  // Cap hit radius so handles can't swallow the interior of small shapes.
+  // Without this cap, at low zoom the entire comment box becomes handle territory.
+  if(selectedShape.type==='comment'){
+    var minDim=Math.min(selectedShape.w, selectedShape.h);
+    hitR=Math.min(hitR, minDim*0.28);
+  }
   // Check rotation handles first (8-11) — they're further out so check before resize
   for(var i=8;i<=11;i++){
     if(Math.hypot(x-handles[i].x,y-handles[i].y)<hitR) return i;
@@ -3567,7 +4207,7 @@ function isInsideShape(s,x,y,isTouch){
   // On touch, guarantee at least 16 screen-px of canvas-space padding so that
   // tapping inside a shape zoomed in doesn't miss. On desktop 4/zoom is enough.
   var pad = isTouch ? Math.max(4/zoom, 16/zoom) : 4/zoom;
-  if(s.type==='rect'||s.type==='cloud'||s.type==='text') return Math.abs(lx)<=s.w/2+pad&&Math.abs(ly)<=s.h/2+pad;
+  if(s.type==='rect'||s.type==='cloud'||s.type==='text'||s.type==='comment') return Math.abs(lx)<=s.w/2+pad&&Math.abs(ly)<=s.h/2+pad;
   if(s.type==='ellipse') return (lx/(s.w/2+pad))*(lx/(s.w/2+pad))+(ly/(s.h/2+pad))*(ly/(s.h/2+pad))<=1;
   return false;
 }
@@ -3599,6 +4239,8 @@ function findObjAtStrict(x, y){
   if(pmHit) return pmHit;
   var plHit=findPolylineObjAt(x,y,false);
   if(plHit) return plHit;
+  var cHit=findCommentObjAt(x,y,false);
+  if(cHit) return cHit;
   return null;
 }
 
@@ -3642,10 +4284,11 @@ function renderSelection(){
       selCtx.font='bold '+to.fontSize+'px Arial,sans-serif';
       selCtx.translate(s.cx,s.cy); selCtx.rotate(s.angle);
       var lines2=to.text.split('\n');
-      var estW2=lines2.reduce(function(m,l){return Math.max(m,l.length);},0)*to.fontSize*0.6;
+      // Use accurate measurement so text position matches the ellipse center.
+      var textW2=lines2.reduce(function(m,l){ return Math.max(m,selCtx.measureText(l).width); },0);
       var estH2=lines2.length*to.fontSize*1.35;
       var localY2=to.fontSize - estH2/2;
-      lines2.forEach(function(line,i){ selCtx.fillText(line,-estW2/2,localY2+i*to.fontSize*1.35); });
+      lines2.forEach(function(line,i){ selCtx.fillText(line,-textW2/2,localY2+i*to.fontSize*1.35); });
 
     }
   }
@@ -3657,7 +4300,7 @@ function renderSelection(){
   selCtx.strokeStyle='rgba(0,212,255,0.8)';
   selCtx.lineWidth=lw; selCtx.setLineDash([4/zoom,3/zoom]); selCtx.globalAlpha=1;
   var pad=6/zoom;
-  if(s.type==='rect') selCtx.strokeRect(-s.w/2-pad,-s.h/2-pad,s.w+pad*2,s.h+pad*2);
+  if(s.type==='rect'||s.type==='comment') selCtx.strokeRect(-s.w/2-pad,-s.h/2-pad,s.w+pad*2,s.h+pad*2);
   else{selCtx.beginPath();selCtx.ellipse(0,0,s.w/2+pad,s.h/2+pad,0,0,Math.PI*2);selCtx.stroke();}
   selCtx.restore();
 
@@ -3666,7 +4309,7 @@ function renderSelection(){
   var hs=HANDLE_SIZE/zoom;
   selCtx.setLineDash([]); selCtx.globalAlpha=1;
 
-  // Resize handles 0-7 — visible for all types including text
+  // Resize handles 0-7
   if(true){
     for(var i=0;i<=7;i++){
       var h=handles[i];
@@ -3681,7 +4324,8 @@ function renderSelection(){
     }
   }
 
-  // Rotation handles 8-11 — deep pink circles with curved arrow
+  // Rotation handles 8-11 — skip for comments (they don't rotate)
+  if(s.type!=='comment'){
   for(var i=8;i<=11;i++){
     var h=handles[i];
     var r=hs*0.7;
@@ -3718,17 +4362,39 @@ function renderSelection(){
     selCtx.stroke();
     selCtx.restore();
   }
+  } // end if(s.type!=='comment') for rotation handles
 }
 
 function commitSelection(){
   if(!selectedShape) return;
   var s=selectedShape;
 
+  // ── Comment object: save text if editing, sync bounds, deselect ──
+  if(s.type==='comment' && s._commentObj){
+    var c=s._commentObj;
+    c.cx=s.cx; c.cy=s.cy; c.w=s.w; c.h=s.h;
+    if(_editingComment===c){
+      c.text=textOv.value;
+      _editingComment=null;
+      textOv.style.display='none'; textOv.blur();
+      textOv.style.background=''; textOv.style.borderBottom='';
+      textOv.style.width=''; textOv.style.height='';
+      textOv.style.minWidth=''; textOv.style.minHeight='';
+      textOv.style.maxWidth=''; textOv.style.maxHeight='';
+      textOv.style.whiteSpace='pre'; textOv.style.overflow='hidden';
+    }
+    selectedShape=null; selHandle=-1; selDragStart=null;
+    selCv.width=1; selCv.height=1;
+    renderShapeAndMeasure(); composite(); pushUndo();
+    return;
+  }
+
   // ── Text object: sync position+angle back to the text object ──
   if(s.type==='text' && s._textObj){
     var obj=s._textObj;
     var lines=obj.text.split('\n');
-    var estW=lines.reduce(function(m,l){ return Math.max(m,l.length); },0)*obj.fontSize*0.6;
+    // Use accurate measurement to compute the left-edge origin from the ellipse center.
+    var estW=measureLinesW(lines,obj.fontSize);
     var estH=lines.length*obj.fontSize*1.35;
     var cos=Math.cos(s.angle), sin=Math.sin(s.angle);
     var tLocalX=-estW/2, tLocalY=obj.fontSize-estH/2;
@@ -3774,9 +4440,23 @@ function cancelSelection(){
   if(selectedShape&&selectedShape.type==='text'&&selectedShape._textObj){
     selectedShape._textObj._editing=false; renderTextObjs();
   }
+  // For comment: save text if editing, then clear
+  if(selectedShape&&selectedShape.type==='comment'&&selectedShape._commentObj){
+    var _cc=selectedShape._commentObj;
+    if(_editingComment===_cc){
+      _cc.text=textOv.value;
+      _editingComment=null;
+      textOv.style.display='none'; textOv.blur();
+      textOv.style.background=''; textOv.style.borderBottom='';
+      textOv.style.width=''; textOv.style.height='';
+      textOv.style.minWidth=''; textOv.style.minHeight='';
+      textOv.style.maxWidth=''; textOv.style.maxHeight='';
+      textOv.style.whiteSpace='pre'; textOv.style.overflow='hidden';
+    }
+  }
   selectedShape=null; selHandle=-1; selDragStart=null;
   selCv.width=1; selCv.height=1;
-  renderShapeObjs(); composite();
+  renderShapeObjs(); renderShapeAndMeasure(); composite();
 }
 
 // Resize / rotate cursors for each handle
@@ -3788,13 +4468,21 @@ function updateSelCursor(x,y){
   if(!selectedShape){ drawCv.style.cursor='crosshair'; return; }
   var h=getHandleAt(x,y,false);
   if(h>=0){ drawCv.style.cursor=HANDLE_CURSORS[h]; return; }
-  if(isInsideShape(selectedShape,x,y,false)){ drawCv.style.cursor='move'; return; }
+  if(isInsideShape(selectedShape,x,y,false)){
+    // Comment: border strip = move cursor, interior = text cursor (Acrobat style)
+    if(selectedShape.type==='comment'){
+      drawCv.style.cursor = isOnCommentBorder(selectedShape,x,y,false) ? 'move' : 'text';
+    } else {
+      drawCv.style.cursor='move';
+    }
+    return;
+  }
   drawCv.style.cursor='crosshair';
 }
 
 drawCv.addEventListener('mousemove',function(e){
   var p=getPos(e);
-  if(tool==='text'&&!_txtCursorActive&&baseLoaded){ showTextHover(p.x,p.y); }
+  if(tool==='text'&&!_txtCursorActive&&!selectedShape&&baseLoaded){ showTextHover(p.x,p.y); }
   else if(tool!=='text'){ clearTextHover(); }
   if(selectedMeasure&&measureDragHandle===-1){
     var mh=getMeasureHandleAt(selectedMeasure,p.x,p.y,false);
@@ -3808,6 +4496,20 @@ drawCv.addEventListener('mousemove',function(e){
   if((tool==='rect'||tool==='ellipse'||tool==='cloud')&&!selectedShape&&baseLoaded){
     var hit=findShapeObjAt(p.x,p.y,false);
     drawCv.style.cursor=hit?'move':'crosshair';
+  }
+  // Comment tool: show appropriate cursor
+  if(tool==='comment'&&baseLoaded){
+    if(selectedShape&&selectedShape.type==='comment'){ updateSelCursor(p.x,p.y); }
+    else{
+      var hovered=findCommentObjAt(p.x,p.y,false);
+      if(hovered){
+        // Build a temporary shape-like object for border detection
+        var _hs={cx:hovered.cx,cy:hovered.cy,w:hovered.w,h:hovered.h,angle:0};
+        drawCv.style.cursor = isOnCommentBorder(_hs,p.x,p.y,false) ? 'move' : 'text';
+      } else {
+        drawCv.style.cursor='crosshair';
+      }
+    }
   }
   // Show pointer cursor when hovering measure with measure tool
   if(tool==='measure'&&!selectedMeasure&&baseLoaded){
@@ -3941,6 +4643,7 @@ function holdStartTouch(e){
 
 function holdStartMouse(e){
   if(!baseLoaded||e.button!==0) return;
+  if(tool==='comment' && selectedShape && selectedShape.type==='comment') return;
   _holdSx=e.clientX; _holdSy=e.clientY;
   var p=vpToCanvas(e.clientX,e.clientY);
   _holdCx=p.x; _holdCy=p.y;
@@ -4024,6 +4727,20 @@ function holdFire(){
     textObjs=textObjs.filter(function(o){ return o!==tHit; });
     renderTextObjs(); pushUndo();
     toast('Text deleted','',1500);
+    drawing=false;
+    return;
+  }
+
+  // 2b. Comment objects
+  var cHit=findCommentObjAt(x,y,true);
+  if(cHit){
+    // Don't delete a note that is currently selected or being edited
+    if(selectedShape && selectedShape.type==='comment' && selectedShape._commentObj===cHit) return;
+    if(_editingComment===cHit) return;
+    captureState();
+    commentObjs=commentObjs.filter(function(c){ return c!==cHit; });
+    renderShapeAndMeasure(); composite(); pushUndo();
+    toast('Note deleted','',1500);
     drawing=false;
     return;
   }
@@ -4165,22 +4882,104 @@ function closePolyline(){
 
 // ── END POLYLINE TOOL ────────────────────────────────────────
 
+
+// ── TOOLBAR VISIBILITY PER TOOL ───────────────────────────────
+function updateToolbarForTool(t){
+  // Element refs
+  var ids = {
+    fontSizeGrp : document.getElementById('tb-font-size-grp'),
+    lsGrp       : document.getElementById('tb-ls-grp'),
+    lsSep       : document.getElementById('tb-ls-sep'),
+    fillBtn     : document.getElementById('fill-btn'),
+    fillSep     : document.getElementById('tb-fill-sep'),
+    strokeGrp   : document.getElementById('tb-stroke-grp'),
+    fillGrp     : document.getElementById('tb-fill-grp'),
+    swGrp       : document.getElementById('tb-sw-grp'),
+    swSep       : document.getElementById('tb-sw-sep'),
+    opGrp       : document.getElementById('tb-op-grp'),
+    opSep       : document.getElementById('tb-op-sep'),
+    cmtGrp      : document.getElementById('cmt-clr-grp'),
+  };
+
+  // Groups by what each tool needs
+  var SHAPE     = ['rect','ellipse','cloud'];
+  var STROKE    = ['pen','line','arrow','polyline','measure','pathmeasure','polygon','leader'];
+  var TEXT_ONLY = ['text'];
+  var NOTE      = ['comment'];
+  var NONE      = ['eraser','pan','stamp'];
+
+  function sh(el, show){ if(el) el.style.display = show ? (el._origDisplay || '') : 'none'; }
+  function shFlex(el, show){ if(el) el.style.display = show ? 'flex' : 'none'; }
+  function shInline(el, show){ if(el) el.style.display = show ? 'inline-flex' : 'none'; }
+
+  // Save original displays on first call
+  if(!updateToolbarForTool._init){
+    updateToolbarForTool._init = true;
+    ['fontSizeGrp','lsGrp','lsSep','fillBtn','fillSep','strokeGrp','fillGrp','swGrp','swSep','opGrp','opSep'].forEach(function(k){
+      if(ids[k]) ids[k]._origDisplay = ids[k].style.display || '';
+    });
+  }
+
+  var isNote   = NOTE.indexOf(t) > -1;
+  var isText   = TEXT_ONLY.indexOf(t) > -1;
+  var isShape  = SHAPE.indexOf(t) > -1;
+  var isStroke = STROKE.indexOf(t) > -1;
+  var isNone   = NONE.indexOf(t) > -1;
+
+  // cmt-clr-grp: only for note tool (already handled by tool button click, but keep in sync)
+  shFlex(ids.cmtGrp, isNote);
+
+  // font size (text tool only)
+  sh(ids.fontSizeGrp, isText);
+
+  // line style + fill button (shapes + stroke tools, not note/text/none)
+  var showLS = isShape || isStroke;
+  shFlex(ids.lsGrp, showLS);
+  if(ids.lsSep) ids.lsSep.style.display = showLS ? '' : 'none';
+
+  // fill button only for shapes
+  if(ids.fillBtn) ids.fillBtn.style.display = isShape ? '' : 'none';
+  if(ids.fillSep) ids.fillSep.style.display = isShape ? '' : 'none';
+
+  // stroke color (shapes + stroke tools)
+  shFlex(ids.strokeGrp, isShape || isStroke);
+
+  // fill color (shapes only)
+  if(ids.fillGrp) ids.fillGrp.style.display = isShape ? 'contents' : 'none';
+
+  // stroke width + opacity (shapes + stroke tools)
+  shFlex(ids.swGrp, isShape || isStroke);
+  if(ids.swSep) ids.swSep.style.display = (isShape || isStroke) ? '' : 'none';
+  shFlex(ids.opGrp, isShape || isStroke);
+  if(ids.opSep) ids.opSep.style.display = (isShape || isStroke) ? '' : 'none';
+}
+// ── END TOOLBAR VISIBILITY ─────────────────────────────────────
+
 // ── TOOL BUTTONS ──
 document.querySelectorAll('.tb-btn[data-tool]').forEach(function(btn){
   btn.addEventListener('click',function(){
     if(tool==='polygon'&&polyActive){ closePolygon(); }
     if(tool==='pathmeasure'&&pmActive){ closePathMeasure(); }
     if(tool==='polyline'&&plActive){ closePolyline(); }
+    // Save and deselect comment when switching away from note tool
+    if(tool==='comment'&&btn.dataset.tool!=='comment'){
+      if(_editingComment) commitCommentEdit();
+      if(selectedShape&&selectedShape.type==='comment') commitSelection();
+    }
     commitText(); commitSelection(); commitMeasureSelection(); leaderStep=0;
     stopTextCursor(); clearTextHover();
     tool=btn.dataset.tool;
     document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
     btn.classList.add('active');
+    updateToolbarForTool(tool);
     var cur=tool==='text'?'text':tool==='eraser'?'cell':tool==='pan'?'grab':tool==='stamp'?'copy':'crosshair';
     drawCv.style.cursor=cur;
     if(tool==='stamp'){ openStampPicker(); return; }
   });
 });
+
+// Set initial toolbar state
+updateToolbarForTool(tool);
 
 // Helper to switch tool programmatically (mirrors the button click logic)
 function switchTool(name){
@@ -4212,6 +5011,123 @@ function closeStampPicker(){
   document.getElementById('stamp-picker').style.display='none';
   document.getElementById('stamp-overlay').style.display='none';
 }
+
+// ── COMMENT COLOR PICKERS ──────────────────────────────────────
+// All pickers apply immediately to _editingComment if one is open.
+// After each change, textOv is re-focused so typing continues uninterrupted.
+(function(){
+  var bgIn   = document.getElementById('cmt-bg-input');
+  var bgSw   = document.getElementById('cmt-bg-swatch');
+  var bdIn   = document.getElementById('cmt-bd-input');
+  var bdSw   = document.getElementById('cmt-bd-swatch');
+  var txIn   = document.getElementById('cmt-txt-input');
+  var txSw   = document.getElementById('cmt-txt-swatch');
+  var bgOpSl = document.getElementById('cmt-bg-op-sl');
+  var bgOpVal= document.getElementById('cmt-bg-op-val');
+  var bdWSl  = document.getElementById('cmt-bd-w-sl');
+  var bdWVal = document.getElementById('cmt-bd-w-val');
+  var fsSel  = document.getElementById('cmt-font-size-sel');
+
+  // After any picker interaction, return focus to textOv so cursor stays live
+  function refocus(){
+    if(_editingComment && textOv.style.display!=='none'){
+      // Restore focus immediately — delay loses any text selection
+      textOv.focus();
+    }
+  }
+
+  function liveRender(){
+    if(_editingComment){ renderShapeAndMeasure(); composite(); }
+  }
+
+  if(bgIn){
+    bgIn.addEventListener('input',function(e){
+      _cBgColor=e.target.value; bgSw.style.background=_cBgColor;
+      if(_editingComment){ _editingComment.bgColor=_cBgColor; liveRender(); }
+    });
+    bgIn.addEventListener('change', refocus);
+  }
+  if(bdIn){
+    bdIn.addEventListener('input',function(e){
+      _cBorderColor=e.target.value; bdSw.style.background=_cBorderColor;
+      if(_editingComment){
+        _editingComment.borderColor=_cBorderColor;
+        if(selectedShape&&selectedShape._commentObj===_editingComment) selectedShape.color=_cBorderColor;
+        liveRender();
+      }
+    });
+    bdIn.addEventListener('change', refocus);
+  }
+  if(txIn){
+    txIn.addEventListener('input',function(e){
+      _cTxtColor=e.target.value; txSw.style.background=_cTxtColor;
+      if(_editingComment){
+        _editingComment.textColor=_cTxtColor;
+        textOv.style.color=_cTxtColor; // live color while typing
+        liveRender();
+      }
+    });
+    txIn.addEventListener('change', refocus);
+  }
+  if(bgOpSl){
+    function applyBgOp(v){
+      _cBgOpacity=Math.round(v)/100;
+      if(bgOpVal) bgOpVal.textContent=Math.round(v)+'%';
+      if(_editingComment){ _editingComment.bgOpacity=_cBgOpacity; liveRender(); }
+    }
+    bgOpSl.addEventListener('input',function(e){ applyBgOp(parseInt(e.target.value)); });
+    bgOpSl.addEventListener('change', refocus);
+    attachSliderTouch(bgOpSl,function(v){ applyBgOp(v); });
+  }
+  if(bdWSl){
+    function applyBdW(v){
+      _cBorderW=Math.round(v);
+      if(bdWVal) bdWVal.textContent=_cBorderW+'px';
+      if(_editingComment){ _editingComment.borderStrokeW=_cBorderW; liveRender(); }
+    }
+    bdWSl.addEventListener('input',function(e){ applyBdW(parseInt(e.target.value)); });
+    bdWSl.addEventListener('change', refocus);
+    attachSliderTouch(bdWSl,function(v){ applyBdW(v); });
+  }
+  if(fsSel){
+    // Save textarea selection before the <select> steals focus
+    var _savedSelStart = 0, _savedSelEnd = 0;
+    fsSel.addEventListener('mousedown', function(){
+      if(_editingComment && textOv.style.display !== 'none'){
+        _savedSelStart = textOv.selectionStart;
+        _savedSelEnd   = textOv.selectionEnd;
+      }
+    });
+    fsSel.addEventListener('change',function(e){
+      _cFontSize=parseInt(e.target.value);
+      if(_editingComment){
+        _editingComment.fontSize=_cFontSize;
+        var renderPx = _cFontSize;
+        var visualW  = Math.max((_editingComment.w - 16)*zoom, 40);
+        var layoutW  = Math.round(visualW);
+        // Apply font size — do it twice (immediate + after focus) to beat any
+        // browser re-render that might reset the textarea after focus() is called.
+        textOv.style.fontSize     = renderPx + 'px';
+        textOv.style.transform    = 'none';
+        textOv.style.width        = layoutW + 'px';
+        textOv.style.maxWidth     = layoutW + 'px';
+        textOv.style.minWidth     = layoutW + 'px';
+        liveRender();
+        // Restore focus + selection, then re-apply font size after focus settles
+        textOv.focus();
+        textOv.setSelectionRange(_savedSelStart, _savedSelEnd);
+        var _sz = renderPx;
+        setTimeout(function(){
+          textOv.style.fontSize = _sz + 'px';
+          if(_editingComment) _cmtAutoGrow(_editingComment);
+        }, 0);
+      } else {
+        refocus();
+      }
+    });
+  }
+})();
+// ── END COMMENT COLOR PICKERS ──────────────────────────────────
 
 // ── LINE STYLE ──
 document.querySelectorAll('.ls-btn').forEach(function(btn){
@@ -4468,6 +5384,13 @@ function compositeExport(maxPx){
       drawPolylineOnCtx(ctx, pl, scale);
     });
   }catch(ex){ console.warn('[Export] polylineObjs:',ex); }
+  // Comment objects
+  try{
+    commentObjs.forEach(function(c){
+      var layer=layers[c.layerIdx]; if(layer&&!layer.visible) return;
+      drawCommentBox(ctx,c,scale);
+    });
+  }catch(ex){ console.warn('[Export] commentObjs:',ex); }
   return out;
 }
 
@@ -4662,7 +5585,8 @@ function doSave(){
     shapeObjs:      JSON.parse(JSON.stringify(shapeObjs)),
     measureObjs:    JSON.parse(JSON.stringify(measureObjs)),
     pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
-    polylineObjs:   JSON.parse(JSON.stringify(polylineObjs))
+    polylineObjs:   JSON.parse(JSON.stringify(polylineObjs)),
+    commentObjs:    JSON.parse(JSON.stringify(commentObjs))
   };
 
   // Step 1: encode base image
@@ -4795,6 +5719,7 @@ function doRestore(rec){
             if(rec.measureObjs){ measureObjs=rec.measureObjs; }
             if(rec.pathMeasureObjs){ pathMeasureObjs=rec.pathMeasureObjs; }
             if(rec.polylineObjs){ polylineObjs=rec.polylineObjs; }
+            if(rec.commentObjs){ commentObjs=rec.commentObjs; }
             renderShapeAndMeasure();
             if(rec.scaleSet){ scaleSet=true; ppu=rec.ppu; scaleUnit=rec.scaleUnit;
               ppuIn.value=(1/ppu).toFixed(4); unitIn.value=scaleUnit;
@@ -4891,7 +5816,7 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Enter'&&selectedShape){ commitSelection(); return; }
   if(e.key==='Enter'&&tool==='pathmeasure'&&pmActive){ closePathMeasure(); return; }
   if(e.key==='Enter'&&tool==='polyline'&&plActive){ closePolyline(); return; }
-  var map={q:'pen',l:'line',a:'arrow',r:'rect',e:'ellipse',c:'cloud',m:'measure',v:'pathmeasure',g:'polygon',w:'polyline',t:'text',x:'eraser',h:'pan'};
+  var map={q:'pen',l:'line',a:'arrow',r:'rect',e:'ellipse',c:'cloud',m:'measure',v:'pathmeasure',g:'polygon',w:'polyline',t:'text',n:'comment',x:'eraser',h:'pan'};
   if(map[e.key]){ var b=document.querySelector('.tb-btn[data-tool="'+map[e.key]+'"]'); if(b) b.click(); }
 });
 document.addEventListener('keyup',function(e){ if(e.code==='Space'){ spaceDown=false; viewport.style.cursor=''; hideHint(); } });
@@ -5205,7 +6130,9 @@ function updateWatermark(){
     idx = pathMeasureObjs.indexOf(obj);
     if(idx > -1){ pathMeasureObjs.splice(idx,1); renderShapeAndMeasure(); return; }
     idx = polylineObjs.indexOf(obj);
-    if(idx > -1){ polylineObjs.splice(idx,1); renderShapeAndMeasure(); return; }
+    if(idx > -1){ polylineObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
+    idx = commentObjs.indexOf(obj);
+    if(idx > -1){ commentObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
   });
 
   document.addEventListener('click', function(e){
