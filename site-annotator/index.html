@@ -203,6 +203,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .sc-key{font-family:'Courier New',monospace;font-size:11px;background:var(--surf2);border:1px solid var(--b2);border-radius:4px;padding:2px 6px;color:var(--txt2);white-space:nowrap}
 .sc-desc{font-size:11px;color:var(--txt2)}
 #shortcuts-close{margin-top:14px;width:100%;padding:8px;background:var(--acc);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:1px}
+.sc-section-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);margin:12px 0 4px;padding-bottom:3px;border-bottom:1px solid rgba(108,99,255,.25)}
 
 /* FONT SIZE SELECT */
 #font-size-sel{
@@ -946,6 +947,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 <div id="shortcuts">
   <div id="shortcuts-box">
     <h2>⌨ Keyboard Shortcuts</h2>
+
+    <div class="sc-section-title">TOOLS</div>
     <div class="sc-grid">
       <div class="sc-row"><span class="sc-desc">Pen</span><span class="sc-key">Q</span></div>
       <div class="sc-row"><span class="sc-desc">Line</span><span class="sc-key">L</span></div>
@@ -954,21 +957,55 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       <div class="sc-row"><span class="sc-desc">Ellipse</span><span class="sc-key">E</span></div>
       <div class="sc-row"><span class="sc-desc">Cloud</span><span class="sc-key">C</span></div>
       <div class="sc-row"><span class="sc-desc">Measure</span><span class="sc-key">M</span></div>
-      <div class="sc-row"><span class="sc-desc">Area/Polygon</span><span class="sc-key">G</span></div>
-      <div class="sc-row"><span class="sc-desc">Leader</span><span class="sc-key">—</span></div>
-      <div class="sc-row"><span class="sc-desc">Commit shape</span><span class="sc-key">Enter / Esc</span></div>
+      <div class="sc-row"><span class="sc-desc">Path Distance</span><span class="sc-key">V</span></div>
+      <div class="sc-row"><span class="sc-desc">Area / Polygon</span><span class="sc-key">G</span></div>
+      <div class="sc-row"><span class="sc-desc">Polyline</span><span class="sc-key">W</span></div>
       <div class="sc-row"><span class="sc-desc">Text</span><span class="sc-key">T</span></div>
       <div class="sc-row"><span class="sc-desc">Eraser</span><span class="sc-key">X</span></div>
       <div class="sc-row"><span class="sc-desc">Pan</span><span class="sc-key">H</span></div>
-      <div class="sc-row"><span class="sc-desc">Undo</span><span class="sc-key">Ctrl+Z</span></div>
-      <div class="sc-row"><span class="sc-desc">Redo</span><span class="sc-key">Ctrl+Y</span></div>
-      <div class="sc-row"><span class="sc-desc">Save PNG</span><span class="sc-key">Ctrl+S</span></div>
-      <div class="sc-row"><span class="sc-desc">Fit to screen</span><span class="sc-key">Ctrl+0</span></div>
-      <div class="sc-row"><span class="sc-desc">Pan (hold)</span><span class="sc-key">Space</span></div>
-      <div class="sc-row"><span class="sc-desc">Close polygon</span><span class="sc-key">Esc</span></div>
-      <div class="sc-row"><span class="sc-desc">Hold to delete</span><span class="sc-key">600ms hold</span></div>
-      <div class="sc-row"><span class="sc-desc">Shortcuts</span><span class="sc-key">?</span></div>
     </div>
+
+    <div class="sc-section-title">EDIT</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Undo</span><span class="sc-key">⌘ / Ctrl + Z</span></div>
+      <div class="sc-row"><span class="sc-desc">Redo</span><span class="sc-key">⌘ / Ctrl + Y</span></div>
+      <div class="sc-row"><span class="sc-desc">Redo (Mac alt)</span><span class="sc-key">⌘ ⇧ Z</span></div>
+      <div class="sc-row"><span class="sc-desc">Save PNG</span><span class="sc-key">⌘ / Ctrl + S</span></div>
+    </div>
+
+    <div class="sc-section-title">VIEW</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Fit to screen</span><span class="sc-key">⌘ / Ctrl + 0</span></div>
+      <div class="sc-row"><span class="sc-desc">Zoom in</span><span class="sc-key">Ctrl + Scroll ↑</span></div>
+      <div class="sc-row"><span class="sc-desc">Zoom out</span><span class="sc-key">Ctrl + Scroll ↓</span></div>
+      <div class="sc-row"><span class="sc-desc">Pan up / down</span><span class="sc-key">Scroll wheel</span></div>
+      <div class="sc-row"><span class="sc-desc">Pan left / right</span><span class="sc-key">⇧ + Scroll</span></div>
+      <div class="sc-row"><span class="sc-desc">Pan (hold)</span><span class="sc-key">Space + drag</span></div>
+      <div class="sc-row"><span class="sc-desc">Pan (middle btn)</span><span class="sc-key">Middle click + drag</span></div>
+    </div>
+
+    <div class="sc-section-title">ACTIONS</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Commit / finish shape</span><span class="sc-key">Enter</span></div>
+      <div class="sc-row"><span class="sc-desc">Cancel / deselect</span><span class="sc-key">Esc</span></div>
+      <div class="sc-row"><span class="sc-desc">Close polygon</span><span class="sc-key">Esc or dbl-click</span></div>
+      <div class="sc-row"><span class="sc-desc">Add text line</span><span class="sc-key">⇧ Enter</span></div>
+      <div class="sc-row"><span class="sc-desc">Commit text</span><span class="sc-key">Enter</span></div>
+    </div>
+
+    <div class="sc-section-title">TOUCH (iPad)</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Undo</span><span class="sc-key">3-finger tap</span></div>
+      <div class="sc-row"><span class="sc-desc">Redo</span><span class="sc-key">4-finger tap</span></div>
+      <div class="sc-row"><span class="sc-desc">Zoom</span><span class="sc-key">Pinch</span></div>
+      <div class="sc-row"><span class="sc-desc">Pan</span><span class="sc-key">2-finger drag</span></div>
+    </div>
+
+    <div class="sc-section-title">GENERAL</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Show this panel</span><span class="sc-key">? or /</span></div>
+    </div>
+
     <button id="shortcuts-close">Close</button>
   </div>
 </div>
