@@ -2306,7 +2306,7 @@ function drawShapeOnCtx(ctx,t,x1,y1,x2,y2,final){
 function eraseVectorAt(x, y, radius){
   var erased=false;
   // Use eraser radius as tolerance so edges are hit, not just interior
-  var slop=Math.max(radius, 12/zoom);
+  var slop=Math.max(radius, 2/zoom);
   // Shapes — check if eraser overlaps shape bounding box (works at any angle)
   for(var i=shapeObjs.length-1;i>=0;i--){
     var s=shapeObjs[i];
@@ -3582,6 +3582,36 @@ function isInsideShape(s,x,y,isTouch){
   if(s.type==='rect'||s.type==='cloud'||s.type==='text') return Math.abs(lx)<=s.w/2+pad&&Math.abs(ly)<=s.h/2+pad;
   if(s.type==='ellipse') return (lx/(s.w/2+pad))*(lx/(s.w/2+pad))+(ly/(s.h/2+pad))*(ly/(s.h/2+pad))<=1;
   return false;
+}
+
+// ── Strict hit-test for right-click delete (zero pad, screen-px accurate) ──
+function findObjAtStrict(x, y){
+  // Shapes — no invisible padding, must be inside visible bounds
+  for(var i=shapeObjs.length-1;i>=0;i--){
+    var s=shapeObjs[i];
+    if(s._editing) continue;
+    var layer=layers[s.layerIdx]; if(layer&&!layer.visible) continue;
+    var cos=Math.cos(-s.angle), sin=Math.sin(-s.angle);
+    var lx=(x-s.cx)*cos-(y-s.cy)*sin;
+    var ly=(x-s.cx)*sin+(y-s.cy)*cos;
+    var hit=false;
+    if(s.type==='rect'||s.type==='cloud'||s.type==='text')
+      hit = Math.abs(lx)<=s.w/2 && Math.abs(ly)<=s.h/2;
+    else if(s.type==='ellipse')
+      hit = (lx/(s.w/2))*(lx/(s.w/2))+(ly/(s.h/2))*(ly/(s.h/2))<=1;
+    if(hit) return s;
+  }
+  // Text objects
+  var tHit=findTextObjAt(x,y); if(tHit&&!tHit._editing) return tHit;
+  // Lines/measures — 4 screen-pixel threshold (4/zoom canvas px)
+  var lineThresh = 4/zoom;
+  var mHit=findMeasureObjAt(x,y,false);
+  if(mHit) return mHit;
+  var pmHit=findPathMeasureObjAt(x,y,false);
+  if(pmHit) return pmHit;
+  var plHit=findPolylineObjAt(x,y,false);
+  if(plHit) return plHit;
+  return null;
 }
 
 // ── Render selection overlay ────────────────────────────────
@@ -5160,12 +5190,7 @@ function updateWatermark(){
     e.preventDefault();
     var cp = vpToCanvas(e.clientX, e.clientY);
 
-    var hit =
-      findShapeObjAt(cp.x, cp.y, false) ||
-      findTextObjAt(cp.x, cp.y) ||
-      findMeasureObjAt(cp.x, cp.y, false) ||
-      findPathMeasureObjAt(cp.x, cp.y, false) ||
-      findPolylineObjAt(cp.x, cp.y, false);
+    var hit = findObjAtStrict(cp.x, cp.y);
 
     if(!hit){ hideMenu(); return; }
     _ctxHit = hit;
