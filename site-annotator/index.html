@@ -7894,32 +7894,31 @@ _imgFileInput.addEventListener('change',function(){
 (function(){
   var _origCompExp=compositeExport;
   compositeExport=function(maxPx){
-    var out=_origCompExp(maxPx);
-    if(!out||!imgOverlays.length) return out;
-    // Draw overlays below everything else — re-draw in correct order
-    // Actually we need them between base and draw layers.
-    // Rebuild: base → imgOverlays → layers → shapes
-    var w=out.width, h=out.height;
-    var sc=w/(baseCv.width||w);
-    var tmp=document.createElement('canvas'); tmp.width=w; tmp.height=h;
-    var tc=tmp.getContext('2d');
-    // Base
-    tc.drawImage(baseCv,0,0,w,h);
-    // Image overlays (scaled)
+    if(!imgOverlays.length) return _origCompExp(maxPx);
+
+    // Save the current base canvas pixels
+    var savedData=null;
+    try{ savedData=bCtx.getImageData(0,0,baseCv.width,baseCv.height); }catch(e){}
+
+    // Burn overlays into baseCv at canvas coordinates.
+    // _origCompExp handles all the scaling, so we just draw at natural size here.
     imgOverlays.forEach(function(ov){
-      tc.save();
-      tc.globalAlpha=ov.opacity!==undefined?ov.opacity:1;
-      tc.translate(ov.cx*sc, ov.cy*sc);
-      tc.rotate(ov.angle||0);
-      tc.scale(ov.flipH?-1:1, ov.flipV?-1:1);
-      tc.drawImage(ov.img, -ov.w/2*sc, -ov.h/2*sc, ov.w*sc, ov.h*sc);
-      tc.restore();
+      bCtx.save();
+      bCtx.globalAlpha=ov.opacity!==undefined?ov.opacity:1;
+      bCtx.translate(ov.cx,ov.cy);
+      bCtx.rotate(ov.angle||0);
+      bCtx.scale(ov.flipH?-1:1,ov.flipV?-1:1);
+      try{ bCtx.drawImage(ov.img,-ov.w/2,-ov.h/2,ov.w,ov.h); }catch(e){}
+      bCtx.restore();
     });
-    // Draw layers
-    layers.forEach(function(l){ if(l.visible) tc.drawImage(l.canvas,0,0,w,h); });
-    // Shapes, text, measures are in out already — just composite on top
-    tc.drawImage(out,0,0);
-    return tmp;
+
+    // Export with overlays baked into the base — all shapes, text, measures etc. draw on top
+    var out=_origCompExp(maxPx);
+
+    // Restore baseCv to its original pixels
+    if(savedData){ try{ bCtx.putImageData(savedData,0,0); }catch(e){} }
+
+    return out;
   };
 })();
 
