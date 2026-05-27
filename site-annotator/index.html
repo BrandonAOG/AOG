@@ -599,6 +599,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   <button class="tb-btn" data-tool="text"><svg viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg><span class="lbl">Text</span></button>
   <button class="tb-btn" data-tool="comment" title="Comment box — drag to place, click to edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="13" x2="13" y2="13"/></svg><span class="lbl">Note</span></button>
   <div id="tb-font-size-grp"><select id="font-size-sel" title="Font size">
+    <option value="6">6</option><option value="7">7</option>
+    <option value="8">8</option><option value="9">9</option>
     <option value="10">10</option><option value="12">12</option>
     <option value="14">14</option><option value="16">16</option>
     <option value="18" selected>18</option><option value="20">20</option>
@@ -1739,7 +1741,7 @@ function captureState(){
     _preOp={
       layerData:  snaps,
       activeIdx:  activeLayerIdx,
-      textObjs:   JSON.parse(JSON.stringify(textObjs)),
+      textObjs:   JSON.parse(JSON.stringify(textObjs.map(function(o){ var c=Object.assign({},o); c._editing=false; return c; }))),
       shapeObjs:  JSON.parse(JSON.stringify(shapeObjs)),
       measureObjs:JSON.parse(JSON.stringify(measureObjs)),
       pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
@@ -1762,7 +1764,7 @@ function pushUndo(){
             return l.ctx.getImageData(0,0,l.canvas.width,l.canvas.height);
           }),
           activeIdx:  activeLayerIdx,
-          textObjs:   JSON.parse(JSON.stringify(textObjs)),
+          textObjs:   JSON.parse(JSON.stringify(textObjs.map(function(o){ var c=Object.assign({},o); c._editing=false; return c; }))),
           shapeObjs:  JSON.parse(JSON.stringify(shapeObjs)),
           measureObjs:JSON.parse(JSON.stringify(measureObjs)),
           pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
@@ -1937,7 +1939,7 @@ function updateLegend(){
 }
 
 // ── ZOOM/PAN ──
-function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(_editingComment) repositionCommentEditor(_editingComment); if(_pendingImg&&_pendingImgPos) _drawImgGhost(_pendingImgPos.x,_pendingImgPos.y); }
+function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(_editingComment) repositionCommentEditor(_editingComment); if(typeof repositionTextOverlay==='function') repositionTextOverlay(); if(_pendingImg&&_pendingImgPos) _drawImgGhost(_pendingImgPos.x,_pendingImgPos.y); }
 
 function clampPan(){
   var vw=viewport.clientWidth,vh=viewport.clientHeight;
@@ -2630,6 +2632,18 @@ function onMove(e){
       // Move
       selectedShape.cx=orig.cx+(tp.x-selDragStart.x);
       selectedShape.cy=orig.cy+(tp.y-selDragStart.y);
+      // Sync text object position live so it follows the handles
+      if(selectedShape.type==='text'&&selectedShape._textObj){
+        var _to=selectedShape._textObj;
+        var _lines=_to.text.split('\n');
+        var _estW=measureLinesW(_lines,_to.fontSize);
+        var _estH=_lines.length*_to.fontSize*1.35;
+        var _cos=Math.cos(selectedShape.angle), _sin=Math.sin(selectedShape.angle);
+        var _lx=-_estW/2, _ly=_to.fontSize-_estH/2;
+        _to.x=selectedShape.cx+_lx*_cos-_ly*_sin;
+        _to.y=selectedShape.cy+_lx*_sin+_ly*_cos;
+        renderTextObjs();
+      }
       // Sync comment object position live
       if(selectedShape.type==='comment'&&selectedShape._commentObj){
         selectedShape._commentObj.cx=selectedShape.cx;
@@ -4285,8 +4299,8 @@ function commitText(){
 // Enter selection mode for a text object (move + rotate, no resize)
 function enterTextTransformMode(obj){
   if(!obj) return;
-  // Hide from txt-cv while transform handles are shown — prevents double rendering
-  obj._editing=true;
+  // Render text on txt-cv immediately (keep visible at all times)
+  obj._editing=false;
   renderTextObjs();
   var lines=obj.text.split('\n');
   // Use actual canvas measurement so the ellipse fits the real rendered text.
@@ -4572,7 +4586,7 @@ function commitSelection(){
     obj.x=s.cx + tLocalX*cos - tLocalY*sin;
     obj.y=s.cy + tLocalX*sin + tLocalY*cos;
     obj.angle=s.angle;
-    obj._editing=false; // unhide so txt-cv renders it
+    obj._editing=false;
     renderTextObjs();
     selectedShape=null; selHandle=-1; selDragStart=null;
     if(!selImg){ selCv.width=1; selCv.height=1; }
@@ -4607,7 +4621,7 @@ function commitSelection(){
 
 function cancelSelection(){
   if(editShapeObj){ editShapeObj._editing=false; editShapeObj=null; }
-  // Unhide text object if it was hidden for transform mode
+  // Unhide text object if it was hidden for transform mode (kept for safety)
   if(selectedShape&&selectedShape.type==='text'&&selectedShape._textObj){
     selectedShape._textObj._editing=false; renderTextObjs();
   }
@@ -5321,7 +5335,25 @@ fillBtn.addEventListener('click',function(){
 // ── COLOR / SLIDERS ──
 // Color swatch click handled by overlaid input (iOS-compatible)
 // Font size
-fontSizeSel.addEventListener('change',function(e){ FONT_SIZE=parseInt(e.target.value); });
+fontSizeSel.addEventListener('mousedown', function(){
+  if(textOv.style.display !== 'none'){
+    fontSizeSel._savedSelStart = textOv.selectionStart;
+    fontSizeSel._savedSelEnd   = textOv.selectionEnd;
+  }
+});
+fontSizeSel.addEventListener('change',function(e){
+  FONT_SIZE=parseInt(e.target.value);
+  // If text overlay is open, resize it and restore selection
+  if(textOv.style.display !== 'none'){
+    textOv.style.fontSize = FONT_SIZE + 'px';
+    textOv.style.height = 'auto';
+    textOv.style.height = Math.max(40, textOv.scrollHeight) + 'px';
+    textOv.focus();
+    var ss = fontSizeSel._savedSelStart || 0;
+    var se = fontSizeSel._savedSelEnd   || 0;
+    textOv.setSelectionRange(ss, se);
+  }
+});
 clrInput.addEventListener('input',function(e){
   color=e.target.value; clrSwatch.style.background=color;
   // Live update selected item
