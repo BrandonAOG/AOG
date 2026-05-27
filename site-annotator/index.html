@@ -1990,6 +1990,7 @@ var measureDragStart=null; // {x,y,orig:{x1,y1,x2,y2}}
 // Track points of the current pen stroke so we can measure arc length
 var penPathPoints=[];
 var scalingMode=false, refLinePixels=0;
+var _scalingRefMeasure=null; // reference line kept live while scale dialog is open
 var scaleSet=false, ppu=1, scaleUnit='m';
 var gridEnabled=false, gridSize=50, snapEnabled=false;
 var pdfDoc=null, currentPage=1, baseLoaded=false;
@@ -2577,7 +2578,13 @@ function loadPDF(f){
 function renderPDFPage(n){
   pdfDoc.getPage(n).then(function(page){
     var vp1=page.getViewport({scale:1});
-    var sc=Math.min(IOS_MAX_PX/vp1.width,2);
+    // PDFs are 72 pts/inch at scale:1. Target DPI per device, always capped by IOS_MAX_PX.
+    // iPhone: 150 DPI (2.08×) — memory constrained, still 2× sharper than before
+    // iPad:   200 DPI (2.78×) — good balance of quality vs memory
+    // Desktop:300 DPI (4.17×) — full print quality
+    var targetDpi = IS_IPHONE ? 150 : IS_IPAD ? 200 : 300;
+    var dpiScale  = targetDpi / 72;
+    var sc = Math.min(dpiScale, IOS_MAX_PX / Math.max(vp1.width, vp1.height));
     var vp=page.getViewport({scale:sc});
     var w=Math.round(vp.width),h=Math.round(vp.height);
     resize(w,h);
@@ -2585,6 +2592,8 @@ function renderPDFPage(n){
       afterLoad();
       pgInfo.textContent=n+'/'+pdfDoc.numPages;
       btnPrev.disabled=n<=1; btnNext.disabled=n>=pdfDoc.numPages;
+      var actualDpi=Math.round(sc*72);
+      toast('PDF loaded at '+actualDpi+' DPI · '+w+'×'+h+' px','ok',3000);
     });
   });
 }
@@ -2954,6 +2963,12 @@ function onMove(e){
       selectedMeasure.x2=orig.x2+dx; selectedMeasure.y2=orig.y2+dy;
     }
     renderMeasureSelection();
+    // Live-update scale dialog pixel count while dragging the reference line
+    if(_scalingRefMeasure && _scalingRefMeasure===selectedMeasure){
+      var _livePx=Math.hypot(_scalingRefMeasure.x2-_scalingRefMeasure.x1,_scalingRefMeasure.y2-_scalingRefMeasure.y1);
+      var _info=document.getElementById('ref-px-info');
+      if(_info) _info.textContent='Line: '+Math.round(_livePx)+' px  ·  drag endpoints to fine-tune';
+    }
     return;
   }
   // ── Shape transform drag ──
@@ -3166,8 +3181,10 @@ function onUp(e){
   // End measure endpoint drag
   if(selectedMeasure && measureDragHandle!==-1){    measureDragHandle=-1; measureDragStart=null;
     var isTouch=!!(e.changedTouches&&e.changedTouches.length);
-    // Commit on release for both touch and desktop (drop on release)
-    if(isTouch && tool==='line'){
+    // If this is the active scaling reference line, keep it in edit mode
+    if(_scalingRefMeasure && _scalingRefMeasure===selectedMeasure){
+      renderMeasureSelection(); // keep handles visible
+    } else if(isTouch && tool==='line'){
       commitMeasureSelection();
     } else if(!isTouch){
       commitMeasureSelection();
@@ -3241,7 +3258,20 @@ function onUp(e){
         selectedMeasure=null;
         renderShapeAndMeasure();
       }
-      if(scalingMode){ refLinePixels=px; document.getElementById('ref-px-info').textContent='Line drawn: '+Math.round(px)+' pixels'; showScaleDlg(); scalingMode=false; commitMeasureSelection(); }
+      if(scalingMode){
+        refLinePixels=px;
+        _scalingRefMeasure=newM;
+        // Keep the line selected on BOTH touch and desktop so the user can
+        // drag the endpoint handles to fine-tune before clicking Set Scale.
+        newM._editing=true;
+        selectedMeasure=newM;
+        measureDragHandle=-1; measureDragStart=null;
+        renderShapeAndMeasure();
+        renderMeasureSelection();
+        showScaleDlg();
+        scalingMode=false;
+        // DON'T commitMeasureSelection() — handles stay live until dialog is confirmed
+      }
     } else {
       renderShapeAndMeasure();
     }
@@ -6034,7 +6064,10 @@ btnSetScale.addEventListener('click',function(){
 });
 
 function showScaleDlg(){
-  document.getElementById('ref-px-info').textContent='Line: '+Math.round(refLinePixels)+' px. Enter real length:';
+  var px=_scalingRefMeasure
+    ? Math.hypot(_scalingRefMeasure.x2-_scalingRefMeasure.x1, _scalingRefMeasure.y2-_scalingRefMeasure.y1)
+    : refLinePixels;
+  document.getElementById('ref-px-info').textContent='Line: '+Math.round(px)+' px  ·  drag endpoints to fine-tune';
   document.getElementById('scale-dlg').style.display='block';
   document.getElementById('scale-ov').style.display='block';
 }
@@ -6042,17 +6075,29 @@ function showScaleDlg(){
 document.getElementById('scale-cancel').addEventListener('click',function(){
   document.getElementById('scale-dlg').style.display='none';
   document.getElementById('scale-ov').style.display='none';
+  _scalingRefMeasure=null;
+  commitMeasureSelection();
 });
 
 document.getElementById('scale-ok').addEventListener('click',function(){
   var len=parseFloat(document.getElementById('ref-len').value);
   var unit=document.getElementById('ref-unit').value.trim()||'m';
+  // Always read the final endpoint positions — captures any fine-tuning the user did
+  if(_scalingRefMeasure){
+    refLinePixels=Math.hypot(
+      _scalingRefMeasure.x2-_scalingRefMeasure.x1,
+      _scalingRefMeasure.y2-_scalingRefMeasure.y1
+    );
+  }
   if(!len||len<=0||!refLinePixels){ toast('Draw a reference line first, then enter its real length.','warn'); return; }
   ppu=len/refLinePixels; scaleUnit=unit; scaleSet=true;
   ppuIn.value=(1/ppu).toFixed(4); unitIn.value=unit;
   scaleStatus.textContent='1 px = '+(1/ppu).toFixed(4)+' '+unit;
   document.getElementById('scale-dlg').style.display='none';
   document.getElementById('scale-ov').style.display='none';
+  _scalingRefMeasure=null;
+  commitMeasureSelection();
+  toast('Scale set ✓','ok',2000);
 });
 
 // manual PPU input
