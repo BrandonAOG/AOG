@@ -1375,6 +1375,29 @@ body.dark-mode .ft-label { color: #7DD3FC; }
     color: var(--text) !important;
   }
 
+  /* Wire length tables (CU / AL / THHN): bigger cells so ~5 chars are visible */
+  #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td:not(.row-label) {
+    min-width: 62px !important;
+  }
+  #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td input[type="text"] {
+    min-width: 58px !important;
+    width: 100% !important;
+    height: 36px !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    border: 1px solid rgba(217,119,6,0.4) !important;
+    border-radius: 3px !important;
+    background: var(--bg3) !important;
+    padding: 2px 4px !important;
+    box-sizing: border-box !important;
+    letter-spacing: 0.5px !important;
+  }
+  body.dark-mode #page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td input[type="text"] {
+    border-color: rgba(0,255,200,0.3) !important;
+    background: rgba(15,21,53,0.8) !important;
+    color: #E0F7FF !important;
+  }
+
   body.dark-mode #page2 table.mat-table td input[type="text"] {
     color: #E0F7FF !important;
   }
@@ -1693,11 +1716,11 @@ html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap      {
         </tr></thead>
         <tbody><tr>
           <td class="row-label">Length</td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
         </tr></tbody>
       </table>
     </div>
@@ -1713,10 +1736,10 @@ html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap      {
         </tr></thead>
         <tbody><tr>
           <td class="row-label">Length</td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
         </tr></tbody>
       </table>
     </div>
@@ -1731,9 +1754,9 @@ html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap      {
         </tr></thead>
         <tbody><tr>
           <td class="row-label">Length</td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
-          <td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="numeric" pattern="[0-9]*"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
+          <td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td><td><div class="ft-cell"><input type="text" inputmode="text"><span class="ft-label">Ft.</span></div></td>
         </tr></tbody>
       </table>
     </div>
