@@ -1929,12 +1929,13 @@ fittings.forEach((name, idx) => {
 function applyNumericOnlyToPage2() {
   // Footer fields: all except the .allow-text "Other:" field.
   document.querySelectorAll('#page2 .footer-field input[type="text"]:not(.allow-text)').forEach(makeNumericOnly);
-  // CU/AL/THHN wire tables (the .mat-table tables that aren't fittings/wireway/polaris).
-  document.querySelectorAll('#page2 table.mat-table:not(#fittings-table):not(#wireway-table):not(#polaris-table) td input[type="text"]').forEach(makeNumericOnly);
+  // CU/AL/THHN wire tables: length fields accept numbers AND letters (e.g. "N/A", "TBD"),
+  // so makeNumericOnly is intentionally NOT applied to these tables.
   // Mobile accordion mirror inputs: all are numeric quantities EXCEPT the footer
   // "Other" field. Identify "Other" by its row label and skip it.
   document.querySelectorAll('.mob-card-input').forEach(mirror => {
     if (mirror._numericOnly) return;
+    if (mirror.classList.contains('wire-length-mirror')) return; // AL/CU/THHN length fields accept letters too
     const row = mirror.closest('.mob-footer-row, .mob-card-row');
     const labelEl = row && row.querySelector('.mob-footer-label, .mob-card-label');
     const labelText = labelEl ? labelEl.textContent.trim().toLowerCase() : '';
@@ -2671,8 +2672,8 @@ function buildMobileAccordions() {
         lbl.className = 'mob-card-label';
         lbl.textContent = th.textContent.trim().replace(/\n/g, ' ');
         const inp = document.createElement('input');
-        inp.type = 'text'; inp.inputMode = 'numeric'; inp.pattern = '[0-9]*';
-        inp.className = 'mob-card-input'; inp.placeholder = '\u2014';
+        inp.type = 'text'; inp.inputMode = 'text';
+        inp.className = 'mob-card-input wire-length-mirror'; inp.placeholder = '\u2014';
         const ftSuffix = document.createElement('span');
         ftSuffix.textContent = 'Ft.';
         ftSuffix.style.cssText = 'font-size:11px;color:var(--text-muted);flex-shrink:0;font-family:Arial,sans-serif;';
