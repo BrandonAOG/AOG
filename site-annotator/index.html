@@ -1081,8 +1081,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <div class="sc-row"><span class="sc-desc">Commit / finish shape</span><span class="sc-key">Enter</span></div>
         <div class="sc-row"><span class="sc-desc">Cancel / deselect</span><span class="sc-key">Esc</span></div>
         <div class="sc-row"><span class="sc-desc">Close polygon / polyline</span><span class="sc-key">Esc or dbl-click</span></div>
-        <div class="sc-row"><span class="sc-desc">Commit text</span><span class="sc-key">Enter</span></div>
-        <div class="sc-row"><span class="sc-desc">New line in text box</span><span class="sc-key">⇧ Enter</span></div>
+        <div class="sc-row"><span class="sc-desc">New line in text box</span><span class="sc-key">Enter</span></div>
+        <div class="sc-row"><span class="sc-desc">Commit text</span><span class="sc-key">⇧ Enter</span></div>
         <div class="sc-row"><span class="sc-desc">Show this panel</span><span class="sc-key">? or /</span></div>
       </div>
 
@@ -1184,10 +1184,10 @@ var IS_IPAD   = /iPad/.test(navigator.userAgent) ||
                 (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 var IS_IOS    = IS_IPHONE || IS_IPAD;
 // 2400px on iPhone = good zoom quality, keeps 5 layers ~33MB each (~165MB total).
-// iPad gets no cap (16384 = effectively unlimited).
-// iPad canvas capped at 4096px — prevents multi-layer snapshots from
+// iPad gets 10000px cap.
+// iPad canvas capped at 10000px — prevents multi-layer snapshots from
 // filling Safari's memory and crashing on reload.
-var IOS_MAX_PX = IS_IPHONE ? 2900 : (IS_IPAD ? 4096 : 16384);
+var IOS_MAX_PX = IS_IPHONE ? 2900 : (IS_IPAD ? 10000 : 25000);
 // iPad undo kept at 5 — each snapshot is ~50MB+ per layer at full res.
 var MAX_UNDO   = IS_IPHONE ? 5 : (IS_IPAD ? 5 : 20);
 
@@ -2491,6 +2491,25 @@ function onDown(e){
         return;
       }
       if(isInsideShape(selectedShape,sp.x,sp.y,_isTouchEvt)){
+        // Double-tap on a selected text shape → open editor
+        if(selectedShape.type==='text' && selectedShape._textObj){
+          var _now=Date.now();
+          var _isDoubleTap=(_now-_txtTapTime<380 && _txtTapObj===selectedShape._textObj);
+          _txtTapTime=_now; _txtTapObj=selectedShape._textObj;
+          if(_isDoubleTap){
+            e.preventDefault();
+            var _tobj=selectedShape._textObj;
+            commitSelection();
+            editingObj=_tobj;
+            _tobj._editing=true;
+            renderTextObjs();
+            textX=_tobj.x; textY=_tobj.y;
+            startTextCursor(_tobj.x,_tobj.y);
+            showTextOverlay(_tobj.x,_tobj.y);
+            textOv.value=_tobj.text;
+            return;
+          }
+        }
         // Start move
         e.preventDefault();
         selHandle=-2;
@@ -4108,6 +4127,9 @@ function handleCommentDown(e, sp, isTouch){
 var _txtTapTime=0, _txtTapObj=null;
 function handleText(e){
   var p=getPos(e);
+  // If a text object is in transform mode, commit it first so it becomes
+  // visible and findTextObjAt can hit-test it correctly.
+  if(selectedShape&&selectedShape.type==='text') commitSelection();
   var existing=findTextObjAt(p.x,p.y);
   var now=Date.now();
 
@@ -4208,7 +4230,16 @@ textOv.addEventListener('keydown',function(e){
   }
   // ── Regular text object ────────────────────────────────────────
   if(e.key==='Escape'){ commitText(); return; }
-  if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); commitText(); }
+  // Shift+Enter commits; plain Enter drops to a new line
+  if(e.key==='Enter'&&e.shiftKey){ e.preventDefault(); commitText(); }
+  // Plain Enter → insert newline and auto-grow the textarea
+  if(e.key==='Enter'&&!e.shiftKey){
+    // Let the browser insert the newline, then grow the textarea
+    setTimeout(function(){
+      textOv.style.height='auto';
+      textOv.style.height=Math.max(40,textOv.scrollHeight)+'px';
+    },0);
+  }
 });
 
 // ── Auto-grow comment box when user types or pastes ───────────
