@@ -3067,6 +3067,8 @@ function onMove(e){
       var _livePx=Math.hypot(_scalingRefMeasure.x2-_scalingRefMeasure.x1,_scalingRefMeasure.y2-_scalingRefMeasure.y1);
       var _info=document.getElementById('ref-px-info');
       if(_info) _info.textContent='Line: '+Math.round(_livePx)+' px  ·  drag endpoints to fine-tune';
+      // Keep shCv in sync so the line doesn't snap back when selCv is cleared
+      renderShapeAndMeasure();
     }
     return;
   }
@@ -3282,6 +3284,7 @@ function onUp(e){
     var isTouch=!!(e.changedTouches&&e.changedTouches.length);
     // If this is the active scaling reference line, keep it in edit mode
     if(_scalingRefMeasure && _scalingRefMeasure===selectedMeasure){
+      renderShapeAndMeasure(); // commit updated coords to shCv so it never snaps back
       renderMeasureSelection(); // keep handles visible
     } else if(isTouch && tool==='line'){
       commitMeasureSelection();
