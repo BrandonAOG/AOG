@@ -1124,6 +1124,27 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <button class="add-btn" id="btn-reset-scale" style="width:100%;margin-bottom:6px;color:#f87171;border-color:rgba(239,68,68,0.4);display:none">✕ Reset Scale</button>
         <div style="font-size:10px;color:var(--txt2)" id="scale-status">Scale not set</div>
       </div>
+      <!-- DPI + Scale Calculator -->
+      <div class="prop-section">
+        <div class="prop-title" style="display:flex;align-items:center;gap:5px">
+          DPI Calculator
+          <span id="auto-scale-spinner" style="display:none;font-size:9px;color:var(--acc2);animation:savePulse .8s ease-in-out infinite">⬤</span>
+        </div>
+        <div style="font-size:10px;color:var(--acc2);margin-bottom:6px;line-height:1.4" id="auto-scale-hint">Upload a plan to auto-detect scale</div>
+        <div class="prop-row"><label>Scale notation</label><input class="prop-input" id="dpi-notation" type="text" placeholder='1"=30ft' style="width:80px"></div>
+        <div class="prop-row">
+          <label>File DPI</label>
+          <input class="prop-input" id="dpi-value" type="number" min="1" step="1" placeholder="300" style="width:52px">
+          <select class="prop-input" id="dpi-unit" style="width:42px;padding:3px 2px">
+            <option value="ft">ft</option>
+            <option value="in">in</option>
+            <option value="m">m</option>
+            <option value="cm">cm</option>
+          </select>
+        </div>
+        <button class="add-btn" id="btn-dpi-calc" style="width:100%;margin-bottom:4px">⚡ Calculate &amp; Set Scale</button>
+        <div style="font-size:10px;color:var(--txt2)" id="dpi-calc-status"></div>
+      </div>
       <!-- Grid -->
       <div class="prop-section">
         <div class="prop-title">Grid</div>
@@ -2089,6 +2110,7 @@ var measureDragStart=null; // {x,y,orig:{x1,y1,x2,y2}}
 // Track points of the current pen stroke so we can measure arc length
 var penPathPoints=[];
 var scalingMode=false, refLinePixels=0;
+var _lastLoadedDpi = 0; // DPI of the most recently loaded file (set by PDF loader, estimated for images)
 var _scalingRefMeasure=null; // reference line kept live while scale dialog is open
 var scaleSet=false, ppu=1, scaleUnit='m';
 var gridEnabled=false, gridSize=50, snapEnabled=false;
@@ -2692,6 +2714,9 @@ function renderPDFPage(n){
       pgInfo.textContent=n+'/'+pdfDoc.numPages;
       btnPrev.disabled=n<=1; btnNext.disabled=n>=pdfDoc.numPages;
       var actualDpi=Math.round(sc*72);
+      _lastLoadedDpi = actualDpi;
+      var dpiIn = document.getElementById('dpi-value');
+      if(dpiIn) dpiIn.value = actualDpi;
       toast('PDF loaded at '+actualDpi+' DPI · '+w+'×'+h+' px','ok',3000);
     });
   });
@@ -2724,6 +2749,8 @@ function afterLoad(){
   fitToVP();
   toast('File loaded — '+(IS_IPHONE?'iPhone cap applied':'ready to annotate'),'ok',2000);
   clearSave(); scheduleSave(); // start fresh save for this file
+  // Auto-detect scale from title block (non-blocking)
+  setTimeout(autoDetectScale, 100);
 }
 
 function pgGrp(show){
@@ -6401,6 +6428,134 @@ unitIn.addEventListener('change',function(){ scaleUnit=unitIn.value.trim()||'m';
     toast('Draw a line of known length to recalibrate the scale.','ok',4000);
   });
 })();
+
+// ── DPI + Scale calculator ─────────────────────────────────────────────────
+function parseScaleNotation(str, unitOverride){
+  str=(str||'').trim();
+  // Imperial: 1"=30' or 1"=30ft or 1 inch = 30 feet
+  var imp=str.match(/1[\s"']*(?:inch)?[\s=:]+(\d+(?:\.\d+)?)\s*(?:'|ft|feet)?/i);
+  if(imp){
+    var ft=parseFloat(imp[1]);
+    if(unitOverride==='in')  return {value:ft*12,  unit:'in'};
+    if(unitOverride==='m')   return {value:ft*0.3048, unit:'m'};
+    if(unitOverride==='cm')  return {value:ft*30.48, unit:'cm'};
+    return {value:ft, unit:'ft'};
+  }
+  // Ratio: 1:100 or 1/100
+  var rat=str.match(/1\s*[:\/]\s*(\d+(?:\.\d+)?)/);
+  if(rat){
+    var R=parseFloat(rat[1]);
+    if(unitOverride==='ft'||unitOverride==='in'||unitOverride==='cm'){
+      var fpi=R/12;
+      if(unitOverride==='ft')  return {value:fpi, unit:'ft'};
+      if(unitOverride==='in')  return {value:R,   unit:'in'};
+      if(unitOverride==='cm')  return {value:fpi*30.48, unit:'cm'};
+    }
+    // Default for ratios: metric metres
+    return {value:R*0.0254, unit:'m'};
+  }
+  return null;
+}
+
+function applyDpiScale(parsed, dpi){
+  if(!parsed||!dpi) return false;
+  ppu=parsed.value/dpi;
+  scaleUnit=parsed.unit;
+  scaleSet=true;
+  ppuIn.value=(1/ppu).toFixed(4);
+  unitIn.value=scaleUnit;
+  scaleStatus.textContent='1 px = '+(1/ppu).toFixed(4)+' '+scaleUnit;
+  document.getElementById('btn-recalibrate').style.display='';
+  document.getElementById('btn-reset-scale').style.display='';
+  return true;
+}
+
+(function(){
+  var calcBtn=document.getElementById('btn-dpi-calc');
+  if(!calcBtn) return;
+  calcBtn.addEventListener('click',function(){
+    var notation=document.getElementById('dpi-notation').value.trim();
+    var dpi=parseFloat(document.getElementById('dpi-value').value);
+    var unit=document.getElementById('dpi-unit').value;
+    var status=document.getElementById('dpi-calc-status');
+    if(!notation){ status.textContent='Enter a scale e.g. 1"=30ft'; return; }
+    if(!dpi||dpi<=0){ status.textContent='Enter the file DPI'; return; }
+    var parsed=parseScaleNotation(notation,unit);
+    if(!parsed){ status.textContent='Cannot parse "'+notation+'" — try 1"=30ft or 1:100'; return; }
+    if(applyDpiScale(parsed,dpi)){
+      status.textContent='✓ 1 px = '+(1/ppu).toFixed(4)+' '+scaleUnit;
+      toast('Scale set via DPI calculator ✓','ok',2000);
+    }
+  });
+})();
+
+// ── Auto-detect scale from uploaded plan using Claude vision ───────────────
+function autoDetectScale(){
+  if(!baseLoaded) return;
+  var spinner=document.getElementById('auto-scale-spinner');
+  var hint=document.getElementById('auto-scale-hint');
+  var dpiStatus=document.getElementById('dpi-calc-status');
+  // If offline, skip silently and show manual hint
+  if(!navigator.onLine){
+    if(hint) hint.textContent='Offline — use DPI calculator or draw a reference line';
+    return;
+  }
+  if(spinner) spinner.style.display='';
+  if(hint)    hint.textContent='Scanning plan for scale notation…';
+
+  // Thumbnail the full canvas — max 1024px on longest side
+  var maxPx=1024, sw=baseCv.width, sh=baseCv.height;
+  var ts=Math.min(1,maxPx/Math.max(sw,sh));
+  var tw=Math.round(sw*ts), th=Math.round(sh*ts);
+  var tmp=document.createElement('canvas');
+  tmp.width=tw; tmp.height=th;
+  tmp.getContext('2d').drawImage(baseCv,0,0,sw,sh,0,0,tw,th);
+  var b64=tmp.toDataURL('image/jpeg',0.82).split(',')[1];
+
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:200,
+      messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+        {type:'text',text:'Find the drawing scale in this plan\'s title block (e.g. 1"=30\', 1:100, NTS). Reply ONLY with valid JSON, no markdown or extra text:\n{"scale":"1\\"=30\'","feet_per_inch":30,"unit":"ft"}\nFor ratio 1:R use feet_per_inch=R/12, unit="ft". If metric preferred return unit="m" and meters_per_inch=R*0.0254 in feet_per_inch field.\nIf no scale or NTS: {"scale":null}'}
+      ]}]
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(spinner) spinner.style.display='none';
+    var txt=(data.content||[]).map(function(i){ return i.text||''; }).join('');
+    var result;
+    try{ result=JSON.parse(txt.replace(/```[a-z]*|```/g,'').trim()); }catch(e){ result=null; }
+    if(!result||!result.scale||!result.feet_per_inch){
+      if(hint) hint.textContent='No scale found — use calculator below or draw a reference line';
+      return;
+    }
+    var notation=result.scale;
+    var dpi=_lastLoadedDpi||150;
+    var unit=result.unit||'ft';
+    // Pre-fill calculator fields
+    document.getElementById('dpi-notation').value=notation;
+    if(!document.getElementById('dpi-value').value) document.getElementById('dpi-value').value=dpi;
+    document.getElementById('dpi-unit').value=unit;
+    // Convert feet_per_inch to the chosen unit
+    var fpi=result.feet_per_inch;
+    var unitVal=unit==='ft'?fpi:unit==='in'?fpi*12:unit==='m'?fpi*0.3048:fpi*30.48;
+    if(applyDpiScale({value:unitVal,unit:unit},dpi)){
+      if(hint) hint.textContent='✓ Detected: '+notation+' at '+dpi+' DPI';
+      if(dpiStatus) dpiStatus.textContent='Auto-set from title block';
+      toast('Scale auto-detected: '+notation+' ✓','ok',4000);
+    }
+  })
+  .catch(function(err){
+    if(spinner) spinner.style.display='none';
+    if(hint) hint.textContent='Auto-detect unavailable — use calculator or draw a reference line';
+    console.warn('[autoDetectScale]',err);
+  });
+}
 
 // ── EXPORT ──
 // compositeExport(maxPx) — maxPx=0 = full resolution; caller must releaseCanvas(result)
