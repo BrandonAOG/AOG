@@ -167,15 +167,16 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .stamp-opt span{font-size:10px;color:var(--txt2)}
 #stamp-overlay{position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.5);display:none}
 /* SCALE DIALOG */
-#scale-dlg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surf);border:1px solid var(--b2);border-radius:12px;padding:18px;z-index:102;display:none;min-width:280px}
-#scale-dlg h3{font-size:13px;margin-bottom:12px;color:var(--txt)}
+#scale-dlg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surf);border:1px solid var(--b2);border-radius:12px;padding:18px;z-index:102;display:none;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,.55);user-select:none;-webkit-user-select:none}
+#scale-dlg h3{font-size:13px;margin-bottom:12px;color:var(--txt);cursor:grab;padding:4px 0 4px 0;display:flex;align-items:center;gap:6px}
+#scale-dlg h3::before{content:'⠿';font-size:16px;color:var(--txt2);flex-shrink:0}
 .dlg-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--txt2)}
 .dlg-input{flex:1;background:var(--surf2);border:1px solid var(--b2);color:var(--txt);border-radius:6px;padding:5px 8px;font-size:12px;outline:none}
 .dlg-input:focus{border-color:var(--acc)}
 .dlg-btn{padding:6px 14px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600}
 .dlg-btn.primary{background:var(--acc);color:#fff}
 .dlg-btn.sec{background:var(--surf2);color:var(--txt2);border:1px solid var(--b2)}
-.dlg-overlay{position:fixed;inset:0;z-index:101;background:rgba(0,0,0,.5);display:none}
+.dlg-overlay{position:fixed;inset:0;z-index:101;background:rgba(0,0,0,.0);display:none;pointer-events:none}
 /* TITLE BLOCK DIALOG */
 #tb-dlg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surf);border:1px solid var(--b2);border-radius:12px;padding:18px;z-index:102;display:none;min-width:300px;max-width:90vw}
 #tb-dlg h3{font-size:13px;margin-bottom:12px;color:var(--txt)}
@@ -196,12 +197,16 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 /* SHORTCUTS OVERLAY */
 #shortcuts{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 #shortcuts.show{display:flex}
-#shortcuts-box{background:var(--surf);border:1px solid var(--b2);border-radius:12px;padding:20px 24px;max-width:500px;width:90vw;max-height:80vh;overflow-y:auto}
+#shortcuts-box{background:var(--surf);border:1px solid var(--b2);border-radius:12px;padding:20px 28px;max-width:min(860px,92vw);width:92vw;max-height:88vh;overflow-y:auto;overflow-x:hidden}
 #shortcuts-box h2{font-size:13px;letter-spacing:3px;color:var(--acc2);text-transform:uppercase;margin-bottom:14px;font-family:'Segoe UI',sans-serif}
-.sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px}
-.sc-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--b1)}
-.sc-key{font-family:'Courier New',monospace;font-size:11px;background:var(--surf2);border:1px solid var(--b2);border-radius:4px;padding:2px 6px;color:var(--txt2);white-space:nowrap}
-.sc-desc{font-size:11px;color:var(--txt2)}
+.sc-grid{display:grid;grid-template-columns:1fr;gap:0}
+.sc-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--b1);gap:10px}
+.sc-desc{font-size:11px;color:var(--txt2);flex:0 0 auto;min-width:150px;max-width:55%;padding-right:4px}
+.sc-key{font-family:'Courier New',monospace;font-size:11px;background:var(--surf2);border:1px solid var(--b2);border-radius:4px;padding:2px 6px;color:var(--txt2);white-space:normal;word-break:break-word;text-align:right;flex:1 1 auto;min-width:0}
+@media(min-width:600px){
+  .sc-grid{grid-template-columns:1fr 1fr;gap:0 28px}
+  .sc-desc{min-width:140px;max-width:50%}
+}
 #shortcuts-close{margin-top:14px;width:100%;padding:8px;background:var(--acc);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:1px}
 .sc-section-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);margin:12px 0 4px;padding-bottom:3px;border-bottom:1px solid rgba(108,99,255,.25)}
 
@@ -1114,7 +1119,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       <div class="prop-section">
         <div class="prop-title">Scale</div>
         <div class="prop-row"><label>1 pixel =</label><input class="prop-input" id="ppu-in" type="number" min="0.001" step="any" value="1"><input class="prop-input" id="unit-in" type="text" value="m" style="width:36px;margin-left:2px"></div>
-        <button class="add-btn" id="btn-set-scale" style="width:100%;margin-bottom:6px">Draw Reference Line</button>
+        <button class="add-btn" id="btn-set-scale" style="width:100%;margin-bottom:4px">Draw Reference Line</button>
+        <button class="add-btn" id="btn-recalibrate" style="width:100%;margin-bottom:4px;display:none">↺ Recalibrate Scale</button>
+        <button class="add-btn" id="btn-reset-scale" style="width:100%;margin-bottom:6px;color:#f87171;border-color:rgba(239,68,68,0.4);display:none">✕ Reset Scale</button>
         <div style="font-size:10px;color:var(--txt2)" id="scale-status">Scale not set</div>
       </div>
       <!-- Grid -->
@@ -1185,6 +1192,17 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   </div>
 </div>
 
+<!-- CLEAR CONFIRM DIALOG -->
+<div class="dlg-overlay" id="clear-ov" style="display:none"></div>
+<div id="clear-dlg" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surf);border:1px solid var(--b2);border-radius:12px;padding:20px 22px;z-index:102;display:none;min-width:260px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.55)">
+  <h3 style="font-size:13px;margin-bottom:8px;color:var(--txt)">Clear layer?</h3>
+  <p id="clear-dlg-msg" style="font-size:11px;color:var(--txt2);margin-bottom:16px;line-height:1.5"></p>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="dlg-btn sec" id="clear-cancel">Cancel</button>
+    <button class="dlg-btn" id="clear-confirm" style="background:#ef4444;color:#fff">Clear</button>
+  </div>
+</div>
+
 <!-- SCALE DIALOG -->
 <div class="dlg-overlay" id="scale-ov"></div>
 <div id="scale-dlg">
@@ -1193,7 +1211,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   <div class="dlg-row"><label>Real length:</label><input class="dlg-input" id="ref-len" type="number" min="0.01" step="any" placeholder="e.g. 10"><input class="dlg-input" id="ref-unit" type="text" value="m" style="max-width:40px"></div>
   <div id="ref-px-info" style="font-size:11px;color:var(--txt2);margin-bottom:12px">Draw the line first.</div>
   <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="dlg-btn sec" id="scale-reset" style="margin-right:auto;color:#f87171;border-color:rgba(239,68,68,0.4)">Reset</button>
     <button class="dlg-btn sec" id="scale-cancel">Cancel</button>
+    <button class="dlg-btn sec" id="scale-redraw" style="display:none">↺ Redraw Line</button>
     <button class="dlg-btn primary" id="scale-ok">Set Scale</button>
   </div>
 </div>
@@ -1298,24 +1318,20 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 <!-- SHORTCUTS OVERLAY -->
 <div id="shortcuts">
   <div id="shortcuts-box">
-    <!-- Title changes per device -->
     <h2 id="sc-title">⌨ Keyboard Shortcuts</h2>
 
-    <!-- ═══════════════════════════════════════════
-         DESKTOP-ONLY SECTIONS (Mac / Windows / Linux)
-         Hidden on iPad, iPhone, Android
-    ════════════════════════════════════════════════ -->
+    <!-- ═══ DESKTOP-ONLY ═══ -->
     <div class="sc-desktop-only">
 
-      <div class="sc-section-title">TOOLS</div>
+      <div class="sc-section-title">TOOLS — keyboard shortcuts</div>
       <div class="sc-grid">
-        <div class="sc-row"><span class="sc-desc">Pen</span><span class="sc-key">Q</span></div>
-        <div class="sc-row"><span class="sc-desc">Line</span><span class="sc-key">L</span></div>
+        <div class="sc-row"><span class="sc-desc">Pen (freehand)</span><span class="sc-key">Q</span></div>
+        <div class="sc-row"><span class="sc-desc">Line (plain)</span><span class="sc-key">L</span></div>
         <div class="sc-row"><span class="sc-desc">Arrow</span><span class="sc-key">A</span></div>
         <div class="sc-row"><span class="sc-desc">Rectangle</span><span class="sc-key">R</span></div>
         <div class="sc-row"><span class="sc-desc">Ellipse</span><span class="sc-key">E</span></div>
         <div class="sc-row"><span class="sc-desc">Cloud</span><span class="sc-key">C</span></div>
-        <div class="sc-row"><span class="sc-desc">Measure</span><span class="sc-key">M</span></div>
+        <div class="sc-row"><span class="sc-desc">Measure line</span><span class="sc-key">M</span></div>
         <div class="sc-row"><span class="sc-desc">Path Distance</span><span class="sc-key">V</span></div>
         <div class="sc-row"><span class="sc-desc">Area / Polygon</span><span class="sc-key">G</span></div>
         <div class="sc-row"><span class="sc-desc">Polyline</span><span class="sc-key">W</span></div>
@@ -1323,6 +1339,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <div class="sc-row"><span class="sc-desc">Note / Comment</span><span class="sc-key">N</span></div>
         <div class="sc-row"><span class="sc-desc">Eraser</span><span class="sc-key">X</span></div>
         <div class="sc-row"><span class="sc-desc">Pan</span><span class="sc-key">H</span></div>
+        <div class="sc-row"><span class="sc-desc">Leader (toolbar only)</span><span class="sc-key">—</span></div>
+        <div class="sc-row"><span class="sc-desc">Stamp (toolbar only)</span><span class="sc-key">—</span></div>
+        <div class="sc-row"><span class="sc-desc">Highlight / Strike / Underline (toolbar only)</span><span class="sc-key">—</span></div>
       </div>
 
       <div class="sc-section-title">EDIT</div>
@@ -1332,6 +1351,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <div class="sc-row"><span class="sc-desc">Redo (alt)</span><span class="sc-key" id="sc-redo2">⌘⇧Z</span></div>
         <div class="sc-row"><span class="sc-desc">Save PNG</span><span class="sc-key" id="sc-save">⌘S</span></div>
         <div class="sc-row"><span class="sc-desc">Print</span><span class="sc-key" id="sc-print">⌘P</span></div>
+        <div class="sc-row"><span class="sc-desc">Show help</span><span class="sc-key">? or /</span></div>
       </div>
 
       <div class="sc-section-title">VIEW</div>
@@ -1339,13 +1359,13 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <div class="sc-row"><span class="sc-desc">Fit to screen</span><span class="sc-key" id="sc-fit">⌘0</span></div>
         <div class="sc-row"><span class="sc-desc">Zoom in</span><span class="sc-key">= or ⌘=</span></div>
         <div class="sc-row"><span class="sc-desc">Zoom out</span><span class="sc-key">- or ⌘-</span></div>
-        <div class="sc-row"><span class="sc-desc">Zoom (mouse)</span><span class="sc-key" id="sc-zin">Ctrl + Scroll wheel</span></div>
+        <div class="sc-row"><span class="sc-desc">Zoom (mouse)</span><span class="sc-key" id="sc-zin">Ctrl + Scroll</span></div>
         <div class="sc-row"><span class="sc-desc">Pan up / down</span><span class="sc-key">Scroll wheel</span></div>
         <div class="sc-row"><span class="sc-desc">Pan left / right</span><span class="sc-key">⇧ + Scroll</span></div>
         <div class="sc-row"><span class="sc-desc">Pan (hold key)</span><span class="sc-key">Space + drag</span></div>
         <div class="sc-row"><span class="sc-desc">Pan (middle btn)</span><span class="sc-key">Middle click + drag</span></div>
-        <div class="sc-row"><span class="sc-desc">Rotate left</span><span class="sc-key">[</span></div>
-        <div class="sc-row"><span class="sc-desc">Rotate right</span><span class="sc-key">]</span></div>
+        <div class="sc-row"><span class="sc-desc">Rotate canvas left</span><span class="sc-key">[</span></div>
+        <div class="sc-row"><span class="sc-desc">Rotate canvas right</span><span class="sc-key">]</span></div>
         <div class="sc-row"><span class="sc-desc">Toggle grid</span><span class="sc-key">` (backtick)</span></div>
         <div class="sc-row"><span class="sc-desc">Toggle snap</span><span class="sc-key">\ (backslash)</span></div>
       </div>
@@ -1355,17 +1375,93 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <div class="sc-row"><span class="sc-desc">Commit / finish shape</span><span class="sc-key">Enter</span></div>
         <div class="sc-row"><span class="sc-desc">Cancel / deselect</span><span class="sc-key">Esc</span></div>
         <div class="sc-row"><span class="sc-desc">Close polygon / polyline</span><span class="sc-key">Esc or dbl-click</span></div>
-        <div class="sc-row"><span class="sc-desc">New line in text box</span><span class="sc-key">Enter</span></div>
+        <div class="sc-row"><span class="sc-desc">New line in text</span><span class="sc-key">Enter</span></div>
         <div class="sc-row"><span class="sc-desc">Commit text</span><span class="sc-key">⇧ Enter</span></div>
-        <div class="sc-row"><span class="sc-desc">Show this panel</span><span class="sc-key">? or /</span></div>
+        <div class="sc-row"><span class="sc-desc">Right-click object</span><span class="sc-key">Context menu → Delete</span></div>
       </div>
 
     </div><!-- end .sc-desktop-only -->
 
-    <!-- ═══════════════════════════════════════════
-         TOUCH-ONLY SECTIONS (iPad / iPhone / Android)
-         Hidden on desktop
-    ════════════════════════════════════════════════ -->
+    <!-- ═══ SHARED SECTIONS ═══ -->
+
+    <div class="sc-section-title">OPENING &amp; SAVING</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Open image / PDF</span><span class="sc-key">＋ Open button or drag &amp; drop onto canvas</span></div>
+      <div class="sc-row"><span class="sc-desc">New blank canvas</span><span class="sc-key">Tap ＋ Open → select New Canvas</span></div>
+      <div class="sc-row"><span class="sc-desc">Export PNG</span><span class="sc-key">PNG button (subbar)</span></div>
+      <div class="sc-row"><span class="sc-desc">Export PDF</span><span class="sc-key">PDF button (subbar)</span></div>
+      <div class="sc-row"><span class="sc-desc">Print with title block</span><span class="sc-key">Print button (subbar)</span></div>
+      <div class="sc-row"><span class="sc-desc">Auto-save status dot</span><span class="sc-key">🟢 saved · 🟡 unsaved · 🔴 error</span></div>
+      <div class="sc-row"><span class="sc-desc">Multi-page navigation</span><span class="sc-key">← → buttons in subbar</span></div>
+      <div class="sc-row"><span class="sc-desc">Clear active layer</span><span class="sc-key">Clear button (toolbar)</span></div>
+      <div class="sc-row"><span class="sc-desc">Toggle dark / light mode</span><span class="sc-key">🌙 / ☀️ button (top-right nav)</span></div>
+    </div>
+
+    <div class="sc-section-title">TOOLS — how they work</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Leader line</span><span class="sc-key">Click anchor point, click arrowhead, type label</span></div>
+      <div class="sc-row"><span class="sc-desc">Stamp</span><span class="sc-key">Tap Stamp tool → choose symbol → click to place</span></div>
+      <div class="sc-row"><span class="sc-desc">Highlight / Strikeout / Underline</span><span class="sc-key">Drag across an area to mark it</span></div>
+      <div class="sc-row"><span class="sc-desc">Path Distance</span><span class="sc-key">Click waypoints along a route; dbl-click / Enter to finish</span></div>
+      <div class="sc-row"><span class="sc-desc">Area / Polygon</span><span class="sc-key">Click vertices; dbl-click or Esc to close &amp; calculate area</span></div>
+      <div class="sc-row"><span class="sc-desc">Pen arc length</span><span class="sc-key">Shown automatically after each freehand stroke</span></div>
+    </div>
+
+    <div class="sc-section-title">LAYERS</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Open layers panel</span><span class="sc-key">Layers button (subbar)</span></div>
+      <div class="sc-row"><span class="sc-desc">Add layer</span><span class="sc-key">＋ button in layers panel</span></div>
+      <div class="sc-row"><span class="sc-desc">Switch active layer</span><span class="sc-key">Tap layer name</span></div>
+      <div class="sc-row"><span class="sc-desc">Toggle visibility</span><span class="sc-key">👁 eye icon on layer</span></div>
+      <div class="sc-row"><span class="sc-desc">Delete layer</span><span class="sc-key">✕ icon (hover to reveal)</span></div>
+    </div>
+
+    <div class="sc-section-title">SCALE CALIBRATION</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Open calibration</span><span class="sc-key">Properties → Draw Reference Line</span></div>
+      <div class="sc-row"><span class="sc-desc">Fine-tune endpoints</span><span class="sc-key">Drag P1 / P2 handles</span></div>
+      <div class="sc-row"><span class="sc-desc">Move dialog</span><span class="sc-key">Drag ⠿ header to reposition</span></div>
+      <div class="sc-row"><span class="sc-desc">Redraw reference line</span><span class="sc-key">↺ Redraw Line (in dialog)</span></div>
+      <div class="sc-row"><span class="sc-desc">Recalibrate after set</span><span class="sc-key">↺ Recalibrate (Properties panel)</span></div>
+      <div class="sc-row"><span class="sc-desc">Reset to no scale</span><span class="sc-key">✕ Reset Scale (Properties panel or dialog)</span></div>
+      <div class="sc-row"><span class="sc-desc">Manual entry</span><span class="sc-key">Type 1 pixel = value in Properties</span></div>
+      <div class="sc-row"><span class="sc-desc">Endpoint overrun lines</span><span class="sc-key">Dashed extensions past each endpoint for alignment</span></div>
+    </div>
+
+    <div class="sc-section-title">IMAGES &amp; OVERLAYS</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Add image overlay</span><span class="sc-key">📷 Img button (subbar)</span></div>
+      <div class="sc-row"><span class="sc-desc">Place overlay on canvas</span><span class="sc-key">Click / tap where to place it</span></div>
+      <div class="sc-row"><span class="sc-desc">Move overlay</span><span class="sc-key">Drag inside bounding box</span></div>
+      <div class="sc-row"><span class="sc-desc">Resize overlay</span><span class="sc-key">Drag white square handles (8 total)</span></div>
+      <div class="sc-row"><span class="sc-desc">Rotate overlay</span><span class="sc-key">Drag pink circle handles (4 corners)</span></div>
+      <div class="sc-row"><span class="sc-desc">Flip horizontal / vertical</span><span class="sc-key">↔ H / ↕ V buttons on overlay, or toolbar bar</span></div>
+      <div class="sc-row"><span class="sc-desc">Adjust opacity</span><span class="sc-key">Opacity slider in floating image bar</span></div>
+      <div class="sc-row"><span class="sc-desc">Bring to front / send to back</span><span class="sc-key">↑ Front / ↓ Back buttons in image bar</span></div>
+      <div class="sc-row"><span class="sc-desc">Delete overlay</span><span class="sc-key">🗑 button in image bar</span></div>
+      <div class="sc-row"><span class="sc-desc">Deselect / commit</span><span class="sc-key">✓ Done button, or tap / click outside</span></div>
+      <div class="sc-row"><span class="sc-desc">Live W × H readout</span><span class="sc-key">Shown while dragging resize handles (scale-aware)</span></div>
+    </div>
+
+    <div class="sc-section-title">SHAPES &amp; ANNOTATIONS</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Live W × H on resize</span><span class="sc-key">Rect, Ellipse, Cloud — visible while dragging handles</span></div>
+      <div class="sc-row"><span class="sc-desc">Edit note text</span><span class="sc-key">Double-tap / double-click note box</span></div>
+      <div class="sc-row"><span class="sc-desc">Move / resize note</span><span class="sc-key">Select note box, drag body or handles</span></div>
+      <div class="sc-row"><span class="sc-desc">Delete any object</span><span class="sc-key">Right-click → Delete (desktop) · Long-press (touch)</span></div>
+      <div class="sc-row"><span class="sc-desc">⚡ AOG Labels</span><span class="sc-key">Quick-place generator, tank, ATS &amp; appliance labels</span></div>
+    </div>
+
+    <div class="sc-section-title">PROPERTIES PANEL</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-desc">Open panel</span><span class="sc-key">⚙ Props button (subbar)</span></div>
+      <div class="sc-row"><span class="sc-desc">Scale calibration</span><span class="sc-key">Draw Reference Line / manual 1px= entry</span></div>
+      <div class="sc-row"><span class="sc-desc">Grid size &amp; snapping</span><span class="sc-key">Cell size input · Show / Snap toggles</span></div>
+      <div class="sc-row"><span class="sc-desc">Title block</span><span class="sc-key">Project name, Drawn by, Date, Scale text for print/PDF</span></div>
+      <div class="sc-row"><span class="sc-desc">Customer watermark</span><span class="sc-key">Name &amp; address burned onto exported PNG</span></div>
+    </div>
+
+    <!-- ═══ TOUCH-ONLY ═══ -->
     <div class="sc-touch-only">
 
       <div class="sc-section-title">GESTURES</div>
@@ -1378,26 +1474,29 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <div class="sc-row"><span class="sc-desc">Finish / commit shape</span><span class="sc-key">Tap ✓ button</span></div>
         <div class="sc-row"><span class="sc-desc">Cancel / deselect</span><span class="sc-key">Tap Esc button</span></div>
         <div class="sc-row"><span class="sc-desc">Close polygon</span><span class="sc-key">Double-tap last point</span></div>
-        <div class="sc-row"><span class="sc-desc">Delete shape</span><span class="sc-key">Long-press → Delete</span></div>
-        <div class="sc-row"><span class="sc-desc">Fit to screen</span><span class="sc-key">Zoom button (subbar)</span></div>
+        <div class="sc-row"><span class="sc-desc">Delete shape / object</span><span class="sc-key">Long-press → Delete</span></div>
+        <div class="sc-row"><span class="sc-desc">Fit to screen</span><span class="sc-key">Fit button (subbar)</span></div>
       </div>
 
-      <div class="sc-section-title">TOOLS</div>
+      <div class="sc-section-title">TOOLS &amp; CONTROLS</div>
       <div class="sc-grid">
         <div class="sc-row"><span class="sc-desc">Select tool</span><span class="sc-key">Tap toolbar icon</span></div>
-        <div class="sc-row"><span class="sc-desc">Scroll toolbar</span><span class="sc-key">Swipe toolbar left / right</span></div>
+        <div class="sc-row"><span class="sc-desc">Scroll toolbar</span><span class="sc-key">Swipe left / right</span></div>
         <div class="sc-row"><span class="sc-desc">Color picker</span><span class="sc-key">Tap colour swatch</span></div>
         <div class="sc-row"><span class="sc-desc">Line thickness</span><span class="sc-key">Drag size slider</span></div>
-        <div class="sc-row"><span class="sc-desc">Layers panel</span><span class="sc-key">Tap Layers button</span></div>
-        <div class="sc-row"><span class="sc-desc">Properties panel</span><span class="sc-key">Tap Props button</span></div>
+        <div class="sc-row"><span class="sc-desc">Layers panel</span><span class="sc-key">Layers button (subbar)</span></div>
+        <div class="sc-row"><span class="sc-desc">Properties panel</span><span class="sc-key">Props button (subbar)</span></div>
+        <div class="sc-row"><span class="sc-desc">Leader line</span><span class="sc-key">Tap anchor, tap arrowhead, type label</span></div>
+        <div class="sc-row"><span class="sc-desc">Stamp</span><span class="sc-key">Tap Stamp → choose symbol → tap to place</span></div>
       </div>
 
       <div class="sc-section-title">TIPS</div>
       <div class="sc-grid">
         <div class="sc-row"><span class="sc-desc">Best precision</span><span class="sc-key">Use Apple Pencil</span></div>
-        <div class="sc-row"><span class="sc-desc">Add photo / plan</span><span class="sc-key">Tap Open button</span></div>
-        <div class="sc-row"><span class="sc-desc">Export annotated image</span><span class="sc-key">Save button (subbar)</span></div>
+        <div class="sc-row"><span class="sc-desc">Open image / PDF</span><span class="sc-key">＋ Open or drag &amp; drop</span></div>
+        <div class="sc-row"><span class="sc-desc">Export annotated image</span><span class="sc-key">PNG button (subbar)</span></div>
         <div class="sc-row"><span class="sc-desc">Undo many steps</span><span class="sc-key">3-finger tap repeatedly</span></div>
+        <div class="sc-row"><span class="sc-desc">Note text drifting right?</span><span class="sc-key">Keyboard will reposition the text box automatically</span></div>
       </div>
 
     </div><!-- end .sc-touch-only -->
@@ -1860,7 +1959,7 @@ function repositionCommentEditor(c){
   var visualW = Math.max(cw2*zoom, 40);
   var layoutW  = Math.round(visualW);
 
-  textOv.style.left     = Math.round(panX + cx2*zoom + vvL) + 'px';
+  textOv.style.left     = Math.round(Math.max(0, panX + cx2*zoom + vvL)) + 'px';
   textOv.style.top      = Math.round(panY + cy2*zoom + vvT) + 'px';
   textOv.style.width    = layoutW + 'px';
   textOv.style.maxWidth = layoutW + 'px';
@@ -3193,7 +3292,9 @@ function onUp(e){
     }
     return;
   }
-  // End shape transform drag
+  // If the scale dialog is open, don't let a stray onUp (e.g. from mouseleave
+  // when the cursor moves onto the floating dialog) wipe the reference line.
+  if(document.getElementById('scale-dlg').style.display==='block') return;
   if(selHandle!==-1){
     // For comment resize/move: push undo on release so the resize is undoable
     if(selectedShape&&selectedShape.type==='comment'&&selectedShape._commentObj){
@@ -3419,10 +3520,19 @@ function drawCloud(ctx,x1,y1,x2,y2,fillInfo){
 function drawMeasureLine(ctx,x1,y1,x2,y2,px){
   setupCtx(ctx);
   ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-  // tick marks
+  // tick marks + overrun extensions
   ctx.setLineDash([]);
   var ang=Math.atan2(y2-y1,x2-x1);
-  var perp=ang+Math.PI/2, tk=6;
+  var perp=ang+Math.PI/2, tk=30;
+  // Dashed extension lines past each endpoint along the main axis
+  var ext=22; // canvas-px overrun (helps align to plan features on iPad)
+  ctx.save();
+  ctx.setLineDash([3,3]); ctx.globalAlpha=0.55;
+  ctx.beginPath();
+  ctx.moveTo(x1,y1); ctx.lineTo(x1-Math.cos(ang)*ext,y1-Math.sin(ang)*ext);
+  ctx.moveTo(x2,y2); ctx.lineTo(x2+Math.cos(ang)*ext,y2+Math.sin(ang)*ext);
+  ctx.stroke();
+  ctx.restore();
   [x1,x2].forEach(function(cx,i){
     var cy=i===0?y1:y2;
     ctx.beginPath();
@@ -3466,9 +3576,18 @@ function drawMeasureObjOnCtx(ctx, m, highlight){
   ctx.beginPath(); ctx.moveTo(m.x1,m.y1); ctx.lineTo(m.x2,m.y2); ctx.stroke();
   // Plain line: no ticks or label
   if(m.showLabel===false){ ctx.restore(); return; }
-  // tick marks
+  // tick marks + overrun extensions
   ctx.setLineDash([]);
-  var perp=ang+Math.PI/2, tk=Math.max(5,m.strokeW*2.5);
+  var perp=ang+Math.PI/2, tk=Math.max(25,m.strokeW*2.5);
+  // Dashed extension lines past each endpoint along the main axis
+  var ext=22; // canvas-px overrun
+  ctx.save();
+  ctx.setLineDash([3,3]); ctx.globalAlpha=(m.opacity||1)*0.55;
+  ctx.beginPath();
+  ctx.moveTo(m.x1,m.y1); ctx.lineTo(m.x1-Math.cos(ang)*ext,m.y1-Math.sin(ang)*ext);
+  ctx.moveTo(m.x2,m.y2); ctx.lineTo(m.x2+Math.cos(ang)*ext,m.y2+Math.sin(ang)*ext);
+  ctx.stroke();
+  ctx.restore();
   [[m.x1,m.y1],[m.x2,m.y2]].forEach(function(pt){
     ctx.beginPath();
     ctx.moveTo(pt[0]+Math.cos(perp)*tk, pt[1]+Math.sin(perp)*tk);
@@ -3526,7 +3645,9 @@ function renderShapeAndMeasure(){
   });
   // Measure objects
   measureObjs.forEach(function(m){
-    if(m._editing) return;
+    // Always draw the active scale reference line so it stays visible
+    // even while the dialog is open (selCv may get cleared by other events)
+    if(m._editing && m !== _scalingRefMeasure) return;
     var layer=layers[m.layerIdx];
     if(layer&&!layer.visible) return;
     drawMeasureObjOnCtx(shCtx, m, false);
@@ -3984,7 +4105,7 @@ drawCv.addEventListener('mousemove',function(e){
     var mpx=Math.hypot(mpos.x-startX,mpos.y-startY);
     var ang=Math.atan2(mpos.y-startY,mpos.x-startX);
     var perp=ang+Math.PI/2;
-    var tk=Math.max(5,strokeW*2.5);
+    var tk=Math.max(25,strokeW*2.5);
 
     // Restore dCtx to base state (no stale preview lines)
     dCtx.putImageData(compositedSnap,0,0);
@@ -4032,6 +4153,15 @@ drawCv.addEventListener('mousemove',function(e){
     else if(lineStyle==='dotted') shCtx.setLineDash([strokeW,strokeW*2.5]);
     else shCtx.setLineDash([]);
     shCtx.beginPath(); shCtx.moveTo(startX,startY); shCtx.lineTo(mpos.x,mpos.y); shCtx.stroke();
+    // Dashed overrun extensions past each endpoint
+    var ext=22;
+    shCtx.save();
+    shCtx.setLineDash([3,3]); shCtx.globalAlpha=opacity*0.55;
+    shCtx.beginPath();
+    shCtx.moveTo(startX,startY); shCtx.lineTo(startX-Math.cos(ang)*ext,startY-Math.sin(ang)*ext);
+    shCtx.moveTo(mpos.x,mpos.y); shCtx.lineTo(mpos.x+Math.cos(ang)*ext,mpos.y+Math.sin(ang)*ext);
+    shCtx.stroke();
+    shCtx.restore();
     // Ticks
     shCtx.setLineDash([]);
     [[startX,startY],[mpos.x,mpos.y]].forEach(function(pt){
@@ -4740,8 +4870,14 @@ function repositionTextOverlay(){
 
 // Listen for keyboard appearance / viewport resize on iOS
 if(window.visualViewport){
-  window.visualViewport.addEventListener('resize',  repositionTextOverlay);
-  window.visualViewport.addEventListener('scroll',  repositionTextOverlay);
+  window.visualViewport.addEventListener('resize', function(){
+    repositionTextOverlay();
+    if(_editingComment) repositionCommentEditor(_editingComment);
+  });
+  window.visualViewport.addEventListener('scroll', function(){
+    repositionTextOverlay();
+    if(_editingComment) repositionCommentEditor(_editingComment);
+  });
 }
 
 // Stop mousedown on the textarea from propagating to canvas handlers
@@ -5077,6 +5213,12 @@ function renderSelection(){
     selCtx.restore();
   }
   } // end if(s.type!=='comment') for rotation handles
+
+  // Dimension badges — only during an active resize drag (handles 0-7), for geometric shapes
+  if(selHandle >= 0 && selHandle <= 7 && selDragStart &&
+     (s.type==='rect' || s.type==='ellipse' || s.type==='cloud')){
+    _drawDimBadges(selCtx, s.cx, s.cy, s.w, s.h, s.angle);
+  }
 }
 
 function commitSelection(){
@@ -6046,7 +6188,28 @@ attachSliderTouch(opSl,function(v){ opacity=Math.round(v)/100; opVal.textContent
 // ── UNDO/REDO/CLEAR ──
 btnUndo.addEventListener('click',undoFn);
 btnRedo.addEventListener('click',redoFn);
-btnClear.addEventListener('click',clearFn);
+btnClear.addEventListener('click',function(){
+  if(!baseLoaded) return;
+  var layerName = (layers[activeLayerIdx] && layers[activeLayerIdx].name) || ('Layer ' + (activeLayerIdx + 1));
+  document.getElementById('clear-dlg-msg').textContent =
+    'This will permanently erase all drawings on "' + layerName + '". This cannot be undone without using Undo.';
+  document.getElementById('clear-ov').style.display  = 'block';
+  document.getElementById('clear-dlg').style.display = 'block';
+});
+document.getElementById('clear-cancel').addEventListener('click', function(){
+  document.getElementById('clear-ov').style.display  = 'none';
+  document.getElementById('clear-dlg').style.display = 'none';
+});
+document.getElementById('clear-confirm').addEventListener('click', function(){
+  document.getElementById('clear-ov').style.display  = 'none';
+  document.getElementById('clear-dlg').style.display = 'none';
+  clearFn();
+});
+// Close on overlay click
+document.getElementById('clear-ov').addEventListener('click', function(){
+  document.getElementById('clear-ov').style.display  = 'none';
+  document.getElementById('clear-dlg').style.display = 'none';
+});
 
 // ── PANELS ──
 btnLayers.addEventListener('click',function(){ layersPanel.classList.toggle('collapsed'); btnLayers.classList.toggle('active',!layersPanel.classList.contains('collapsed')); });
@@ -6068,15 +6231,66 @@ function showScaleDlg(){
     ? Math.hypot(_scalingRefMeasure.x2-_scalingRefMeasure.x1, _scalingRefMeasure.y2-_scalingRefMeasure.y1)
     : refLinePixels;
   document.getElementById('ref-px-info').textContent='Line: '+Math.round(px)+' px  ·  drag endpoints to fine-tune';
+  // Show the Redraw button whenever a reference line (or prior scale) exists
+  var hasLine=px>0;
+  document.getElementById('scale-redraw').style.display=hasLine?'':'none';
   document.getElementById('scale-dlg').style.display='block';
   document.getElementById('scale-ov').style.display='block';
 }
+
+// ── Shared scale reset — called from both the dialog and the properties panel ──
+function resetScale(){
+  ppu=1; scaleUnit='m'; scaleSet=false;
+  ppuIn.value='1'; unitIn.value='m';
+  scaleStatus.textContent='Scale not set';
+  document.getElementById('ref-len').value='';
+  document.getElementById('ref-unit').value='m';
+  document.getElementById('ref-px-info').textContent='Draw the line first.';
+  if(_scalingRefMeasure){
+    var idx=measureObjs.indexOf(_scalingRefMeasure);
+    if(idx>-1) measureObjs.splice(idx,1);
+    _scalingRefMeasure=null;
+    selectedMeasure=null;
+    if(selCv.width>1){ selCv.width=1; selCv.height=1; }
+    renderShapeAndMeasure(); composite();
+  }
+  refLinePixels=0;
+  scalingMode=false;
+  document.getElementById('btn-recalibrate').style.display='none';
+  document.getElementById('btn-reset-scale').style.display='none';
+  document.getElementById('scale-dlg').style.display='none';
+  document.getElementById('scale-ov').style.display='none';
+  toast('Scale reset to default','ok',2000);
+}
+
+document.getElementById('scale-reset').addEventListener('click', resetScale);
+document.getElementById('btn-reset-scale').addEventListener('click', resetScale);
 
 document.getElementById('scale-cancel').addEventListener('click',function(){
   document.getElementById('scale-dlg').style.display='none';
   document.getElementById('scale-ov').style.display='none';
   _scalingRefMeasure=null;
   commitMeasureSelection();
+});
+
+// Redraw: dismiss dialog, keep scaling mode active so user draws a fresh line
+document.getElementById('scale-redraw').addEventListener('click',function(){
+  document.getElementById('scale-dlg').style.display='none';
+  document.getElementById('scale-ov').style.display='none';
+  // Remove the old reference measure so the user can draw a new one
+  if(_scalingRefMeasure){
+    var idx=measureObjs.indexOf(_scalingRefMeasure);
+    if(idx>-1) measureObjs.splice(idx,1);
+    _scalingRefMeasure=null;
+    renderShapeAndMeasure();
+  }
+  scalingMode=true;
+  tool='measure';
+  document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
+  var mb=document.querySelector('.tb-btn[data-tool="measure"]');
+  if(mb) mb.classList.add('active');
+  drawCv.style.cursor='crosshair';
+  toast('Draw a new reference line, then enter its real length.','ok',4000);
 });
 
 document.getElementById('scale-ok').addEventListener('click',function(){
@@ -6093,6 +6307,10 @@ document.getElementById('scale-ok').addEventListener('click',function(){
   ppu=len/refLinePixels; scaleUnit=unit; scaleSet=true;
   ppuIn.value=(1/ppu).toFixed(4); unitIn.value=unit;
   scaleStatus.textContent='1 px = '+(1/ppu).toFixed(4)+' '+unit;
+  // Show the Recalibrate button now that scale is set
+  var rcBtn=document.getElementById('btn-recalibrate');
+  if(rcBtn) rcBtn.style.display='';
+  document.getElementById('btn-reset-scale').style.display='';
   document.getElementById('scale-dlg').style.display='none';
   document.getElementById('scale-ov').style.display='none';
   _scalingRefMeasure=null;
@@ -6103,9 +6321,83 @@ document.getElementById('scale-ok').addEventListener('click',function(){
 // manual PPU input
 ppuIn.addEventListener('change',function(){
   var v=parseFloat(ppuIn.value);
-  if(v>0){ ppu=1/v; scaleUnit=unitIn.value.trim()||'m'; scaleSet=true; scaleStatus.textContent='1 px = '+v+' '+scaleUnit; }
+  if(v>0){
+    ppu=1/v; scaleUnit=unitIn.value.trim()||'m'; scaleSet=true;
+    scaleStatus.textContent='1 px = '+v+' '+scaleUnit;
+    document.getElementById('btn-recalibrate').style.display='';
+    document.getElementById('btn-reset-scale').style.display='';
+  }
 });
 unitIn.addEventListener('change',function(){ scaleUnit=unitIn.value.trim()||'m'; });
+
+// ── Make scale dialog draggable by its header ─────────────────────────────
+(function(){
+  var dlg = document.getElementById('scale-dlg');
+  var hdr = dlg ? dlg.querySelector('h3') : null;
+  if(!dlg || !hdr) return;
+  var dragging = false, ox = 0, oy = 0, startL = 0, startT = 0;
+
+  function getXY(e){ return e.touches ? {x:e.touches[0].clientX, y:e.touches[0].clientY} : {x:e.clientX, y:e.clientY}; }
+
+  function onStart(e){
+    // Only drag from the header, not its child inputs/buttons
+    if(e.target !== hdr && !hdr.contains(e.target)) return;
+    e.preventDefault();
+    // Resolve current position — may still be centred via transform, so pin it first
+    var r = dlg.getBoundingClientRect();
+    dlg.style.transform = 'none';
+    dlg.style.left = r.left + 'px';
+    dlg.style.top  = r.top  + 'px';
+    var p = getXY(e);
+    ox = p.x; oy = p.y;
+    startL = r.left; startT = r.top;
+    dragging = true;
+    hdr.style.cursor = 'grabbing';
+  }
+  function onMove(e){
+    if(!dragging) return;
+    var p = getXY(e);
+    var nx = startL + (p.x - ox);
+    var ny = startT + (p.y - oy);
+    // Keep on screen
+    nx = Math.max(0, Math.min(window.innerWidth  - dlg.offsetWidth,  nx));
+    ny = Math.max(0, Math.min(window.innerHeight - dlg.offsetHeight, ny));
+    dlg.style.left = nx + 'px';
+    dlg.style.top  = ny + 'px';
+  }
+  function onEnd(){ dragging = false; hdr.style.cursor = 'grab'; }
+
+  hdr.addEventListener('mousedown',  onStart);
+  hdr.addEventListener('touchstart', onStart, {passive:false});
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, {passive:false});
+  document.addEventListener('mouseup',   onEnd);
+  document.addEventListener('touchend',  onEnd);
+
+  // Re-centre when shown (so first open is always centred)
+  var _origShow = showScaleDlg;
+  showScaleDlg = function(){
+    dlg.style.transform = 'translate(-50%,-50%)';
+    dlg.style.left = '50%';
+    dlg.style.top  = '50%';
+    _origShow();
+  };
+})();
+(function(){
+  var rcBtn=document.getElementById('btn-recalibrate');
+  if(!rcBtn) return;
+  rcBtn.addEventListener('click',function(){
+    // Trigger the same flow as btnSetScale
+    scalingMode=true;
+    tool='measure';
+    document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
+    var mb=document.querySelector('.tb-btn[data-tool="measure"]');
+    if(mb) mb.classList.add('active');
+    drawCv.style.cursor='crosshair';
+    scaleStatus.textContent='Draw a new reference line...';
+    toast('Draw a line of known length to recalibrate the scale.','ok',4000);
+  });
+})();
 
 // ── EXPORT ──
 // compositeExport(maxPx) — maxPx=0 = full resolution; caller must releaseCanvas(result)
@@ -6667,7 +6959,9 @@ function doRestore(rec){
             renderShapeAndMeasure();
             if(rec.scaleSet){ scaleSet=true; ppu=rec.ppu; scaleUnit=rec.scaleUnit;
               ppuIn.value=(1/ppu).toFixed(4); unitIn.value=scaleUnit;
-              scaleStatus.textContent='1 px = '+(1/ppu).toFixed(4)+' '+scaleUnit; }
+              scaleStatus.textContent='1 px = '+(1/ppu).toFixed(4)+' '+scaleUnit;
+              var _rcb=document.getElementById('btn-recalibrate'); if(_rcb) _rcb.style.display='';
+              document.getElementById('btn-reset-scale').style.display=''; }
             // Restore grid
             if(rec.gridEnabled){ gridEnabled=true; gridSize=rec.gridSize||50;
               gridSz.value=gridSize; togGrid.classList.add('on'); btnGrid.classList.add('active'); }
@@ -6883,6 +7177,60 @@ function renderImgSelection(){
   }
   // Flip buttons — rendered as small pill buttons in canvas space above the image
   _drawImgFlipButtons(selCtx, ov);
+  // Dimension badges — only during an active resize drag (handles 0-7)
+  if(selImgDrag && selImgDrag.hi >= 0 && selImgDrag.hi <= 7){
+    _drawDimBadges(selCtx, ov.cx, ov.cy, ov.w, ov.h, ov.angle);
+  }
+}
+
+// ── Shared live dimension badges (shown during resize for images AND shapes) ──
+// cx/cy/w/h/angle are all in canvas-space px.
+function _drawDimBadges(ctx, cx, cy, w, h, angle){
+  var a = angle || 0;
+  var cosA = Math.cos(a), sinA = Math.sin(a);
+
+  function fmtDim(px){
+    if(scaleSet && ppu > 0){
+      var real = px * ppu;
+      var dec = real >= 100 ? 0 : real >= 10 ? 1 : 2;
+      return real.toFixed(dec) + '\u202f' + scaleUnit;
+    }
+    return Math.round(px) + ' px';
+  }
+
+  var fontSize = Math.max(9, Math.min(16, 12 / zoom));
+  var pad      = 5 / zoom;
+  var radius   = 3 / zoom;
+  var lw       = 0.9 / zoom;
+  var badgeH   = fontSize + pad * 2;
+  // Gap from image/shape EDGE to nearest badge edge = 3/zoom
+  var edgeGap  = 3 / zoom;
+
+  function drawBadge(bx, by, text, rot){
+    ctx.save();
+    ctx.translate(bx, by); ctx.rotate(rot);
+    ctx.font = 'bold ' + fontSize + 'px "Share Tech Mono",monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var tw  = ctx.measureText(text).width;
+    var bw  = tw + pad * 2.4;
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(-bw/2, -badgeH/2, bw, badgeH, radius);
+    else ctx.rect(-bw/2, -badgeH/2, bw, badgeH);
+    ctx.fillStyle = 'rgba(8,8,18,0.86)'; ctx.fill();
+    ctx.strokeStyle = '#00D4FF'; ctx.lineWidth = lw; ctx.stroke();
+    ctx.fillStyle = '#E2F8FF';
+    ctx.shadowColor = '#00D4FF'; ctx.shadowBlur = 3 / zoom;
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  }
+
+  // Width badge: just below the bottom edge
+  var botOff  = h / 2 + edgeGap + badgeH / 2;
+  drawBadge(cx - sinA * botOff, cy + cosA * botOff, fmtDim(w), a);
+
+  // Height badge: just right of the right edge, rotated 90°
+  var rightOff = w / 2 + edgeGap + badgeH / 2;
+  drawBadge(cx + cosA * rightOff, cy + sinA * rightOff, fmtDim(h), a + Math.PI / 2);
 }
 
 function _drawImgFlipButtons(ctx, ov){
