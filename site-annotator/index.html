@@ -6015,40 +6015,64 @@ function closeStampPicker(){
     attachSliderTouch(bdWSl,function(v){ applyBdW(v); });
   }
   if(fsSel){
-    // Save textarea selection before the <select> steals focus
+    // Save the comment reference BEFORE the picker opens (mousedown = desktop, touchstart = iPad)
     var _savedSelStart = 0, _savedSelEnd = 0;
-    fsSel.addEventListener('mousedown', function(){
+    var _pendingCmtRef = null; // holds comment ref across the picker interaction
+    function saveCmtState(){
+      // Snapshot whichever comment is active right now
+      _pendingCmtRef = _editingComment || (selectedShape && selectedShape._commentObj) || null;
       if(_editingComment && textOv.style.display !== 'none'){
-        _savedSelStart = textOv.selectionStart;
-        _savedSelEnd   = textOv.selectionEnd;
+        try{ _savedSelStart = textOv.selectionStart; _savedSelEnd = textOv.selectionEnd; }catch(e){}
       }
-    });
+    }
+    fsSel.addEventListener('mousedown',  saveCmtState);
+    fsSel.addEventListener('touchstart', saveCmtState, {passive:true});
+
     fsSel.addEventListener('change',function(e){
-      _cFontSize=parseInt(e.target.value);
-      if(_editingComment){
-        _editingComment.fontSize=_cFontSize;
-        var renderPx = _cFontSize;
-        var visualW  = Math.max((_editingComment.w - 16)*zoom, 40);
-        var layoutW  = Math.round(visualW);
-        // Apply font size — do it twice (immediate + after focus) to beat any
-        // browser re-render that might reset the textarea after focus() is called.
-        textOv.style.fontSize     = renderPx + 'px';
-        textOv.style.transform    = 'none';
-        textOv.style.width        = layoutW + 'px';
-        textOv.style.maxWidth     = layoutW + 'px';
-        textOv.style.minWidth     = layoutW + 'px';
-        liveRender();
-        // Restore focus + selection, then re-apply font size after focus settles
-        textOv.focus();
-        textOv.setSelectionRange(_savedSelStart, _savedSelEnd);
-        var _sz = renderPx;
-        setTimeout(function(){
-          textOv.style.fontSize = _sz + 'px';
-          if(_editingComment) _cmtAutoGrow(_editingComment);
-        }, 0);
-      } else {
-        refocus();
+      _cFontSize = parseInt(e.target.value);
+      // Use the snapshotted reference — _editingComment may be null on iPad
+      // because the native picker interaction can blur/reset it
+      var target = _editingComment || _pendingCmtRef ||
+                   (selectedShape && selectedShape._commentObj) || null;
+      if(!target){ refocus(); return; }
+
+      // Apply to the comment object itself
+      target.fontSize = _cFontSize;
+      // Keep selectedShape in sync if it wraps this comment
+      if(selectedShape && selectedShape._commentObj === target) {
+        // no separate fontSize on selectedShape — comment obj is canonical
       }
+
+      // Update the live textarea if it's visible
+      if(textOv.style.display !== 'none'){
+        var renderPx = _cFontSize;
+        var visualW  = Math.max((target.w - 16) * zoom, 40);
+        textOv.style.fontSize = renderPx + 'px';
+        textOv.style.transform = 'none';
+        textOv.style.width    = Math.round(visualW) + 'px';
+        textOv.style.maxWidth = Math.round(visualW) + 'px';
+        textOv.style.minWidth = Math.round(visualW) + 'px';
+      }
+
+      // Always re-render the canvas so the note box shows the new size
+      renderShapeAndMeasure(); composite();
+      if(_editingComment) _cmtAutoGrow(_editingComment);
+
+      // Desktop: restore focus + cursor position (safe; skipped silently on iOS)
+      if(!('ontouchstart' in window)){
+        try{
+          textOv.focus();
+          textOv.setSelectionRange(_savedSelStart, _savedSelEnd);
+        }catch(ex){}
+      }
+
+      // Re-apply after a tick to beat any browser re-render
+      var _sz = _cFontSize;
+      var _ref = target;
+      setTimeout(function(){
+        if(textOv.style.display !== 'none') textOv.style.fontSize = _sz + 'px';
+        if(_editingComment === _ref) _cmtAutoGrow(_ref);
+      }, 0);
     });
   }
 })();
@@ -6074,34 +6098,68 @@ fillBtn.addEventListener('click',function(){
 
 // ── COLOR / SLIDERS ──
 // Color swatch click handled by overlaid input (iOS-compatible)
-// Font size
-fontSizeSel.addEventListener('mousedown', function(){
+// ── FONT SIZE (text tool) ─────────────────────────────────────
+var _fsSavedSS = 0, _fsSavedSE = 0, _fsEditRef = null;
+function _fsSaveState(){
+  _fsEditRef = editingObj; // snapshot before picker steals focus
   if(textOv.style.display !== 'none'){
-    fontSizeSel._savedSelStart = textOv.selectionStart;
-    fontSizeSel._savedSelEnd   = textOv.selectionEnd;
+    try{ _fsSavedSS = textOv.selectionStart; _fsSavedSE = textOv.selectionEnd; }catch(ex){}
   }
-});
+}
+fontSizeSel.addEventListener('mousedown',  _fsSaveState);
+fontSizeSel.addEventListener('touchstart', _fsSaveState, {passive:true});
+
 fontSizeSel.addEventListener('change',function(e){
-  FONT_SIZE=parseInt(e.target.value);
-  // If text overlay is open, resize it and restore selection
+  FONT_SIZE = parseInt(e.target.value);
+  // Use the snapshotted editingObj — may be null if picker interaction cleared it
+  var ref = editingObj || _fsEditRef;
+  if(ref){ ref.fontSize = FONT_SIZE; }
+
   if(textOv.style.display !== 'none'){
-    textOv.style.fontSize = FONT_SIZE + 'px';
-    textOv.style.height = 'auto';
-    textOv.style.height = Math.max(40, textOv.scrollHeight) + 'px';
-    textOv.focus();
-    var ss = fontSizeSel._savedSelStart || 0;
-    var se = fontSizeSel._savedSelEnd   || 0;
-    textOv.setSelectionRange(ss, se);
+    // Apply font size directly without focus() — focus is blocked on iOS
+    var screenSz = FONT_SIZE * zoom;
+    var renderSz = Math.max(16, screenSz);
+    var scaleV   = screenSz / renderSz;
+    textOv.style.fontSize  = renderSz + 'px';
+    textOv.style.transform = scaleV < 0.99 ? 'scale('+scaleV.toFixed(3)+')' : 'none';
+    textOv.style.height    = 'auto';
+    textOv.style.height    = Math.max(40, textOv.scrollHeight) + 'px';
+
+    // Desktop only: restore focus + cursor (silently fails on iOS, that's fine)
+    if(!('ontouchstart' in window)){
+      try{
+        textOv.focus();
+        textOv.setSelectionRange(_fsSavedSS, _fsSavedSE);
+      }catch(ex){}
+    }
   }
+  if(ref){ renderTextObjs(); }
 });
 
 // ── FONT FAMILY ───────────────────────────────────────────────
 var fontFamilySel=document.getElementById('font-family-sel');
 if(fontFamilySel){
+  var _ffEditRef = null;
+  function _ffSaveState(){ _ffEditRef = editingObj; }
+  fontFamilySel.addEventListener('mousedown',  _ffSaveState);
+  fontFamilySel.addEventListener('touchstart', _ffSaveState, {passive:true});
+
   fontFamilySel.addEventListener('change',function(e){
-    textFontFamily=e.target.value;
-    textOv.style.fontFamily=textFontFamily;
-    if(editingObj){ editingObj.fontFamily=textFontFamily; renderTextObjs(); }
+    textFontFamily = e.target.value;
+    var ref = editingObj || _ffEditRef;
+
+    // Update the live textarea immediately
+    if(textOv.style.display !== 'none'){
+      textOv.style.fontFamily = textFontFamily;
+      // Re-run repositionTextOverlay to apply all text styles consistently
+      if(typeof repositionTextOverlay === 'function') repositionTextOverlay();
+    }
+
+    // Update the text object and re-render canvas
+    if(ref){
+      ref.fontFamily = textFontFamily;
+      renderTextObjs();
+    }
   });
 }
 
