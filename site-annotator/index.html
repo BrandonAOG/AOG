@@ -22,7 +22,7 @@ html{position:fixed;width:100%;height:100%;overflow:hidden;overscroll-behavior:n
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;height:100%;width:100%;display:flex;flex-direction:column;overflow:hidden;overscroll-behavior:none;position:fixed;touch-action:none;-webkit-overflow-scrolling:none}
 /* TOOLBAR */
-#tb{height:68px;background:var(--surf);border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:2px;padding:0 8px;flex-shrink:0;overflow-x:auto;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+#tb{height:68px;background:var(--surf);border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:2px;padding:0 8px;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scroll-behavior:auto;will-change:scroll-position}
 #tb::-webkit-scrollbar{display:none}
 .sep{width:1px;height:36px;background:var(--b2);margin:0 3px;flex-shrink:0}
 .tb-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:42px;height:56px;border-radius:var(--rad);border:1.5px solid transparent;background:transparent;color:var(--txt2);cursor:pointer;flex-shrink:0;transition:all .15s;padding:0 4px;gap:1px}
@@ -2075,6 +2075,31 @@ document.addEventListener('touchmove', function(e){
   }
   if(e.cancelable) e.preventDefault();
 },{passive:false});
+
+// ── Fast scroll for toolbar + panels on iPad ──────────────────────────────
+// The document touchmove listener above is passive:false (needed to block canvas scroll),
+// but that forces the browser to wait for JS before scrolling ANYTHING — killing momentum.
+// Fix: intercept touchmove on scrollable zones with a passive:true listener that
+// stopPropagation()s, so the event never reaches the slow document handler.
+(function(){
+  var zones=['#tb','#sb','.panel-body','#shortcuts-box','#print-scroll'];
+  function addFastScroll(selector){
+    var els=document.querySelectorAll(selector);
+    els.forEach(function(el){
+      el.addEventListener('touchmove',function(e){ e.stopPropagation(); },{passive:true,capture:false});
+    });
+  }
+  zones.forEach(addFastScroll);
+  // Also catch any panel-body added later (layers panel opens dynamically)
+  var _origAddLayer=addLayerBtn?addLayerBtn.addEventListener.bind(addLayerBtn):null;
+  // Re-apply after panels open so dynamically-added scroll zones are covered
+  document.getElementById('btn-layers') && document.getElementById('btn-layers').addEventListener('click',function(){
+    setTimeout(function(){ addFastScroll('.panel-body'); },50);
+  });
+  document.getElementById('btn-props') && document.getElementById('btn-props').addEventListener('click',function(){
+    setTimeout(function(){ addFastScroll('.panel-body'); },50);
+  });
+})();
 
 // ── APP STATE ──
 var tool='pan', color='#ef4444', strokeW=2, opacity=1, lineStyle='solid', fillShape=false;
