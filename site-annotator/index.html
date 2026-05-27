@@ -409,40 +409,103 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   flex-shrink:0;
   width:100%;
   background:var(--theme-bg-nav);
-  padding:max(4px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) 4px max(8px, env(safe-area-inset-left));
-  display:flex;gap:4px;flex-wrap:nowrap;align-items:center;
-  box-shadow:0 2px 8px rgba(0,0,0,0.4);
+  /* env(safe-area-inset-top) pushes content below iOS/Android address bar notch */
+  padding-top:max(6px, env(safe-area-inset-top));
+  padding-bottom:6px;
+  padding-left:max(6px, env(safe-area-inset-left));
+  padding-right:max(6px, env(safe-area-inset-right));
+  display:flex;gap:5px;flex-wrap:nowrap;align-items:center;
+  min-height:calc(48px + max(0px, env(safe-area-inset-top)));
+  box-shadow:0 2px 12px rgba(0,0,0,0.45);
   border-bottom:1px solid var(--theme-border);
   box-sizing:border-box;
   z-index:200;
 }
 
-/* Action bar buttons — identical to spec viewer .ab-btn */
+/* HOME button — flex:1 so it stretches full width like breaker tool */
 .ab-btn{
-  padding:6px 8px;font-size:10px;font-weight:bold;letter-spacing:0.5px;
-  border:1px solid var(--theme-btn-border);background:var(--theme-btn-bg);
-  border-radius:0;cursor:pointer;color:var(--theme-btn-color);text-transform:uppercase;
-  font-family:Arial,sans-serif;white-space:nowrap;flex:1;min-width:0;
+  padding:8px 14px;
+  font-size:11px;font-weight:700;letter-spacing:1.5px;
+  border:1px solid var(--theme-btn-border);
+  background:var(--theme-btn-bg);
+  border-radius:0;cursor:pointer;
+  color:var(--theme-btn-color);
+  text-transform:uppercase;
+  font-family:'Share Tech Mono',monospace;
+  white-space:nowrap;
+  flex:1;           /* stretches to fill available width */
+  min-width:0;
   text-align:center;text-decoration:none;
-  display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
   clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
   -webkit-tap-highlight-color:transparent;touch-action:manipulation;
-  overflow:hidden;text-overflow:ellipsis;transition:all 0.15s ease;
-  height:34px;
+  transition:all 0.15s ease;
+  height:36px;
 }
-.ab-btn:hover{border-color:var(--theme-btn-color);box-shadow:0 0 8px rgba(251,191,36,0.3);}
-.ab-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ab-btn:hover{border-color:var(--theme-btn-color);box-shadow:0 0 10px rgba(251,191,36,0.35);}
+.ab-btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ab-btn .ab-label{font-size:11px;letter-spacing:1.5px;}
+
+/* Right cluster — save dot · online dot · theme toggle */
+#nav-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+#aog-net-lbl{
+  font-family:'Share Tech Mono',monospace;font-size:9px;
+  letter-spacing:1.5px;color:var(--theme-dim);text-transform:uppercase;
+}
 
 /* Theme toggle button */
 .theme-toggle-ab{
-  width:34px;height:34px;padding:6px;flex-shrink:0;
+  width:36px;height:36px;padding:6px;flex-shrink:0;
   border:1px solid var(--theme-btn-border);background:var(--theme-btn-bg);
   border-radius:4px;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
-  color:var(--theme-btn-color);font-size:16px;transition:all 0.2s;
+  color:var(--theme-btn-color);font-size:17px;transition:all 0.2s;
   -webkit-tap-highlight-color:transparent;touch-action:manipulation;
 }
-.theme-toggle-ab:hover{border-color:var(--theme-btn-color);box-shadow:0 0 8px rgba(251,191,36,0.3);}
+.theme-toggle-ab:hover{border-color:var(--theme-btn-color);box-shadow:0 0 10px rgba(251,191,36,0.35);}
+
+/* ── BRAND BAR — logo + company name sits below the action bar ── */
+#brand-bar{
+  flex-shrink:0;
+  width:100%;
+  background:var(--theme-bg-nav);
+  border-bottom:1px solid var(--theme-border);
+  padding:6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left));
+  display:flex;align-items:center;justify-content:flex-start;gap:10px;
+  box-sizing:border-box;
+}
+#brand-bar img{
+  width:28px;height:28px;object-fit:contain;flex-shrink:0;
+  filter:drop-shadow(0 0 7px rgba(251,191,36,0.65));
+}
+[data-theme="light"] #brand-bar img{filter:drop-shadow(0 0 4px rgba(180,130,20,0.4));}
+#brand-bar-text{display:flex;flex-direction:column;line-height:1.2;}
+.brand-company{
+  font-family:'Orbitron',monospace;font-size:10px;font-weight:900;
+  letter-spacing:2.5px;white-space:nowrap;
+  background:linear-gradient(135deg,#FBBF24,#F97316);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+.brand-sub{
+  font-family:'Share Tech Mono',monospace;font-size:8px;
+  letter-spacing:3px;text-transform:uppercase;color:#00D4FF;
+  white-space:nowrap;margin-top:1px;
+}
+[data-theme="light"] .brand-sub{color:#0284C7;}
+
+/* ── RESPONSIVE ── */
+@media(max-width:480px){
+  #aog-nav{padding-top:max(6px, env(safe-area-inset-top));padding-left:max(4px,env(safe-area-inset-left));padding-right:max(4px,env(safe-area-inset-right));gap:4px;}
+  #aog-net-lbl{display:none;}
+}
+@media(max-width:340px){
+  .brand-company{font-size:9px;letter-spacing:1.5px;}
+  .brand-sub{letter-spacing:2px;}
+}
+@media(min-width:481px){
+  .ab-icon-only{display:none;}
+}
+@media print{#aog-nav,#brand-bar,#customer-bar{display:none!important;}}
 
 /* Customer bar — second row */
 #customer-bar{
@@ -554,10 +617,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .ctx-sep{height:1px;background:var(--b1);margin:4px 0;}
 
 @media(max-width:480px){
-  #aog-nav{padding:4px 4px;gap:3px;}
-  .ab-btn{padding:6px 4px;font-size:9px;}
-  .ab-btn .ab-label{display:none;}
-  .ab-btn .ab-icon{display:inline;}
+  #aog-nav{padding-top:max(6px, env(safe-area-inset-top));padding-left:max(4px,env(safe-area-inset-left));padding-right:max(4px,env(safe-area-inset-right));gap:3px;}
 }
 @media(min-width:481px){
   .ab-icon-only{display:none;}
@@ -603,36 +663,34 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
 <!-- ACTION BAR — matches spec viewer style -->
 <nav id="aog-nav">
-  <a class="ab-btn" href="../" style="max-width:72px;flex:0 0 auto;">
+
+  <!-- HOME — flex:1 stretches it full width just like the breaker tool -->
+  <a class="ab-btn" href="../">
     <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
     <span class="ab-label">HOME</span>
   </a>
 
-  <!-- Logo + name -->
-  <div style="display:flex;align-items:center;gap:7px;flex-shrink:0;margin:0 4px;">
-    <img src="../logo.png" alt="AOG" style="width:26px;height:26px;object-fit:contain;filter:drop-shadow(0 0 6px rgba(251,191,36,0.6));"
-         onerror="this.style.display='none'">
-    <div style="display:flex;flex-direction:column;line-height:1;">
-      <span style="font-family:'Orbitron',monospace;font-size:9px;font-weight:900;letter-spacing:2px;background:linear-gradient(135deg,#FBBF24,#F97316);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap;">Always On Generators</span>
-      <span style="font-family:'Share Tech Mono',monospace;font-size:7.5px;letter-spacing:2.5px;text-transform:uppercase;color:#00D4FF;white-space:nowrap;">Site Annotator</span>
-    </div>
+  <!-- Right cluster: save indicator · theme toggle -->
+  <div id="nav-right">
+    <div id="save-indicator" title="Auto-save status" style="display:none"></div>
+    <button class="theme-toggle-ab" id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
   </div>
 
-  <!-- Spacer -->
-  <div style="flex:1"></div>
-
-  <!-- Save indicator (hidden from nav — status shown via aog-dot) -->
-  <div id="save-indicator" title="Auto-save status" style="flex-shrink:0;display:none"></div>
-
-  <!-- Online status -->
-  <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-right:4px;">
-    <span class="aog-status-dot" id="aog-dot"></span>
-    <span id="aog-net-lbl" style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--theme-dim);text-transform:uppercase;">Online</span>
-  </div>
-
-  <!-- Theme toggle -->
-  <button class="theme-toggle-ab" id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
 </nav>
+
+<!-- BRAND BAR — logo + company name + online status sits just below the action bar -->
+<div id="brand-bar">
+  <img src="../logo.png" alt="AOG" onerror="this.style.display='none'">
+  <div id="brand-bar-text">
+    <span class="brand-company">Always On Generators</span>
+    <span class="brand-sub">Site Annotator</span>
+  </div>
+  <div style="flex:1"></div>
+  <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+    <span class="aog-status-dot" id="aog-dot"></span>
+    <span id="aog-net-lbl">Online</span>
+  </div>
+</div>
 
 <!-- CUSTOMER BAR -->
 <div id="customer-bar">
