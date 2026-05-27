@@ -563,6 +563,40 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   .ab-icon-only{display:none;}
 }
 @media print{#aog-nav,#customer-bar{display:none!important;}}
+
+/* ══ NEW CANVAS DIALOG ══════════════════════════════════════════ */
+#new-canvas-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center}
+#new-canvas-overlay.show{display:flex}
+#new-canvas-dlg{background:var(--surf);border:1px solid var(--b2);border-radius:16px;padding:22px 26px;min-width:310px;max-width:96vw;box-shadow:0 16px 64px rgba(0,0,0,.7);animation:dlgPop .18s ease}
+@keyframes dlgPop{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+#new-canvas-dlg h3{font-family:'Orbitron',monospace;font-size:.72rem;font-weight:700;letter-spacing:3px;color:var(--acc2);text-transform:uppercase;margin-bottom:16px}
+.nc-section{margin-bottom:14px}
+.nc-label{font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;display:block}
+.nc-size-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.nc-size-btn{padding:7px 4px;border-radius:8px;border:1.5px solid var(--b2);background:var(--surf2);color:var(--txt2);cursor:pointer;font-size:11px;font-weight:600;text-align:center;transition:all .14s;display:flex;flex-direction:column;align-items:center;gap:2px}
+.nc-size-btn .nc-sub{font-size:9px;font-weight:400;opacity:.65}
+.nc-size-btn:hover{background:var(--b2);color:var(--txt)}
+.nc-size-btn.sel{border-color:var(--acc);background:rgba(108,99,255,.18);color:var(--acc2)}
+.nc-size-btn.sel .nc-sub{opacity:1;color:var(--acc2)}
+.nc-orient-row,.nc-bg-row,.nc-dpi-row{display:flex;gap:6px}
+.nc-orient-btn,.nc-bg-btn,.nc-dpi-btn{flex:1;padding:9px 6px;border-radius:8px;border:1.5px solid var(--b2);background:var(--surf2);color:var(--txt2);cursor:pointer;font-size:11px;font-weight:600;text-align:center;transition:all .14s;display:flex;align-items:center;justify-content:center;gap:5px}
+.nc-orient-btn svg{flex-shrink:0}
+.nc-orient-btn:hover,.nc-bg-btn:hover,.nc-dpi-btn:hover{background:var(--b2);color:var(--txt)}
+.nc-orient-btn.sel,.nc-bg-btn.sel,.nc-dpi-btn.sel{border-color:var(--acc);background:rgba(108,99,255,.18);color:var(--acc2)}
+.nc-dpi-btn .nc-sub{font-size:9px;font-weight:400;opacity:.65;display:block;margin-top:1px}
+.nc-dpi-btn.sel .nc-sub{opacity:1}
+#nc-preview-wrap{display:flex;align-items:center;justify-content:center;height:68px;margin-bottom:4px}
+#nc-preview-rect{border:2px solid var(--acc2);border-radius:3px;transition:all .2s;position:relative;background:rgba(255,255,255,.05)}
+#nc-preview-rect .nc-prev-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--acc2);letter-spacing:.5px;pointer-events:none}
+#nc-cap-warn{font-size:10px;color:#f59e0b;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:6px 10px;margin-bottom:10px;display:none;line-height:1.5}
+.nc-actions{display:flex;gap:8px;margin-top:6px}
+.nc-actions button{flex:1;height:36px;font-size:12px;font-weight:700;border-radius:9px;cursor:pointer;border:none}
+#nc-cancel-btn{background:var(--surf2);color:var(--txt2);border:1.5px solid var(--b2)!important}
+#nc-create-btn{background:linear-gradient(135deg,var(--acc),#9d97ff);color:#fff;box-shadow:0 4px 16px rgba(108,99,255,.35);transition:opacity .15s}
+#nc-create-btn:hover{opacity:.88}
+[data-theme="light"] #new-canvas-dlg{background:#f0f4ff;border-color:rgba(217,119,6,.25)}
+[data-theme="light"] .nc-size-btn,[data-theme="light"] .nc-orient-btn,[data-theme="light"] .nc-bg-btn,[data-theme="light"] .nc-dpi-btn{background:#dde8ff;color:#1A2640;border-color:rgba(0,0,0,.15)}
+[data-theme="light"] .nc-size-btn.sel,[data-theme="light"] .nc-orient-btn.sel,[data-theme="light"] .nc-bg-btn.sel,[data-theme="light"] .nc-dpi-btn.sel{background:rgba(217,119,6,.15);border-color:#D97706;color:#D97706}
 </style>
 </head>
 <body>
@@ -615,6 +649,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 <!-- TOOLBAR -->
 <div id="tb">
   <button id="open-btn">＋ Open</button>
+  <button id="new-canvas-btn" style="background:var(--surf2);color:var(--txt2);border:1.5px solid var(--b2);border-radius:var(--rad);padding:0 10px;height:36px;cursor:pointer;font-size:11px;font-weight:700;flex-shrink:0;white-space:nowrap;transition:all .15s" title="New blank canvas">✦ New</button>
   <button id="cam-btn" class="tb-btn" style="display:none" title="Take Photo"><svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span class="lbl">Camera</span></button>
   <input type="file" id="file-in" accept="image/*,.pdf,.heic,.heif,.tiff,.tif,.bmp,.svg,.webp,application/pdf" style="display:none">
   <input type="file" id="camera-in" accept="image/*" capture="environment" style="display:none">
@@ -1126,6 +1161,81 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 </div>
 
 <div id="toast"></div>
+
+<!-- NEW CANVAS DIALOG -->
+<div id="new-canvas-overlay">
+  <div id="new-canvas-dlg">
+    <h3>✦ New Blank Canvas</h3>
+
+    <!-- Paper size -->
+    <div class="nc-section">
+      <span class="nc-label">Paper Size</span>
+      <div class="nc-size-grid">
+        <button class="nc-size-btn sel" data-w="8.5"  data-h="11">Letter<span class="nc-sub">8.5 × 11"</span></button>
+        <button class="nc-size-btn"     data-w="8.5"  data-h="14">Legal<span class="nc-sub">8.5 × 14"</span></button>
+        <button class="nc-size-btn"     data-w="11"   data-h="17">Tabloid<span class="nc-sub">11 × 17"</span></button>
+        <button class="nc-size-btn"     data-w="13"   data-h="19">Super-B<span class="nc-sub">13 × 19"</span></button>
+        <button class="nc-size-btn"     data-w="18"   data-h="24">Arch C<span class="nc-sub">18 × 24"</span></button>
+        <button class="nc-size-btn"     data-w="24"   data-h="36">Arch D<span class="nc-sub">24 × 36"</span></button>
+        <button class="nc-size-btn"     data-w="8.27" data-h="11.69">A4<span class="nc-sub">210 × 297mm</span></button>
+        <button class="nc-size-btn"     data-w="11.69" data-h="16.54">A3<span class="nc-sub">297 × 420mm</span></button>
+        <button class="nc-size-btn"     data-w="16.54" data-h="23.39">A2<span class="nc-sub">420 × 594mm</span></button>
+      </div>
+    </div>
+
+    <!-- Orientation -->
+    <div class="nc-section">
+      <span class="nc-label">Orientation</span>
+      <div class="nc-orient-row">
+        <button class="nc-orient-btn sel" id="nc-portrait">
+          <svg width="14" height="18" viewBox="0 0 14 18" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="12" height="16" rx="1.5"/></svg>Portrait
+        </button>
+        <button class="nc-orient-btn" id="nc-landscape">
+          <svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="16" height="12" rx="1.5"/></svg>Landscape
+        </button>
+      </div>
+    </div>
+
+    <!-- Background -->
+    <div class="nc-section">
+      <span class="nc-label">Background</span>
+      <div class="nc-bg-row">
+        <button class="nc-bg-btn sel" data-bg="white">⬜ White</button>
+        <button class="nc-bg-btn"     data-bg="grid">⊞ Grid</button>
+        <button class="nc-bg-btn"     data-bg="transparent">▪ None</button>
+      </div>
+    </div>
+
+    <!-- Resolution -->
+    <div class="nc-section">
+      <span class="nc-label">Resolution</span>
+      <div class="nc-dpi-row">
+        <button class="nc-dpi-btn sel" data-dpi="96">Screen<span class="nc-sub">96 dpi</span></button>
+        <button class="nc-dpi-btn"     data-dpi="150">Print<span class="nc-sub">150 dpi</span></button>
+        <button class="nc-dpi-btn"     data-dpi="300">Hi-Res<span class="nc-sub">300 dpi</span></button>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="nc-section" style="margin-bottom:10px">
+      <span class="nc-label">Preview</span>
+      <div id="nc-preview-wrap">
+        <div id="nc-preview-rect">
+          <div class="nc-prev-label" id="nc-prev-label">8.5 × 11" · 816 × 1056 px</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Device cap warning -->
+    <div id="nc-cap-warn"></div>
+
+    <!-- Actions -->
+    <div class="nc-actions">
+      <button id="nc-cancel-btn">Cancel</button>
+      <button id="nc-create-btn">✦ Create Canvas</button>
+    </div>
+  </div>
+</div>
 
 <!-- SHORTCUTS OVERLAY -->
 <div id="shortcuts">
@@ -4658,7 +4768,7 @@ var selHandle     = -1;   // -1=none, 0-7=resize, 8-11=rotate, -2=move
 var selDragStart  = null;
 
 var HANDLE_SIZE   = 9;
-var ROT_OFFSET    = 22;  // px from corner to rotation handle (screen space)
+var ROT_OFFSET    = 46;  // px from corner to rotation handle (screen space) — kept far from resize corners
 var ROT_COLOR     = '#db2777'; // deep pink — visible on white backgrounds
 
 // ── Handle positions ────────────────────────────────────────
@@ -4844,7 +4954,7 @@ function renderSelection(){
   if(s.type!=='comment'){
   for(var i=8;i<=11;i++){
     var h=handles[i];
-    var r=hs*0.7;
+    var r=hs*1.05;  // larger than resize squares so it's clearly distinct
     // Connector line from bounding-box corner to rotation handle
     var cornerIdx=[0,2,4,6][i-8];
     var corner=handles[cornerIdx];
@@ -6527,7 +6637,7 @@ var imgOverlays = [];          // [{img,cx,cy,w,h,angle,flipH,flipV,opacity}, ..
 var selImg      = null;        // currently selected overlay
 var selImgHandle= -1;          // which handle is being dragged
 var selImgDrag  = null;        // drag start state
-var IMG_HANDLE  = 8;           // handle size px (screen)
+var IMG_HANDLE  = 10;          // handle size px (screen)
 
 // Sync img-cv size whenever canvas changes
 function syncImgCv(){
@@ -6559,13 +6669,13 @@ function _imgHandles(ov){
   var hw=ov.w/2, hh=ov.h/2, a=ov.angle||0;
   var cos=Math.cos(a), sin=Math.sin(a);
   function rot(lx,ly){ return {x:ov.cx+lx*cos-ly*sin, y:ov.cy+lx*sin+ly*cos}; }
-  var ROT_OFF = 18; // px in canvas space
+  var ROT_OFF = 46/zoom; // screen-px converted to canvas space — matches shape ROT_OFFSET
   return [
     rot(-hw,-hh), rot(0,-hh), rot(hw,-hh),  // 0 TL, 1 TC, 2 TR
     rot(hw,0),                                // 3 MR
     rot(hw,hh), rot(0,hh), rot(-hw,hh),     // 4 BR, 5 BC, 6 BL
     rot(-hw,0),                              // 7 ML
-    // rotation handles outside corners
+    // rotation handles outside corners — pushed well clear of resize handles
     rot(-hw-ROT_OFF,-hh-ROT_OFF), rot(hw+ROT_OFF,-hh-ROT_OFF),
     rot(hw+ROT_OFF,hh+ROT_OFF),  rot(-hw-ROT_OFF,hh+ROT_OFF)
   ];
@@ -6573,9 +6683,11 @@ function _imgHandles(ov){
 
 function _imgHandleAt(ov, x, y, isTouch){
   var handles=_imgHandles(ov);
-  var slop=(isTouch?18:9)/zoom;
+  var resizeSlop = (isTouch ? 18 : 9) / zoom;
+  var rotSlop    = (isTouch ? 24 : 12) / zoom; // slightly larger for rotation circles
   for(var i=handles.length-1;i>=0;i--){
     var h=handles[i];
+    var slop = i >= 8 ? rotSlop : resizeSlop;
     if(Math.hypot(x-h.x,y-h.y)<slop) return i;
   }
   return -1;
@@ -6633,14 +6745,37 @@ function renderImgSelection(){
   }
   // Rotation handles 8-11
   var ROT_COLOR='#DB2777';
+  var corners=[handles[0],handles[2],handles[4],handles[6]]; // TL TR BR BL resize corners
   for(var i=8;i<=11;i++){
-    var h=handles[i], r=hs*0.7;
+    var h=handles[i], r=hs*1.05;
+    // Dashed connector line from resize corner to rotation handle
+    var corner=corners[i-8];
+    selCtx.save();
+    selCtx.strokeStyle='rgba(219,39,119,0.4)';
+    selCtx.lineWidth=lw; selCtx.setLineDash([2/zoom,2/zoom]);
+    selCtx.beginPath(); selCtx.moveTo(corner.x,corner.y); selCtx.lineTo(h.x,h.y);
+    selCtx.stroke();
+    selCtx.restore();
+    // Circle with curved-arrow icon
     selCtx.save();
     selCtx.fillStyle=ROT_COLOR; selCtx.strokeStyle='#fff';
-    selCtx.lineWidth=lw*1.5;
+    selCtx.lineWidth=lw*1.5; selCtx.setLineDash([]);
     selCtx.shadowColor=ROT_COLOR; selCtx.shadowBlur=6/zoom;
     selCtx.beginPath(); selCtx.arc(h.x,h.y,r,0,Math.PI*2);
     selCtx.fill(); selCtx.stroke();
+    // Curved arrow inside
+    selCtx.strokeStyle='#fff'; selCtx.lineWidth=lw*1.2; selCtx.shadowBlur=0;
+    var ar=r*.55;
+    selCtx.beginPath(); selCtx.arc(h.x,h.y,ar,Math.PI*.15,Math.PI*1.85,false); selCtx.stroke();
+    var endAngle=Math.PI*1.85;
+    var ax_=h.x+ar*Math.cos(endAngle), ay_=h.y+ar*Math.sin(endAngle);
+    var perpA=endAngle+Math.PI/2, aw=ar*.45;
+    selCtx.beginPath();
+    selCtx.moveTo(ax_,ay_);
+    selCtx.lineTo(ax_-aw*Math.cos(perpA-Math.PI*.35),ay_-aw*Math.sin(perpA-Math.PI*.35));
+    selCtx.moveTo(ax_,ay_);
+    selCtx.lineTo(ax_-aw*Math.cos(perpA+Math.PI*.35),ay_-aw*Math.sin(perpA+Math.PI*.35));
+    selCtx.stroke();
     selCtx.restore();
   }
   // Flip buttons — rendered as small pill buttons in canvas space above the image
@@ -7370,6 +7505,222 @@ function hideHint(){ panHint.classList.remove('show'); }
 
 // ── INIT PDF.js ──
 if(typeof pdfjsLib!=='undefined') pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ══════════════════════════════════════════════════════════════
+// NEW BLANK CANVAS SYSTEM
+// ══════════════════════════════════════════════════════════════
+(function(){
+  // ── State ──
+  var ncW    = 8.5;   // inches (short side stored, orientation swaps)
+  var ncH    = 11;
+  var ncLand = false; // landscape toggle
+  var ncBg   = 'white';
+  var ncDpi  = 96;
+
+  // ── Per-device pixel caps ──
+  // Same logic as IOS_MAX_PX — prevent OOM on constrained devices
+  function getDeviceCap(){
+    if(IS_IPHONE) return 2900;
+    if(IS_IPAD)   return 6000;
+    return 14400; // desktop — generous but avoids browser tab OOM
+  }
+
+  // ── Compute actual pixel dimensions ──
+  function getPixels(){
+    var shortIn = Math.min(ncW, ncH);
+    var longIn  = Math.max(ncW, ncH);
+    var wIn = ncLand ? longIn  : shortIn;
+    var hIn = ncLand ? shortIn : longIn;
+    var cap = getDeviceCap();
+    var rawW = Math.round(wIn * ncDpi);
+    var rawH = Math.round(hIn * ncDpi);
+    // Scale down proportionally if either dimension exceeds the cap
+    var scale = Math.min(1, cap / Math.max(rawW, rawH));
+    return {
+      w:     Math.round(rawW * scale),
+      h:     Math.round(rawH * scale),
+      wIn:   wIn,
+      hIn:   hIn,
+      capped: scale < 0.999
+    };
+  }
+
+  // ── Update preview rect + label + cap warning ──
+  function updatePreview(){
+    var px  = getPixels();
+    var cap = getDeviceCap();
+    var previewWrap = document.getElementById('nc-preview-wrap');
+    var rect  = document.getElementById('nc-preview-rect');
+    var label = document.getElementById('nc-prev-label');
+    var warn  = document.getElementById('nc-cap-warn');
+
+    // Size the preview box proportionally inside a 68px-tall space
+    var maxH = 60, maxW = 140;
+    var ratio = px.w / px.h;
+    var dispH, dispW;
+    if(ratio >= 1){ // landscape
+      dispW = Math.min(maxW, maxH * ratio);
+      dispH = dispW / ratio;
+    } else {
+      dispH = Math.min(maxH, maxW / ratio);
+      dispW = dispH * ratio;
+    }
+    rect.style.width  = Math.round(dispW) + 'px';
+    rect.style.height = Math.round(dispH) + 'px';
+
+    // Grid background preview
+    if(ncBg === 'grid'){
+      rect.style.backgroundImage = 'repeating-linear-gradient(var(--b2) 0 1px,transparent 1px 100%),repeating-linear-gradient(90deg,var(--b2) 0 1px,transparent 1px 100%)';
+      rect.style.backgroundSize  = '14px 14px';
+      rect.style.backgroundColor = 'rgba(255,255,255,.04)';
+    } else if(ncBg === 'transparent'){
+      rect.style.backgroundImage = 'repeating-conic-gradient(#555 0% 25%,transparent 0% 50%)';
+      rect.style.backgroundSize  = '14px 14px';
+      rect.style.backgroundColor = '';
+    } else {
+      rect.style.backgroundImage = 'none';
+      rect.style.backgroundColor = 'rgba(255,255,255,.88)';
+    }
+
+    // Label: inches × pixels
+    var wLabel = px.wIn % 1 === 0 ? px.wIn : px.wIn.toFixed(2).replace(/\.?0+$/,'');
+    var hLabel = px.hIn % 1 === 0 ? px.hIn : px.hIn.toFixed(2).replace(/\.?0+$/,'');
+    label.textContent = wLabel + ' × ' + hLabel + '" · ' + px.w + ' × ' + px.h + ' px';
+    label.style.color = ncBg === 'white' ? '#6c63ff' : 'var(--acc2)';
+
+    // Cap warning
+    if(px.capped){
+      var devName = IS_IPHONE ? 'iPhone' : IS_IPAD ? 'iPad' : 'this device';
+      warn.textContent = '⚠ Resolution capped to ' + cap + 'px on ' + devName + '. Full size available on desktop.';
+      warn.style.display = 'block';
+    } else {
+      warn.style.display = 'none';
+    }
+  }
+
+  // ── Open / close dialog ──
+  function openDialog(){
+    updatePreview();
+    document.getElementById('new-canvas-overlay').classList.add('show');
+  }
+  function closeDialog(){
+    document.getElementById('new-canvas-overlay').classList.remove('show');
+  }
+
+  // ── Wire size buttons ──
+  document.querySelectorAll('.nc-size-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.nc-size-btn').forEach(function(b){ b.classList.remove('sel'); });
+      btn.classList.add('sel');
+      ncW = parseFloat(btn.dataset.w);
+      ncH = parseFloat(btn.dataset.h);
+      updatePreview();
+    });
+  });
+
+  // ── Wire orientation buttons ──
+  document.getElementById('nc-portrait').addEventListener('click', function(){
+    ncLand = false;
+    document.getElementById('nc-portrait').classList.add('sel');
+    document.getElementById('nc-landscape').classList.remove('sel');
+    updatePreview();
+  });
+  document.getElementById('nc-landscape').addEventListener('click', function(){
+    ncLand = true;
+    document.getElementById('nc-landscape').classList.add('sel');
+    document.getElementById('nc-portrait').classList.remove('sel');
+    updatePreview();
+  });
+
+  // ── Wire background buttons ──
+  document.querySelectorAll('.nc-bg-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.nc-bg-btn').forEach(function(b){ b.classList.remove('sel'); });
+      btn.classList.add('sel');
+      ncBg = btn.dataset.bg;
+      updatePreview();
+    });
+  });
+
+  // ── Wire DPI buttons ──
+  document.querySelectorAll('.nc-dpi-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.nc-dpi-btn').forEach(function(b){ b.classList.remove('sel'); });
+      btn.classList.add('sel');
+      ncDpi = parseInt(btn.dataset.dpi);
+      updatePreview();
+    });
+  });
+
+  // ── Cancel ──
+  document.getElementById('nc-cancel-btn').addEventListener('click', closeDialog);
+  document.getElementById('new-canvas-overlay').addEventListener('click', function(e){
+    if(e.target === this) closeDialog();
+  });
+
+  // ── Create ──
+  document.getElementById('nc-create-btn').addEventListener('click', function(){
+    var px = getPixels();
+    closeDialog();
+
+    // Reset all annotation state (same as afterLoad)
+    pdfDoc = null; pgGrp(false);
+    resize(px.w, px.h);
+
+    // Fill the base canvas with chosen background
+    bCtx.clearRect(0, 0, px.w, px.h);
+    if(ncBg === 'white'){
+      bCtx.fillStyle = '#ffffff';
+      bCtx.fillRect(0, 0, px.w, px.h);
+    } else if(ncBg === 'grid'){
+      // White base
+      bCtx.fillStyle = '#ffffff';
+      bCtx.fillRect(0, 0, px.w, px.h);
+      // Grid lines — cell size proportional to DPI (0.25" grid)
+      var cellPx = Math.round(ncDpi * 0.25);
+      cellPx = Math.max(10, Math.min(80, cellPx));
+      bCtx.strokeStyle = '#d0d8e8';
+      bCtx.lineWidth = 1;
+      for(var gx = cellPx; gx < px.w; gx += cellPx){
+        bCtx.beginPath(); bCtx.moveTo(gx, 0); bCtx.lineTo(gx, px.h); bCtx.stroke();
+      }
+      for(var gy = cellPx; gy < px.h; gy += cellPx){
+        bCtx.beginPath(); bCtx.moveTo(0, gy); bCtx.lineTo(px.w, gy); bCtx.stroke();
+      }
+      // Every 4th line slightly darker (major grid)
+      var majorCell = cellPx * 4;
+      bCtx.strokeStyle = '#b0bdd0';
+      bCtx.lineWidth = 1;
+      for(var mgx = majorCell; mgx < px.w; mgx += majorCell){
+        bCtx.beginPath(); bCtx.moveTo(mgx, 0); bCtx.lineTo(mgx, px.h); bCtx.stroke();
+      }
+      for(var mgy = majorCell; mgy < px.h; mgy += majorCell){
+        bCtx.beginPath(); bCtx.moveTo(0, mgy); bCtx.lineTo(px.w, mgy); bCtx.stroke();
+      }
+    }
+    // transparent = leave canvas empty (black-checkerboard shows in viewport but exports transparent)
+
+    afterLoad();
+
+    // Auto-prompt scale dialog with sensible defaults for blank canvas
+    // Set scale based on DPI — 1 px = 1/dpi inches
+    ppu = 1 / ncDpi;       // pixels per inch
+    scaleUnit = 'in';
+    scaleSet = true;
+    ppuIn.value = ncDpi;   // 1 inch = ncDpi px
+    unitIn.value = 'in';
+    scaleStatus.textContent = '1 px = ' + (1/ncDpi).toFixed(4) + ' in · ' + ncDpi + ' dpi';
+
+    var wLabel = px.wIn % 1 === 0 ? px.wIn : px.wIn.toFixed(2).replace(/\.?0+$/,'');
+    var hLabel = px.hIn % 1 === 0 ? px.hIn : px.hIn.toFixed(2).replace(/\.?0+$/,'');
+    toast('Blank canvas ready · ' + wLabel + '×' + hLabel + '" at ' + ncDpi + ' dpi', 'ok', 3500);
+  });
+
+  // ── Trigger button ──
+  document.getElementById('new-canvas-btn').addEventListener('click', openDialog);
+
+})();
+// ══ END NEW BLANK CANVAS ══════════════════════════════════════
 
 })();
 </script>
