@@ -4918,12 +4918,22 @@ var editingObj = null;     // text object currently being edited
 // ── Render all text objects onto txt-cv ──────────────────────
 function renderTextObjs(){
   tCtx.clearRect(0,0,tCv.width,tCv.height);
+  // Identify the text object currently being transformed so we can hide its
+  // STATIC copy while the live preview is drawn on selCv. We match by several
+  // identities to be robust against reference churn (undo clones, re-selects):
+  //   • _dragText (set when a move/rotate/resize drag begins)
+  //   • the selected shape's text object while a transform handle is engaged
+  // Matching on id as a final fallback covers the case where the array element
+  // was replaced by a structurally-equal clone (so === would miss).
+  var _hideText = _dragText
+    || ((selHandle!==-1 && selectedShape && selectedShape.type==='text') ? selectedShape._textObj : null);
+  var _hideId = (_hideText && _hideText.id!==undefined) ? _hideText.id : null;
   textObjs.forEach(function(obj){
     if(obj._editing) return;
     // While this text is being moved/rotated/resized, it's drawn live on the
     // selection canvas instead — skip it here so the old position/angle doesn't
     // ghost behind the live preview.
-    if(obj===_dragText) return;
+    if(_hideText && (obj===_hideText || (_hideId!==null && obj.id===_hideId))) return;
     var layer=layers[obj.layerIdx];
     if(layer&&!layer.visible) return;
     tCtx.save();
