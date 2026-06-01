@@ -1720,9 +1720,19 @@ var _cBorderW       = 2;          // border stroke width in canvas px
 var _cTxtColor      = '#1a1a2e';
 var _cFontSize      = 13;
 var _editingComment = null;       // comment whose text is being edited
-var CMT_PAD = 0.5; // canvas px interior padding between note border and text (tight)
+var CMT_PAD = 2; // canvas px interior padding between note border and text while editing/drawing
+var CMT_SNAP_PAD = 1.5; // tighter padding used when the box snaps to hug text (commit / shrink)
 var _movingComment  = null;       // comment being dragged
 var _moveCmtStart   = null;       // {x,y,cx,cy} at drag start
+// ── Movement deadband (Acrobat-style intent detection) ──────────────
+// A press inside a selected comment's interior is AMBIGUOUS: it could be the
+// start of a move, or a click to enter text editing. Acrobat waits to see if
+// the pointer travels before committing. We mirror that: on interior press we
+// stash a "pending" gesture; pointermove promotes it to a move once travel
+// exceeds CMT_DRAG_DEADBAND (screen px); pointerup with no such travel opens
+// the text editor instead.
+var _cmtPending     = null;       // {x,y,sp} captured on interior press, or null
+var CMT_DRAG_DEADBAND = 5;        // screen px of travel before a press becomes a move
 
 // ── Note text uses a FIXED size (Acrobat-style), not box-relative ───
 // The font-size dropdown sets the actual size in canvas pixels. Resizing
@@ -1808,15 +1818,19 @@ function drawCommentBox(ctx, c, sc, skipText, onScreen){
     ctx.fillStyle=c.textColor||'#1a1a2e';
     ctx.font=fs+'px Arial,sans-serif';
     ctx.textBaseline='top'; ctx.textAlign='left';
-    var pad=CMT_PAD*sc;
+    // Committed boxes are sized with CMT_SNAP_PAD (tight hug), so draw text at
+    // that same inset — otherwise text would sit at a looser pad than the box
+    // was fitted to and the last line would falsely read as overflow.
+    var pad=CMT_SNAP_PAD*sc;
     var maxW=w-2*pad;
     var lineH=fs*1.4;
     var lines=cmtWrapLines(ctx,c.text,maxW);
     lines.forEach(function(line,i){
       var ty=y+pad+i*lineH;
-      // Fixed size (Acrobat-style): clip lines that don't fit instead of scaling.
-      // Allow a small epsilon so the last fitted line isn't falsely clipped.
-      if(ty+lineH<=y+h-pad+0.5) ctx.fillText(line,x+pad,ty,maxW);
+      // Clip lines that don't fit (Acrobat-style: no scaling). The fit test uses
+      // the glyph box (fs*1.2) for the line, NOT a full lineH, matching the box
+      // height math in fitCommentToText so no false overflow on the last line.
+      if(ty+fs*1.2<=y+h-pad+0.5) ctx.fillText(line,x+pad,ty,maxW);
       else overflow=true;
     });
   }
@@ -1873,6 +1887,7 @@ function findCommentObjAt(x,y,isTouch){
 var _cmtLastTap = 0, _cmtLastHit = null;  // double-click tracking
 var _cmtHandleTap = 0, _cmtHandleObj = null;  // double-click-handle → snap-to-fit
 var _dragComment = null;  // comment currently being moved/resized (drawn live on selCv)
+var _dragText    = null;  // text obj currently being moved/rotated/resized (drawn live on selCv only)
 
 // ── Helper: sync all comment toolbar controls to a note's values ──
 function _syncCommentPickers(c){
@@ -1991,15 +2006,23 @@ function fitCommentToText(c, text, skipRender, mode){
   text = (text!==undefined && text!==null ? text : (c.text||''));
   var fs   = cmtEffFontSize(c);           // scale-locked canvas px
   var lineH= fs*1.4;
-  var maxW = Math.max(c.w - 2*CMT_PAD, 10);
+  // Padding: snap modes hug tight (CMT_SNAP_PAD on every side); live grow/draw
+  // keeps the looser CMT_PAD so the cursor isn't jammed against the border.
+  var pad  = (mode==='snap') ? CMT_SNAP_PAD : CMT_PAD;
+  var maxW = Math.max(c.w - 2*pad, 10);
   // Measure with the same font the renderer uses
   tCtx.save();
   tCtx.font = fs+'px Arial,sans-serif';
   var lines = (text && text.trim()) ? cmtWrapLines(tCtx, text, maxW) : [''];
   tCtx.restore();
   var n = Math.max(lines.length, 1);
-  var neededH = Math.ceil(n*lineH + 2*CMT_PAD);
-  var minH = Math.ceil(lineH + 2*CMT_PAD);
+  // Height = leading between lines + the LAST line's actual glyph box, NOT a
+  // full lineH for the final line. A trailing full lineH includes ~40% leading
+  // below the last line — that was the wasted bottom space. fs*1.2 covers
+  // ascender+descender for Arial so descenders (g, y, p) never clip.
+  var blockH  = (n-1)*lineH + fs*1.2;
+  var neededH = Math.ceil(blockH + 2*pad);
+  var minH    = Math.ceil(fs*1.2 + 2*pad);
   if(mode==='grow'){
     // Only grow if the text doesn't fit; keep the user's manual height otherwise
     if(neededH > c.h) c.h = neededH;
@@ -3158,6 +3181,11 @@ function onDown(e){
         selDragStart={x:sp.x,y:sp.y,shape:snapObj,rotAngleOffset:rotOff,
           origFontSize:(selectedShape.type==='text'&&selectedShape._textObj)?selectedShape._textObj.fontSize:null,
           origH:selectedShape.h};
+        // Text transform begins → hide the static copy so it doesn't ghost
+        // behind the live rotated/resized preview drawn on selCv.
+        if(selectedShape.type==='text'&&selectedShape._textObj){
+          _dragText=selectedShape._textObj; renderTextObjs();
+        }
         return;
       }
       if(isInsideShape(selectedShape,sp.x,sp.y,_isTouchEvt)){
@@ -3189,6 +3217,10 @@ function onDown(e){
                  w:selectedShape.w,h:selectedShape.h,angle:selectedShape.angle,
                  color:selectedShape.color,strokeW:selectedShape.strokeW,
                  opacity:selectedShape.opacity,fill:selectedShape.fill,lineStyle:selectedShape.lineStyle}};
+        // Text move begins → hide static copy so it doesn't ghost behind preview.
+        if(selectedShape.type==='text'&&selectedShape._textObj){
+          _dragText=selectedShape._textObj; renderTextObjs();
+        }
         return;
       }
       // Clicked outside — commit shape. User taps again to draw new shape.
@@ -3320,6 +3352,25 @@ function onDown(e){
 }
 
 function onMove(e){
+  // ── Pending comment gesture: promote to MOVE once travel passes deadband ──
+  // (Otherwise it resolves to "open editor" on pointerup — see onUp.)
+  if(_cmtPending && selectedShape && selectedShape.type==='comment' && !pinching){
+    var _pp=getPos(e);
+    var _dead=CMT_DRAG_DEADBAND/zoom;   // screen-px deadband → canvas units
+    if(Math.hypot(_pp.x-_cmtPending.x, _pp.y-_cmtPending.y) > _dead){
+      // Travelled far enough → this is a move, not a click-to-edit.
+      if(e.cancelable) e.preventDefault();
+      selHandle=-2;
+      selDragStart={x:_cmtPending.x,y:_cmtPending.y,   // anchor at ORIGINAL press → no jump
+        shape:{type:'comment',cx:selectedShape.cx,cy:selectedShape.cy,
+               w:selectedShape.w,h:selectedShape.h,angle:0,
+               color:selectedShape.color,strokeW:selectedShape.strokeW,
+               opacity:1,fill:false,lineStyle:'solid'},
+        rotAngleOffset:0,origFontSize:null,origH:selectedShape.h};
+      _cmtPending=null;
+      // fall through into the transform-drag block below this frame
+    }
+  }
   // ── Image overlay drag — handled inline (same as shapes) ──
   if(selImg && selImgDrag){
     if(e.cancelable) e.preventDefault();
@@ -3362,18 +3413,11 @@ function onMove(e){
       // Move
       selectedShape.cx=orig.cx+(tp.x-selDragStart.x);
       selectedShape.cy=orig.cy+(tp.y-selDragStart.y);
-      // Sync text object position live so it follows the handles
+      // Text: the live preview (renderSelection) derives its origin from the
+      // selection pose, so we only need to refresh it — no need to mutate the
+      // text object mid-drag (commit writes it back with correct origin math).
       if(selectedShape.type==='text'&&selectedShape._textObj){
-        var _to=selectedShape._textObj;
-        var _lines=_to.text.split('\n');
-        var _tofpx=ptToCanvasPx(_to.fontSize);
-        var _estW=measureLinesW(_lines,_tofpx);
-        var _estH=_lines.length*_tofpx*1.35;
-        var _cos=Math.cos(selectedShape.angle), _sin=Math.sin(selectedShape.angle);
-        var _lx=-_estW/2, _ly=_tofpx-_estH/2;
-        _to.x=selectedShape.cx+_lx*_cos-_ly*_sin;
-        _to.y=selectedShape.cy+_lx*_sin+_ly*_cos;
-        renderTextObjs();
+        renderSelection();
       }
       // Sync comment object position live
       if(selectedShape.type==='comment'&&selectedShape._commentObj){
@@ -3511,6 +3555,16 @@ function onMove(e){
 }
 
 function onUp(e){
+  // ── Pending comment gesture resolves to a CLICK (no move occurred) ──
+  // If travel never exceeded the deadband, onMove never promoted it to a move,
+  // so the press was a click → open the text editor now. (Acrobat behavior)
+  if(_cmtPending){
+    var _cp=_cmtPending; _cmtPending=null;
+    if(selectedShape && selectedShape.type==='comment' && selectedShape._commentObj && !_editingComment){
+      startCommentTextEdit(selectedShape._commentObj);
+    }
+    return;
+  }
   // ── Image overlay drag end — handled inline (same as shapes) ──
   if(selImg && selImgDrag){ handleImgPointerUp(); return; }
   // ── Markup tool: commit on mouseup ───────────────────────────
@@ -3590,10 +3644,34 @@ function onUp(e){
       var _rc=selectedShape._commentObj;
       _rc.cx=selectedShape.cx; _rc.cy=selectedShape.cy;
       _rc.w=selectedShape.w; _rc.h=selectedShape.h;
+      // After a manual resize, snap the height back so ALL text is visible at the
+      // tight snap padding (no wasted space, no clipped lines). The width the user
+      // dragged to is preserved — text re-wraps to it, then height hugs the result.
+      // Top edge stays put so the box doesn't jump.
+      if(!_editingComment){
+        var _topR=_rc.cy-_rc.h/2;
+        fitCommentToText(_rc, _rc.text, true, 'snap');
+        _rc.cy=_topR+_rc.h/2;
+        if(selectedShape){ selectedShape.cy=_rc.cy; selectedShape.h=_rc.h; }
+      }
       _dragComment=null;                 // stop live-on-selCv; restore to shCv
       renderShapeAndMeasure(); composite();
       renderSelection();                 // re-draw handles on the now-cleared selCv
       repositionCommentEditor(_rc);
+      pushUndo();
+    }
+    // ── Text transform release: persist move/rotate/resize back to the object,
+    // clear the live-drag flag, and restore the static draw at the new pose. ──
+    if(selectedShape&&selectedShape.type==='text'&&selectedShape._textObj){
+      var _tt=selectedShape._textObj;
+      // Position already synced live during move; ensure angle is persisted too
+      // (rotation only updates selectedShape.angle during the drag).
+      _tt.angle=selectedShape.angle;
+      // Font-size from resize is written live in the resize branch; nothing else
+      // to copy here. Re-establish the selection box around the final text pose.
+      _dragText=null;                    // stop skipping it in renderTextObjs
+      renderTextObjs();                  // redraw static text at its new pose
+      renderSelection();                 // keep handles, now over the static text
       pushUndo();
     }
     selHandle=-1; selDragStart=null;
@@ -4842,6 +4920,10 @@ function renderTextObjs(){
   tCtx.clearRect(0,0,tCv.width,tCv.height);
   textObjs.forEach(function(obj){
     if(obj._editing) return;
+    // While this text is being moved/rotated/resized, it's drawn live on the
+    // selection canvas instead — skip it here so the old position/angle doesn't
+    // ghost behind the live preview.
+    if(obj===_dragText) return;
     var layer=layers[obj.layerIdx];
     if(layer&&!layer.visible) return;
     tCtx.save();
@@ -4930,10 +5012,20 @@ function findTextObjAt(x,y){
     if(o._editing) continue;
     var lines=o.text.split('\n');
     var ofpx=ptToCanvasPx(o.fontSize);
-    var estW=measureLinesW(lines,ofpx);
+    var estW=measureLinesWFull(lines,ofpx,o.fontFamily||'Arial',o.bold,o.italic);
     var estH=lines.length*ofpx*1.3;
     var pad=Math.max(8,12/zoom);
-    if(x>=o.x-pad&&x<=o.x+estW+pad&&y>=o.y-ofpx-pad&&y<=o.y+estH+pad){
+    // Rotate the click point into the label's LOCAL frame (pivot = o.x,o.y,
+    // the same origin the text is drawn about). Without this, a rotated label's
+    // clickable area stayed axis-aligned and the click missed — falling through
+    // to the draw tools and starting a stray rectangle.
+    var ang=o.angle||0;
+    var dx=x-o.x, dy=y-o.y;
+    var ca=Math.cos(-ang), sa=Math.sin(-ang);
+    var lx=dx*ca-dy*sa;
+    var ly=dx*sa+dy*ca;
+    // Local text box spans x:[0, estW], y:[-ofpx, estH-ofpx] (baseline-origin).
+    if(lx>=-pad&&lx<=estW+pad&&ly>=-ofpx-pad&&ly<=estH-ofpx+pad){
       return o;
     }
   }
@@ -5154,11 +5246,16 @@ function isOnCommentBorder(s, x, y, isTouch){
   var lx=(x-s.cx)*cos-(y-s.cy)*sin;
   var ly=(x-s.cx)*sin+(y-s.cy)*cos;
   var hw=s.w/2, hh=s.h/2;
-  // Grab strip target: ~30 screen-px on touch, ~16 on desktop (converted to canvas px).
-  var thresh = Math.max(COMMENT_BORDER_THRESH/zoom, (isTouch ? 30 : 16)/zoom);
-  // …but never let the strip swallow the whole box — keep an interior the
-  // user can still tap to edit on small notes.
-  thresh = Math.min(thresh, Math.min(hw, hh) * 0.45);
+  // Border-move strip: FIXED SCREEN SIZE, converted to canvas units exactly like
+  // the handle radius in getHandleAt — so the two zones live in one coordinate
+  // space and stop fighting. The strip is capped to the SAME half-extent
+  // denominator (0.40) used by the handle cap; this guarantees the move-strip
+  // never extends past where handles take over, leaving a clean hierarchy:
+  //   corners  → resize handles
+  //   edges    → move strip
+  //   interior → type
+  var thresh = (isTouch ? 30 : 16) / zoom;
+  thresh = Math.min(thresh, Math.min(hw, hh) * 0.40);
   // Must be inside (or very close to) the outer boundary
   if(Math.abs(lx)>hw+thresh||Math.abs(ly)>hh+thresh) return false;
   // Must be within thresh of at least one edge
@@ -5245,9 +5342,12 @@ function handleCommentDown(e, sp, isTouch){
         return;
       }
 
-      // Single click in interior → immediately open text editor (Acrobat behavior)
+      // Interior press on a selected, NON-editing note is ambiguous: it may be
+      // the start of a move, or a click to enter text editing. Don't commit yet.
+      // Stash a pending gesture; pointermove promotes it to a move past the
+      // deadband, pointerup without that travel opens the editor. (Acrobat behavior)
       e.preventDefault();
-      startCommentTextEdit(selectedShape._commentObj);
+      _cmtPending={x:sp.x,y:sp.y,sp:sp};
       return;
     }
 
@@ -5495,11 +5595,18 @@ function enterTextTransformMode(obj){
   // all four text corners sit inside the ellipse (see TEXT_ELLIPSE_K comment above).
   var estW=textW*TEXT_ELLIPSE_K;
   var estH=textH*TEXT_ELLIPSE_K;
+  // The text is drawn rotated about its origin (obj.x, obj.y). Compute the
+  // ellipse center by rotating the local center-offset by the same angle, so
+  // the selection box sits exactly over the rotated glyphs (not drifted off).
+  var _ang=obj.angle||0;
+  var _lcx=textW/2, _lcy=-tmfpx+textH/2;   // center offset in the text's local frame
+  var _ca=Math.cos(_ang), _sa=Math.sin(_ang);
   selectedShape={
     type:'text', _textObj:obj,
-    cx: obj.x+textW/2, cy: obj.y-tmfpx+textH/2,
+    cx: obj.x + _lcx*_ca - _lcy*_sa,
+    cy: obj.y + _lcx*_sa + _lcy*_ca,
     w: Math.max(estW,40), h: Math.max(estH,tmfpx*1.5),
-    angle: obj.angle||0,
+    angle: _ang,
     color: obj.color, strokeW:1.5, opacity:obj.opacity,
     fill:false, lineStyle:'solid'
   };
@@ -5548,16 +5655,20 @@ function getHandlePositions(s){
 function getHandleAt(x,y,isTouch){
   if(!selectedShape) return -1;
   var handles=getHandlePositions(selectedShape);
-  // On touch, use a minimum of 28px screen-space slop converted to canvas coords.
-  // At high zoom the formula (HANDLE_SIZE+5)/zoom can shrink to <3 canvas px —
-  // way too small for a fingertip. Guarantee at least 28 screen-px in canvas units.
-  var minSlop = isTouch ? Math.max((HANDLE_SIZE+5)/zoom, 28/zoom) : (HANDLE_SIZE+5)/zoom;
-  var hitR = minSlop;
-  // Cap hit radius so handles can't swallow the interior of small shapes.
-  // Without this cap, at low zoom the entire comment box becomes handle territory.
+  // Handle hit target is a FIXED SCREEN SIZE (Acrobat-style): the same physical
+  // grab radius regardless of zoom or the annotation's page dimensions. We pick
+  // the screen-px target, then convert ONCE into canvas units via /zoom so the
+  // target stays constant on screen at every zoom level.
+  var screenTarget = isTouch ? 30 : (HANDLE_SIZE+5);  // physical px
+  var hitR = screenTarget / zoom;                      // canvas px at this zoom
+  // Cap so handles can't swallow a small box's interior — but cap against the
+  // SAME coordinate space the border-move strip uses (see CMT_ZONE below), so
+  // the two zones never compete. Reserve the outer ring for handles and leave
+  // a clear interior. Cap is a fraction of the half-extent, matched to the
+  // border strip's denominator (half-sides), not the full min dimension.
   if(selectedShape.type==='comment'){
-    var minDim=Math.min(selectedShape.w, selectedShape.h);
-    hitR=Math.min(hitR, minDim*0.28);
+    var hwC=selectedShape.w/2, hhC=selectedShape.h/2;
+    hitR=Math.min(hitR, Math.min(hwC, hhC)*0.40);
   }
   // Check rotation handles first (8-11) — they're further out so check before resize
   for(var i=8;i<=11;i++){
@@ -5666,23 +5777,37 @@ function renderSelection(){
   } else if(s.type==='cloud'){
     drawCloud(selCtx,-s.w/2,-s.h/2,s.w/2,s.h/2,s.fill?{color:s.fillColor||s.color,opacity:s.fillOpacity!==undefined?s.fillOpacity:s.opacity*.25}:null);
   } else if(s.type==='text'){
-    // Text selection: draw text at its position/angle for live preview
+    // Text selection preview: draw using the SAME per-line anchor as
+    // renderTextObjs(), but derive the draw ORIGIN live from the selection
+    // pose (s.cx/s.cy/s.angle). The origin is the ellipse center minus the
+    // rotated local center-offset — the exact inverse of the mapping in
+    // enterTextTransformMode — so the preview tracks move, rotate and resize
+    // in real time and sits exactly over where the committed text will land.
     if(s._textObj){
       var to=s._textObj;
       var tofpx=ptToCanvasPx(to.fontSize);
-      selCtx.restore(); // undo translate/rotate so we can re-render text
+      var tfam=to.fontFamily||'Arial';
+      var twt=(to.bold?'bold ':'');
+      var tst=(to.italic?'italic ':'');
+      selCtx.restore(); // undo the center translate/rotate set up above
       selCtx.save();
       selCtx.globalAlpha=to.opacity;
       selCtx.fillStyle=to.color;
-      selCtx.font='bold '+tofpx+'px Arial,sans-serif';
-      selCtx.translate(s.cx,s.cy); selCtx.rotate(s.angle);
-      var lines2=to.text.split('\n');
-      // Use accurate measurement so text position matches the ellipse center.
-      var textW2=lines2.reduce(function(m,l){ return Math.max(m,selCtx.measureText(l).width); },0);
-      var estH2=lines2.length*tofpx*1.35;
-      var localY2=tofpx - estH2/2;
-      lines2.forEach(function(line,i){ selCtx.fillText(line,-textW2/2,localY2+i*tofpx*1.35); });
-
+      selCtx.font=tst+twt+tofpx+'px '+tfam+',sans-serif';
+      var talign=to.textAlign||'left';
+      selCtx.textAlign=talign;
+      var tlines=to.text.split('\n');
+      var tmaxW=measureLinesWFull(tlines,tofpx,tfam,to.bold,to.italic);
+      var tH=tlines.length*tofpx*1.35;
+      // local center offset (matches enterTextTransformMode): (textW/2, -fpx+textH/2)
+      var lcx=tmaxW/2, lcy=-tofpx+tH/2;
+      var ca=Math.cos(s.angle), sa=Math.sin(s.angle);
+      var ox=s.cx-(lcx*ca-lcy*sa);
+      var oy=s.cy-(lcx*sa+lcy*ca);
+      selCtx.translate(ox,oy);
+      selCtx.rotate(s.angle);
+      var taxOff=(talign==='center'?tmaxW/2:talign==='right'?tmaxW:0);
+      tlines.forEach(function(line,i){ selCtx.fillText(line,taxOff,i*tofpx*1.35); });
     }
   }
   selCtx.restore();
@@ -5765,6 +5890,8 @@ function renderSelection(){
 }
 
 function commitSelection(){
+  _cmtPending=null;
+  _dragText=null;
   if(!selectedShape) return;
   var s=selectedShape;
 
@@ -5798,13 +5925,17 @@ function commitSelection(){
     var obj=s._textObj;
     var lines=obj.text.split('\n');
     var cmfpx=ptToCanvasPx(obj.fontSize);
-    // Use accurate measurement to compute the left-edge origin from the ellipse center.
-    var estW=measureLinesW(lines,cmfpx);
+    // Derive the origin (obj.x, obj.y) from the ellipse center using the SAME
+    // convention as enterTextTransformMode and the preview: full measurement,
+    // local center-offset (textW/2, -fpx+textH/2), inverse-rotated. Using a
+    // matching convention everywhere is what stops the label from shifting /
+    // doubling when you re-select it after committing.
+    var estW=measureLinesWFull(lines,cmfpx,obj.fontFamily||'Arial',obj.bold,obj.italic);
     var estH=lines.length*cmfpx*1.35;
     var cos=Math.cos(s.angle), sin=Math.sin(s.angle);
-    var tLocalX=-estW/2, tLocalY=cmfpx-estH/2;
-    obj.x=s.cx + tLocalX*cos - tLocalY*sin;
-    obj.y=s.cy + tLocalX*sin + tLocalY*cos;
+    var tLocalX=estW/2, tLocalY=-cmfpx+estH/2;
+    obj.x=s.cx - (tLocalX*cos - tLocalY*sin);
+    obj.y=s.cy - (tLocalX*sin + tLocalY*cos);
     obj.angle=s.angle;
     obj._editing=false;
     renderTextObjs();
@@ -5840,6 +5971,8 @@ function commitSelection(){
 }
 
 function cancelSelection(){
+  _cmtPending=null;
+  _dragText=null;
   _dragComment=null;
   if(editShapeObj){ editShapeObj._editing=false; editShapeObj=null; }
   // Unhide text object if it was hidden for transform mode (kept for safety)
