@@ -2254,6 +2254,7 @@ var compositedSnap=null;
 var undoStack=[], redoStack=[];
 var polyPoints=[], polyActive=false;
 var leaderStep=0;
+var _suppressLeaderPlaceUntil=0; // ignore placement clicks right after a select/drag/deselect
 // ── TEXT FORMATTING STATE ──
 var textFontFamily = 'Arial';
 var textBold       = false;
@@ -2274,6 +2275,10 @@ var selectedMeasure=null; // currently selected measure object
 var selectedPolyline=null; // currently selected polyline object (for recolor/restyle)
 var measureDragHandle=-1; // -1=none, 0=p1 endpoint, 1=p2 endpoint, -2=move whole line
 var measureDragStart=null; // {x,y,orig:{x1,y1,x2,y2}}
+// ── LEADER SELECTION ──
+var selectedLeader=null;  // currently selected leader object (recolor/resize/reposition)
+var leaderDragHandle=-1;  // -1=none, 0=arrow tip(P1), 1=elbow(P2), 2=shoulder end, -2=move whole leader
+var leaderDragStart=null; // {x,y,orig:{x1,y1,x2,y2,shoulderLen,shoulderDir}}
 // ── PEN PATH MEASUREMENT ──
 // Track points of the current pen stroke so we can measure arc length
 var penPathPoints=[];
@@ -2967,6 +2972,7 @@ function afterLoad(){
   pathMeasureObjs=[]; pmPoints=[]; pmActive=false;
   polylineObjs=[]; plPoints=[]; plActive=false; selectedPolyline=null;
   penObjs=[]; polygonObjs=[]; leaderObjs=[]; stampObjs=[];
+  selectedLeader=null; leaderDragHandle=-1; leaderDragStart=null;
   penPathPoints=[]; markupObjs=[];
   tCtx.clearRect(0,0,tCv.width,tCv.height);
   shCtx.clearRect(0,0,shCv.width,shCv.height);
@@ -3238,7 +3244,57 @@ function onDown(e){
   }
   if(tool==='polygon'){ return; }
   if(tool==='pathmeasure'){ return; }
-  if(tool==='leader'){ return; }
+  if(tool==='leader'){
+    // Mid-placement (first point already set) → let the click handler place P2.
+    if(leaderStep>0){ return; }
+    // If a leader is already selected, check its handles first.
+    if(selectedLeader){
+      var lh=getLeaderHandleAt(selectedLeader,sp.x,sp.y,_isTouchEvt);
+      if(lh!==-1){
+        e.preventDefault();
+        _suppressLeaderPlaceUntil=Date.now()+700;
+        leaderDragHandle=lh;
+        leaderDragStart={x:sp.x,y:sp.y,orig:{
+          x1:selectedLeader.x1,y1:selectedLeader.y1,
+          x2:selectedLeader.x2,y2:selectedLeader.y2,
+          shoulderLen:selectedLeader.shoulderLen||60,
+          shoulderDir:selectedLeader.shoulderDir||1}};
+        return;
+      }
+      // Clicked off the selected leader — but if we hit ANOTHER leader, switch to it.
+      var other=findLeaderObjAt(sp.x,sp.y,_isTouchEvt);
+      if(other && other!==selectedLeader){
+        commitLeaderSelection();
+        e.preventDefault();
+        _suppressLeaderPlaceUntil=Date.now()+700;
+        selectedLeader=other; leaderDragHandle=-1; leaderDragStart=null;
+        color=other.color; clrSwatch.style.background=color; clrInput.value=color;
+        opacity=other.opacity; opSl.value=Math.round(opacity*100); opVal.textContent=Math.round(opacity*100)+'%';
+        if(other.strokeW){ strokeW=other.strokeW; swSl.value=strokeW; swVal.textContent=strokeW+'px'; }
+        renderLeaderSelection();
+        return;
+      }
+      // Clicked empty space → commit (deselect). User can start a new leader after.
+      _suppressLeaderPlaceUntil=Date.now()+700;
+      commitLeaderSelection();
+      return;
+    }
+    // No leader selected yet → clicking an existing leader selects it.
+    var lSel=findLeaderObjAt(sp.x,sp.y,_isTouchEvt);
+    if(lSel){
+      e.preventDefault();
+      _suppressLeaderPlaceUntil=Date.now()+700;
+      selectedLeader=lSel; leaderDragHandle=-1; leaderDragStart=null;
+      // Sync toolbar pickers to this leader so color/width edits apply to it.
+      color=lSel.color; clrSwatch.style.background=color; clrInput.value=color;
+      opacity=lSel.opacity; opSl.value=Math.round(opacity*100); opVal.textContent=Math.round(opacity*100)+'%';
+      if(lSel.strokeW){ strokeW=lSel.strokeW; swSl.value=strokeW; swVal.textContent=strokeW+'px'; }
+      renderLeaderSelection();
+      return;
+    }
+    // Empty space, nothing selected → fall through to placement (click handler).
+    return;
+  }
   if(tool==='stamp'){ handleStamp(e); return; }
 
   // ── Arrow object: re-select or start drag (live editable vector) ──
@@ -3402,6 +3458,28 @@ function onMove(e){
       // Keep shCv in sync so the line doesn't snap back when selCv is cleared
       renderShapeAndMeasure();
     }
+    return;
+  }
+  // ── Leader handle/move drag ──
+  if(selectedLeader && leaderDragHandle!==-1 && leaderDragStart && !pinching){
+    if(e.cancelable) e.preventDefault();
+    var lp=getPos(e);
+    var lo=leaderDragStart.orig;
+    var o=selectedLeader;
+    if(leaderDragHandle===0){            // arrow tip (P1)
+      var sp2=snapPt(lp.x,lp.y); o.x1=sp2.x; o.y1=sp2.y;
+    } else if(leaderDragHandle===1){     // elbow (P2)
+      var sp3=snapPt(lp.x,lp.y); o.x2=sp3.x; o.y2=sp3.y;
+    } else if(leaderDragHandle===2){     // shoulder end → adjust length + direction
+      var ddx=lp.x-o.x2;
+      o.shoulderDir = ddx<0 ? -1 : 1;
+      o.shoulderLen = Math.max(12, Math.abs(ddx));
+    } else if(leaderDragHandle===-2){    // move whole leader
+      var mdx=lp.x-leaderDragStart.x, mdy=lp.y-leaderDragStart.y;
+      o.x1=lo.x1+mdx; o.y1=lo.y1+mdy;
+      o.x2=lo.x2+mdx; o.y2=lo.y2+mdy;
+    }
+    renderLeaderSelection();
     return;
   }
   // ── Shape transform drag ──
@@ -3617,6 +3695,16 @@ function onUp(e){
   if(tool==='comment'&&_movingComment){
     _movingComment=null; _moveCmtStart=null;
     // handled by selectedShape system now — just clear stale refs
+    return;
+  }
+  // End leader handle/move drag — but KEEP the leader selected so the user can
+  // keep editing (change color/width, drag again) and moving the cursor away
+  // does NOT deselect it. Deselection only happens on an explicit click-off.
+  if(selectedLeader && leaderDragHandle!==-1){
+    leaderDragHandle=-1; leaderDragStart=null;
+    renderShapeAndMeasure();   // bake nothing; just refresh static layer (selected one is skipped)
+    renderLeaderSelection();   // keep handles visible over the live leader
+    pushUndo();
     return;
   }
   // End measure endpoint drag
@@ -4091,7 +4179,7 @@ function renderShapeAndMeasure(){
   // Pen / Polygon / Leader / Stamp objects (live, never burned)
   penObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawPenOnCtx(shCtx,o,1); });
   polygonObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawPolygonOnCtx(shCtx,o,1); });
-  leaderObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawLeaderOnCtx(shCtx,o,1); });
+  leaderObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; if(o===selectedLeader) return; drawLeaderOnCtx(shCtx,o,1); });
   stampObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawStampObjOnCtx(shCtx,o,1); });
   // Comment objects (sticky notes)
   renderCommentObjs(shCtx);
@@ -4354,6 +4442,74 @@ function commitMeasureSelection(){
 function cancelMeasureSelection(){
   if(selectedMeasure){ selectedMeasure._editing=false; selectedMeasure=null; }
   measureDragHandle=-1; measureDragStart=null;
+  if(selCv.width>1){ selCv.width=1; selCv.height=1; }
+  renderShapeAndMeasure(); composite();
+}
+
+// ── LEADER SELECTION OVERLAY ──────────────────────────────────
+// Returns which leader control is under (x,y): 0=arrow tip, 1=elbow,
+// 2=shoulder end, -2=on a segment (move whole), -1=none.
+function getLeaderHandleAt(o, x, y, isTouch){
+  var slop=isTouch?Math.max(14,20/zoom):Math.max(8,10/zoom);
+  var sx=o.x2+(o.shoulderLen||60)*(o.shoulderDir||1); // shoulder end x
+  if(Math.hypot(x-o.x1,y-o.y1)<slop) return 0;   // arrow tip
+  if(Math.hypot(x-o.x2,y-o.y2)<slop) return 1;   // elbow
+  if(Math.hypot(x-sx,  y-o.y2)<slop) return 2;   // shoulder end
+  // body: leader line P1->P2 and shoulder P2->shoulderEnd
+  var segs=[[o.x1,o.y1,o.x2,o.y2],[o.x2,o.y2,sx,o.y2]];
+  for(var s=0;s<segs.length;s++){
+    var ax=segs[s][0],ay=segs[s][1],bx=segs[s][2],by=segs[s][3];
+    var dx=bx-ax,dy=by-ay,len2=dx*dx+dy*dy; if(len2<1) continue;
+    var t=Math.max(0,Math.min(1,((x-ax)*dx+(y-ay)*dy)/len2));
+    if(Math.hypot(ax+t*dx-x,ay+t*dy-y)<(isTouch?18:8)+(o.strokeW||2)/2) return -2;
+  }
+  return -1;
+}
+
+// Draw selection overlay for the selected leader on selCv (handles + highlight).
+function renderLeaderSelection(){
+  if(!selectedLeader){ return; }
+  if(selCv.width!==drawCv.width||selCv.height!==drawCv.height){
+    selCv.width=drawCv.width; selCv.height=drawCv.height;
+  }
+  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  var o=selectedLeader;
+  // Draw the leader itself live here (it's skipped on shCv while selected).
+  drawLeaderOnCtx(selCtx, o, 1);
+  var sx=o.x2+(o.shoulderLen||60)*(o.shoulderDir||1);
+  var hs=Math.max(8,10/zoom);
+  // Handles: tip (cyan), elbow (amber), shoulder end (purple)
+  [[o.x1,o.y1,'#00D4FF'],[o.x2,o.y2,'#FBBF24'],[sx,o.y2,'#9d97ff']].forEach(function(pt){
+    selCtx.save();
+    selCtx.fillStyle=pt[2];
+    selCtx.strokeStyle='#fff';
+    selCtx.lineWidth=1.5/zoom;
+    selCtx.shadowColor=pt[2];
+    selCtx.shadowBlur=6/zoom;
+    selCtx.setLineDash([]);
+    selCtx.beginPath();
+    selCtx.arc(pt[0],pt[1],hs,0,Math.PI*2);
+    selCtx.fill(); selCtx.stroke();
+    selCtx.restore();
+  });
+  // Hint
+  selCtx.save();
+  selCtx.fillStyle='rgba(0,212,255,0.8)';
+  selCtx.font=(Math.max(10,11/zoom))+'px Arial,sans-serif';
+  selCtx.textAlign='center'; selCtx.textBaseline='top';
+  selCtx.fillText('Drag handles · change color/width in toolbar', (o.x1+sx)/2, Math.min(o.y1,o.y2)-20/zoom);
+  selCtx.restore();
+}
+
+function commitLeaderSelection(){
+  if(!selectedLeader) return;
+  selectedLeader=null; leaderDragHandle=-1; leaderDragStart=null;
+  if(selCv.width>1){ selCv.width=1; selCv.height=1; }
+  renderShapeAndMeasure(); composite(); pushUndo();
+}
+
+function cancelLeaderSelection(){
+  selectedLeader=null; leaderDragHandle=-1; leaderDragStart=null;
   if(selCv.width>1){ selCv.width=1; selCv.height=1; }
   renderShapeAndMeasure(); composite();
 }
@@ -4629,7 +4785,10 @@ drawCv.addEventListener('touchend',function(e){
   // polyline is handled by the dedicated touchstart/touchmove/touchend above
   if(tool==='polyline') return;
   lastTap=now;
-  if(tool==='leader'){ handleLeaderClick(p.x,p.y,fakeE); }
+  if(tool==='leader'){
+    if(selectedLeader || Date.now() < _suppressLeaderPlaceUntil) return;
+    handleLeaderClick(p.x,p.y,fakeE);
+  }
 },{passive:true});
 
 // Desktop: click to add vertex, dblclick to close
@@ -4648,7 +4807,12 @@ drawCv.addEventListener('click',function(e){
     if(selectedPolyline) return; // a polyline is selected for editing — don't start a new one
     plPoints.push(p); plActive=true; redrawPolylinePreview(p.x,p.y);
   }
-  else if(tool==='leader'){ handleLeaderClick(p.x,p.y,e); }
+  else if(tool==='leader'){
+    // Don't place a new leader if one is selected (we're editing it) or if a
+    // selection/drag/deselect interaction just consumed this click in onDown.
+    if(selectedLeader || Date.now() < _suppressLeaderPlaceUntil) return;
+    handleLeaderClick(p.x,p.y,e);
+  }
 });
 drawCv.addEventListener('dblclick',function(e){
   if(tool==='polygon'&&polyPoints.length>=3){ e.preventDefault(); closePolygon(); }
@@ -5238,9 +5402,10 @@ function showTextHover(x, y){
 }
 
 function clearTextHover(){
-  // Only collapse selCv if no shape/text/image/measure/polyline selection is showing.
-  // Collapsing it while a selection is active wipes the selection overlay.
-  if(!_txtCursorActive && !selectedShape && !selImg && !selectedMeasure && !selectedPolyline && selCv.width > 1){ selCv.width=1; selCv.height=1; }
+  // Only collapse selCv if no shape/text/image/measure/polyline/leader selection
+  // is showing. Collapsing it while a selection is active wipes the overlay —
+  // this is what made a selected leader vanish as soon as the mouse moved.
+  if(!_txtCursorActive && !selectedShape && !selImg && !selectedMeasure && !selectedPolyline && !selectedLeader && selCv.width > 1){ selCv.width=1; selCv.height=1; }
 }
 
 // ── END TEXT CURSOR INDICATOR ────────────────────────────────
@@ -6075,6 +6240,16 @@ drawCv.addEventListener('mousemove',function(e){
     var ph2=findPolylineObjAt(p.x,p.y,false);
     drawCv.style.cursor=(ph2||selectedPolyline)?'move':'crosshair';
   }
+  // Leader tool: show grab cursor over the selected leader's handles/body,
+  // pointer over any re-selectable leader, crosshair otherwise.
+  if(tool==='leader'&&leaderStep===0&&baseLoaded){
+    if(selectedLeader){
+      var lhh=getLeaderHandleAt(selectedLeader,p.x,p.y,false);
+      drawCv.style.cursor = (lhh>=0) ? 'crosshair' : (lhh===-2 ? 'move' : 'default');
+    } else {
+      drawCv.style.cursor = findLeaderObjAt(p.x,p.y,false) ? 'move' : 'crosshair';
+    }
+  }
 },{passive:true});
 
 // ══════════════════════════════════════════════════════════════
@@ -6603,7 +6778,7 @@ document.querySelectorAll('.tb-btn[data-tool]').forEach(function(btn){
       if(_editingComment) commitCommentEdit();
       if(selectedShape&&selectedShape.type==='comment') commitSelection();
     }
-    commitText(); commitSelection(); commitMeasureSelection(); commitPolylineSelection(); leaderStep=0;
+    commitText(); commitSelection(); commitMeasureSelection(); commitPolylineSelection(); commitLeaderSelection(); leaderStep=0;
     stopTextCursor(); clearTextHover();
     tool=btn.dataset.tool;
     document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
@@ -6975,12 +7150,14 @@ clrInput.addEventListener('input',function(e){
   }
   if(selectedMeasure){ selectedMeasure.color=color; renderMeasureSelection(); renderShapeAndMeasure(); }
   if(selectedPolyline){ selectedPolyline.color=color; renderShapeAndMeasure(); renderPolylineSelection(); }
+  if(selectedLeader){ selectedLeader.color=color; renderShapeAndMeasure(); renderLeaderSelection(); }
 });
 swSl.addEventListener('input',function(e){
   strokeW=parseInt(e.target.value); swVal.textContent=strokeW+'px';
   if(selectedShape){ selectedShape.strokeW=strokeW; renderSelection(); }
   if(selectedMeasure){ selectedMeasure.strokeW=strokeW; renderMeasureSelection(); renderShapeAndMeasure(); }
   if(selectedPolyline){ selectedPolyline.strokeW=strokeW; renderShapeAndMeasure(); renderPolylineSelection(); }
+  if(selectedLeader){ selectedLeader.strokeW=strokeW; renderShapeAndMeasure(); renderLeaderSelection(); }
 });
 opSl.addEventListener('input',function(e){
   opacity=parseInt(e.target.value)/100; opVal.textContent=e.target.value+'%';
@@ -6991,6 +7168,7 @@ opSl.addEventListener('input',function(e){
   }
   if(selectedMeasure){ selectedMeasure.opacity=opacity; renderMeasureSelection(); renderShapeAndMeasure(); }
   if(selectedPolyline){ selectedPolyline.opacity=opacity; renderShapeAndMeasure(); renderPolylineSelection(); }
+  if(selectedLeader){ selectedLeader.opacity=opacity; renderShapeAndMeasure(); renderLeaderSelection(); }
 });
 
 // Fill color + opacity pickers
@@ -8874,6 +9052,7 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     if(selImg){ commitImgSelection(); return; }
     stopTextCursor(); clearTextHover();
+    if(selectedLeader){ commitLeaderSelection(); return; }
     if(selectedMeasure){ commitMeasureSelection(); return; }
     if(selectedPolyline){ cancelPolylineSelection(); return; }
     if(tool==='pathmeasure'&&pmActive){ closePathMeasure(); return; }
@@ -8891,6 +9070,16 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Enter'&&selectedShape){ commitSelection(); return; }
   if(e.key==='Enter'&&tool==='pathmeasure'&&pmActive){ closePathMeasure(); return; }
   if(e.key==='Enter'&&tool==='polyline'&&plActive){ closePolyline(); return; }
+  if((e.key==='Delete'||e.key==='Backspace')&&selectedLeader&&document.activeElement===document.body){
+    e.preventDefault();
+    captureState();
+    var lidx=leaderObjs.indexOf(selectedLeader);
+    if(lidx>-1) leaderObjs.splice(lidx,1);
+    selectedLeader=null; leaderDragHandle=-1; leaderDragStart=null;
+    if(selCv.width>1){ selCv.width=1; selCv.height=1; }
+    renderShapeAndMeasure(); composite(); pushUndo();
+    return;
+  }
   if((e.key==='Delete'||e.key==='Backspace')&&selImg&&document.activeElement===document.body){
     e.preventDefault();
     captureState();
@@ -9721,6 +9910,7 @@ function updateWatermark(){
     if(typeof leaderStep!=='undefined'&&leaderStep>0){ leaderStep=0; renderShapeAndMeasure(); composite(); return; }
     if(typeof _editingComment!=='undefined'&&_editingComment&&typeof commitCommentEdit==='function'){ commitCommentEdit(); return; }
     // Then deselect any active selection (no delete — just release it)
+    if(selectedLeader){ cancelLeaderSelection(); return; }
     if(selectedPolyline){ cancelPolylineSelection(); return; }
     if(selectedMeasure){ cancelMeasureSelection(); return; }
     if(selectedShape){ if(typeof cancelSelection==='function') cancelSelection(); else { selectedShape=null; if(selCv.width>1){selCv.width=1;selCv.height=1;} renderShapeAndMeasure(); composite(); } return; }
@@ -9754,7 +9944,7 @@ function updateWatermark(){
     idx = polygonObjs.indexOf(obj);
     if(idx > -1){ polygonObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
     idx = leaderObjs.indexOf(obj);
-    if(idx > -1){ leaderObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
+    if(idx > -1){ if(obj===selectedLeader){ selectedLeader=null; leaderDragHandle=-1; leaderDragStart=null; if(selCv.width>1){selCv.width=1;selCv.height=1;} } leaderObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
     idx = stampObjs.indexOf(obj);
     if(idx > -1){ stampObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
     if(typeof imgOverlays!=='undefined'){ idx = imgOverlays.indexOf(obj);
