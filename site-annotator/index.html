@@ -617,7 +617,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   font-size:13px;color:var(--txt);cursor:pointer;
   transition:background .12s;white-space:nowrap;
 }
-.ctx-item:hover{background:rgba(239,68,68,.18);color:#fca5a5;}
+.ctx-item:hover{background:rgba(108,99,255,.18);color:var(--acc2);}
+#ctx-delete:hover{background:rgba(239,68,68,.18);color:#fca5a5;}
+.ctx-item.hidden{display:none;}
 .ctx-item svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
 .ctx-sep{height:1px;background:var(--b1);margin:4px 0;}
 
@@ -1182,6 +1184,11 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
 <!-- RIGHT-CLICK CONTEXT MENU -->
 <div id="ctx-menu">
+  <div class="ctx-item" id="ctx-upload"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload Image</div>
+  <div class="ctx-item" id="ctx-copy"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</div>
+  <div class="ctx-item" id="ctx-paste"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Paste</div>
+  <div class="ctx-item" id="ctx-cancel"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="8" y1="8" x2="16" y2="16"/><line x1="16" y1="8" x2="8" y2="16"/></svg>Cancel</div>
+  <div class="ctx-item" id="ctx-fit"><svg viewBox="0 0 24 24"><polyline points="4 9 4 4 9 4"/><polyline points="20 9 20 4 15 4"/><polyline points="4 15 4 20 9 20"/><polyline points="20 15 20 20 15 20"/></svg>Fit to text</div>
   <div class="ctx-item" id="ctx-delete"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>Delete</div>
 </div>
 
@@ -1713,8 +1720,21 @@ var _cBorderW       = 2;          // border stroke width in canvas px
 var _cTxtColor      = '#1a1a2e';
 var _cFontSize      = 13;
 var _editingComment = null;       // comment whose text is being edited
+var CMT_PAD = 0.5; // canvas px interior padding between note border and text (tight)
 var _movingComment  = null;       // comment being dragged
 var _moveCmtStart   = null;       // {x,y,cx,cy} at drag start
+
+// ── Note text uses a FIXED size (Acrobat-style), not box-relative ───
+// The font-size dropdown sets the actual size in canvas pixels. Resizing
+// the box never rescales the text — it only changes the frame (text
+// re-wraps to the new width and the box grows vertically as you type).
+// If the text can't fit the box, drawCommentBox shows an overflow marker
+// instead of shrinking, exactly like Acrobat's yellow warning icon.
+function cmtEffFontSize(c){
+  // Stored c.fontSize is a TRUE POINT value; convert to scale-locked canvas px
+  // so a note prints at the same physical size at any plan resolution.
+  return ptToCanvasPx(Math.max(6, (c.fontSize || _cFontSize || 13)));
+}
 
 // Darken a hex color by `amt` (0–1)
 function darkenHex(hex, amt){
@@ -1741,8 +1761,11 @@ function cmtWrapLines(ctx, text, maxW){
   return out;
 }
 
-// Draw one comment box on any canvas context (sc = scale for export, skipText = hide text during edit)
-function drawCommentBox(ctx, c, sc, skipText){
+// Draw one comment box on any canvas context.
+//   sc       = scale (1 on screen, export scale for PNG/PDF)
+//   skipText = hide text while the edit overlay is active
+//   onScreen = draw the overflow warning marker (suppressed in exports)
+function drawCommentBox(ctx, c, sc, skipText, onScreen){
   sc=sc||1;
   ctx.save();
   var x=(c.cx-c.w/2)*sc, y=(c.cy-c.h/2)*sc, w=c.w*sc, h=c.h*sc;
@@ -1778,20 +1801,46 @@ function drawCommentBox(ctx, c, sc, skipText){
   ctx.stroke();
 
   // ── Body text (word-wrapped) — skipped while textOv overlay is active ──
+  var overflow=false;
   if(!skipText && c.text && c.text.trim()){
-    var fs=Math.max(8,Math.round((c.fontSize||13)*sc));
+    var fs=Math.max(8,Math.round(cmtEffFontSize(c)*sc));
     ctx.globalAlpha=1;
     ctx.fillStyle=c.textColor||'#1a1a2e';
     ctx.font=fs+'px Arial,sans-serif';
     ctx.textBaseline='top'; ctx.textAlign='left';
-    var pad=8*sc;
+    var pad=CMT_PAD*sc;
     var maxW=w-2*pad;
     var lineH=fs*1.4;
     var lines=cmtWrapLines(ctx,c.text,maxW);
     lines.forEach(function(line,i){
       var ty=y+pad+i*lineH;
-      if(ty+lineH<=y+h-2) ctx.fillText(line,x+pad,ty,maxW);
+      // Fixed size (Acrobat-style): clip lines that don't fit instead of scaling.
+      // Allow a small epsilon so the last fitted line isn't falsely clipped.
+      if(ty+lineH<=y+h-pad+0.5) ctx.fillText(line,x+pad,ty,maxW);
+      else overflow=true;
     });
+  }
+
+  // ── Overflow marker — Acrobat-style "text doesn't fit" warning ──
+  // On-screen only (never burned into exported PNG/PDF).
+  if(overflow && onScreen){
+    var m=Math.max(9, 11*sc);              // marker size in px
+    var mx=x+w-m-3*sc, my=y+h-m-3*sc;      // bottom-right interior corner
+    ctx.globalAlpha=1;
+    ctx.fillStyle='#F59E0B';               // amber triangle
+    ctx.strokeStyle='rgba(0,0,0,0.55)';
+    ctx.lineWidth=Math.max(0.5,1*sc);
+    ctx.beginPath();
+    ctx.moveTo(mx, my+m);
+    ctx.lineTo(mx+m, my+m);
+    ctx.lineTo(mx+m, my);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // exclamation mark
+    ctx.fillStyle='#1a1a1a';
+    ctx.font='bold '+Math.round(m*0.62)+'px Arial,sans-serif';
+    ctx.textBaseline='middle'; ctx.textAlign='center';
+    ctx.fillText('!', mx+m*0.68, my+m*0.66);
   }
   ctx.restore();
 }
@@ -1822,6 +1871,8 @@ function findCommentObjAt(x,y,isTouch){
 // ══════════════════════════════════════════════════════════════
 
 var _cmtLastTap = 0, _cmtLastHit = null;  // double-click tracking
+var _cmtHandleTap = 0, _cmtHandleObj = null;  // double-click-handle → snap-to-fit
+var _dragComment = null;  // comment currently being moved/resized (drawn live on selCv)
 
 // ── Helper: sync all comment toolbar controls to a note's values ──
 function _syncCommentPickers(c){
@@ -1869,14 +1920,13 @@ function enterCommentSelectMode(c){
 function startCommentTextEdit(c){
   _editingComment=c;
 
-  // Always render the textarea at a comfortable reading size (min 13px on screen).
-  // The canvas draws text at (fontSize * zoom) screen px, but the editing overlay
-  // just needs to be legible — exact visual match to the canvas is not required here.
-  // Use the note's font size directly — this is an HTML overlay, not canvas, so no zoom math needed.
-  var renderPx = (c.fontSize || _cFontSize);
+  // Editor overlay shows text at the same ON-SCREEN size the canvas will
+  // render it: effective(box) size in canvas px × zoom. Clamp to a legible
+  // minimum so tiny notes are still typeable.
+  var renderPx = Math.max(12, Math.round(cmtEffFontSize(c) * zoom));
   var scale = 1;
 
-  var pad = 8;
+  var pad = CMT_PAD;
   var cx  = c.cx - c.w/2 + pad;
   var cy  = c.cy - c.h/2 + pad;
   var cw  = c.w - 2*pad;
@@ -1921,24 +1971,72 @@ function startCommentTextEdit(c){
   if(document.activeElement !== textOv) textOv.focus();
 }
 
-// ── Auto-grow box to fit textOv content (accounts for transform:scale) ──
+// ── Auto-grow box to fit textOv content while typing ──
+// Grows the box only when the text would overflow; never shrinks a box the
+// user sized by hand. (Double-click snaps to a tight fit — see snapCommentToFit.)
 function _cmtAutoGrow(c){
   if(_editingComment !== c) return;
   textOv.style.height = 'auto';
   var scrollH = Math.max(textOv.scrollHeight || 20, 20);
   textOv.style.height = scrollH + 'px';
+  fitCommentToText(c, textOv.value, false, 'grow');
+  repositionCommentEditorHeight(c);
+}
 
-  // Convert textarea scroll height (screen px) to canvas px.
-  var visualH  = scrollH;                  // no scale transform any more
-  var pad      = 8;
-  var neededH  = Math.ceil(visualH / zoom) + 2*pad + 4;
-
-  if(neededH > c.h){
-    c.h = neededH;
-    if(selectedShape && selectedShape._commentObj === c) selectedShape.h = neededH;
+// Compute the box height needed for the wrapped text at the note's current
+// font + width. mode='grow' only expands when text overflows (manual size
+// preserved); mode='snap' sets the exact tight height (shrink + grow).
+function fitCommentToText(c, text, skipRender, mode){
+  mode = mode || 'snap';
+  text = (text!==undefined && text!==null ? text : (c.text||''));
+  var fs   = cmtEffFontSize(c);           // scale-locked canvas px
+  var lineH= fs*1.4;
+  var maxW = Math.max(c.w - 2*CMT_PAD, 10);
+  // Measure with the same font the renderer uses
+  tCtx.save();
+  tCtx.font = fs+'px Arial,sans-serif';
+  var lines = (text && text.trim()) ? cmtWrapLines(tCtx, text, maxW) : [''];
+  tCtx.restore();
+  var n = Math.max(lines.length, 1);
+  var neededH = Math.ceil(n*lineH + 2*CMT_PAD);
+  var minH = Math.ceil(lineH + 2*CMT_PAD);
+  if(mode==='grow'){
+    // Only grow if the text doesn't fit; keep the user's manual height otherwise
+    if(neededH > c.h) c.h = neededH;
+    if(c.h < minH) c.h = minH;
+  } else {
+    // snap: tight hug
+    c.h = Math.max(neededH, minH);
+  }
+  if(selectedShape && selectedShape._commentObj === c) selectedShape.h = c.h;
+  if(!skipRender){
     renderShapeAndMeasure(); composite();
     if(selectedShape) renderSelection();
   }
+}
+
+// Double-click snap: tighten the box to exactly hug the text, top edge stable.
+function snapCommentToFit(c){
+  if(!c) return;
+  var topE = c.cy - c.h/2;
+  fitCommentToText(c, c.text, true, 'snap');
+  c.cy = topE + c.h/2;
+  if(selectedShape && selectedShape._commentObj===c){ selectedShape.cy=c.cy; selectedShape.h=c.h; }
+  renderShapeAndMeasure(); composite();
+  if(_editingComment===c) repositionCommentEditor(c);
+  if(selectedShape) renderSelection();
+  pushUndo();
+}
+
+// Match the editor textarea's height to the box interior (prevents the
+// textarea from scrolling its content out of the visible box).
+function repositionCommentEditorHeight(c){
+  if(_editingComment !== c || textOv.style.display === 'none') return;
+  var interiorH = Math.max((c.h - 2*CMT_PAD) * zoom, 16);
+  textOv.style.height    = Math.round(interiorH) + 'px';
+  textOv.style.minHeight = Math.round(interiorH) + 'px';
+  textOv.style.maxHeight = Math.round(interiorH) + 'px';
+  textOv.style.overflow  = 'hidden';
 }
 
 // ── Save text, close textOv, KEEP selection handles ──────────────
@@ -1951,6 +2049,11 @@ function commitCommentEdit(){
     c.cx=selectedShape.cx; c.cy=selectedShape.cy;
     c.w=selectedShape.w; c.h=selectedShape.h;
   }
+  // On commit (click away), snap the box tight to hug the text.
+  var _topE = c.cy - c.h/2;
+  fitCommentToText(c, c.text, true, 'snap');
+  c.cy = _topE + c.h/2;
+  if(selectedShape && selectedShape._commentObj===c){ selectedShape.cy=c.cy; selectedShape.h=c.h; }
   textOv.style.display = 'none'; textOv.blur();
   // Fully restore textOv to default state for next use (clear all comment-specific styles)
   textOv.style.background      = '';
@@ -1978,7 +2081,7 @@ function openCommentEditor(c){
 // Reposition textOv when box is resized while editing
 function repositionCommentEditor(c){
   if(_editingComment !== c || textOv.style.display === 'none') return;
-  var pad = 8;
+  var pad = CMT_PAD;
   var cx2 = c.cx - c.w/2 + pad;
   var cy2 = c.cy - c.h/2 + pad;
   var cw2 = c.w - 2*pad;
@@ -1993,17 +2096,24 @@ function repositionCommentEditor(c){
   textOv.style.width    = layoutW + 'px';
   textOv.style.maxWidth = layoutW + 'px';
   textOv.style.minWidth = layoutW + 'px';
-  // Re-measure height after width change (word-wrap may shift)
-  setTimeout(function(){ if(_editingComment === c) _cmtAutoGrow(c); }, 0);
+  // Box-relative font: rescale the editor text as the box width changes
+  textOv.style.fontSize = Math.max(12, Math.round(cmtEffFontSize(c) * zoom)) + 'px';
+  // Match editor height to the (already-fitted) box interior — cheap, no re-render.
+  repositionCommentEditorHeight(c);
 }
 
 // Render all comment objects (called as part of renderShapeAndMeasure)
 function renderCommentObjs(ctx){
   commentObjs.forEach(function(c){
+    // While actively dragging/resizing a comment, it's drawn live on the
+    // lightweight selection canvas instead — skip it here so we don't pay the
+    // full-plan shCv redraw on every pointer event (perf).
+    if(c===_dragComment && ctx===shCtx) return;
     var layer=layers[c.layerIdx]; if(layer&&!layer.visible) return;
     // Always draw the box shell (fill + border).
     // When editing, pass skipText=true so textOv overlay shows the text instead.
-    drawCommentBox(ctx, c, 1, c===_editingComment);
+    // onScreen=true → show the overflow warning marker (export omits it).
+    drawCommentBox(ctx, c, 1, c===_editingComment, true);
   });
 }
 
@@ -2053,6 +2163,7 @@ function syncPickersToSelected(){
     color=m.color; clrSwatch.style.background=color; clrInput.value=color;
     opacity=m.opacity; opSl.value=Math.round(opacity*100); opVal.textContent=Math.round(opacity*100)+'%';
     if(m.strokeW){ strokeW=m.strokeW; swSl.value=strokeW; swVal.textContent=strokeW+'px'; }
+    if(typeof syncLineStyleButtons==='function') syncLineStyleButtons(m.lineStyle);
   }
 }
 
@@ -2137,6 +2248,7 @@ var markupOpacity = 0.45;
 // Each: {id, x1,y1,x2,y2, color, strokeW, opacity, lineStyle, layerIdx, _editing}
 var measureObjs=[];
 var selectedMeasure=null; // currently selected measure object
+var selectedPolyline=null; // currently selected polyline object (for recolor/restyle)
 var measureDragHandle=-1; // -1=none, 0=p1 endpoint, 1=p2 endpoint, -2=move whole line
 var measureDragStart=null; // {x,y,orig:{x1,y1,x2,y2}}
 // ── PEN PATH MEASUREMENT ──
@@ -2144,6 +2256,19 @@ var measureDragStart=null; // {x,y,orig:{x1,y1,x2,y2}}
 var penPathPoints=[];
 var scalingMode=false, refLinePixels=0;
 var _lastLoadedDpi = 0; // DPI of the most recently loaded file (set by PDF loader, estimated for images)
+// ── SCALE-LOCKED TEXT ────────────────────────────────────────
+// All text / comment / note sizes are stored as TRUE POINT VALUES (1 pt = 1/72").
+// They are authored against a 96-DPI reference (typical screen). To keep a given
+// point size printing at the SAME physical size regardless of the plan's render
+// resolution, we scale the stored point value by (loadedDPI / REF_DPI) at draw &
+// export time. So "12 pt" is always 12 points on paper, at 150/200/300 DPI alike.
+var TEXT_REF_DPI = 96;
+function textDpiFactor(){
+  var d = _lastLoadedDpi || TEXT_REF_DPI;
+  return d / TEXT_REF_DPI;
+}
+// Convert a stored point size -> canvas pixels at the current plan resolution.
+function ptToCanvasPx(pt){ return (pt || 0) * textDpiFactor(); }
 var _scalingRefMeasure=null; // reference line kept live while scale dialog is open
 var scaleSet=false, ppu=1, scaleUnit='m';
 var gridEnabled=false, gridSize=50, snapEnabled=false;
@@ -2199,6 +2324,25 @@ function composite(){
   // (they are separate absolutely-positioned canvases in the DOM)
 }
 
+// ── rAF-throttled redraw for drag operations ────────────────
+// During a comment/shape drag many pointermove events fire per frame; without
+// coalescing we'd run renderShapeAndMeasure()+composite() (heavy on busy plans)
+// for each, causing lag. This batches them to one render per animation frame.
+var _rafPending = false;
+var _rafExtra = null;
+function scheduleShapeRender(extra){
+  if(extra) _rafExtra = extra;
+  if(_rafPending) return;
+  _rafPending = true;
+  requestAnimationFrame(function(){
+    _rafPending = false;
+    renderShapeAndMeasure();
+    composite();
+    var fn=_rafExtra; _rafExtra=null;
+    if(fn) fn();
+  });
+}
+
 function lctx(){ return layers[activeLayerIdx].ctx; }
 
 // ── PRE-OPERATION SNAPSHOT ──────────────────────────────────
@@ -2221,6 +2365,10 @@ function captureState(){
       measureObjs:JSON.parse(JSON.stringify(measureObjs)),
       pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
       polylineObjs:JSON.parse(JSON.stringify(polylineObjs)),
+      penObjs:JSON.parse(JSON.stringify(penObjs)),
+      polygonObjs:JSON.parse(JSON.stringify(polygonObjs)),
+      leaderObjs:JSON.parse(JSON.stringify(leaderObjs)),
+      stampObjs:JSON.parse(JSON.stringify(stampObjs)),
       commentObjs:JSON.parse(JSON.stringify(commentObjs)),
       markupObjs: JSON.parse(JSON.stringify(markupObjs))
     };
@@ -2245,6 +2393,10 @@ function pushUndo(){
           measureObjs:JSON.parse(JSON.stringify(measureObjs)),
           pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
           polylineObjs:JSON.parse(JSON.stringify(polylineObjs)),
+          penObjs:JSON.parse(JSON.stringify(penObjs)),
+          polygonObjs:JSON.parse(JSON.stringify(polygonObjs)),
+          leaderObjs:JSON.parse(JSON.stringify(leaderObjs)),
+          stampObjs:JSON.parse(JSON.stringify(stampObjs)),
           commentObjs:JSON.parse(JSON.stringify(commentObjs)),
           markupObjs: JSON.parse(JSON.stringify(markupObjs))
         };
@@ -2286,6 +2438,10 @@ function _snapCurrentState(){
     measureObjs:JSON.parse(JSON.stringify(measureObjs)),
     pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
     polylineObjs:JSON.parse(JSON.stringify(polylineObjs)),
+    penObjs:JSON.parse(JSON.stringify(penObjs)),
+    polygonObjs:JSON.parse(JSON.stringify(polygonObjs)),
+    leaderObjs:JSON.parse(JSON.stringify(leaderObjs)),
+    stampObjs:JSON.parse(JSON.stringify(stampObjs)),
     commentObjs:JSON.parse(JSON.stringify(commentObjs)),
     markupObjs: JSON.parse(JSON.stringify(markupObjs))
   };
@@ -2311,6 +2467,10 @@ function undoFn(){
     if(snap.measureObjs!==undefined){ measureObjs=snap.measureObjs; renderMeasureObjs(); }
     if(snap.pathMeasureObjs!==undefined){ pathMeasureObjs=snap.pathMeasureObjs; }
     if(snap.polylineObjs!==undefined){ polylineObjs=snap.polylineObjs; }
+    if(snap.penObjs!==undefined){ penObjs=snap.penObjs; }
+    if(snap.polygonObjs!==undefined){ polygonObjs=snap.polygonObjs; }
+    if(snap.leaderObjs!==undefined){ leaderObjs=snap.leaderObjs; }
+    if(snap.stampObjs!==undefined){ stampObjs=snap.stampObjs; }
     if(snap.commentObjs!==undefined){ commentObjs=snap.commentObjs; }
     if(snap.markupObjs!==undefined){ markupObjs=snap.markupObjs; }
     renderShapeAndMeasure();
@@ -2336,6 +2496,10 @@ function redoFn(){
     if(snap.measureObjs!==undefined){ measureObjs=snap.measureObjs; renderMeasureObjs(); }
     if(snap.pathMeasureObjs!==undefined){ pathMeasureObjs=snap.pathMeasureObjs; }
     if(snap.polylineObjs!==undefined){ polylineObjs=snap.polylineObjs; }
+    if(snap.penObjs!==undefined){ penObjs=snap.penObjs; }
+    if(snap.polygonObjs!==undefined){ polygonObjs=snap.polygonObjs; }
+    if(snap.leaderObjs!==undefined){ leaderObjs=snap.leaderObjs; }
+    if(snap.stampObjs!==undefined){ stampObjs=snap.stampObjs; }
     if(snap.commentObjs!==undefined){ commentObjs=snap.commentObjs; }
     if(snap.markupObjs!==undefined){ markupObjs=snap.markupObjs; }
     renderShapeAndMeasure();
@@ -2360,7 +2524,10 @@ function clearFn(){
   polylineObjs    = polylineObjs.filter(function(pl){ return pl.layerIdx!==activeLayerIdx; });
   commentObjs     = commentObjs.filter(function(c){ return c.layerIdx!==activeLayerIdx; });
   markupObjs      = markupObjs.filter(function(m){ return m.layerIdx!==activeLayerIdx; });
-  // Cancel any in-progress selection on the cleared layer
+  penObjs     = penObjs.filter(function(o){ return o.layerIdx!==activeLayerIdx; });
+  polygonObjs = polygonObjs.filter(function(o){ return o.layerIdx!==activeLayerIdx; });
+  leaderObjs  = leaderObjs.filter(function(o){ return o.layerIdx!==activeLayerIdx; });
+  stampObjs   = stampObjs.filter(function(o){ return o.layerIdx!==activeLayerIdx; });
   if(selectedShape){
     var tobj=selectedShape._textObj;
     var sobj=editShapeObj;
@@ -2720,6 +2887,12 @@ function showImageError(name){
 
 function loadPDF(f){
   if(typeof pdfjsLib==='undefined'){ toast('PDF support requires an internet connection.','warn'); return; }
+  // pdf.js 3.x REQUIRES a worker source. The original code set this in a
+  // guard that executed before the library loaded, so it was never applied
+  // and PDFs failed to open. Set it lazily here, once, now that pdfjsLib exists.
+  if(pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc){
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
   var url=URL.createObjectURL(f);
   pdfjsLib.getDocument(url).promise.then(function(doc){
     pdfDoc=doc; currentPage=1; pgGrp(true);
@@ -2769,7 +2942,8 @@ function afterLoad(){
   undoStack=[]; redoStack=[]; textObjs=[]; editingObj=null; shapeObjs=[]; editShapeObj=null;
   measureObjs=[]; selectedMeasure=null; measureDragHandle=-1; measureDragStart=null;
   pathMeasureObjs=[]; pmPoints=[]; pmActive=false;
-  polylineObjs=[]; plPoints=[]; plActive=false;
+  polylineObjs=[]; plPoints=[]; plActive=false; selectedPolyline=null;
+  penObjs=[]; polygonObjs=[]; leaderObjs=[]; stampObjs=[];
   penPathPoints=[]; markupObjs=[];
   tCtx.clearRect(0,0,tCv.width,tCv.height);
   shCtx.clearRect(0,0,shCv.width,shCv.height);
@@ -3035,7 +3209,53 @@ function onDown(e){
   if(tool==='leader'){ return; }
   if(tool==='stamp'){ handleStamp(e); return; }
 
-  // ── Measure / Line object: re-select or start drag ──
+  // ── Arrow object: re-select or start drag (live editable vector) ──
+  if(tool==='arrow'){
+    if(selectedMeasure){
+      var ah=getMeasureHandleAt(selectedMeasure,sp.x,sp.y,_isTouchEvt);
+      if(ah!==-1){
+        e.preventDefault();
+        measureDragHandle=ah;
+        measureDragStart={x:sp.x,y:sp.y,orig:{x1:selectedMeasure.x1,y1:selectedMeasure.y1,x2:selectedMeasure.x2,y2:selectedMeasure.y2}};
+        return;
+      }
+      commitMeasureSelection();
+    }
+    var aHit=findMeasureObjAt(sp.x,sp.y,_isTouchEvt);
+    if(aHit && aHit.isArrow){
+      e.preventDefault();
+      aHit._editing=true;
+      selectedMeasure=aHit;
+      measureDragHandle=-1; measureDragStart=null;
+      renderMeasureSelection();
+      syncPickersToSelected();
+      return;
+    }
+    // Otherwise fall through to normal draw (new arrow)
+  }
+
+  // ── Polyline object: re-select for recolor/restyle ──
+  if(tool==='polyline' && !plActive){
+    // If a polyline is already selected and we click off it, commit it first
+    if(selectedPolyline){
+      var stillOn=findPolylineObjAt(sp.x,sp.y,_isTouchEvt);
+      if(stillOn===selectedPolyline){ e.preventDefault(); return; } // keep selected
+      commitPolylineSelection();
+    }
+    var plSel=findPolylineObjAt(sp.x,sp.y,_isTouchEvt);
+    if(plSel){
+      e.preventDefault();
+      selectedPolyline=plSel;
+      // sync pickers to the polyline
+      color=plSel.color; clrSwatch.style.background=color; clrInput.value=color;
+      opacity=plSel.opacity; opSl.value=Math.round(opacity*100); opVal.textContent=Math.round(opacity*100)+'%';
+      if(plSel.strokeW){ strokeW=plSel.strokeW; swSl.value=strokeW; swVal.textContent=strokeW+'px'; }
+      syncLineStyleButtons(plSel.lineStyle);
+      renderPolylineSelection();
+      return;
+    }
+    // Otherwise fall through to normal draw (new polyline)
+  }
   if(tool==='measure'||tool==='line'){
     // Check if we're clicking on the currently selected measure/line
     if(selectedMeasure){
@@ -3053,7 +3273,7 @@ function onDown(e){
     // Line tool only re-selects plain lines (showLabel===false)
     // Measure tool only re-selects measure lines (showLabel!==false)
     var mHit=findMeasureObjAt(sp.x,sp.y,_isTouchEvt);
-    if(mHit && (tool==='line'?mHit.showLabel===false:mHit.showLabel!==false)){
+    if(mHit && !mHit.isArrow && (tool==='line'?mHit.showLabel===false:mHit.showLabel!==false)){
       e.preventDefault();
       mHit._editing=true;
       selectedMeasure=mHit;
@@ -3095,6 +3315,7 @@ function onDown(e){
     lc2.beginPath(); lc2.moveTo(startX,startY);
     dCtx.beginPath(); dCtx.moveTo(startX,startY);
     lastPenX=startX; lastPenY=startY;
+    if(tool==='pen'){ penPathPoints=[{x:startX,y:startY}]; }
   }
 }
 
@@ -3145,10 +3366,11 @@ function onMove(e){
       if(selectedShape.type==='text'&&selectedShape._textObj){
         var _to=selectedShape._textObj;
         var _lines=_to.text.split('\n');
-        var _estW=measureLinesW(_lines,_to.fontSize);
-        var _estH=_lines.length*_to.fontSize*1.35;
+        var _tofpx=ptToCanvasPx(_to.fontSize);
+        var _estW=measureLinesW(_lines,_tofpx);
+        var _estH=_lines.length*_tofpx*1.35;
         var _cos=Math.cos(selectedShape.angle), _sin=Math.sin(selectedShape.angle);
-        var _lx=-_estW/2, _ly=_to.fontSize-_estH/2;
+        var _lx=-_estW/2, _ly=_tofpx-_estH/2;
         _to.x=selectedShape.cx+_lx*_cos-_ly*_sin;
         _to.y=selectedShape.cy+_lx*_sin+_ly*_cos;
         renderTextObjs();
@@ -3157,7 +3379,8 @@ function onMove(e){
       if(selectedShape.type==='comment'&&selectedShape._commentObj){
         selectedShape._commentObj.cx=selectedShape.cx;
         selectedShape._commentObj.cy=selectedShape.cy;
-        renderShapeAndMeasure(); composite();
+        _dragComment=selectedShape._commentObj;   // draw live on selCv
+        renderSelection();                         // lightweight, no full shCv redraw
         repositionCommentEditor(selectedShape._commentObj);
       }
     } else if(selHandle>=8){
@@ -3216,14 +3439,16 @@ function onMove(e){
         renderTextObjs();
       }
     }
-    // ── For comment: sync live bounds back to the comment object ──
+    // ── For comment: all handles resize freely (manual control) ──
     if(selectedShape.type==='comment'&&selectedShape._commentObj){
       var _cobj=selectedShape._commentObj;
       _cobj.cx=selectedShape.cx; _cobj.cy=selectedShape.cy;
-      _cobj.w=Math.max(selectedShape.w,60); _cobj.h=Math.max(selectedShape.h,40);
+      _cobj.w=Math.max(selectedShape.w,40); _cobj.h=Math.max(selectedShape.h,24);
       selectedShape.w=_cobj.w; selectedShape.h=_cobj.h;
-      renderShapeAndMeasure(); composite();
-      repositionCommentEditor(_cobj); // keep textOv inside resized box
+      _dragComment=_cobj;          // draw live on the lightweight selCv
+      renderSelection();           // no full shCv redraw during the drag
+      repositionCommentEditor(_cobj);
+      return; // skip the unconditional renderSelection() below
     }
     renderSelection();
     return;
@@ -3251,8 +3476,9 @@ function onMove(e){
   }
   if(tool==='pen'){
     var mx=(lastPenX+x)/2, my=(lastPenY+y)/2;
-    setupCtx(lc); lc.quadraticCurveTo(lastPenX,lastPenY,mx,my); lc.stroke(); resetCtx(lc);
+    // Preview on the display canvas only — NOT burned to the layer
     setupCtx(dCtx); dCtx.quadraticCurveTo(lastPenX,lastPenY,mx,my); dCtx.stroke(); resetCtx(dCtx);
+    penPathPoints.push({x:x,y:y});
     lastPenX=x; lastPenY=y;
   } else if(tool==='eraser'){
     lc.save(); lc.globalCompositeOperation='destination-out'; lc.lineWidth=strokeW*4; lc.lineCap='round'; lc.lineTo(x,y); lc.stroke(); lc.restore();
@@ -3364,7 +3590,9 @@ function onUp(e){
       var _rc=selectedShape._commentObj;
       _rc.cx=selectedShape.cx; _rc.cy=selectedShape.cy;
       _rc.w=selectedShape.w; _rc.h=selectedShape.h;
+      _dragComment=null;                 // stop live-on-selCv; restore to shCv
       renderShapeAndMeasure(); composite();
+      renderSelection();                 // re-draw handles on the now-cleared selCv
       repositionCommentEditor(_rc);
       pushUndo();
     }
@@ -3378,7 +3606,15 @@ function onUp(e){
   var p=snapPt(getPos(e).x,getPos(e).y);
   var lc=lctx();
   if(tool==='pen'){
+    if(penPathPoints.length>=1){
+      penObjs.push({
+        id:Date.now(), pts:penPathPoints.slice(),
+        color:color, strokeW:strokeW, opacity:opacity, lineStyle:lineStyle,
+        layerIdx:activeLayerIdx
+      });
+    }
     penPathPoints=[];
+    renderShapeAndMeasure();
     composite();
   } else if(tool==='eraser'){ composite(); }
   else if(tool==='line'){
@@ -3440,6 +3676,32 @@ function onUp(e){
       renderShapeAndMeasure();
     }
     composite();
+  }
+  else if(tool==='arrow'){
+    // Arrow = committed LIVE vector object (never burned to the layer canvas).
+    // Stored as a measure-style object with isArrow:true / showLabel:false so it
+    // inherits selection, endpoint dragging, recolor, restroke, move, export & save.
+    var apx=Math.hypot(p.x-startX,p.y-startY);
+    if(apx>4){
+      var isTouchA=!!(e.changedTouches&&e.changedTouches.length);
+      var newA={
+        id:Date.now(), x1:startX,y1:startY,x2:p.x,y2:p.y,
+        color:color, strokeW:strokeW, opacity:opacity, lineStyle:lineStyle,
+        layerIdx:activeLayerIdx, showLabel:false, isArrow:true, _editing:false
+      };
+      measureObjs.push(newA);
+      if(isTouchA){
+        newA._editing=true;
+        selectedMeasure=newA;
+        measureDragHandle=-1; measureDragStart=null;
+        renderShapeAndMeasure();
+        renderMeasureSelection();
+      } else {
+        selectedMeasure=null;
+        renderShapeAndMeasure();
+      }
+    } else { renderShapeAndMeasure(); }
+    composite(); pushUndo();
   }
   else {
     dCtx.putImageData(compositedSnap,0,0);
@@ -3542,7 +3804,15 @@ function eraseVectorAt(x, y, radius){
     polylineObjs=polylineObjs.filter(function(pl){ return pl!==plHit; });
     erased=true;
   }
-  // Markup objects
+  // Pen / Polygon / Leader / Stamp objects
+  var penHit=findPenObjAt(x,y,false);
+  if(penHit){ penObjs=penObjs.filter(function(o){ return o!==penHit; }); erased=true; }
+  var pgHit=findPolygonObjAt(x,y,false);
+  if(pgHit){ polygonObjs=polygonObjs.filter(function(o){ return o!==pgHit; }); erased=true; }
+  var ldHit=findLeaderObjAt(x,y,false);
+  if(ldHit){ leaderObjs=leaderObjs.filter(function(o){ return o!==ldHit; }); erased=true; }
+  var stHit=findStampObjAt(x,y,false);
+  if(stHit){ stampObjs=stampObjs.filter(function(o){ return o!==stHit; }); erased=true; }
   for(var mi=markupObjs.length-1;mi>=0;mi--){
     var m=markupObjs[mi];
     var mx1=Math.min(m.x1,m.x2)-radius, mx2=Math.max(m.x1,m.x2)+radius;
@@ -3637,6 +3907,19 @@ function drawMeasureObjOnCtx(ctx, m, highlight){
   else ctx.setLineDash([]);
   // main line
   ctx.beginPath(); ctx.moveTo(m.x1,m.y1); ctx.lineTo(m.x2,m.y2); ctx.stroke();
+  // Arrow: draw a solid arrowhead at P2, no ticks/label
+  if(m.isArrow){
+    ctx.setLineDash([]);
+    var hw=Math.max(m.strokeW*3.2,12);
+    ctx.beginPath();
+    ctx.moveTo(m.x2,m.y2);
+    ctx.lineTo(m.x2-hw*Math.cos(ang-Math.PI/6), m.y2-hw*Math.sin(ang-Math.PI/6));
+    ctx.moveTo(m.x2,m.y2);
+    ctx.lineTo(m.x2-hw*Math.cos(ang+Math.PI/6), m.y2-hw*Math.sin(ang+Math.PI/6));
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
   // Plain line: no ticks or label
   if(m.showLabel===false){ ctx.restore(); return; }
   // tick marks + overrun extensions
@@ -3727,8 +4010,163 @@ function renderShapeAndMeasure(){
     if(layer&&!layer.visible) return;
     drawPolylineOnCtx(shCtx, pl, 1);
   });
+  // Pen / Polygon / Leader / Stamp objects (live, never burned)
+  penObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawPenOnCtx(shCtx,o,1); });
+  polygonObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawPolygonOnCtx(shCtx,o,1); });
+  leaderObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawLeaderOnCtx(shCtx,o,1); });
+  stampObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawStampObjOnCtx(shCtx,o,1); });
   // Comment objects (sticky notes)
   renderCommentObjs(shCtx);
+}
+
+// ── Draw helpers for live pen/polygon/leader/stamp ──────────────
+function drawPenOnCtx(ctx,o,sc){
+  sc=sc||1;
+  if(!o.pts||o.pts.length<1) return;
+  ctx.save();
+  ctx.globalAlpha=o.opacity;
+  ctx.strokeStyle=o.color;
+  ctx.lineWidth=o.strokeW*sc;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  if(o.lineStyle==='dashed') ctx.setLineDash([o.strokeW*4*sc,o.strokeW*3*sc]);
+  else if(o.lineStyle==='dotted') ctx.setLineDash([o.strokeW*sc,o.strokeW*2.5*sc]);
+  else ctx.setLineDash([]);
+  ctx.beginPath();
+  var p=o.pts;
+  ctx.moveTo(p[0].x*sc,p[0].y*sc);
+  if(p.length===1){ ctx.lineTo(p[0].x*sc+0.1,p[0].y*sc+0.1); }
+  for(var i=1;i<p.length;i++){
+    var mx=((p[i-1].x+p[i].x)/2)*sc, my=((p[i-1].y+p[i].y)/2)*sc;
+    ctx.quadraticCurveTo(p[i-1].x*sc,p[i-1].y*sc,mx,my);
+  }
+  ctx.lineTo(p[p.length-1].x*sc,p[p.length-1].y*sc);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPolygonOnCtx(ctx,o,sc){
+  sc=sc||1;
+  if(!o.pts||o.pts.length<3) return;
+  ctx.save();
+  ctx.globalAlpha=o.opacity;
+  ctx.strokeStyle=o.color; ctx.fillStyle=o.color;
+  ctx.lineWidth=o.strokeW*sc; ctx.lineCap='round'; ctx.lineJoin='round';
+  if(o.lineStyle==='dashed') ctx.setLineDash([o.strokeW*4*sc,o.strokeW*3*sc]);
+  else if(o.lineStyle==='dotted') ctx.setLineDash([o.strokeW*sc,o.strokeW*2.5*sc]);
+  else ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(o.pts[0].x*sc,o.pts[0].y*sc);
+  for(var i=1;i<o.pts.length;i++) ctx.lineTo(o.pts[i].x*sc,o.pts[i].y*sc);
+  ctx.closePath();
+  if(o.fill){ ctx.fillStyle=o.fillColor||o.color; ctx.globalAlpha=o.fillOpacity!==undefined?o.fillOpacity:o.opacity*0.25; ctx.fill(); ctx.globalAlpha=o.opacity; ctx.fillStyle=o.color; }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Area label
+  var area=polygonArea(o.pts);
+  var cx=o.pts.reduce(function(s,p){return s+p.x;},0)/o.pts.length;
+  var cy=o.pts.reduce(function(s,p){return s+p.y;},0)/o.pts.length;
+  ctx.globalAlpha=1;
+  ctx.font='bold '+(13*sc)+'px Arial,sans-serif';
+  var areaLabel=scaleSet?formatArea(area):(Math.round(area)+'px\xb2');
+  ctx.fillStyle='#fff'; ctx.strokeStyle='#000'; ctx.lineWidth=3*sc; ctx.textAlign='center';
+  ctx.strokeText(areaLabel,cx*sc,cy*sc);
+  ctx.fillStyle=o.color; ctx.lineWidth=0;
+  ctx.fillText(areaLabel,cx*sc,cy*sc);
+  ctx.restore();
+}
+
+function drawLeaderOnCtx(ctx,o,sc){
+  sc=sc||1;
+  ctx.save();
+  ctx.globalAlpha=o.opacity;
+  ctx.strokeStyle=o.color; ctx.fillStyle=o.color;
+  ctx.lineWidth=o.strokeW*sc; ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.setLineDash([]);
+  // main line P1(arrow end) -> P2(elbow)
+  ctx.beginPath(); ctx.moveTo(o.x1*sc,o.y1*sc); ctx.lineTo(o.x2*sc,o.y2*sc); ctx.stroke();
+  // arrowhead at P1
+  var ang=Math.atan2(o.y1-o.y2,o.x1-o.x2), hw=Math.max(o.strokeW*3,10)*sc;
+  ctx.beginPath();
+  ctx.moveTo(o.x1*sc,o.y1*sc);
+  ctx.lineTo(o.x1*sc-hw*Math.cos(ang-Math.PI/6),o.y1*sc-hw*Math.sin(ang-Math.PI/6));
+  ctx.moveTo(o.x1*sc,o.y1*sc);
+  ctx.lineTo(o.x1*sc-hw*Math.cos(ang+Math.PI/6),o.y1*sc-hw*Math.sin(ang+Math.PI/6));
+  ctx.stroke();
+  // horizontal shoulder at P2
+  var dir=o.shoulderDir||1, len=(o.shoulderLen||60);
+  ctx.beginPath(); ctx.moveTo(o.x2*sc,o.y2*sc); ctx.lineTo((o.x2+len*dir)*sc,o.y2*sc); ctx.stroke();
+  ctx.restore();
+}
+
+function drawStampObjOnCtx(ctx,o,sc){
+  sc=sc||1;
+  ctx.save();
+  // drawStamp reads global color/strokeW/opacity; temporarily honor the object's
+  var _c=color,_sw=strokeW,_op=opacity;
+  color=o.color; strokeW=o.strokeW; opacity=o.opacity;
+  if(sc===1){ drawStamp(ctx,o.type,o.x,o.y,o.s); }
+  else {
+    ctx.save(); ctx.scale(sc,sc); drawStamp(ctx,o.type,o.x,o.y,o.s); ctx.restore();
+  }
+  color=_c; strokeW=_sw; opacity=_op;
+  ctx.restore();
+}
+
+// Hit-tests for selectable live objects
+function findPenObjAt(x,y,isTouch){
+  var thresh=(isTouch?14:7)/Math.max(zoom,0.0001);
+  for(var i=penObjs.length-1;i>=0;i--){
+    var o=penObjs[i]; var L=layers[o.layerIdx]; if(L&&!L.visible) continue;
+    for(var j=1;j<o.pts.length;j++){
+      var dx=o.pts[j].x-o.pts[j-1].x, dy=o.pts[j].y-o.pts[j-1].y;
+      var len2=dx*dx+dy*dy; if(len2<1){ if(Math.hypot(o.pts[j].x-x,o.pts[j].y-y)<thresh+(o.strokeW||2)/2) return o; continue; }
+      var t=Math.max(0,Math.min(1,((x-o.pts[j-1].x)*dx+(y-o.pts[j-1].y)*dy)/len2));
+      if(Math.hypot(o.pts[j-1].x+t*dx-x,o.pts[j-1].y+t*dy-y)<thresh+(o.strokeW||2)/2) return o;
+    }
+  }
+  return null;
+}
+function findPolygonObjAt(x,y,isTouch){
+  for(var i=polygonObjs.length-1;i>=0;i--){
+    var o=polygonObjs[i]; var L=layers[o.layerIdx]; if(L&&!L.visible) continue;
+    // point-in-polygon
+    var inside=false, p=o.pts;
+    for(var a=0,b=p.length-1;a<p.length;b=a++){
+      if(((p[a].y>y)!==(p[b].y>y)) && (x < (p[b].x-p[a].x)*(y-p[a].y)/(p[b].y-p[a].y)+p[a].x)) inside=!inside;
+    }
+    if(inside) return o;
+    // also edges
+    var thresh=(isTouch?14:7)/Math.max(zoom,0.0001);
+    for(var j=0;j<p.length;j++){
+      var q=p[(j+1)%p.length];
+      var dx=q.x-p[j].x, dy=q.y-p[j].y, len2=dx*dx+dy*dy; if(len2<1) continue;
+      var t=Math.max(0,Math.min(1,((x-p[j].x)*dx+(y-p[j].y)*dy)/len2));
+      if(Math.hypot(p[j].x+t*dx-x,p[j].y+t*dy-y)<thresh+(o.strokeW||2)/2) return o;
+    }
+  }
+  return null;
+}
+function findLeaderObjAt(x,y,isTouch){
+  var thresh=(isTouch?14:7)/Math.max(zoom,0.0001);
+  for(var i=leaderObjs.length-1;i>=0;i--){
+    var o=leaderObjs[i]; var L=layers[o.layerIdx]; if(L&&!L.visible) continue;
+    var segs=[[o.x1,o.y1,o.x2,o.y2],[o.x2,o.y2,o.x2+(o.shoulderLen||60)*(o.shoulderDir||1),o.y2]];
+    for(var s=0;s<segs.length;s++){
+      var sx=segs[s][0],sy=segs[s][1],ex=segs[s][2],ey=segs[s][3];
+      var dx=ex-sx,dy=ey-sy,len2=dx*dx+dy*dy; if(len2<1) continue;
+      var t=Math.max(0,Math.min(1,((x-sx)*dx+(y-sy)*dy)/len2));
+      if(Math.hypot(sx+t*dx-x,sy+t*dy-y)<thresh+(o.strokeW||2)/2) return o;
+    }
+  }
+  return null;
+}
+function findStampObjAt(x,y,isTouch){
+  var pad=(isTouch?10:4)/Math.max(zoom,0.0001);
+  for(var i=stampObjs.length-1;i>=0;i--){
+    var o=stampObjs[i]; var L=layers[o.layerIdx]; if(L&&!L.visible) continue;
+    if(Math.hypot(x-o.x,y-o.y)<=o.s+pad) return o;
+  }
+  return null;
 }
 
 // Hit test: find measure object near a canvas point
@@ -3903,6 +4341,11 @@ var pmActive   = false;    // true while placing points
 var polylineObjs = [];     // committed polyline paths (open, no labels)
 var plPoints     = [];     // in-progress polyline waypoints
 var plActive     = false;  // true while placing polyline points
+// ── Live (non-burned) object arrays for formerly-burned tools ──
+var penObjs      = [];     // [{id,pts:[{x,y}],color,strokeW,opacity,lineStyle,layerIdx}]
+var polygonObjs  = [];     // [{id,pts,color,strokeW,opacity,fill,fillColor,fillOpacity,lineStyle,layerIdx}]
+var leaderObjs   = [];     // [{id,x1,y1,x2,y2,shoulderDir,shoulderLen,color,strokeW,opacity,layerIdx}]
+var stampObjs    = [];     // [{id,type,x,y,s,color,strokeW,opacity,layerIdx}]
 
 // ── Draw a committed path measure onto a canvas context ──────
 function drawPathMeasureOnCtx(ctx, pm, sc){
@@ -4074,10 +4517,17 @@ function findPathMeasureObjAt(x,y,isTouch){
 // ── POLYGON / AREA ──
 // ── POLYGON / LEADER CLICK & DOUBLE-TAP ──
 var lastTap=0;
+// Timestamp until which synthetic mouse "click" events (fired by touch
+// devices after a tap) are ignored, so vertices aren't added twice.
+var _suppressClickUntil=0;
 // Unified touch handler: handles single tap (add point) and double-tap (close polygon)
 drawCv.addEventListener('touchend',function(e){
   if(pinching||drawing) return;
   if(e.changedTouches.length!==1) return;
+  // After a tap, iOS/Android fire a synthetic mouse "click" ~300ms later.
+  // Without this guard the click handler below would add a SECOND vertex for
+  // every tap (doubled polygon/path/leader points on touch devices).
+  _suppressClickUntil = Date.now() + 700;
   var now=Date.now();
   var fakeE={clientX:e.changedTouches[0].clientX,clientY:e.changedTouches[0].clientY,touches:[]};
   var pos=getPos(fakeE); var p=snapPt(pos.x,pos.y);
@@ -4107,6 +4557,9 @@ drawCv.addEventListener('touchend',function(e){
 // Desktop: click to add vertex, dblclick to close
 drawCv.addEventListener('click',function(e){
   if(pinching||drawing) return;
+  // Ignore the synthetic click that touch devices fire right after a tap —
+  // the touchend handler above already added the vertex.
+  if(Date.now() < _suppressClickUntil) return;
   var pos=getPos(e); var p=snapPt(pos.x,pos.y);
   if(tool==='polygon'){ polyPoints.push(p); polyActive=true; redrawPolyPreview(p.x,p.y); }
   else if(tool==='pathmeasure'){
@@ -4114,6 +4567,7 @@ drawCv.addEventListener('click',function(e){
     redrawPathMeasurePreview(p.x,p.y);
   }
   else if(tool==='polyline'){
+    if(selectedPolyline) return; // a polyline is selected for editing — don't start a new one
     plPoints.push(p); plActive=true; redrawPolylinePreview(p.x,p.y);
   }
   else if(tool==='leader'){ handleLeaderClick(p.x,p.y,e); }
@@ -4273,29 +4727,14 @@ function redrawPolyPreview(mx,my){
 function closePolygon(){
   if(polyPoints.length<3){ polyPoints=[]; polyActive=false; composite(); return; }
   captureState(); // save before polygon is committed
-  var lc=lctx();
-  setupCtx(lc);
-  lc.beginPath();
-  lc.moveTo(polyPoints[0].x,polyPoints[0].y);
-  for(var i=1;i<polyPoints.length;i++) lc.lineTo(polyPoints[i].x,polyPoints[i].y);
-  lc.closePath();
-  if(fillShape){ lc.globalAlpha=opacity*0.25; lc.fill(); lc.globalAlpha=opacity; }
-  lc.stroke();
-  // area label
-  var area=polygonArea(polyPoints);
-  var cx=polyPoints.reduce(function(s,p){ return s+p.x; },0)/polyPoints.length;
-  var cy=polyPoints.reduce(function(s,p){ return s+p.y; },0)/polyPoints.length;
-  lc.save();
-  lc.globalAlpha=1;
-  lc.font='bold 13px Arial,sans-serif';
-  var areaLabel=scaleSet?formatArea(area):(Math.round(area)+'px\xb2');
-  lc.fillStyle='#fff'; lc.strokeStyle='#000'; lc.lineWidth=3; lc.textAlign='center';
-  lc.strokeText(areaLabel,cx,cy);
-  lc.fillStyle=color; lc.lineWidth=0;
-  lc.fillText(areaLabel,cx,cy);
-  lc.restore();
-  resetCtx(lc);
+  polygonObjs.push({
+    id:Date.now(), pts:polyPoints.slice(),
+    color:color, strokeW:strokeW, opacity:opacity,
+    fill:fillShape, fillColor:fillColor, fillOpacity:fillOpacity,
+    lineStyle:lineStyle, layerIdx:activeLayerIdx
+  });
   polyPoints=[]; polyActive=false;
+  renderShapeAndMeasure();
   composite(); pushUndo();
 }
 
@@ -4317,23 +4756,17 @@ function handleLeaderClick(x,y,e){
     leaderP1x=x; leaderP1y=y; leaderStep=1;
     // show crosshair hint
   } else if(leaderStep===1){
-    // draw leader line on layer
-    var lc=lctx();
-    setupCtx(lc);
-    lc.beginPath(); lc.moveTo(leaderP1x,leaderP1y); lc.lineTo(x,y); lc.stroke();
-    // arrow at p1
-    var ang=Math.atan2(leaderP1y-y,leaderP1x-x),hw=Math.max(strokeW*3,10);
-    lc.beginPath();
-    lc.moveTo(leaderP1x,leaderP1y);
-    lc.lineTo(leaderP1x-hw*Math.cos(ang-Math.PI/6),leaderP1y-hw*Math.sin(ang-Math.PI/6));
-    lc.moveTo(leaderP1x,leaderP1y);
-    lc.lineTo(leaderP1x-hw*Math.cos(ang+Math.PI/6),leaderP1y-hw*Math.sin(ang+Math.PI/6));
-    lc.stroke();
-    // horizontal shoulder — direction based on which half of canvas we're on
+    // Commit a LIVE leader object (never burned to the layer canvas)
+    captureState();
     var shoulderDir = (x > baseCv.width/2) ? -1 : 1;
     var shoulderLen = 60;
-    lc.beginPath(); lc.moveTo(x,y); lc.lineTo(x+shoulderLen*shoulderDir,y); lc.stroke();
-    resetCtx(lc);
+    leaderObjs.push({
+      id:Date.now(),
+      x1:leaderP1x, y1:leaderP1y, x2:x, y2:y,
+      shoulderDir:shoulderDir, shoulderLen:shoulderLen,
+      color:color, strokeW:strokeW, opacity:opacity, layerIdx:activeLayerIdx
+    });
+    renderShapeAndMeasure();
     composite();
     textX=x+(shoulderLen+2)*shoulderDir; textY=y;
     showTextOverlay(textX, y);
@@ -4346,9 +4779,12 @@ function handleLeaderClick(x,y,e){
 function handleStamp(e){
   captureState(); // save before stamp is placed
   var p=snapPt(getPos(e).x,getPos(e).y);
-  var lc=lctx();
   var sz=Math.max(20,Math.min(60,40/zoom));
-  drawStamp(lc,stampType,p.x,p.y,sz);
+  stampObjs.push({
+    id:Date.now(), type:stampType, x:p.x, y:p.y, s:sz,
+    color:color, strokeW:strokeW, opacity:opacity, layerIdx:activeLayerIdx
+  });
+  renderShapeAndMeasure();
   composite(); pushUndo();
 }
 
@@ -4414,25 +4850,26 @@ function renderTextObjs(){
     var family=obj.fontFamily||'Arial';
     var weight=(obj.bold?'bold ':'')||'';
     var style_=(obj.italic?'italic ':'')||'';
-    tCtx.font=style_+weight+obj.fontSize+'px '+family+',sans-serif';
+    var fpx=ptToCanvasPx(obj.fontSize); // scale-locked: pt -> canvas px at plan DPI
+    tCtx.font=style_+weight+fpx+'px '+family+',sans-serif';
     var lines=obj.text.split('\n');
     var align=obj.textAlign||'left';
     tCtx.textAlign=align;
-    var maxW=measureLinesWFull(lines,obj.fontSize,family,obj.bold,obj.italic);
+    var maxW=measureLinesWFull(lines,fpx,family,obj.bold,obj.italic);
     // Compute anchor x for alignment
     var ax=obj.x+(align==='center'?maxW/2:align==='right'?maxW:0);
     // Draw background if bgOpacity>0
     if(obj.bgOpacity&&obj.bgOpacity>0){
       var pad=4;
-      var bgH=lines.length*obj.fontSize*1.35+pad*2;
+      var bgH=lines.length*fpx*1.35+pad*2;
       tCtx.save();
       tCtx.globalAlpha=obj.opacity*obj.bgOpacity;
       tCtx.fillStyle=obj.bgColor||'#ffff00';
       if(obj.angle){
         tCtx.translate(obj.x,obj.y);tCtx.rotate(obj.angle);
-        tCtx.fillRect(-pad,-obj.fontSize-pad,maxW+pad*2,bgH);
+        tCtx.fillRect(-pad,-fpx-pad,maxW+pad*2,bgH);
       } else {
-        tCtx.fillRect(obj.x-pad,obj.y-obj.fontSize-pad,maxW+pad*2,bgH);
+        tCtx.fillRect(obj.x-pad,obj.y-fpx-pad,maxW+pad*2,bgH);
       }
       tCtx.restore();
       tCtx.globalAlpha=obj.opacity;
@@ -4443,39 +4880,39 @@ function renderTextObjs(){
       tCtx.textAlign=align;
       var axOff=(align==='center'?maxW/2:align==='right'?maxW:0);
       lines.forEach(function(line,i){
-        var ly=i*obj.fontSize*1.35;
+        var ly=i*fpx*1.35;
         tCtx.fillText(line,axOff,ly);
         if(obj.underline){
           var lw=tCtx.measureText(line).width;
           var lx=align==='center'?axOff-lw/2:align==='right'?axOff-lw:axOff;
-          tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,obj.fontSize*0.07);
-          tCtx.beginPath();tCtx.moveTo(lx,ly+obj.fontSize*0.12);tCtx.lineTo(lx+lw,ly+obj.fontSize*0.12);tCtx.stroke();
+          tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,fpx*0.07);
+          tCtx.beginPath();tCtx.moveTo(lx,ly+fpx*0.12);tCtx.lineTo(lx+lw,ly+fpx*0.12);tCtx.stroke();
           tCtx.restore();
         }
         if(obj.strike){
           var lw=tCtx.measureText(line).width;
           var lx=align==='center'?axOff-lw/2:align==='right'?axOff-lw:axOff;
-          tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,obj.fontSize*0.07);
-          tCtx.beginPath();tCtx.moveTo(lx,ly-obj.fontSize*0.32);tCtx.lineTo(lx+lw,ly-obj.fontSize*0.32);tCtx.stroke();
+          tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,fpx*0.07);
+          tCtx.beginPath();tCtx.moveTo(lx,ly-fpx*0.32);tCtx.lineTo(lx+lw,ly-fpx*0.32);tCtx.stroke();
           tCtx.restore();
         }
       });
     } else {
       lines.forEach(function(line,i){
-        var ly=obj.y+i*obj.fontSize*1.35;
+        var ly=obj.y+i*fpx*1.35;
         tCtx.fillText(line,ax,ly);
         if(obj.underline){
           var lw=tCtx.measureText(line).width;
           var lx=align==='center'?ax-lw/2:align==='right'?ax-lw:ax;
-          tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,obj.fontSize*0.07);
-          tCtx.beginPath();tCtx.moveTo(lx,ly+obj.fontSize*0.12);tCtx.lineTo(lx+lw,ly+obj.fontSize*0.12);tCtx.stroke();
+          tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,fpx*0.07);
+          tCtx.beginPath();tCtx.moveTo(lx,ly+fpx*0.12);tCtx.lineTo(lx+lw,ly+fpx*0.12);tCtx.stroke();
           tCtx.restore();
         }
         if(obj.strike){
           var lw=tCtx.measureText(line).width;
           var lx=align==='center'?ax-lw/2:align==='right'?ax-lw:ax;
-          tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,obj.fontSize*0.07);
-          tCtx.beginPath();tCtx.moveTo(lx,ly-obj.fontSize*0.32);tCtx.lineTo(lx+lw,ly-obj.fontSize*0.32);tCtx.stroke();
+          tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,fpx*0.07);
+          tCtx.beginPath();tCtx.moveTo(lx,ly-fpx*0.32);tCtx.lineTo(lx+lw,ly-fpx*0.32);tCtx.stroke();
           tCtx.restore();
         }
       });
@@ -4492,10 +4929,11 @@ function findTextObjAt(x,y){
     var o=textObjs[i];
     if(o._editing) continue;
     var lines=o.text.split('\n');
-    var estW=measureLinesW(lines,o.fontSize);
-    var estH=lines.length*o.fontSize*1.3;
+    var ofpx=ptToCanvasPx(o.fontSize);
+    var estW=measureLinesW(lines,ofpx);
+    var estH=lines.length*ofpx*1.3;
     var pad=Math.max(8,12/zoom);
-    if(x>=o.x-pad&&x<=o.x+estW+pad&&y>=o.y-o.fontSize-pad&&y<=o.y+estH+pad){
+    if(x>=o.x-pad&&x<=o.x+estW+pad&&y>=o.y-ofpx-pad&&y<=o.y+estH+pad){
       return o;
     }
   }
@@ -4671,18 +5109,19 @@ function showTextHover(x, y){
     // Highlight existing text object with edit indicator
     drawCv.style.cursor='text';
     var lines=overExisting.text.split('\n');
-    var estW=measureLinesW(lines,overExisting.fontSize);
-    var estH=lines.length*overExisting.fontSize*1.3;
+    var oefpx=ptToCanvasPx(overExisting.fontSize);
+    var estW=measureLinesW(lines,oefpx);
+    var estH=lines.length*oefpx*1.3;
     var pad=6/zoom;
     selCtx.save();
     selCtx.strokeStyle=color; selCtx.lineWidth=1.5/zoom;
     selCtx.setLineDash([4/zoom,3/zoom]); selCtx.globalAlpha=0.7;
-    selCtx.strokeRect(overExisting.x-pad, overExisting.y-overExisting.fontSize-pad, estW+pad*2, estH+pad*2);
+    selCtx.strokeRect(overExisting.x-pad, overExisting.y-oefpx-pad, estW+pad*2, estH+pad*2);
     // Edit pencil icon hint
     selCtx.setLineDash([]); selCtx.globalAlpha=0.8;
     selCtx.font='bold '+(Math.max(10,11/zoom))+'px Arial,sans-serif';
     selCtx.fillStyle=color; selCtx.textAlign='left';
-    selCtx.fillText('✎ edit', overExisting.x, overExisting.y-overExisting.fontSize-8/zoom);
+    selCtx.fillText('✎ edit', overExisting.x, overExisting.y-oefpx-8/zoom);
     selCtx.restore();
   } else {
     drawCv.style.cursor='crosshair';
@@ -4697,9 +5136,9 @@ function showTextHover(x, y){
 }
 
 function clearTextHover(){
-  // Only collapse selCv if no shape/text/image selection is currently being displayed.
-  // Collapsing it while selectedShape OR selImg is active wipes the selection overlay.
-  if(!_txtCursorActive && !selectedShape && !selImg && selCv.width > 1){ selCv.width=1; selCv.height=1; }
+  // Only collapse selCv if no shape/text/image/measure/polyline selection is showing.
+  // Collapsing it while a selection is active wipes the selection overlay.
+  if(!_txtCursorActive && !selectedShape && !selImg && !selectedMeasure && !selectedPolyline && selCv.width > 1){ selCv.width=1; selCv.height=1; }
 }
 
 // ── END TEXT CURSOR INDICATOR ────────────────────────────────
@@ -4708,14 +5147,18 @@ function clearTextHover(){
 // ── Returns true if (x,y) is on the border zone of comment shape s ──
 // "Border zone" = within BORDER_THRESH canvas-px of any edge, but NOT at an
 // 8-point handle.  This is the drag-to-move strip, matching Acrobat Pro.
-var COMMENT_BORDER_THRESH = 10; // canvas px — the grabbable border strip width
+var COMMENT_BORDER_THRESH = 16; // canvas px — the grabbable border strip width
 function isOnCommentBorder(s, x, y, isTouch){
   // Rotate point into local (axis-aligned) space
   var cos=Math.cos(-s.angle), sin=Math.sin(-s.angle);
   var lx=(x-s.cx)*cos-(y-s.cy)*sin;
   var ly=(x-s.cx)*sin+(y-s.cy)*cos;
   var hw=s.w/2, hh=s.h/2;
-  var thresh = Math.max(COMMENT_BORDER_THRESH/zoom, isTouch ? 18/zoom : 6/zoom);
+  // Grab strip target: ~30 screen-px on touch, ~16 on desktop (converted to canvas px).
+  var thresh = Math.max(COMMENT_BORDER_THRESH/zoom, (isTouch ? 30 : 16)/zoom);
+  // …but never let the strip swallow the whole box — keep an interior the
+  // user can still tap to edit on small notes.
+  thresh = Math.min(thresh, Math.min(hw, hh) * 0.45);
   // Must be inside (or very close to) the outer boundary
   if(Math.abs(lx)>hw+thresh||Math.abs(ly)>hh+thresh) return false;
   // Must be within thresh of at least one edge
@@ -4733,6 +5176,15 @@ function handleCommentDown(e, sp, isTouch){
   if(selectedShape&&selectedShape.type==='comment'){
     var sh=getHandleAt(sp.x,sp.y,isTouch);
     if(sh>=0){
+      // Double-click/tap a resize handle → snap the box to hug the text
+      var _hNow=Date.now();
+      if(_hNow-_cmtHandleTap<380 && _cmtHandleObj===selectedShape._commentObj){
+        e.preventDefault();
+        _cmtHandleTap=0; _cmtHandleObj=null;
+        snapCommentToFit(selectedShape._commentObj);
+        return;
+      }
+      _cmtHandleTap=_hNow; _cmtHandleObj=selectedShape._commentObj;
       // Resize handle: grab it (works whether or not we're editing)
       e.preventDefault();
       selHandle=sh;
@@ -4900,8 +5352,9 @@ function repositionTextOverlay(){
   var vv=window.visualViewport;
   var vvOffTop  = vv ? vv.offsetTop  : 0;
   var vvOffLeft = vv ? vv.offsetLeft : 0;
+  var FONT_PX = ptToCanvasPx(FONT_SIZE); // scale-locked canvas px for editor preview
   var sx = panX + cx*zoom + vvOffLeft;
-  var sy = panY + cy*zoom - FONT_SIZE*zoom + vvOffTop;
+  var sy = panY + cy*zoom - FONT_PX*zoom + vvOffTop;
   // Keep textarea on screen
   var vpH = vv ? vv.height : viewport.clientHeight;
   sy = Math.min(sy, vpH - 60);
@@ -4909,9 +5362,9 @@ function repositionTextOverlay(){
   textOv.style.display  = 'block';
   textOv.style.left     = sx+'px';
   textOv.style.top      = sy+'px';
-  // Font size = FONT_SIZE * zoom on screen. Min 16px to prevent iOS zoom.
+  // Font size = FONT_PX * zoom on screen. Min 16px to prevent iOS zoom.
   // Use transform:scale for smaller sizes so preview matches canvas output.
-  var screenSz = FONT_SIZE * zoom;
+  var screenSz = FONT_PX * zoom;
   var renderSz = Math.max(16, screenSz);
   var scaleV   = screenSz / renderSz;
   textOv.style.fontSize  = renderSz+'px';
@@ -4975,6 +5428,16 @@ textOv.addEventListener('input', function(){
   if(!_editingComment) return;
   _cmtAutoGrow(_editingComment);
 });
+// While editing a note, the textarea must never scroll its own content
+// (that's what made text drift outside the box). Redirect wheel to canvas pan.
+textOv.addEventListener('wheel', function(e){
+  if(!_editingComment) return;
+  e.preventDefault();
+  var dy=e.deltaY; if(e.deltaMode===1) dy*=20; else if(e.deltaMode===2) dy*=300;
+  panX -= (e.deltaX||0) * (e.deltaMode===0?1:20);
+  panY -= dy;
+  clampPan(); applyTransform();
+}, {passive:false});
 
 function commitText(){
   if(textOv.style.display==='none') return;
@@ -5024,17 +5487,18 @@ function enterTextTransformMode(obj){
   obj._editing=false;
   renderTextObjs();
   var lines=obj.text.split('\n');
+  var tmfpx=ptToCanvasPx(obj.fontSize);
   // Use actual canvas measurement so the ellipse fits the real rendered text.
-  var textW=measureLinesWFull(lines,obj.fontSize,obj.fontFamily||'Arial',obj.bold,obj.italic);
-  var textH=lines.length*obj.fontSize*1.35;
+  var textW=measureLinesWFull(lines,tmfpx,obj.fontFamily||'Arial',obj.bold,obj.italic);
+  var textH=lines.length*tmfpx*1.35;
   // Ellipse must be TEXT_ELLIPSE_K× larger than the text bounding box so that
   // all four text corners sit inside the ellipse (see TEXT_ELLIPSE_K comment above).
   var estW=textW*TEXT_ELLIPSE_K;
   var estH=textH*TEXT_ELLIPSE_K;
   selectedShape={
     type:'text', _textObj:obj,
-    cx: obj.x+textW/2, cy: obj.y-obj.fontSize+textH/2,
-    w: Math.max(estW,40), h: Math.max(estH,obj.fontSize*1.5),
+    cx: obj.x+textW/2, cy: obj.y-tmfpx+textH/2,
+    w: Math.max(estW,40), h: Math.max(estH,tmfpx*1.5),
     angle: obj.angle||0,
     color: obj.color, strokeW:1.5, opacity:obj.opacity,
     fill:false, lineStyle:'solid'
@@ -5145,6 +5609,14 @@ function findObjAtStrict(x, y){
   if(pmHit) return pmHit;
   var plHit=findPolylineObjAt(x,y,false);
   if(plHit) return plHit;
+  var penHitR=findPenObjAt(x,y,false);
+  if(penHitR) return penHitR;
+  var pgHitR=findPolygonObjAt(x,y,false);
+  if(pgHitR) return pgHitR;
+  var ldHitR=findLeaderObjAt(x,y,false);
+  if(ldHitR) return ldHitR;
+  var stHitR=findStampObjAt(x,y,false);
+  if(stHitR) return stHitR;
   var cHit=findCommentObjAt(x,y,false);
   if(cHit) return cHit;
   // Markup objects
@@ -5168,6 +5640,13 @@ function renderSelection(){
   selCtx.clearRect(0,0,selCv.width,selCv.height);
   var s=selectedShape, lw=1.5/zoom;
 
+  // While dragging/resizing a comment, draw the full note box live here on the
+  // lightweight selection canvas (it's skipped on shCv during the drag).
+  if(_dragComment && s.type==='comment' && s._commentObj===_dragComment){
+    _dragComment.cx=s.cx; _dragComment.cy=s.cy; _dragComment.w=s.w; _dragComment.h=s.h;
+    drawCommentBox(selCtx, _dragComment, 1, _dragComment===_editingComment, true);
+  }
+
   // Shape preview
   selCtx.save();
   selCtx.translate(s.cx,s.cy); selCtx.rotate(s.angle);
@@ -5190,18 +5669,19 @@ function renderSelection(){
     // Text selection: draw text at its position/angle for live preview
     if(s._textObj){
       var to=s._textObj;
+      var tofpx=ptToCanvasPx(to.fontSize);
       selCtx.restore(); // undo translate/rotate so we can re-render text
       selCtx.save();
       selCtx.globalAlpha=to.opacity;
       selCtx.fillStyle=to.color;
-      selCtx.font='bold '+to.fontSize+'px Arial,sans-serif';
+      selCtx.font='bold '+tofpx+'px Arial,sans-serif';
       selCtx.translate(s.cx,s.cy); selCtx.rotate(s.angle);
       var lines2=to.text.split('\n');
       // Use accurate measurement so text position matches the ellipse center.
       var textW2=lines2.reduce(function(m,l){ return Math.max(m,selCtx.measureText(l).width); },0);
-      var estH2=lines2.length*to.fontSize*1.35;
-      var localY2=to.fontSize - estH2/2;
-      lines2.forEach(function(line,i){ selCtx.fillText(line,-textW2/2,localY2+i*to.fontSize*1.35); });
+      var estH2=lines2.length*tofpx*1.35;
+      var localY2=tofpx - estH2/2;
+      lines2.forEach(function(line,i){ selCtx.fillText(line,-textW2/2,localY2+i*tofpx*1.35); });
 
     }
   }
@@ -5302,6 +5782,11 @@ function commitSelection(){
       textOv.style.maxWidth=''; textOv.style.maxHeight='';
       textOv.style.whiteSpace='pre'; textOv.style.overflow='hidden';
     }
+    // Snap the box tight to the text on deselect (top edge stays put)
+    var _ct=c.cy-c.h/2;
+    fitCommentToText(c, c.text, true, 'snap');
+    c.cy=_ct+c.h/2;
+    _dragComment=null;
     selectedShape=null; selHandle=-1; selDragStart=null;
     if(!selImg){ selCv.width=1; selCv.height=1; }
     renderShapeAndMeasure(); composite(); pushUndo();
@@ -5312,11 +5797,12 @@ function commitSelection(){
   if(s.type==='text' && s._textObj){
     var obj=s._textObj;
     var lines=obj.text.split('\n');
+    var cmfpx=ptToCanvasPx(obj.fontSize);
     // Use accurate measurement to compute the left-edge origin from the ellipse center.
-    var estW=measureLinesW(lines,obj.fontSize);
-    var estH=lines.length*obj.fontSize*1.35;
+    var estW=measureLinesW(lines,cmfpx);
+    var estH=lines.length*cmfpx*1.35;
     var cos=Math.cos(s.angle), sin=Math.sin(s.angle);
-    var tLocalX=-estW/2, tLocalY=obj.fontSize-estH/2;
+    var tLocalX=-estW/2, tLocalY=cmfpx-estH/2;
     obj.x=s.cx + tLocalX*cos - tLocalY*sin;
     obj.y=s.cy + tLocalX*sin + tLocalY*cos;
     obj.angle=s.angle;
@@ -5354,6 +5840,7 @@ function commitSelection(){
 }
 
 function cancelSelection(){
+  _dragComment=null;
   if(editShapeObj){ editShapeObj._editing=false; editShapeObj=null; }
   // Unhide text object if it was hidden for transform mode (kept for safety)
   if(selectedShape&&selectedShape.type==='text'&&selectedShape._textObj){
@@ -5435,6 +5922,16 @@ drawCv.addEventListener('mousemove',function(e){
     var mh2=findMeasureObjAt(p.x,p.y,false);
     drawCv.style.cursor=mh2?'move':'crosshair';
   }
+  // Arrow tool: pointer when hovering an existing arrow
+  if(tool==='arrow'&&baseLoaded){
+    if(selectedMeasure&&measureDragHandle===-1){ /* handled above */ }
+    else { var ah2=findMeasureObjAt(p.x,p.y,false); drawCv.style.cursor=(ah2&&ah2.isArrow)?'move':'crosshair'; }
+  }
+  // Polyline tool: pointer when hovering an existing polyline
+  if(tool==='polyline'&&!plActive&&baseLoaded){
+    var ph2=findPolylineObjAt(p.x,p.y,false);
+    drawCv.style.cursor=(ph2||selectedPolyline)?'move':'crosshair';
+  }
 },{passive:true});
 
 // ══════════════════════════════════════════════════════════════
@@ -5484,6 +5981,22 @@ drawCv.addEventListener('touchstart',function(e){
     var t=e.touches[0];
     var pos=getPos({clientX:t.clientX,clientY:t.clientY,touches:[t]});
     var sp=snapPt(pos.x,pos.y);
+    // Tap on an existing polyline → select it for recolor/restyle
+    if(selectedPolyline){
+      var stillOnT=findPolylineObjAt(sp.x,sp.y,true);
+      if(stillOnT===selectedPolyline) return;
+      commitPolylineSelection();
+    }
+    var plSelT=findPolylineObjAt(sp.x,sp.y,true);
+    if(plSelT){
+      selectedPolyline=plSelT;
+      color=plSelT.color; clrSwatch.style.background=color; clrInput.value=color;
+      opacity=plSelT.opacity; opSl.value=Math.round(opacity*100); opVal.textContent=Math.round(opacity*100)+'%';
+      if(plSelT.strokeW){ strokeW=plSelT.strokeW; swSl.value=strokeW; swVal.textContent=strokeW+'px'; }
+      syncLineStyleButtons(plSelT.lineStyle);
+      renderPolylineSelection();
+      return;
+    }
     plPoints.push(sp); plActive=true;
     redrawPolylinePreview(sp.x,sp.y);
     return;
@@ -5750,6 +6263,54 @@ function findPolylineObjAt(x,y,isTouch){
   return null;
 }
 
+// ── POLYLINE SELECTION (recolor / restyle) ──────────────────────
+// Draw a selection highlight + vertex dots for the selected polyline.
+function renderPolylineSelection(){
+  if(!selectedPolyline){ return; }
+  if(selCv.width!==drawCv.width||selCv.height!==drawCv.height){
+    selCv.width=drawCv.width; selCv.height=drawCv.height;
+  }
+  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  var pl=selectedPolyline;
+  if(!pl.pts||pl.pts.length<2) return;
+  // Glow highlight under the line
+  selCtx.save();
+  selCtx.globalAlpha=0.5;
+  selCtx.strokeStyle='#6c63ff';
+  selCtx.lineWidth=(pl.strokeW||2)+6/zoom;
+  selCtx.lineCap='round'; selCtx.lineJoin='round';
+  selCtx.beginPath();
+  selCtx.moveTo(pl.pts[0].x,pl.pts[0].y);
+  for(var i=1;i<pl.pts.length;i++) selCtx.lineTo(pl.pts[i].x,pl.pts[i].y);
+  selCtx.stroke();
+  selCtx.restore();
+  // The polyline itself (in its real color, on top)
+  drawPolylineOnCtx(selCtx, pl, 1);
+  // Vertex dots
+  var hs=Math.max(5,7/zoom);
+  pl.pts.forEach(function(pt){
+    selCtx.save();
+    selCtx.fillStyle='rgba(108,99,255,0.9)';
+    selCtx.strokeStyle='#fff'; selCtx.lineWidth=1.5/zoom;
+    selCtx.beginPath(); selCtx.arc(pt.x,pt.y,hs,0,Math.PI*2);
+    selCtx.fill(); selCtx.stroke();
+    selCtx.restore();
+  });
+}
+
+function commitPolylineSelection(){
+  if(!selectedPolyline) return;
+  selectedPolyline=null;
+  if(selCv.width>1){ selCv.width=1; selCv.height=1; }
+  renderShapeAndMeasure(); composite(); pushUndo();
+}
+
+function cancelPolylineSelection(){
+  selectedPolyline=null;
+  if(selCv.width>1){ selCv.width=1; selCv.height=1; }
+  renderShapeAndMeasure(); composite();
+}
+
 function redrawPolylinePreview(mx,my){
   if(!plActive||plPoints.length<1) return;
   renderShapeAndMeasure();
@@ -5899,7 +6460,7 @@ document.querySelectorAll('.tb-btn[data-tool]').forEach(function(btn){
       if(_editingComment) commitCommentEdit();
       if(selectedShape&&selectedShape.type==='comment') commitSelection();
     }
-    commitText(); commitSelection(); commitMeasureSelection(); leaderStep=0;
+    commitText(); commitSelection(); commitMeasureSelection(); commitPolylineSelection(); leaderStep=0;
     stopTextCursor(); clearTextHover();
     tool=btn.dataset.tool;
     document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
@@ -6053,7 +6614,7 @@ function closeStampPicker(){
 
       // Update the live textarea if it's visible
       if(textOv.style.display !== 'none'){
-        var renderPx = _cFontSize;
+        var renderPx = Math.max(12, Math.round(cmtEffFontSize(target) * zoom));
         var visualW  = Math.max((target.w - 16) * zoom, 40);
         textOv.style.fontSize = renderPx + 'px';
         textOv.style.transform = 'none';
@@ -6075,10 +6636,9 @@ function closeStampPicker(){
       }
 
       // Re-apply after a tick to beat any browser re-render
-      var _sz = _cFontSize;
       var _ref = target;
       setTimeout(function(){
-        if(textOv.style.display !== 'none') textOv.style.fontSize = _sz + 'px';
+        if(textOv.style.display !== 'none') textOv.style.fontSize = Math.max(12, Math.round(cmtEffFontSize(_ref) * zoom)) + 'px';
         if(_editingComment === _ref) _cmtAutoGrow(_ref);
       }, 0);
     });
@@ -6087,11 +6647,26 @@ function closeStampPicker(){
 // ── END COMMENT COLOR PICKERS ──────────────────────────────────
 
 // ── LINE STYLE ──
+function syncLineStyleButtons(style){
+  style=style||'solid';
+  document.querySelectorAll('.ls-btn').forEach(function(b){
+    b.classList.toggle('active', b.dataset.ls===style);
+  });
+  lineStyle=style;
+}
 document.querySelectorAll('.ls-btn').forEach(function(btn){
   btn.addEventListener('click',function(){
     lineStyle=btn.dataset.ls;
     document.querySelectorAll('.ls-btn').forEach(function(b){ b.classList.remove('active'); });
     btn.classList.add('active');
+    // Apply live to whatever is selected
+    if(selectedShape&&selectedShape.type!=='text'&&selectedShape.type!=='comment'){
+      selectedShape.lineStyle=lineStyle;
+      if(editShapeObj) editShapeObj.lineStyle=lineStyle;
+      renderSelection();
+    }
+    if(selectedMeasure){ selectedMeasure.lineStyle=lineStyle; renderShapeAndMeasure(); renderMeasureSelection(); }
+    if(selectedPolyline){ selectedPolyline.lineStyle=lineStyle; renderShapeAndMeasure(); renderPolylineSelection(); }
   });
 });
 
@@ -6256,11 +6831,13 @@ clrInput.addEventListener('input',function(e){
     renderSelection(); renderTextObjs();
   }
   if(selectedMeasure){ selectedMeasure.color=color; renderMeasureSelection(); renderShapeAndMeasure(); }
+  if(selectedPolyline){ selectedPolyline.color=color; renderShapeAndMeasure(); renderPolylineSelection(); }
 });
 swSl.addEventListener('input',function(e){
   strokeW=parseInt(e.target.value); swVal.textContent=strokeW+'px';
   if(selectedShape){ selectedShape.strokeW=strokeW; renderSelection(); }
   if(selectedMeasure){ selectedMeasure.strokeW=strokeW; renderMeasureSelection(); renderShapeAndMeasure(); }
+  if(selectedPolyline){ selectedPolyline.strokeW=strokeW; renderShapeAndMeasure(); renderPolylineSelection(); }
 });
 opSl.addEventListener('input',function(e){
   opacity=parseInt(e.target.value)/100; opVal.textContent=e.target.value+'%';
@@ -6270,6 +6847,7 @@ opSl.addEventListener('input',function(e){
     renderSelection(); renderTextObjs();
   }
   if(selectedMeasure){ selectedMeasure.opacity=opacity; renderMeasureSelection(); renderShapeAndMeasure(); }
+  if(selectedPolyline){ selectedPolyline.opacity=opacity; renderShapeAndMeasure(); renderPolylineSelection(); }
 });
 
 // Fill color + opacity pickers
@@ -6708,18 +7286,19 @@ function compositeExport(maxPx){
       var fam=obj.fontFamily||'Arial';
       var bld=obj.bold?'bold ':'';
       var itl=obj.italic?'italic ':'';
-      ctx.font=itl+bld+Math.round(obj.fontSize*scale)+'px '+fam+',sans-serif';
+      var efpx=ptToCanvasPx(obj.fontSize); // scale-locked canvas px
+      ctx.font=itl+bld+Math.round(efpx*scale)+'px '+fam+',sans-serif';
       var lines_=obj.text.split('\n');
       var align_=obj.textAlign||'left';
       ctx.textAlign=align_;
-      var maxW_=measureLinesWFull(lines_,Math.round(obj.fontSize*scale),fam,obj.bold,obj.italic);
+      var maxW_=measureLinesWFull(lines_,Math.round(efpx*scale),fam,obj.bold,obj.italic);
       var ax_=Math.round(obj.x*scale)+(align_==='center'?maxW_/2:align_==='right'?maxW_:0);
       // Background
       if(obj.bgOpacity&&obj.bgOpacity>0){
         ctx.save(); ctx.globalAlpha=obj.opacity*obj.bgOpacity; ctx.fillStyle=obj.bgColor||'#ffff00';
         var pad_=4*scale;
-        if(obj.angle){ctx.translate(Math.round(obj.x*scale),Math.round(obj.y*scale));ctx.rotate(obj.angle);ctx.fillRect(-pad_,-obj.fontSize*scale-pad_,maxW_+pad_*2,lines_.length*obj.fontSize*1.35*scale+pad_*2);}
-        else{ctx.fillRect(ax_-(align_==='center'?maxW_/2:align_==='right'?maxW_:0)-pad_,Math.round(obj.y*scale)-obj.fontSize*scale-pad_,maxW_+pad_*2,lines_.length*obj.fontSize*1.35*scale+pad_*2);}
+        if(obj.angle){ctx.translate(Math.round(obj.x*scale),Math.round(obj.y*scale));ctx.rotate(obj.angle);ctx.fillRect(-pad_,-efpx*scale-pad_,maxW_+pad_*2,lines_.length*efpx*1.35*scale+pad_*2);}
+        else{ctx.fillRect(ax_-(align_==='center'?maxW_/2:align_==='right'?maxW_:0)-pad_,Math.round(obj.y*scale)-efpx*scale-pad_,maxW_+pad_*2,lines_.length*efpx*1.35*scale+pad_*2);}
         ctx.restore();
         ctx.globalAlpha=obj.opacity;
       }
@@ -6728,17 +7307,17 @@ function compositeExport(maxPx){
         ctx.rotate(obj.angle);
         var axOff_=align_==='center'?maxW_/2:align_==='right'?maxW_:0;
         lines_.forEach(function(line,i){
-          var ly_=Math.round(i*obj.fontSize*1.35*scale);
+          var ly_=Math.round(i*efpx*1.35*scale);
           ctx.fillText(line,axOff_,ly_);
-          if(obj.underline){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?axOff_-lw_/2:align_==='right'?axOff_-lw_:axOff_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,obj.fontSize*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_+obj.fontSize*scale*0.12);ctx.lineTo(lx_+lw_,ly_+obj.fontSize*scale*0.12);ctx.stroke();ctx.restore();}
-          if(obj.strike){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?axOff_-lw_/2:align_==='right'?axOff_-lw_:axOff_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,obj.fontSize*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_-obj.fontSize*scale*0.32);ctx.lineTo(lx_+lw_,ly_-obj.fontSize*scale*0.32);ctx.stroke();ctx.restore();}
+          if(obj.underline){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?axOff_-lw_/2:align_==='right'?axOff_-lw_:axOff_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_+efpx*scale*0.12);ctx.lineTo(lx_+lw_,ly_+efpx*scale*0.12);ctx.stroke();ctx.restore();}
+          if(obj.strike){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?axOff_-lw_/2:align_==='right'?axOff_-lw_:axOff_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_-efpx*scale*0.32);ctx.lineTo(lx_+lw_,ly_-efpx*scale*0.32);ctx.stroke();ctx.restore();}
         });
       } else {
         lines_.forEach(function(line,i){
-          var ly_=Math.round((obj.y+i*obj.fontSize*1.35)*scale);
+          var ly_=Math.round((obj.y+i*efpx*1.35)*scale);
           ctx.fillText(line,ax_,ly_);
-          if(obj.underline){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?ax_-lw_/2:align_==='right'?ax_-lw_:ax_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,obj.fontSize*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_+obj.fontSize*scale*0.12);ctx.lineTo(lx_+lw_,ly_+obj.fontSize*scale*0.12);ctx.stroke();ctx.restore();}
-          if(obj.strike){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?ax_-lw_/2:align_==='right'?ax_-lw_:ax_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,obj.fontSize*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_-obj.fontSize*scale*0.32);ctx.lineTo(lx_+lw_,ly_-obj.fontSize*scale*0.32);ctx.stroke();ctx.restore();}
+          if(obj.underline){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?ax_-lw_/2:align_==='right'?ax_-lw_:ax_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_+efpx*scale*0.12);ctx.lineTo(lx_+lw_,ly_+efpx*scale*0.12);ctx.stroke();ctx.restore();}
+          if(obj.strike){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?ax_-lw_/2:align_==='right'?ax_-lw_:ax_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_-efpx*scale*0.32);ctx.lineTo(lx_+lw_,ly_-efpx*scale*0.32);ctx.stroke();ctx.restore();}
         });
       }
       ctx.restore();
@@ -6762,6 +7341,20 @@ function compositeExport(maxPx){
       else ctx.setLineDash([]);
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
       ctx.setLineDash([]);
+      // Arrow: draw arrowhead at P2, no ticks/label
+      if(m.isArrow){
+        var hwE=Math.max(m.strokeW*3.2,12)*sc;
+        ctx.beginPath();
+        ctx.moveTo(x2,y2);
+        ctx.lineTo(x2-hwE*Math.cos(ang-Math.PI/6), y2-hwE*Math.sin(ang-Math.PI/6));
+        ctx.moveTo(x2,y2);
+        ctx.lineTo(x2-hwE*Math.cos(ang+Math.PI/6), y2-hwE*Math.sin(ang+Math.PI/6));
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+      // Plain line (no label): skip ticks/label
+      if(m.showLabel===false){ ctx.restore(); return; }
       var tk=Math.max(5,m.strokeW*2.5)*sc;
       var perp=ang+Math.PI/2;
       [[x1,y1],[x2,y2]].forEach(function(pt){
@@ -6797,6 +7390,11 @@ function compositeExport(maxPx){
       drawPolylineOnCtx(ctx, pl, scale);
     });
   }catch(ex){ console.warn('[Export] polylineObjs:',ex); }
+  // Pen / Polygon / Leader / Stamp objects (live)
+  try{ penObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawPenOnCtx(ctx,o,scale); }); }catch(ex){ console.warn('[Export] penObjs:',ex); }
+  try{ polygonObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawPolygonOnCtx(ctx,o,scale); }); }catch(ex){ console.warn('[Export] polygonObjs:',ex); }
+  try{ leaderObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawLeaderOnCtx(ctx,o,scale); }); }catch(ex){ console.warn('[Export] leaderObjs:',ex); }
+  try{ stampObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawStampObjOnCtx(ctx,o,scale); }); }catch(ex){ console.warn('[Export] stampObjs:',ex); }
   // Comment objects
   try{
     commentObjs.forEach(function(c){
@@ -6908,6 +7506,46 @@ function exportToBlob(maxPx, mimeType, quality, cb){
 document.getElementById('btn-shortcuts').addEventListener('click',function(){
   document.getElementById('shortcuts').classList.toggle('show');
 });
+// ── Save a Blob, letting the user pick a folder/filename when supported ──
+// Uses the File System Access API (Chrome/Edge/Android Chrome) to open a
+// native "Save As" panel. Falls back to a normal download (Downloads folder)
+// on Safari/Firefox/iOS where the picker isn't available.
+//
+// IMPORTANT: showSaveFilePicker must be called from within the user gesture
+// (the button click), BEFORE the async export finishes — otherwise browsers
+// reject it for lacking user activation. So we open the picker first to get a
+// handle, then write the blob once it's ready.
+function pickSaveTarget(suggestedName, mimeType, description, exts){
+  if(window.showSaveFilePicker){
+    var accept={}; accept[mimeType]=exts;
+    return window.showSaveFilePicker({
+      suggestedName: suggestedName,
+      types: [{ description: description||'File', accept: accept }]
+    }).then(function(handle){ return handle; })
+      .catch(function(err){
+        if(err && (err.name==='AbortError' || err.name==='NotAllowedError')) return 'cancelled';
+        return null; // unsupported/failed → caller falls back to download
+      });
+  }
+  return Promise.resolve(null); // no picker → download fallback
+}
+function writeToTarget(handle, blob, fallbackName){
+  if(handle && handle.createWritable){
+    return handle.createWritable().then(function(w){
+      return w.write(blob).then(function(){ return w.close(); });
+    }).then(function(){ return true; })
+      .catch(function(){ _downloadBlob(blob, fallbackName); return true; });
+  }
+  _downloadBlob(blob, fallbackName);
+  return Promise.resolve(true);
+}
+function _downloadBlob(blob, name){
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.download=name; a.href=url; a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); },30000);
+}
+
 btnPng.addEventListener('click',function(){
   if(!baseLoaded){ toast('Open a file first','warn'); return; }
   // On iPhone, PNG encoding of a drawn canvas is too heavy for WebKit;
@@ -6915,14 +7553,15 @@ btnPng.addEventListener('click',function(){
   var mime  = IS_IPHONE ? 'image/jpeg' : 'image/png';
   var qual  = IS_IPHONE ? 0.97 : 1;
   var ext   = IS_IPHONE ? 'jpg' : 'png';
-  toast((IS_IPHONE?'Saving JPEG…':'Preparing PNG…'),'',0);
-  exportToBlob(0, mime, qual, function(blob){
-    if(!blob){ toast('Export failed — try again','err',4000); return; }
-    var url=URL.createObjectURL(blob);
-    var a=document.createElement('a');
-    a.download='site-plan.'+ext; a.href=url; a.click();
-    setTimeout(function(){ URL.revokeObjectURL(url); },30000);
-    toast('Saved ✓','ok',2500);
+  var mt    = ext==='jpg' ? 'image/jpeg' : 'image/png';
+  // Open the Save-As panel FIRST (within the click gesture), then export.
+  pickSaveTarget('site-plan.'+ext, mt, 'Image', ['.'+ext]).then(function(handle){
+    if(handle==='cancelled'){ toast('Save cancelled'); return; }
+    toast((IS_IPHONE?'Saving JPEG…':'Preparing PNG…'),'',0);
+    exportToBlob(0, mime, qual, function(blob){
+      if(!blob){ toast('Export failed — try again','err',4000); return; }
+      writeToTarget(handle, blob, 'site-plan.'+ext).then(function(){ toast('Saved ✓','ok',2500); });
+    });
   });
 });
 
@@ -6931,12 +7570,15 @@ btnPdf.addEventListener('click',function(){
   if(typeof window.jspdf==='undefined'&&typeof jsPDF==='undefined'){
     toast('PDF export needs an internet connection','warn'); return;
   }
-  toast('Preparing PDF…','',0);
-  exportToBlob(0,'image/jpeg',0.92,function(blob){
-    if(!blob){ toast('Export failed','err'); return; }
-    var JSPDF=window.jspdf?window.jspdf.jsPDF:jsPDF;
-    var reader=new FileReader();
-    reader.onload=function(e){
+  // Open the Save-As panel FIRST (within the click gesture), then build the PDF.
+  pickSaveTarget('site-plan.pdf', 'application/pdf', 'PDF Document', ['.pdf']).then(function(handle){
+    if(handle==='cancelled'){ toast('Save cancelled'); return; }
+    toast('Preparing PDF…','',0);
+    exportToBlob(0,'image/jpeg',0.92,function(blob){
+      if(!blob){ toast('Export failed','err'); return; }
+      var JSPDF=window.jspdf?window.jspdf.jsPDF:jsPDF;
+      var reader=new FileReader();
+      reader.onload=function(e){
       var imgData=e.target.result;
       var cw=baseCv.width, ch=baseCv.height;
       var orientation=cw>ch?'landscape':'portrait';
@@ -6956,10 +7598,11 @@ btnPdf.addEventListener('click',function(){
       doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.text(drwn,pw/6,ph-tbH+14,{align:'center'});
       doc.setFontSize(9); doc.text('Scale: '+scTxt,pw/2,ph-tbH+10,{align:'center'});
       doc.setFontSize(8); doc.text(date,5*pw/6,ph-tbH+10,{align:'center'});
-      doc.save('site-plan.pdf');
-      toast('Saved as PDF ✓','ok',2500);
+      var pdfBlob=doc.output('blob');
+      writeToTarget(handle, pdfBlob, 'site-plan.pdf').then(function(){ toast('Saved as PDF ✓','ok',2500); });
     };
     reader.readAsDataURL(blob);
+    });
   });
 });
 
@@ -7069,8 +7712,26 @@ function doSave(){
     measureObjs:    JSON.parse(JSON.stringify(measureObjs)),
     pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
     polylineObjs:   JSON.parse(JSON.stringify(polylineObjs)),
+    penObjs:JSON.parse(JSON.stringify(penObjs)),
+    polygonObjs:JSON.parse(JSON.stringify(polygonObjs)),
+    leaderObjs:JSON.parse(JSON.stringify(leaderObjs)),
+    stampObjs:JSON.parse(JSON.stringify(stampObjs)),
     commentObjs:    JSON.parse(JSON.stringify(commentObjs)),
-    markupObjs:     JSON.parse(JSON.stringify(markupObjs))
+    markupObjs:     JSON.parse(JSON.stringify(markupObjs)),
+    loadedDpi:      _lastLoadedDpi,
+    textScaleLocked: true,
+    imgOverlays:    (typeof imgOverlays!=='undefined'?imgOverlays:[]).map(function(ov){
+      var url='';
+      try{
+        var tc=document.createElement('canvas');
+        tc.width=Math.max(1,Math.round(ov.img.naturalWidth||ov.w));
+        tc.height=Math.max(1,Math.round(ov.img.naturalHeight||ov.h));
+        tc.getContext('2d').drawImage(ov.img,0,0,tc.width,tc.height);
+        url=tc.toDataURL('image/png');
+      }catch(ex){ url=''; }
+      return {src:url,cx:ov.cx,cy:ov.cy,w:ov.w,h:ov.h,angle:ov.angle||0,
+              flipH:!!ov.flipH,flipV:!!ov.flipV,opacity:ov.opacity!==undefined?ov.opacity:1};
+    })
   };
 
   // Step 1: encode base image
@@ -7197,14 +7858,37 @@ function doRestore(rec){
           if(pending===0){
             // All layers loaded
             activeLayerIdx=Math.min(rec.activeLayerIdx||0,layers.length-1);
+            // Scale-locked text: restore the plan DPI so point sizes render at
+            // the same physical size. Legacy saves (no flag) keep factor 1.0.
+            _lastLoadedDpi = rec.textScaleLocked ? (rec.loadedDpi||0) : 0;
             // Restore scale
             if(rec.textObjs){ textObjs=rec.textObjs; renderTextObjs(); }
             if(rec.shapeObjs){ shapeObjs=rec.shapeObjs; renderShapeObjs(); }
             if(rec.measureObjs){ measureObjs=rec.measureObjs; }
             if(rec.pathMeasureObjs){ pathMeasureObjs=rec.pathMeasureObjs; }
             if(rec.polylineObjs){ polylineObjs=rec.polylineObjs; }
+            if(rec.penObjs){ penObjs=rec.penObjs; }
+            if(rec.polygonObjs){ polygonObjs=rec.polygonObjs; }
+            if(rec.leaderObjs){ leaderObjs=rec.leaderObjs; }
+            if(rec.stampObjs){ stampObjs=rec.stampObjs; }
             if(rec.commentObjs){ commentObjs=rec.commentObjs; }
             if(rec.markupObjs){ markupObjs=rec.markupObjs; }
+            // Rehydrate image overlays (uploaded/pasted images)
+            if(rec.imgOverlays && rec.imgOverlays.length && typeof imgOverlays!=='undefined'){
+              imgOverlays=[];
+              rec.imgOverlays.forEach(function(od){
+                if(!od.src) return;
+                var oi=new Image();
+                oi.onload=function(){
+                  imgOverlays.push({img:oi,cx:od.cx,cy:od.cy,w:od.w,h:od.h,
+                    angle:od.angle||0,flipH:!!od.flipH,flipV:!!od.flipV,
+                    opacity:od.opacity!==undefined?od.opacity:1});
+                  if(typeof renderImgOverlays==='function') renderImgOverlays();
+                  composite();
+                };
+                oi.src=od.src;
+              });
+            }
             renderShapeAndMeasure();
             if(rec.scaleSet){ scaleSet=true; ppu=rec.ppu; scaleUnit=rec.scaleUnit;
               ppuIn.value=(1/ppu).toFixed(4); unitIn.value=scaleUnit;
@@ -8048,6 +8732,7 @@ document.addEventListener('keydown',function(e){
     if(selImg){ commitImgSelection(); return; }
     stopTextCursor(); clearTextHover();
     if(selectedMeasure){ commitMeasureSelection(); return; }
+    if(selectedPolyline){ cancelPolylineSelection(); return; }
     if(tool==='pathmeasure'&&pmActive){ closePathMeasure(); return; }
     if(tool==='polyline'&&plActive){ closePolyline(); return; }
     if(selectedShape){ commitSelection(); return; }
@@ -8084,8 +8769,10 @@ function placePreset(text, cx, cy){
   if(!baseLoaded){ toast('Open a site plan first','warn'); return; }
   captureState();
   // Target ~48 screen pixels tall regardless of zoom level.
-  // canvas_px = screen_px / zoom, clamped to sensible bounds.
-  var fs = Math.round(Math.max(10, Math.min(300, 48 / zoom)));
+  // canvas_px = screen_px / zoom, then convert to a scale-locked POINT value
+  // (divide by DPI factor) so fontSize stays resolution-independent like all text.
+  var fsPx = Math.max(10, Math.min(300, 48 / zoom));
+  var fs = Math.round(fsPx / textDpiFactor());
   var obj={
     id:Date.now(), x:cx, y:cy, text:text,
     angle:0, color:color, fontSize:fs,
@@ -8203,7 +8890,8 @@ function showHint(){ panHint.classList.add('show'); clearTimeout(hintTimer); hin
 function hideHint(){ panHint.classList.remove('show'); }
 
 // ── INIT PDF.js ──
-if(typeof pdfjsLib!=='undefined') pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+// NOTE: pdf.js loads AFTER this script, so pdfjsLib is undefined here.
+// workerSrc is now set lazily on first use inside loadPDF() instead.
 
 // ══════════════════════════════════════════════════════════════
 // NEW BLANK CANVAS SYSTEM
@@ -8421,12 +9109,16 @@ if(typeof pdfjsLib!=='undefined') pdfjsLib.GlobalWorkerOptions.workerSrc='https:
 })();
 // ══ END NEW BLANK CANVAS ══════════════════════════════════════
 
-})();
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+// ════════════════════════════════════════════════════════════════
+// NOTE: The code below was previously in a SEPARATE script element that
+// ran in the global scope. Because everything above lives inside this
+// strict-mode IIFE, that separate script crashed at load with
+// "ReferenceError: drawCv is not defined", silently disabling theme
+// persistence, the export watermark, the right-click delete menu and
+// the image-overlay hover cursors. It is now merged INSIDE the IIFE so
+// it shares the same live variables (selImg, drawCv, vpToCanvas, …).
+// ════════════════════════════════════════════════════════════════
 
-<script>
 // ── AOG Online/Offline detection ──────────────────────────
 (function(){
   var dot    = document.getElementById('aog-dot');
@@ -8587,9 +9279,13 @@ drawCv.addEventListener('mouseleave', function(){
 });
 
 // ── commitImgSelection: also clear any cursor state ──
-var _origCommitImgSel = commitImgSelection;
+// NOTE: block above already wraps commitImgSelection (to hide the image bar)
+// using the name _origCommitImgSel. Since both wrappers now live in the same
+// scope, this one MUST use a distinct backup name — otherwise the wrapper
+// would call itself and recurse infinitely (the "Done" button did nothing).
+var _origCommitImgSelCursor = commitImgSelection;
 commitImgSelection = function(){
-  _origCommitImgSel();
+  _origCommitImgSelCursor();
   _imgClearDragCursor();
   drawCv.style.cursor = '';
 };
@@ -8676,45 +9372,254 @@ function updateWatermark(){
 (function(){
   var menu = document.getElementById('ctx-menu');
   var _ctxHit = null;
+  var _ctxPos = null;       // canvas coords of the right-click
+  var _clipObj = null;      // last copied object (deep clone) + its kind
+  var itUpload = document.getElementById('ctx-upload');
+  var itCopy   = document.getElementById('ctx-copy');
+  var itPaste  = document.getElementById('ctx-paste');
+  var itCancel = document.getElementById('ctx-cancel');
+  var itFit    = document.getElementById('ctx-fit');
+  var itDelete = document.getElementById('ctx-delete');
 
   function hideMenu(){ menu.classList.remove('show'); _ctxHit = null; }
+  function show(el,on){ el.classList.toggle('hidden', !on); }
+
+  // Identify which collection an object lives in
+  function kindOf(obj){
+    if(shapeObjs.indexOf(obj)>-1)        return 'shape';
+    if(textObjs.indexOf(obj)>-1)         return 'text';
+    if(measureObjs.indexOf(obj)>-1)      return 'measure';
+    if(pathMeasureObjs.indexOf(obj)>-1)  return 'pathmeasure';
+    if(polylineObjs.indexOf(obj)>-1)     return 'polyline';
+    if(penObjs.indexOf(obj)>-1)          return 'pen';
+    if(polygonObjs.indexOf(obj)>-1)      return 'polygon';
+    if(leaderObjs.indexOf(obj)>-1)       return 'leader';
+    if(stampObjs.indexOf(obj)>-1)        return 'stamp';
+    if(commentObjs.indexOf(obj)>-1)      return 'comment';
+    if(markupObjs.indexOf(obj)>-1)       return 'markup';
+    if(typeof imgOverlays!=='undefined'&&imgOverlays.indexOf(obj)>-1) return 'imgoverlay';
+    return null;
+  }
+
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+  // Offset a cloned object by (dx,dy) in canvas px so the paste is visible
+  function offsetObj(kind, o, dx, dy){
+    o.id = Date.now() + Math.floor(Math.random()*1000);
+    o._editing = false;
+    if(kind==='shape'||kind==='comment'||kind==='stamp'||kind==='imgoverlay'){ o.cx!=null?(o.cx+=dx,o.cy+=dy):(o.x+=dx,o.y+=dy); }
+    else if(kind==='text'){ o.x+=dx; o.y+=dy; }
+    else if(kind==='measure'||kind==='markup'){ o.x1+=dx; o.y1+=dy; o.x2+=dx; o.y2+=dy; }
+    else if(kind==='leader'){ o.x1+=dx; o.y1+=dy; o.x2+=dx; o.y2+=dy; }
+    else if(kind==='polyline'||kind==='pathmeasure'||kind==='pen'||kind==='polygon'){ if(o.pts) o.pts=o.pts.map(function(p){ return {x:p.x+dx,y:p.y+dy}; }); }
+    o.layerIdx = activeLayerIdx;
+    return o;
+  }
+
+  function pushClone(kind, o){
+    if(kind==='shape') shapeObjs.push(o);
+    else if(kind==='text') textObjs.push(o);
+    else if(kind==='measure') measureObjs.push(o);
+    else if(kind==='pathmeasure') pathMeasureObjs.push(o);
+    else if(kind==='polyline') polylineObjs.push(o);
+    else if(kind==='pen') penObjs.push(o);
+    else if(kind==='polygon') polygonObjs.push(o);
+    else if(kind==='leader') leaderObjs.push(o);
+    else if(kind==='stamp') stampObjs.push(o);
+    else if(kind==='comment') commentObjs.push(o);
+    else if(kind==='markup') markupObjs.push(o);
+    renderTextObjs(); renderShapeObjs(); renderShapeAndMeasure(); composite(); pushUndo();
+  }
 
   viewport.addEventListener('contextmenu', function(e){
     e.preventDefault();
+    if(!baseLoaded){ hideMenu(); return; }
     var cp = vpToCanvas(e.clientX, e.clientY);
-
+    _ctxPos = cp;
     var hit = findObjAtStrict(cp.x, cp.y);
-
-    if(!hit){ hideMenu(); return; }
+    // Image overlays use a separate hit-test; check them too
+    if(!hit && typeof findImgAt==='function'){ var ovh=findImgAt(cp.x,cp.y,false); if(ovh) hit=ovh; }
     _ctxHit = hit;
 
+    // Cancel is available whenever there's an active selection or in-progress action
+    var hasActive = !!(selectedShape || selectedMeasure || selectedPolyline ||
+                       (typeof selImg!=='undefined'&&selImg) ||
+                       (typeof plActive!=='undefined'&&plActive) ||
+                       (typeof polyActive!=='undefined'&&polyActive) ||
+                       (typeof pmActive!=='undefined'&&pmActive) ||
+                       (typeof leaderStep!=='undefined'&&leaderStep>0) ||
+                       (typeof _pendingImg!=='undefined'&&_pendingImg) ||
+                       (typeof _editingComment!=='undefined'&&_editingComment));
+
+    if(hit){
+      // On an object: Copy + Delete
+      show(itUpload,false); show(itCopy,true); show(itDelete,true);
+      show(itPaste, !!_clipObj);
+    } else {
+      // Empty area: Upload Image + Paste (object or clipboard image)
+      show(itUpload,true); show(itCopy,false); show(itDelete,false);
+      show(itPaste,true);
+    }
+    show(itCancel, hasActive);
+    show(itFit, !!(hit && typeof kindOf==='function' && kindOf(hit)==='comment'));
+
     var mx = e.clientX, my = e.clientY;
-    if(mx + 170 > window.innerWidth)  mx = window.innerWidth  - 170;
-    if(my + 55  > window.innerHeight) my = window.innerHeight - 55;
-    menu.style.left = mx + 'px';
-    menu.style.top  = my + 'px';
-    menu.classList.add('show');
+    menu.style.left = '-9999px'; menu.style.top = '0px';
+    menu.classList.add('show'); // show first so we can measure height
+    var mh = menu.offsetHeight || 140;
+    var mw = menu.offsetWidth || 180;
+    if(mx + mw > window.innerWidth)  mx = window.innerWidth  - mw - 4;
+    if(my + mh > window.innerHeight) my = window.innerHeight - mh - 4;
+    menu.style.left = Math.max(4,mx) + 'px';
+    menu.style.top  = Math.max(4,my) + 'px';
   });
 
-  document.getElementById('ctx-delete').addEventListener('click', function(){
+  // ── Upload Image (empty-area only) → overlay placement ──
+  itUpload.addEventListener('click', function(){
+    hideMenu();
+    if(!baseLoaded){ toast('Open a site plan first','warn'); return; }
+    var inp = document.getElementById('_img-file-input') || (function(){
+      var i=document.createElement('input'); i.type='file';
+      i.accept='image/*,.heic,.heif,.webp,.bmp'; i.style.display='none';
+      i.id='_ctx-img-input'; document.body.appendChild(i); return i;
+    })();
+    inp.value='';
+    inp.onchange=function(){ if(inp.files&&inp.files[0]) addImgOverlay(inp.files[0]); inp.onchange=null; };
+    inp.click();
+  });
+
+  // ── Copy (on an object) ──
+  itCopy.addEventListener('click', function(){
+    if(!_ctxHit){ hideMenu(); return; }
+    var kind = kindOf(_ctxHit);
+    if(kind==='imgoverlay'){
+      // Keep the live Image reference; store geometry separately
+      var ov=_ctxHit;
+      _clipObj = { kind:'imgoverlay', img:ov.img, w:ov.w, h:ov.h, angle:ov.angle||0,
+                   flipH:!!ov.flipH, flipV:!!ov.flipV, opacity:ov.opacity!==undefined?ov.opacity:1 };
+      toast('Image copied — right-click empty space to paste','ok',2000);
+    } else if(kind){
+      _clipObj = { kind:kind, data:clone(_ctxHit) };
+      toast('Copied — right-click empty space to paste','ok',2000);
+    }
+    hideMenu();
+  });
+
+  // ── Paste: object clone at cursor, else system-clipboard image ──
+  itPaste.addEventListener('click', function(){
+    hideMenu();
+    var pos = _ctxPos || {x:baseCv.width/2, y:baseCv.height/2};
+    if(_clipObj && _clipObj.kind==='imgoverlay'){
+      // Re-create a movable image overlay at the cursor
+      captureState();
+      var nov={img:_clipObj.img, cx:pos.x, cy:pos.y, w:_clipObj.w, h:_clipObj.h,
+               angle:_clipObj.angle||0, flipH:!!_clipObj.flipH, flipV:!!_clipObj.flipV,
+               opacity:_clipObj.opacity!==undefined?_clipObj.opacity:1};
+      imgOverlays.push(nov);
+      if(typeof renderImgOverlays==='function') renderImgOverlays();
+      composite();
+      if(typeof pushImgUndo==='function') pushImgUndo(); else pushUndo();
+      return;
+    }
+    if(_clipObj){
+      var o = offsetObj(_clipObj.kind, clone(_clipObj.data), 0, 0);
+      // Center the paste roughly at the cursor for positional types
+      var k=_clipObj.kind, src=_clipObj.data;
+      if(k==='shape'||k==='comment'){ o.cx=pos.x; o.cy=pos.y; }
+      else if(k==='text'){ o.x=pos.x; o.y=pos.y; }
+      else if(k==='measure'||k==='markup'){ var mdx=pos.x-(src.x1+src.x2)/2, mdy=pos.y-(src.y1+src.y2)/2; o.x1=src.x1+mdx;o.y1=src.y1+mdy;o.x2=src.x2+mdx;o.y2=src.y2+mdy; }
+      else if((k==='polyline'||k==='pathmeasure')&&src.pts&&src.pts.length){ var cx=0,cy=0; src.pts.forEach(function(p){cx+=p.x;cy+=p.y;}); cx/=src.pts.length; cy/=src.pts.length; var pdx=pos.x-cx, pdy=pos.y-cy; o.pts=src.pts.map(function(p){return {x:p.x+pdx,y:p.y+pdy};}); }
+      pushClone(_clipObj.kind, o);
+      return;
+    }
+    // No object copied → try system clipboard image
+    pasteClipboardImage();
+  });
+
+  function pasteClipboardImage(){
+    if(!navigator.clipboard||!navigator.clipboard.read){
+      toast('Clipboard image paste not supported here · use 📷 Img','warn',3500); return;
+    }
+    navigator.clipboard.read().then(function(items){
+      for(var i=0;i<items.length;i++){
+        var types=items[i].types||[];
+        for(var t=0;t<types.length;t++){
+          if(types[t].indexOf('image/')===0){
+            items[i].getType(types[t]).then(function(blob){ addImgOverlay(blob); });
+            return;
+          }
+        }
+      }
+      toast('No image on clipboard','warn',2500);
+    }).catch(function(){ toast('Clipboard blocked — click page first, then retry','warn',3500); });
+  }
+
+  // ── Ctrl/Cmd+V anywhere pastes a clipboard image as overlay ──
+  window.addEventListener('paste', function(e){
+    if(!baseLoaded) return;
+    if(document.activeElement===textOv) return; // let text editing handle it
+    var items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    for(var i=0;i<items.length;i++){
+      if(items[i].type && items[i].type.indexOf('image/')===0){
+        var blob=items[i].getAsFile();
+        if(blob){ e.preventDefault(); addImgOverlay(blob); return; }
+      }
+    }
+  });
+
+  itCancel.addEventListener('click', function(){
+    hideMenu();
+    // Cancel in-progress placements first
+    if(typeof _pendingImg!=='undefined'&&_pendingImg&&typeof _cancelImgPlacement==='function'){ _cancelImgPlacement(); return; }
+    if(typeof plActive!=='undefined'&&plActive){ plPoints=[]; plActive=false; renderShapeAndMeasure(); composite(); return; }
+    if(typeof polyActive!=='undefined'&&polyActive){ polyPoints=[]; polyActive=false; renderShapeAndMeasure(); composite(); return; }
+    if(typeof pmActive!=='undefined'&&pmActive){ pmPoints=[]; pmActive=false; renderShapeAndMeasure(); composite(); return; }
+    if(typeof leaderStep!=='undefined'&&leaderStep>0){ leaderStep=0; renderShapeAndMeasure(); composite(); return; }
+    if(typeof _editingComment!=='undefined'&&_editingComment&&typeof commitCommentEdit==='function'){ commitCommentEdit(); return; }
+    // Then deselect any active selection (no delete — just release it)
+    if(selectedPolyline){ cancelPolylineSelection(); return; }
+    if(selectedMeasure){ cancelMeasureSelection(); return; }
+    if(selectedShape){ if(typeof cancelSelection==='function') cancelSelection(); else { selectedShape=null; if(selCv.width>1){selCv.width=1;selCv.height=1;} renderShapeAndMeasure(); composite(); } return; }
+    if(typeof selImg!=='undefined'&&selImg&&typeof commitImgSelection==='function'){ commitImgSelection(); return; }
+  });
+
+  itFit.addEventListener('click', function(){
+    var obj=_ctxHit; hideMenu();
+    if(obj && typeof kindOf==='function' && kindOf(obj)==='comment' && typeof snapCommentToFit==='function'){
+      snapCommentToFit(obj);
+    }
+  });
+
+  itDelete.addEventListener('click', function(){
     if(!_ctxHit){ hideMenu(); return; }
     var obj = _ctxHit;
     hideMenu();
     var idx;
     idx = shapeObjs.indexOf(obj);
-    if(idx > -1){ shapeObjs.splice(idx,1); renderShapeObjs(); renderShapeAndMeasure(); return; }
+    if(idx > -1){ shapeObjs.splice(idx,1); renderShapeObjs(); renderShapeAndMeasure(); composite(); pushUndo(); return; }
     idx = textObjs.indexOf(obj);
-    if(idx > -1){ textObjs.splice(idx,1); renderTextObjs(); return; }
+    if(idx > -1){ textObjs.splice(idx,1); renderTextObjs(); composite(); pushUndo(); return; }
     idx = measureObjs.indexOf(obj);
-    if(idx > -1){ measureObjs.splice(idx,1); renderShapeAndMeasure(); return; }
+    if(idx > -1){ measureObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
     idx = pathMeasureObjs.indexOf(obj);
-    if(idx > -1){ pathMeasureObjs.splice(idx,1); renderShapeAndMeasure(); return; }
+    if(idx > -1){ pathMeasureObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
     idx = polylineObjs.indexOf(obj);
     if(idx > -1){ polylineObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
+    idx = penObjs.indexOf(obj);
+    if(idx > -1){ penObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
+    idx = polygonObjs.indexOf(obj);
+    if(idx > -1){ polygonObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
+    idx = leaderObjs.indexOf(obj);
+    if(idx > -1){ leaderObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
+    idx = stampObjs.indexOf(obj);
+    if(idx > -1){ stampObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
+    if(typeof imgOverlays!=='undefined'){ idx = imgOverlays.indexOf(obj);
+      if(idx > -1){ imgOverlays.splice(idx,1); if(typeof renderImgOverlays==='function') renderImgOverlays(); composite(); if(typeof pushImgUndo==='function') pushImgUndo(); else pushUndo(); return; } }
     idx = commentObjs.indexOf(obj);
     if(idx > -1){ commentObjs.splice(idx,1); renderShapeAndMeasure(); composite(); pushUndo(); return; }
     idx = markupObjs.indexOf(obj);
-    if(idx > -1){ markupObjs.splice(idx,1); renderTextObjs(); pushUndo(); return; }
+    if(idx > -1){ markupObjs.splice(idx,1); renderTextObjs(); composite(); pushUndo(); return; }
   });
 
   document.addEventListener('click', function(e){
@@ -8724,7 +9629,15 @@ function updateWatermark(){
     if(e.key==='Escape') hideMenu();
   });
 })();
+
+// Inline HTML uses onclick="toggleTheme()", which runs in the global
+// scope — expose it now that toggleTheme lives inside the IIFE.
+window.toggleTheme = toggleTheme;
+
+})();
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 </body>
 </html>
