@@ -2740,6 +2740,26 @@ function getPos(e){
 }
 function snapPt(x,y){ if(!snapEnabled||!gridEnabled) return {x:x,y:y}; var g=gridSize; return {x:Math.round(x/g)*g,y:Math.round(y/g)*g}; }
 
+// ── SHIFT-CONSTRAIN (level horizontal / vertical) ──────────────
+// Tracks whether Shift is currently held so line/arrow/polyline drawing can
+// lock to a perfectly level horizontal or vertical segment. Held-state is
+// tracked globally (not from the pointer event) so it works mid-drag even
+// when the mouse button is already down.
+var _shiftDown = false;
+window.addEventListener('keydown', function(e){ if(e.key==='Shift') _shiftDown=true; }, true);
+window.addEventListener('keyup',   function(e){ if(e.key==='Shift') _shiftDown=false; }, true);
+window.addEventListener('blur',     function(){ _shiftDown=false; }); // releasing focus clears it
+// Snap point (x,y) to be level with anchor (ax,ay): horizontal if the move is
+// more sideways than vertical, otherwise vertical. Returns {x,y}.
+function constrainHV(ax, ay, x, y){
+  if(Math.abs(x-ax) >= Math.abs(y-ay)) return {x:x, y:ay}; // horizontal
+  return {x:ax, y:y};                                       // vertical
+}
+// Convenience: apply HV constraint only when Shift is held.
+function maybeConstrainHV(ax, ay, x, y){
+  return _shiftDown ? constrainHV(ax, ay, x, y) : {x:x, y:y};
+}
+
 // ── FILE LOADING ──
 openBtn.addEventListener('click',function(){ fileIn.click(); });
 // Camera button — show on mobile/touch devices, wire to capture input
@@ -3579,6 +3599,10 @@ function onMove(e){
   if(e.touches&&e.touches.length>1){ drawing=false; return; }
   e.preventDefault();
   var p=snapPt(getPos(e).x,getPos(e).y); var x=p.x,y=p.y;
+  // Shift = level horizontal/vertical for straight single-segment tools.
+  if((tool==='arrow'||tool==='line')&&_shiftDown){
+    var _cv=constrainHV(startX,startY,x,y); x=_cv.x; y=_cv.y;
+  }
   var lc=lctx();
   if(tool==='comment'&&compositedSnap){
     // Live preview of comment box being drawn
@@ -3770,6 +3794,10 @@ function onUp(e){
   // Reset path on display canvas after every stroke
   dCtx.beginPath();
   var p=snapPt(getPos(e).x,getPos(e).y);
+  // Shift = level horizontal/vertical for line/arrow/measure commit.
+  if((tool==='line'||tool==='arrow'||tool==='measure')&&_shiftDown){
+    var _cvp=constrainHV(startX,startY,p.x,p.y); p={x:_cvp.x,y:_cvp.y};
+  }
   var lc=lctx();
   if(tool==='pen'){
     if(penPathPoints.length>=1){
@@ -4805,7 +4833,12 @@ drawCv.addEventListener('click',function(e){
   }
   else if(tool==='polyline'){
     if(selectedPolyline) return; // a polyline is selected for editing — don't start a new one
-    plPoints.push(p); plActive=true; redrawPolylinePreview(p.x,p.y);
+    var plp=p;
+    if(_shiftDown && plPoints.length>=1){
+      var _lpp=plPoints[plPoints.length-1];
+      var _cvpl=constrainHV(_lpp.x,_lpp.y,plp.x,plp.y); plp={x:_cvpl.x,y:_cvpl.y};
+    }
+    plPoints.push(plp); plActive=true; redrawPolylinePreview(plp.x,plp.y);
   }
   else if(tool==='leader'){
     // Don't place a new leader if one is selected (we're editing it) or if a
@@ -4841,6 +4874,7 @@ drawCv.addEventListener('mousemove',function(e){
   // Live line preview — draw on shCv so it's visible above draw-cv
   if(tool==='line'&&drawing&&compositedSnap){
     var lpos=getPos(e);
+    lpos=maybeConstrainHV(startX,startY,lpos.x,lpos.y);
     dCtx.putImageData(compositedSnap,0,0);
     if(shCv.width!==drawCv.width||shCv.height!==drawCv.height){
       shCv.width=drawCv.width; shCv.height=drawCv.height;
@@ -4861,6 +4895,7 @@ drawCv.addEventListener('mousemove',function(e){
   // Live measurement preview — draw on shCv (z-index:1, above draw-cv)
   if(tool==='measure'&&drawing&&compositedSnap){
     var mpos=getPos(e);
+    mpos=maybeConstrainHV(startX,startY,mpos.x,mpos.y);
     var mpx=Math.hypot(mpos.x-startX,mpos.y-startY);
     var ang=Math.atan2(mpos.y-startY,mpos.x-startX);
     var perp=ang+Math.PI/2;
@@ -6631,6 +6666,11 @@ function cancelPolylineSelection(){
 
 function redrawPolylinePreview(mx,my){
   if(!plActive||plPoints.length<1) return;
+  // Shift = level horizontal/vertical for the segment from the last anchor.
+  if(_shiftDown && mx!=null){
+    var _lp=plPoints[plPoints.length-1];
+    var _cv=constrainHV(_lp.x,_lp.y,mx,my); mx=_cv.x; my=_cv.y;
+  }
   renderShapeAndMeasure();
   var pts=plPoints.concat(mx!=null?[{x:mx,y:my}]:[]);
   if(pts.length<2) return;
