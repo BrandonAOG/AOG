@@ -3461,9 +3461,13 @@ function onMove(e){
     var p=snapPt(tp.x,tp.y);
     var orig=measureDragStart.orig;
     if(measureDragHandle===0){
-      selectedMeasure.x1=p.x; selectedMeasure.y1=p.y;
+      // Dragging P1 → keep level relative to the fixed P2 when Shift is held.
+      var p1=(_shiftDown)?constrainHV(selectedMeasure.x2,selectedMeasure.y2,p.x,p.y):p;
+      selectedMeasure.x1=p1.x; selectedMeasure.y1=p1.y;
     } else if(measureDragHandle===1){
-      selectedMeasure.x2=p.x; selectedMeasure.y2=p.y;
+      // Dragging P2 → keep level relative to the fixed P1 when Shift is held.
+      var p2=(_shiftDown)?constrainHV(selectedMeasure.x1,selectedMeasure.y1,p.x,p.y):p;
+      selectedMeasure.x2=p2.x; selectedMeasure.y2=p2.y;
     } else if(measureDragHandle===-2){
       var dx=p.x-measureDragStart.x, dy=p.y-measureDragStart.y;
       selectedMeasure.x1=orig.x1+dx; selectedMeasure.y1=orig.y1+dy;
