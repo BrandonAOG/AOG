@@ -949,9 +949,13 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <button class="ic-btn" id="btn-shortcuts" title="Keyboard shortcuts (?)">?</button>
   </div>
   <div class="sb-group">
+    <button class="save-btn" id="btn-saveproj" title="Save editable project file (.aogplan) — reopen later to keep editing">💾 Save</button>
+    <button class="save-btn" id="btn-openproj" title="Open an editable project file (.aogplan)">📂 Open</button>
     <button class="save-btn" id="btn-png">PNG</button>
     <button class="save-btn" id="btn-pdf">PDF</button>
+    <button class="save-btn" id="btn-pdfedit" title="Export a PDF that also re-opens here for editing">PDF✎</button>
     <button class="save-btn" id="btn-print">Print</button>
+    <input type="file" id="openproj-in" accept=".aogplan,application/json" style="display:none">
   </div>
 </div>
 
@@ -1408,11 +1412,13 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
       <div class="sc-section-title">ACTIONS</div>
       <div class="sc-grid">
+        <div class="sc-row"><span class="sc-desc">Constrain line level (horizontal / vertical)</span><span class="sc-key">Hold ⇧ Shift while drawing or dragging an endpoint</span></div>
         <div class="sc-row"><span class="sc-desc">Commit / finish shape</span><span class="sc-key">Enter</span></div>
         <div class="sc-row"><span class="sc-desc">Cancel / deselect</span><span class="sc-key">Esc</span></div>
         <div class="sc-row"><span class="sc-desc">Close polygon / polyline</span><span class="sc-key">Esc or dbl-click</span></div>
         <div class="sc-row"><span class="sc-desc">New line in text</span><span class="sc-key">Enter</span></div>
         <div class="sc-row"><span class="sc-desc">Commit text</span><span class="sc-key">⇧ Enter</span></div>
+        <div class="sc-row"><span class="sc-desc">Delete selected leader / image</span><span class="sc-key">Delete or Backspace</span></div>
         <div class="sc-row"><span class="sc-desc">Right-click object</span><span class="sc-key">Context menu → Delete</span></div>
       </div>
 
@@ -1424,8 +1430,12 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <div class="sc-grid">
       <div class="sc-row"><span class="sc-desc">Open image / PDF</span><span class="sc-key">＋ Open button or drag &amp; drop onto canvas</span></div>
       <div class="sc-row"><span class="sc-desc">New blank canvas</span><span class="sc-key">Tap ＋ Open → select New Canvas</span></div>
+      <div class="sc-row"><span class="sc-desc">Save editable project</span><span class="sc-key">💾 Save button → .aogplan file (keeps everything editable)</span></div>
+      <div class="sc-row"><span class="sc-desc">Open editable project</span><span class="sc-key">📂 Open button → choose a .aogplan file</span></div>
+      <div class="sc-row"><span class="sc-desc">Export editable PDF</span><span class="sc-key">PDF✎ button — normal PDF that reopens here for editing</span></div>
+      <div class="sc-row"><span class="sc-desc">Reopen an editable PDF</span><span class="sc-key">Open it like any PDF — annotations come back editable automatically</span></div>
       <div class="sc-row"><span class="sc-desc">Export PNG</span><span class="sc-key">PNG button (subbar)</span></div>
-      <div class="sc-row"><span class="sc-desc">Export PDF</span><span class="sc-key">PDF button (subbar)</span></div>
+      <div class="sc-row"><span class="sc-desc">Export flat PDF</span><span class="sc-key">PDF button — flattened image for sharing / printing</span></div>
       <div class="sc-row"><span class="sc-desc">Print with title block</span><span class="sc-key">Print button (subbar)</span></div>
       <div class="sc-row"><span class="sc-desc">Auto-save status dot</span><span class="sc-key">🟢 saved · 🟡 unsaved · 🔴 error</span></div>
       <div class="sc-row"><span class="sc-desc">Multi-page navigation</span><span class="sc-key">← → buttons in subbar</span></div>
@@ -1435,7 +1445,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
     <div class="sc-section-title">TOOLS — how they work</div>
     <div class="sc-grid">
-      <div class="sc-row"><span class="sc-desc">Leader line</span><span class="sc-key">Click anchor point, click arrowhead, type label</span></div>
+      <div class="sc-row"><span class="sc-desc">Leader line</span><span class="sc-key">Click anchor, click arrowhead, type label · click it again later to recolor, resize or move (drag tip / elbow / shoulder handles)</span></div>
       <div class="sc-row"><span class="sc-desc">Stamp</span><span class="sc-key">Tap Stamp tool → choose symbol → click to place</span></div>
       <div class="sc-row"><span class="sc-desc">Highlight / Strikeout / Underline</span><span class="sc-key">Drag across an area to mark it</span></div>
       <div class="sc-row"><span class="sc-desc">Path Distance</span><span class="sc-key">Click waypoints along a route; dbl-click / Enter to finish</span></div>
@@ -1484,6 +1494,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       <div class="sc-row"><span class="sc-desc">Live W × H on resize</span><span class="sc-key">Rect, Ellipse, Cloud — visible while dragging handles</span></div>
       <div class="sc-row"><span class="sc-desc">Edit note text</span><span class="sc-key">Double-tap / double-click note box</span></div>
       <div class="sc-row"><span class="sc-desc">Move / resize note</span><span class="sc-key">Select note box, drag body or handles</span></div>
+      <div class="sc-row"><span class="sc-desc">Re-edit a leader</span><span class="sc-key">With Leader tool, click it → drag handles, or change color / width in toolbar</span></div>
+      <div class="sc-row"><span class="sc-desc">Straighten a line / arrow</span><span class="sc-key">Select it, hold ⇧ Shift while dragging an endpoint → snaps level</span></div>
       <div class="sc-row"><span class="sc-desc">Delete any object</span><span class="sc-key">Right-click → Delete (desktop) · Long-press (touch)</span></div>
       <div class="sc-row"><span class="sc-desc">⚡ AOG Labels</span><span class="sc-key">Quick-place generator, tank, ATS &amp; appliance labels</span></div>
     </div>
@@ -1522,7 +1534,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <div class="sc-row"><span class="sc-desc">Line thickness</span><span class="sc-key">Drag size slider</span></div>
         <div class="sc-row"><span class="sc-desc">Layers panel</span><span class="sc-key">Layers button (subbar)</span></div>
         <div class="sc-row"><span class="sc-desc">Properties panel</span><span class="sc-key">Props button (subbar)</span></div>
-        <div class="sc-row"><span class="sc-desc">Leader line</span><span class="sc-key">Tap anchor, tap arrowhead, type label</span></div>
+        <div class="sc-row"><span class="sc-desc">Leader line</span><span class="sc-key">Tap anchor, tap arrowhead, type label · tap it again to edit (drag handles, recolor)</span></div>
         <div class="sc-row"><span class="sc-desc">Stamp</span><span class="sc-key">Tap Stamp → choose symbol → tap to place</span></div>
       </div>
 
@@ -2934,6 +2946,27 @@ function showImageError(name){
 
 
 function loadPDF(f){
+  if(typeof pdfjsLib==='undefined'){ toast('PDF support requires an internet connection.','warn'); return; }
+  // First: if this PDF carries embedded AOG editable data (saved via "PDF✎"),
+  // restore the full editable project instead of flattening the PDF to a image.
+  if(typeof window.PDFLib!=='undefined'){
+    f.arrayBuffer().then(function(buf){
+      // Clone the buffer for pdf-lib (getDocument may detach the original).
+      var copy=buf.slice(0);
+      extractAogFromPdf(copy).then(function(rec){
+        if(rec){
+          toast('Editable PDF detected — restoring project…','',0);
+          if(loadProjectRecord(rec)){ toast('Editable project restored ✓','ok',3000); return; }
+        }
+        _loadPDFRasterized(f); // no embedded data → normal flatten path
+      }).catch(function(){ _loadPDFRasterized(f); });
+    }).catch(function(){ _loadPDFRasterized(f); });
+    return;
+  }
+  _loadPDFRasterized(f);
+}
+
+function _loadPDFRasterized(f){
   if(typeof pdfjsLib==='undefined'){ toast('PDF support requires an internet connection.','warn'); return; }
   // pdf.js 3.x REQUIRES a worker source. The original code set this in a
   // guard that executed before the library loaded, so it was never applied
@@ -7971,6 +8004,161 @@ btnPdf.addEventListener('click',function(){
   });
 });
 
+// ══════════════════════════════════════════════════════════════
+// PROJECT SAVE / OPEN  (editable, fully re-loadable)
+// ══════════════════════════════════════════════════════════════
+// Option A: a standalone .aogplan file (JSON) holding the base image +
+// every vector object + scale/grid/title settings. Reopen it any day,
+// on any device, and keep editing exactly where you left off.
+
+var btnSaveProj = document.getElementById('btn-saveproj');
+var btnOpenProj = document.getElementById('btn-openproj');
+var btnPdfEdit  = document.getElementById('btn-pdfedit');
+var openProjIn  = document.getElementById('openproj-in');
+
+function _projFileName(ext){
+  var base=(document.getElementById('tb-proj')||{}).value||'site-plan';
+  base=base.replace(/[\\/:*?"<>|]+/g,'_').slice(0,60)||'site-plan';
+  return base+'.'+ext;
+}
+
+if(btnSaveProj) btnSaveProj.addEventListener('click', function(){
+  if(!baseLoaded){ toast('Open a file first','warn'); return; }
+  var name=_projFileName('aogplan');
+  // Open the Save-As panel within the click gesture, then build the record.
+  pickSaveTarget(name, 'application/json', 'AOG Project', ['.aogplan','.json']).then(function(handle){
+    if(handle==='cancelled'){ toast('Save cancelled'); return; }
+    toast('Saving project…','',0);
+    buildProjectRecord(0.92, function(rec){
+      if(!rec){ toast('Project save failed — try again','err',4000); return; }
+      var json; try{ json=JSON.stringify(rec); }catch(ex){ toast('Project too large to serialize','err',4000); return; }
+      var blob=new Blob([json],{type:'application/json'});
+      writeToTarget(handle, blob, name).then(function(){ toast('Project saved ✓','ok',2500); });
+    });
+  });
+});
+
+// Restore from a parsed project record (shared by Open Project + editable-PDF open)
+function loadProjectRecord(rec){
+  if(!rec || !rec.baseData){ toast('Not a valid project file','err',4000); return false; }
+  try{ doRestore(rec); return true; }
+  catch(ex){ console.warn('[Project] restore failed:',ex); toast('Could not open project','err',4000); return false; }
+}
+
+if(btnOpenProj) btnOpenProj.addEventListener('click', function(){ openProjIn.click(); });
+if(openProjIn) openProjIn.addEventListener('change', function(e){
+  var f=e.target.files[0]; if(!f) return;
+  e.target.value='';
+  var fr=new FileReader();
+  fr.onload=function(){
+    var rec; try{ rec=JSON.parse(fr.result); }catch(ex){ toast('Not a valid project file','err',4000); return; }
+    if(loadProjectRecord(rec)) toast('Project opened ✓','ok',2500);
+  };
+  fr.onerror=function(){ toast('Could not read file','err',4000); };
+  fr.readAsText(f);
+});
+
+// ── Option B: Editable PDF ─────────────────────────────────────
+// Builds the normal flat PDF (same look as the PDF button) via jsPDF, then
+// embeds the editable project JSON as a file attachment using pdf-lib. To any
+// other viewer it's a normal PDF; reopened here, all objects come back editable.
+var AOG_PDF_ATTACH = 'aogplan.json'; // attachment name we look for on open
+
+if(btnPdfEdit) btnPdfEdit.addEventListener('click', function(){
+  if(!baseLoaded){ toast('Open a file first','warn'); return; }
+  if(typeof window.jspdf==='undefined'&&typeof jsPDF==='undefined'){ toast('PDF export needs an internet connection','warn'); return; }
+  if(typeof window.PDFLib==='undefined'){ toast('Editable PDF needs an internet connection','warn',4000); return; }
+  var name=_projFileName('pdf');
+  pickSaveTarget(name, 'application/pdf', 'PDF Document', ['.pdf']).then(function(handle){
+    if(handle==='cancelled'){ toast('Save cancelled'); return; }
+    toast('Preparing editable PDF…','',0);
+    // 1) Build the visual PDF exactly like the normal PDF export.
+    exportToBlob(0,'image/jpeg',0.92,function(blob){
+      if(!blob){ toast('Export failed','err'); return; }
+      var JSPDF=window.jspdf?window.jspdf.jsPDF:jsPDF;
+      var reader=new FileReader();
+      reader.onload=function(ev){
+        var imgData=ev.target.result;
+        var cw=baseCv.width, ch=baseCv.height;
+        var orientation=cw>ch?'landscape':'portrait';
+        var doc=new JSPDF({orientation:orientation,unit:'mm',format:'a3'});
+        var pw=doc.internal.pageSize.getWidth(), ph=doc.internal.pageSize.getHeight();
+        var tbH=18, imgH=ph-tbH-4, imgW=pw-4;
+        if(imgH/imgW<ch/cw) imgW=imgH/(ch/cw);
+        doc.addImage(imgData,'JPEG',2,2,imgW,imgH);
+        var proj=document.getElementById('tb-proj').value||'Site Plan';
+        var drwn=document.getElementById('tb-drwn').value||'';
+        var date=document.getElementById('tb-date').value||new Date().toISOString().slice(0,10);
+        var scTxt=document.getElementById('tb-scale').value||(scaleSet?'1px='+ppu.toFixed(4)+scaleUnit:'NTS');
+        doc.setFillColor(255,255,255); doc.rect(0,ph-tbH,pw,tbH,'F');
+        doc.setDrawColor(0); doc.line(0,ph-tbH,pw,ph-tbH);
+        doc.line(pw/3,ph-tbH,pw/3,ph); doc.line(2*pw/3,ph-tbH,2*pw/3,ph);
+        doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.text(proj,pw/6,ph-tbH+8,{align:'center'});
+        doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.text(drwn,pw/6,ph-tbH+14,{align:'center'});
+        doc.setFontSize(9); doc.text('Scale: '+scTxt,pw/2,ph-tbH+10,{align:'center'});
+        doc.setFontSize(8); doc.text(date,5*pw/6,ph-tbH+10,{align:'center'});
+        var pdfArrayBuffer=doc.output('arraybuffer');
+        // 2) Build the editable record, embed it with pdf-lib, then save.
+        buildProjectRecord(0.92, function(rec){
+          if(!rec){ toast('Editable PDF failed — try again','err',4000); return; }
+          var json; try{ json=JSON.stringify(rec); }catch(ex){ toast('Project too large to embed','err',4000); return; }
+          PDFLib.PDFDocument.load(pdfArrayBuffer).then(function(pdfDoc){
+            var bytes=new TextEncoder().encode(json);
+            return pdfDoc.attach(bytes, AOG_PDF_ATTACH, {
+              mimeType:'application/json',
+              description:'AOG editable annotation data',
+              creationDate:new Date(), modificationDate:new Date()
+            }).then(function(){ return pdfDoc.save(); });
+          }).then(function(outBytes){
+            var outBlob=new Blob([outBytes],{type:'application/pdf'});
+            writeToTarget(handle, outBlob, name).then(function(){ toast('Editable PDF saved ✓','ok',3000); });
+          }).catch(function(err){
+            console.warn('[Editable PDF] embed failed:',err);
+            toast('Could not embed editable data','err',4000);
+          });
+        });
+      };
+      reader.readAsDataURL(blob);
+    });
+  });
+});
+
+// Detect & extract embedded AOG data when a PDF is opened, so editable PDFs
+// reopen with all objects intact. Returns a Promise<record|null>.
+function extractAogFromPdf(arrayBuffer){
+  if(typeof window.PDFLib==='undefined') return Promise.resolve(null);
+  return PDFLib.PDFDocument.load(arrayBuffer).then(function(pdfDoc){
+    try{
+      var ctx=pdfDoc.context;
+      var N=PDFLib.PDFName;
+      var catalog=pdfDoc.catalog;
+      var namesDict=ctx.lookup(catalog.get(N.of('Names')));
+      if(!namesDict||!namesDict.get) return null;
+      var ef=ctx.lookup(namesDict.get(N.of('EmbeddedFiles')));
+      if(!ef||!ef.get) return null;
+      var arrObj=ctx.lookup(ef.get(N.of('Names')));
+      if(!arrObj||!arrObj.asArray) return null;
+      var a=arrObj.asArray();           // [ name1, filespec1, name2, filespec2, ... ]
+      for(var i=0;i+1<a.length;i+=2){
+        var fs=ctx.lookup(a[i+1]);
+        if(!fs||!fs.get) continue;
+        var efDict=ctx.lookup(fs.get(N.of('EF')));
+        if(!efDict||!efDict.get) continue;
+        var stream=ctx.lookup(efDict.get(N.of('F'))||efDict.get(N.of('UF')));
+        if(!stream) continue;
+        // Embedded streams are Flate-compressed → decode before reading.
+        var bytes;
+        try{ bytes=PDFLib.decodePDFRawStream(stream).decode(); }
+        catch(ex){ bytes=(stream.getContents?stream.getContents():null); }
+        if(!bytes) continue;
+        var text=new TextDecoder().decode(bytes);
+        try{ var rec=JSON.parse(text); if(rec&&rec.fmt&&rec.baseData) return rec; }catch(ex){}
+      }
+    }catch(ex){ console.warn('[Editable PDF] extract failed:',ex); }
+    return null;
+  }).catch(function(){ return null; });
+}
+
 
 btnPrint.addEventListener('click',function(){
   if(!baseLoaded){ toast('Open a file first','warn'); return; }
@@ -8054,6 +8242,81 @@ function initSaveDB(cb){
 // Sequential encoding with 150ms gaps lets iOS free the previous buffer first.
 var LAYER_SAVE_GAP = IS_IPHONE ? 150 : 20; // ms between layer encodes
 var JPEG_QUALITY   = IS_IPHONE ? 0.80 : 0.88; // JPEG for session saves (lossless only for export)
+
+// ── Build a complete, editable project record (base image + layers + every
+// vector object + scale/grid/title settings). Shared by: session auto-save,
+// the .aogplan project file, and the editable-PDF embed. Async because layer
+// canvases are encoded one at a time to avoid iOS memory spikes.
+//   quality : JPEG quality for the base image (layers always PNG for alpha)
+//   cb(record) : called with the finished record, or null on failure
+function buildProjectRecord(quality, cb){
+  if(!baseLoaded){ cb&&cb(null); return; }
+  var q = (quality!==undefined?quality:JPEG_QUALITY);
+  var record = {
+    id:             'session',
+    ts:             Date.now(),
+    fmt:            'aogplan-1',          // format tag for project files / PDF embed
+    baseData:       null,
+    layers:         [],
+    activeLayerIdx: activeLayerIdx,
+    scaleSet:       scaleSet,
+    ppu:            ppu,
+    scaleUnit:      scaleUnit,
+    gridEnabled:    gridEnabled,
+    gridSize:       gridSize,
+    // Title-block fields so a reopened project keeps its metadata
+    titleBlock: {
+      proj:  (document.getElementById('tb-proj')||{}).value||'',
+      drwn:  (document.getElementById('tb-drwn')||{}).value||'',
+      date:  (document.getElementById('tb-date')||{}).value||'',
+      scale: (document.getElementById('tb-scale')||{}).value||''
+    },
+    textObjs:       JSON.parse(JSON.stringify(textObjs)),
+    shapeObjs:      JSON.parse(JSON.stringify(shapeObjs)),
+    measureObjs:    JSON.parse(JSON.stringify(measureObjs)),
+    pathMeasureObjs:JSON.parse(JSON.stringify(pathMeasureObjs)),
+    polylineObjs:   JSON.parse(JSON.stringify(polylineObjs)),
+    penObjs:        JSON.parse(JSON.stringify(penObjs)),
+    polygonObjs:    JSON.parse(JSON.stringify(polygonObjs)),
+    leaderObjs:     JSON.parse(JSON.stringify(leaderObjs)),
+    stampObjs:      JSON.parse(JSON.stringify(stampObjs)),
+    commentObjs:    JSON.parse(JSON.stringify(commentObjs)),
+    markupObjs:     JSON.parse(JSON.stringify(markupObjs)),
+    loadedDpi:      _lastLoadedDpi,
+    textScaleLocked: true,
+    imgOverlays:    (typeof imgOverlays!=='undefined'?imgOverlays:[]).map(function(ov){
+      var url='';
+      try{
+        var tc=document.createElement('canvas');
+        tc.width=Math.max(1,Math.round(ov.img.naturalWidth||ov.w));
+        tc.height=Math.max(1,Math.round(ov.img.naturalHeight||ov.h));
+        tc.getContext('2d').drawImage(ov.img,0,0,tc.width,tc.height);
+        url=tc.toDataURL('image/png');
+      }catch(ex){ url=''; }
+      return {src:url,cx:ov.cx,cy:ov.cy,w:ov.w,h:ov.h,angle:ov.angle||0,
+              flipH:!!ov.flipH,flipV:!!ov.flipV,opacity:ov.opacity!==undefined?ov.opacity:1};
+    })
+  };
+  // Encode base image, then layers sequentially.
+  setTimeout(function(){
+    try{ record.baseData = baseCv.toDataURL('image/jpeg', q); }
+    catch(ex){ cb&&cb(null); return; }
+    (function encLayer(i){
+      if(i>=layers.length){ cb&&cb(record); return; }
+      setTimeout(function(){
+        try{
+          record.layers.push({
+            name:layers[i].name, color:layers[i].color, visible:layers[i].visible,
+            data:layers[i].canvas.toDataURL('image/png')
+          });
+        }catch(ex){
+          record.layers.push({name:layers[i].name,color:layers[i].color,visible:layers[i].visible,data:''});
+        }
+        encLayer(i+1);
+      }, LAYER_SAVE_GAP);
+    })(0);
+  }, 20);
+}
 
 function doSave(){
   if(!baseLoaded||!_saveDb) return;
@@ -8263,6 +8526,13 @@ function doRestore(rec){
             // Restore grid
             if(rec.gridEnabled){ gridEnabled=true; gridSize=rec.gridSize||50;
               gridSz.value=gridSize; togGrid.classList.add('on'); btnGrid.classList.add('active'); }
+            // Restore title-block fields (project files / editable PDFs only)
+            if(rec.titleBlock){
+              var _tbp=document.getElementById('tb-proj'); if(_tbp&&rec.titleBlock.proj!==undefined) _tbp.value=rec.titleBlock.proj;
+              var _tbd=document.getElementById('tb-drwn'); if(_tbd&&rec.titleBlock.drwn!==undefined) _tbd.value=rec.titleBlock.drwn;
+              var _tbt=document.getElementById('tb-date'); if(_tbt&&rec.titleBlock.date!==undefined) _tbt.value=rec.titleBlock.date;
+              var _tbs=document.getElementById('tb-scale'); if(_tbs&&rec.titleBlock.scale!==undefined) _tbs.value=rec.titleBlock.scale;
+            }
             undoStack=[]; redoStack=[];
             baseLoaded=true;
             dropZone.classList.add('hidden');
@@ -10015,6 +10285,7 @@ window.toggleTheme = toggleTheme;
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 
 </body>
 </html>
