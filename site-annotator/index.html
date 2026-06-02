@@ -1950,18 +1950,25 @@ function startCommentTextEdit(c){
   // Editor overlay shows text at the same ON-SCREEN size the canvas will
   // render it: effective(box) size in canvas px × zoom. Clamp to a legible
   // minimum so tiny notes are still typeable.
-  var renderPx = Math.max(12, Math.round(cmtEffFontSize(c) * zoom));
+  // Font size = the EXACT on-screen size the canvas will render this note at
+  // (true point size → canvas px via DPI factor, then × zoom). No min-clamp:
+  // clamping the font but not the box made text bigger than its box when zoomed
+  // out, spilling outside. Matching the canvas size keeps text inside the box
+  // and makes the editor reflect the real PRINT point size, not a canvas size.
+  var renderPx = Math.max(1, cmtEffFontSize(c) * zoom);
   var scale = 1;
 
   var pad = CMT_PAD;
   var cx  = c.cx - c.w/2 + pad;
   var cy  = c.cy - c.h/2 + pad;
   var cw  = c.w - 2*pad;
-  var vv  = window.visualViewport;
-  var vvL = vv ? vv.offsetLeft : 0;
-  var vvT = vv ? vv.offsetTop  : 0;
-  var sx  = panX + cx*zoom + vvL;
-  var sy  = panY + cy*zoom + vvT;
+  // textOv is absolutely positioned inside #viewport, whose offset parent already
+  // moves with the on-screen keyboard / page scroll. Adding visualViewport offsets
+  // here DOUBLE-counts that shift — the cause of the box landing in a random spot
+  // on iPad each time the keyboard animated. Position in viewport-local space only.
+  // (Desktop: those offsets were 0, so behavior is identical there.)
+  var sx  = panX + cx*zoom;
+  var sy  = panY + cy*zoom;
   // Width matches the visible box interior at current zoom
   var visualW = Math.max(cw*zoom, 40);
   var layoutW = Math.round(visualW);
@@ -1976,6 +1983,12 @@ function startCommentTextEdit(c){
   textOv.style.minHeight    = '16px';
   textOv.style.maxHeight    = 'none';
   textOv.style.fontSize     = renderPx + 'px';
+  // Match the textarea's interior padding to the canvas text inset (CMT_PAD,
+  // which is in canvas px) converted to screen px, so the typed text sits exactly
+  // where drawCommentBox will paint it at any zoom. CSS box-sizing:border-box keeps
+  // the set width correct. This is what aligns text-in-box across zoom levels.
+  textOv.style.padding      = Math.max(0, Math.round(CMT_PAD*zoom)) + 'px';
+  textOv.style.boxSizing    = 'border-box';
   textOv.style.lineHeight   = '1.4';
   textOv.style.transform    = 'none';
   textOv.style.transformOrigin = 'top left';
@@ -2103,6 +2116,8 @@ function commitCommentEdit(){
   textOv.style.overflow        = 'hidden';
   textOv.style.transform       = 'none';
   textOv.style.transformOrigin = '';
+  textOv.style.padding         = '';  // revert to CSS default (2px 4px) for the text tool
+  textOv.style.boxSizing       = '';
   renderShapeAndMeasure(); composite(); pushUndo();
   if(selectedShape) renderSelection();
 }
@@ -2120,19 +2135,28 @@ function repositionCommentEditor(c){
   var cx2 = c.cx - c.w/2 + pad;
   var cy2 = c.cy - c.h/2 + pad;
   var cw2 = c.w - 2*pad;
-  var vv  = window.visualViewport;
-  var vvL = vv ? vv.offsetLeft : 0;
-  var vvT = vv ? vv.offsetTop  : 0;
   var visualW = Math.max(cw2*zoom, 40);
   var layoutW  = Math.round(visualW);
 
-  textOv.style.left     = Math.round(Math.max(0, panX + cx2*zoom + vvL)) + 'px';
-  textOv.style.top      = Math.round(panY + cy2*zoom + vvT) + 'px';
-  textOv.style.width    = layoutW + 'px';
-  textOv.style.maxWidth = layoutW + 'px';
-  textOv.style.minWidth = layoutW + 'px';
-  // Box-relative font: rescale the editor text as the box width changes
-  textOv.style.fontSize = Math.max(12, Math.round(cmtEffFontSize(c) * zoom)) + 'px';
+  // Position changes every pan/zoom tick — always update left/top.
+  // Viewport-local position only — no visualViewport offsets (see startCommentTextEdit).
+  var newLeft = Math.round(Math.max(0, panX + cx2*zoom)) + 'px';
+  var newTop  = Math.round(panY + cy2*zoom) + 'px';
+  if(textOv.style.left !== newLeft) textOv.style.left = newLeft;
+  if(textOv.style.top  !== newTop)  textOv.style.top  = newTop;
+  // Width / font / padding only change on zoom or box-resize — writing them on
+  // every wheel tick forces a synchronous textarea reflow that momentarily blanks
+  // the glyphs (the "text disappears while scrolling" flicker). Only write when
+  // the computed value actually changed.
+  var newW = layoutW + 'px';
+  if(textOv.style.width !== newW){
+    textOv.style.width = newW; textOv.style.maxWidth = newW; textOv.style.minWidth = newW;
+  }
+  var newFont = Math.max(1, cmtEffFontSize(c) * zoom) + 'px';
+  if(textOv.style.fontSize !== newFont) textOv.style.fontSize = newFont;
+  var newPad = Math.max(0, Math.round(CMT_PAD*zoom)) + 'px';
+  if(textOv.style.padding !== newPad) textOv.style.padding = newPad;
+  if(textOv.style.boxSizing !== 'border-box') textOv.style.boxSizing = 'border-box';
   // Match editor height to the (already-fitted) box interior — cheap, no re-render.
   repositionCommentEditorHeight(c);
 }
@@ -5538,6 +5562,13 @@ function handleCommentDown(e, sp, isTouch){
                color:selectedShape.color,strokeW:selectedShape.strokeW,
                opacity:1,fill:false,lineStyle:'solid'},
         rotAngleOffset:0,origFontSize:null,origH:selectedShape.h};
+      // Hide the static copy on shCv so only the live selCv copy shows during the
+      // drag (otherwise the box ghosts at its old position). One redraw now; the
+      // per-frame work stays lightweight (renderSelection only).
+      _dragComment=selectedShape._commentObj;
+      drawCv.style.cursor = (typeof HANDLE_CURSORS!=='undefined' && HANDLE_CURSORS[sh]) ? HANDLE_CURSORS[sh] : 'nwse-resize';
+      renderShapeAndMeasure(); composite();
+      renderSelection();
       return;
     }
 
@@ -5555,6 +5586,11 @@ function handleCommentDown(e, sp, isTouch){
                  color:selectedShape.color,strokeW:selectedShape.strokeW,
                  opacity:1,fill:false,lineStyle:'solid'},
           rotAngleOffset:0,origFontSize:null,origH:selectedShape.h};
+        // Hide static copy so the box doesn't ghost at its old spot during move.
+        _dragComment=selectedShape._commentObj;
+        drawCv.style.cursor='move';
+        renderShapeAndMeasure(); composite();
+        renderSelection();
         return;
       }
 
@@ -5905,17 +5941,19 @@ function getHandleAt(x,y,isTouch){
   // Handle hit target is a FIXED SCREEN SIZE (Acrobat-style): the same physical
   // grab radius regardless of zoom or the annotation's page dimensions. We pick
   // the screen-px target, then convert ONCE into canvas units via /zoom so the
-  // target stays constant on screen at every zoom level.
-  var screenTarget = isTouch ? 30 : (HANDLE_SIZE+5);  // physical px
+  // target stays constant on screen at every zoom level. The desktop target is
+  // generous (the rendered handle is 9px; a ~22px grab ring makes corners easy
+  // to hit even when zoomed out, where handles look tiny and sit far apart).
+  var screenTarget = isTouch ? 32 : 22;                // physical px
   var hitR = screenTarget / zoom;                      // canvas px at this zoom
-  // Cap so handles can't swallow a small box's interior — but cap against the
-  // SAME coordinate space the border-move strip uses (see CMT_ZONE below), so
-  // the two zones never compete. Reserve the outer ring for handles and leave
-  // a clear interior. Cap is a fraction of the half-extent, matched to the
-  // border strip's denominator (half-sides), not the full min dimension.
+  // For comments, keep handles from fully swallowing a small box's interior,
+  // but never shrink the grab target below a clickable floor.
   if(selectedShape.type==='comment'){
     var hwC=selectedShape.w/2, hhC=selectedShape.h/2;
-    hitR=Math.min(hitR, Math.min(hwC, hhC)*0.40);
+    var floorR=14/zoom;                               // never smaller than 14 screen-px
+    var capR=Math.max(floorR, Math.min(hwC,hhC)*0.95);// near-full cap, with floor
+    hitR=Math.min(hitR, capR);
+    if(hitR<floorR) hitR=floorR;                      // guarantee the floor
   }
   // Check rotation handles first (8-11) — they're further out so check before resize
   for(var i=8;i<=11;i++){
@@ -6155,6 +6193,7 @@ function commitSelection(){
       textOv.style.minWidth=''; textOv.style.minHeight='';
       textOv.style.maxWidth=''; textOv.style.maxHeight='';
       textOv.style.whiteSpace='pre'; textOv.style.overflow='hidden';
+      textOv.style.padding=''; textOv.style.boxSizing='';
     }
     // Snap the box tight to the text on deselect (top edge stays put)
     var _ct=c.cy-c.h/2;
@@ -6238,6 +6277,7 @@ function cancelSelection(){
       textOv.style.minWidth=''; textOv.style.minHeight='';
       textOv.style.maxWidth=''; textOv.style.maxHeight='';
       textOv.style.whiteSpace='pre'; textOv.style.overflow='hidden';
+      textOv.style.padding=''; textOv.style.boxSizing='';
     }
   }
   selectedShape=null; selHandle=-1; selDragStart=null;
@@ -6925,8 +6965,22 @@ function closeStampPicker(){
     }
   }
 
+  // liveRender repaints the canvas to reflect a style change (bg/border/text
+  // color, opacity, border width) while editing a comment. Slider inputs fire a
+  // stream of events per second; calling renderShapeAndMeasure()+composite()
+  // synchronously on each one floods compositing (each ~25ms on a large plan at
+  // low zoom), freezing the UI and blanking the editor text. Coalesce to at most
+  // one repaint per animation frame — visually identical, but it can't pile up.
+  var _liveRenderPending=false;
   function liveRender(){
-    if(_editingComment){ renderShapeAndMeasure(); composite(); }
+    if(!_editingComment) return;
+    if(_liveRenderPending) return;
+    _liveRenderPending=true;
+    requestAnimationFrame(function(){
+      _liveRenderPending=false;
+      if(!_editingComment) return;
+      renderShapeAndMeasure(); composite();
+    });
   }
 
   if(bgIn){
@@ -9913,10 +9967,12 @@ function _imgDetachGlobal(){
 drawCv.addEventListener('mousemove', function(e){
   if(selImg && !selImgDrag){
     _imgHoverCursor(e.clientX, e.clientY);
-  } else if(!selImg){
-    // Clear any lingering image cursor when no image is selected
-    drawCv.style.cursor = '';
   }
+  // NOTE: do NOT clear the cursor here when no image is selected. The main
+  // cursor handler (updateSelCursor / per-tool hover) owns the cursor in that
+  // case — clearing it here every mousemove fought that handler and made the
+  // resize/move cursor flicker ("faint cursor"). Only the image path manages
+  // the cursor while an image overlay is selected.
 }, { passive: true });
 
 // Clear image cursor when mouse leaves the canvas entirely and no drag is active
