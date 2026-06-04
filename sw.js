@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.0.0';
+var CACHE_NAME = 'aog-forms-v2.1.0';
 var DEV_MODE   = false;
 
 // Stores last known cache progress so late-loading pages can request it
@@ -20,15 +20,17 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  'Major hub redesign — new dark industrial UI',
-  'Added 40 random animated background themes',
-  'Cards now fully transparent with no blur',
-  'All cards uniform size across every device & category',
-  'Full mobile & tablet responsive fixes across all themes',
-  'Added QC Checklist form',
-  'Added Service Work form',
-  'Added Site Plan / Annotator tool',
-  'Offline page updated to match new hub design',
+  '🗺️ Property Lookup replaces Sketch Pad (use Site plan annotator) — search for info on any FL address',
+  '⚠️ Property Lookup loads offline by design (no errors), but live searches require data/Wi-Fi',
+  '📋 Auto-pulls owner, parcel ID, just value, year built, living area & last sale from live county feeds',
+  '🌊 Live FEMA flood zone (NFHL) + county DFIRM cross-check — flags mismatches between maps',
+  '📐 Zoning district detected live — shows required setbacks for Collier, Lee, Charlotte, Sarasota & cities',
+  '⚡ Generator siting rules built in for Naples, Collier, Cape Coral, Sanibel, Punta Gorda & Sarasota',
+  '💨 Live ASCE 7-22 wind speed at the exact point — interpolated from Risk Cat II contour layer',
+  '🔌 Electric utility identified by territory polygon — FPL vs LCEC vs Duke vs TECO & more',
+  '🔥 Natural gas vs propane determined by LDC service territory — flags propane-only areas like Cape Coral',
+  '📄 PDF report + Excel export — imports owner, address & flood zone straight into the Estimate sheet',
+  '📡 Works offline — all tools cached by the AOG Hub service worker',
 ];
 // ============================================================
 
@@ -50,7 +52,9 @@ var PRECACHE_URLS = [
   './load-calcs/',
   './breaker-conductor/',
   './conduit-fill/',
-  './sketch-pad/',
+  './property-lookup/',
+  './property-lookup/fl_gas_territories.geojson',
+  './property-lookup/fl_electric_territories.geojson',
   './gas-calc/',
   './spec-viewer/'
 ];
