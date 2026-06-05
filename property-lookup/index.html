@@ -850,6 +850,8 @@
     <div id="basemapMenu" class="basemap-menu" hidden>
       <button data-bm="sat" class="active">Satellite</button>
       <button data-bm="aerial" title="Aerial imagery with no place labels — unobstructed photo view">Aerial (clean)</button>
+      <button data-bm="sarco" title="Local high-res county aerials — auto-switches to whichever county you're viewing (Sarasota, Lee, Charlotte, Collier, Manatee). Falls back to Esri imagery elsewhere.">📷 Local HD</button>
+      <button id="localAerialRefresh" class="zl-refresh-row" title="Reload the local aerial for the county you're currently viewing (use after panning across a county line)">⟳ Refresh aerial to this view</button>
       <button data-bm="street">Street</button>
       <button data-bm="gray" title="Minimal light-gray basemap — makes parcel / flood / city overlays read clearly">Gray</button>
       <button data-bm="topo" title="USGS topographic / terrain basemap — elevation &amp; contour context for low-ground / pad siting">⛰ Topo</button>
@@ -1895,36 +1897,166 @@ const map = L.map('map',{
 // reuse the already-rendered bitmap instead of triggering a full redraw on every frame.
 const canvasRenderer = L.canvas({ padding:2, tolerance:4 });   // shared canvas for all vector layers
 const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  {maxZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:21,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
 const labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-  {maxZoom:19,opacity:.9,updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:21,maxNativeZoom:19,opacity:.9,updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
 const street = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  {maxZoom:19,attribution:"&copy; OpenStreetMap contributors",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:21,maxNativeZoom:19,attribution:"&copy; OpenStreetMap contributors",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
 const satGroup = L.layerGroup([sat,labels]).addTo(map);
 // USGS National Map topographic basemap — keyless XYZ tiles. Gives terrain, contours & elevation
 // context (handy for spotting low ground before siting a pad). Cached only to z16, so upscale above.
 const topo = L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
-  {maxZoom:19,maxNativeZoom:16,attribution:"Topo &copy; USGS The National Map",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:21,maxNativeZoom:16,attribution:"Topo &copy; USGS The National Map",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
 // Clean aerial: the same Esri imagery as Satellite but WITHOUT the place-label overlay, for an
 // unobstructed photo view of roofs / pads / setbacks.
 const aerialClean = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  {maxZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:21,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
 // Light gray canvas: minimal, low-noise basemap so parcel lines / flood / city overlays read clearly.
 const gray = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-  {maxZoom:19,maxNativeZoom:16,attribution:"&copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:21,maxNativeZoom:16,attribution:"&copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+
+// =================== LOCAL HD AERIAL (one toggle, auto-picks the county) ===================
+// A single "Local HD" basemap that automatically serves whichever county's OWN high-res aerial
+// covers the spot you're looking at — falling back to Esri imagery anywhere without a wired local
+// source. Each county publishes its aerials as an Esri ImageServer or tiled MapServer; we don't use
+// a {z}/{y}/{x} template because several are DYNAMIC services in FL State Plane (not pre-cached web-
+// mercator tiles). Instead a custom TileLayer builds an exportImage request per 256px tile, converts
+// the tile's web-mercator bounds to a bbox and asks the server to render+reproject that extent
+// (bboxSR/imageSR=3857). The active service URL lives in a mutable holder so the auto-switcher can
+// repoint it as you pan between counties.
+//
+// LOCAL_AERIAL registry — one entry per "main few" county. `bounds` is a rough [W,S,E,N] lon/lat box
+// used ONLY to decide which county you're over (point-in-box); imagery still comes from the service.
+// `candidates` are tried newest-first on load; the first that responds wins (self-healing against a
+// wrong year/name). `kind:'export'` = dynamic ImageServer via exportImage; 'tilexyz' = a pre-cached
+// service we can hit with a direct {z}/{y}/{x} tile path (faster). Servers are county-hosted, so any
+// that block CORS will simply be skipped at probe time and that county falls back to Esri.
+const LOCAL_AERIAL = {
+  SARASOTA: { label:"Sarasota County (3-in)", bounds:[-82.65,26.90,-81.95,27.42], kind:"export",
+    candidates:[ "https://ags3.scgov.net/agsfed/rest/services/ImageServices/SC2025/ImageServer",
+                 "https://ags3.scgov.net/agsfed/rest/services/ImageServices/SC2024/ImageServer",
+                 "https://ags3.scgov.net/agsfed/rest/services/ImageServices/SC2023/ImageServer" ] },
+  LEE:      { label:"Lee County (3-in)", bounds:[-82.30,26.30,-81.55,26.85], kind:"export",
+    candidates:[ "https://gisimageserver.leegov.com/imageserver/rest/services/Aerials/Aerials2025/ImageServer",
+                 "https://gisimageserver.leegov.com/imageserver/rest/services/Aerials/Aerials2024/ImageServer",
+                 "https://gisimageserver.leegov.com/imageserver/rest/services/Aerials/Aerials2023/ImageServer" ] },
+  CHARLOTTE:{ label:"Charlotte County", bounds:[-82.35,26.70,-81.75,27.10], kind:"export",
+    candidates:[ "https://agis.charlottecountyfl.gov/arcgis/rest/services/Imagery/Aerials2025/ImageServer",
+                 "https://agis.charlottecountyfl.gov/arcgis/rest/services/Imagery/Aerials2024/ImageServer",
+                 "https://agis.charlottecountyfl.gov/arcgis/rest/services/Imagery/Aerials2023/ImageServer",
+                 "https://agis.charlottecountyfl.gov/arcgis/rest/services/Imagery/Aerial_2023/ImageServer" ] },
+  COLLIER:  { label:"Collier County", bounds:[-81.90,25.80,-80.85,26.55], kind:"export",
+    candidates:[ "https://gispub.colliercountyfl.gov/arcgis/rest/services/Aerials/Aerial_2025/ImageServer",
+                 "https://gispub.colliercountyfl.gov/arcgis/rest/services/Aerials/Aerial_2024/ImageServer",
+                 "https://gisapp.colliercountyfl.gov/arcgis/rest/services/Aerials/Aerial_2024/ImageServer" ] },
+  MANATEE:  { label:"Manatee County", bounds:[-82.70,27.30,-82.00,27.65], kind:"export",
+    candidates:[ "https://www.mymanatee.org/arcgis/rest/services/Imagery/Aerials_2025/ImageServer",
+                 "https://www.mymanatee.org/arcgis/rest/services/Imagery/Aerials_2024/ImageServer",
+                 "https://maps.mymanatee.org/arcgis/rest/services/Imagery/Aerials_2024/ImageServer" ] }
+};
+// Resolved-at-runtime state: which counties' services actually responded, and their working URLs.
+const LOCAL_AERIAL_ACTIVE = {};        // KEY -> { url, kind, label }
+// The mutable URL the layer is currently drawing from (auto-switcher repoints this).
+const LOCAL_URL_REF = { url:null, kind:"export" };
+function localCountyForCenter(){
+  const c = map.getCenter(), lng=c.lng, lat=c.lat;
+  // The rough county boxes overlap at shared borders, so among every box that contains the center we
+  // choose the one whose center is NEAREST — a far better guess than first-match for border areas like
+  // North Port (Sarasota/Charlotte line) or Punta Gorda. The authoritative FDOT county query in
+  // updateLocalAerial() corrects this asynchronously; this is just the instant first paint.
+  let best=null, bestD=Infinity;
+  for(const k in LOCAL_AERIAL_ACTIVE){
+    const b = LOCAL_AERIAL[k].bounds;
+    if(lng>=b[0] && lng<=b[2] && lat>=b[1] && lat<=b[3]){
+      const cx=(b[0]+b[2])/2, cy=(b[1]+b[3])/2, d=(lng-cx)*(lng-cx)+(lat-cy)*(lat-cy);
+      if(d<bestD){ bestD=d; best=k; }
+    }
+  }
+  return best;
+}
+// Map an authoritative county NAME (from the FDOT boundary layer) to a LOCAL_AERIAL key, if wired+live.
+function localKeyFromCountyName(name){
+  const n = (name||'').toUpperCase().replace(/[^A-Z]/g,'');
+  return LOCAL_AERIAL_ACTIVE[n] ? n : null;   // keys are county names already (SARASOTA, LEE, ...)
+}
+const R_MERC = 20037508.342789244;
+const LocalAerial = L.TileLayer.extend({
+  getTileUrl: function(coords){
+    if(!LOCAL_URL_REF.url) return L.Util.emptyImageUrl;     // no county here → blank (Esri shows under)
+    const n = Math.pow(2, coords.z), t = 2*R_MERC/n;
+    const xmin=-R_MERC+coords.x*t, xmax=-R_MERC+(coords.x+1)*t;
+    const ymax= R_MERC-coords.y*t, ymin= R_MERC-(coords.y+1)*t;
+    if(LOCAL_URL_REF.kind==="tilexyz"){
+      return LOCAL_URL_REF.url + "/tile/" + coords.z + "/" + coords.y + "/" + coords.x;
+    }
+    const bbox=[xmin,ymin,xmax,ymax].join(",");
+    return LOCAL_URL_REF.url + "/exportImage?f=image&format=jpgpng&transparent=true" +
+           "&bbox=" + bbox + "&bboxSR=3857&imageSR=3857&size=256,256";
+  }
+});
+const localAerial = new LocalAerial("", {
+  maxZoom:21, maxNativeZoom:21, minZoom:11,
+  attribution:"Local county aerial", updateWhenIdle:L.Browser.mobile,
+  updateWhenZooming:false, keepBuffer:2, crossOrigin:true
+});
+// Esri imagery sits UNDER the local aerial so any gap (outside a wired county, or a not-yet-loaded
+// tile) still shows photography rather than blank. Labels ride on top for readable streets.
+const localEsriBase = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  {maxZoom:21,maxNativeZoom:19,updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:2});
+const sarcoGroup = L.layerGroup([localEsriBase, localAerial, labels]);   // the "Local HD" basemap
+// Switch the local layer to the county under the current map center; returns the active key (or null).
+let _localActiveKey = "__init__";
+function _applyLocalKey(key){
+  if(key===_localActiveKey) return;
+  _localActiveKey = key;
+  if(key && LOCAL_AERIAL_ACTIVE[key]){
+    LOCAL_URL_REF.url  = LOCAL_AERIAL_ACTIVE[key].url;
+    LOCAL_URL_REF.kind = LOCAL_AERIAL_ACTIVE[key].kind;
+    localAerial.options.attribution = "Aerial &copy; " + LOCAL_AERIAL_ACTIVE[key].label;
+  } else {
+    LOCAL_URL_REF.url = null;     // no wired county here → Esri base shows through
+  }
+  if(map.hasLayer(localAerial)) localAerial.redraw();
+  if(basemapLbl && _curBasemap==='sarco'){
+    basemapLbl.textContent = key && LOCAL_AERIAL_ACTIVE[key] ? LOCAL_AERIAL_ACTIVE[key].label : "Local HD (Esri)";
+  }
+}
+let _localSeq = 0;
+function updateLocalAerial(force){
+  // 1) Instant first paint from the rough box guess.
+  const guess = localCountyForCenter();
+  if(force || guess!==_localActiveKey) _applyLocalKey(guess);
+  // 2) Authoritative refine: ask the FDOT county layer what county the map center actually sits in,
+  //    and correct the choice if the box guess was wrong (border areas). One light query per settle.
+  const seq = ++_localSeq;                       // guard against out-of-order responses while panning
+  const c = map.getCenter();
+  try{
+    arcQuery(EP.county, c.lat, c.lng, 'NAME', false, 5000).then(a=>{
+      if(seq!==_localSeq) return;                // a newer pan superseded this
+      const nm = a && (a.NAME||a.name);
+      if(!nm) return;                            // query failed → keep the box guess
+      const key = localKeyFromCountyName(nm);    // null if that county isn't wired/live → Esri fallback
+      if(key!==_localActiveKey) _applyLocalKey(key);
+    }).catch(()=>{});                            // network/CORS fail → keep box guess silently
+  }catch(e){}
+  return guess;
+}
 
 const btnBasemap=document.getElementById('btnBasemap');
 const basemapMenu=document.getElementById('basemapMenu');
 const basemapLbl=document.getElementById('basemapLbl');
-const BM_LABEL={sat:'Satellite',street:'Street',topo:'⛰ Topo',aerial:'Aerial',gray:'Gray'};
+const BM_LABEL={sat:'Satellite',street:'Street',topo:'⛰ Topo',aerial:'Aerial',gray:'Gray',sarco:'Local HD'};
 // The basemaps are mutually exclusive; overlays (city limits / flood / parcels / radar) sit on top.
 // All basemaps live in the low tilePane, so they always render beneath the overlays regardless of order.
-const BM_LAYER={sat:satGroup,street:street,topo:topo,aerial:aerialClean,gray:gray};
+const BM_LAYER={sat:satGroup,street:street,topo:topo,aerial:aerialClean,gray:gray,sarco:sarcoGroup};
+let _curBasemap='sat';
 function setBasemap(which){
   Object.values(BM_LAYER).forEach(l=>{ if(map.hasLayer(l)) map.removeLayer(l); });
   (BM_LAYER[which]||satGroup).addTo(map);
+  _curBasemap = which;
   basemapLbl.textContent = (BM_LABEL[which]||'Satellite').replace('⛰ ','');
   basemapMenu.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.bm===which));
+  if(which==='sarco') updateLocalAerial(true);   // pick the county under the current view immediately
 }
 function closeBasemapMenu(){ basemapMenu.hidden=true; }
 function openBasemapMenu(){
@@ -1940,11 +2072,62 @@ function openBasemapMenu(){
   basemapMenu.style.left=left+'px';
 }
 btnBasemap.onclick=(e)=>{ e.stopPropagation(); if(basemapMenu.hidden) openBasemapMenu(); else closeBasemapMenu(); };
-basemapMenu.querySelectorAll('button').forEach(b=>{
+basemapMenu.querySelectorAll('button[data-bm]').forEach(b=>{
   b.onclick=(e)=>{ e.stopPropagation(); setBasemap(b.dataset.bm); closeBasemapMenu(); };
 });
+// Manual "refresh aerial to this view": switch to Local HD if needed, then force a county re-pick.
+(function(){
+  const rb=document.getElementById('localAerialRefresh');
+  if(rb) rb.onclick=(e)=>{ e.stopPropagation(); if(_curBasemap!=='sarco') setBasemap('sarco'); else updateLocalAerial(true); closeBasemapMenu(); };
+})();
 // click anywhere else closes the menu
 document.addEventListener('click', closeBasemapMenu);
+
+// ---- Verify the Sarasota aerial service on load; self-heal if the year-name guess is wrong ----
+// The service-name pattern is .../ImageServices/SCYYYY/ImageServer (confirmed for many past years),
+// but we can't externally confirm which year is the latest published. Probe a few recent candidates;
+// use the first that responds, rewire SARCO_2025_URL + the label to it, and if NONE respond, hide the
+// button so the user never lands on a blank basemap. Runs async; the button works the moment it passes.
+(function verifyLocalAerials(){
+  const btn = document.querySelector('.basemap-menu button[data-bm="sarco"]');
+  // Probe one county's candidate URLs in order; resolve with the first working {url,kind} or null.
+  function probeCounty(key){
+    const cfg = LOCAL_AERIAL[key];
+    return new Promise(resolve=>{
+      let i=0;
+      (function next(){
+        if(i>=cfg.candidates.length) return resolve(null);
+        const url = cfg.candidates[i++];
+        const ctrl = new AbortController(); const t=setTimeout(()=>ctrl.abort(), 6000);
+        fetch(url + "?f=json", {signal:ctrl.signal})
+          .then(r=>r.ok?r.json():Promise.reject(r.status))
+          .then(j=>{
+            clearTimeout(t);
+            // ImageServer → has extent + raster meta. Tiled MapServer → singleFusedMapCache + tileInfo.
+            const isImg  = j && !j.error && j.extent && (j.bandCount!=null || j.pixelType || j.serviceDataType);
+            const isTile = j && !j.error && j.singleFusedMapCache===true && j.tileInfo;
+            if(isImg || isTile){
+              LOCAL_AERIAL_ACTIVE[key] = { url, kind:(isTile?"tilexyz":"export"), label:cfg.label };
+              resolve(LOCAL_AERIAL_ACTIVE[key]);
+            } else next();
+          })
+          .catch(()=>{ clearTimeout(t); next(); });
+      })();
+    });
+  }
+  Promise.all(Object.keys(LOCAL_AERIAL).map(probeCounty)).then(()=>{
+    const any = Object.keys(LOCAL_AERIAL_ACTIVE).length>0;
+    if(!any){ if(btn) btn.style.display='none'; return; }   // nothing reachable → hide the option
+    // Reflect coverage in the button tooltip; refresh the layer if it's already showing.
+    const names = Object.keys(LOCAL_AERIAL_ACTIVE).map(k=>LOCAL_AERIAL_ACTIVE[k].label.replace(/\s*\(.+\)/,'')).join(", ");
+    if(btn) btn.title = "Local high-res county aerials — auto-switches by location. Live: " + names + ". Falls back to Esri elsewhere.";
+    if(_curBasemap==='sarco') updateLocalAerial(true);
+  });
+})();
+
+// Auto-switch the local aerial to whichever county you pan into (only while Local HD is active).
+// 'moveend' fires once panning/zooming settles, so this is cheap. Also wired to a manual refresh.
+map.on('moveend', ()=>{ if(_curBasemap==='sarco') updateLocalAerial(false); });
 
 let marker=null, parcelLayer=null, homeParcelLayer=null;
 map.on('click', e => runLookup(e.latlng.lat, e.latlng.lng));
