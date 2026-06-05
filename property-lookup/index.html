@@ -1716,6 +1716,14 @@ const ZONING_LIVE_CITY = {
     // ✅ verified: City of Naples public GIS (backs the official city zoning map viewer)
     "https://g.naplesgov.com/arcgis/rest/services/Planning/Zoning/FeatureServer/0/query"
   ]},
+  // ✅ City of Venice's OWN GIS (geoport.venicefl.gov — the server behind the city's Planning & Zoning
+  // web-app viewer). Zoning is layer 10 of the bldg/TRAKiT MapServer; the classifying column is
+  // "zoning_district", which carries LONG descriptive strings (e.g. "RESIDENTIAL, SINGLE FAMILY 1",
+  // "SOUTH TRAIL: SUBAREA 2 (AUC)") — veniceSetbacks()/VENICE_GIS_VALUE_MAP map those to LDC codes.
+  // Venice is a Sarasota County city with its own code, so the county layer is only a fallback.
+  VENICE: { label:"City of Venice Zoning", codeField:"zoning_district", urls:[
+    "https://geoport.venicefl.gov/server/rest/services/bldg/TRAKiT/MapServer/10/query"
+  ]},
   // City of Marco Island runs its OWN GIS (gis.cityofmarcoisland.com). Marco Island is incorporated
   // and has its own LDC (Ch. 30), so its zoning must come from the city's layer — NOT the Collier
   // County layer (which would otherwise be the fallback and return county-style codes). Zoning is
@@ -2332,10 +2340,22 @@ function setZoningLegend(reg){
   }
   body.innerHTML = out;
 }
-function zoningStyleFor(props, reg){
+/* Resolve a feature's district code resiliently: try the registry's pinned codeField first, but if
+   that field is missing/empty for this feature (e.g. the pinned name is slightly off, or the layer
+   uses a different column than expected — a common cause of a whole county rendering one flat color),
+   fall back to auto-detecting the code field from the feature's actual property names. */
+function zoneCodeOf(props, reg){
+  if(!props) return null;
   let codeF = reg && reg.codeField;
-  if(!codeF){ const det=detectZoningFields(Object.keys(props||{})); codeF=det.code; }
-  const code = codeF && props ? props[codeF] : null;
+  let v = codeF ? props[codeF] : null;
+  if(v==null || String(v).trim()===''){            // pinned field absent/empty → auto-detect
+    const det = detectZoningFields(Object.keys(props));
+    if(det.code && props[det.code]!=null && String(props[det.code]).trim()!=='') v = props[det.code];
+  }
+  return (v==null || String(v).trim()==='') ? null : v;
+}
+function zoningStyleFor(props, reg){
+  const code = zoneCodeOf(props, reg);
   // Naples & Glades get their fine per-district palettes; everywhere else gets a per-district shade
   // derived from the code within its category family (so individual districts stay distinct).
   let col=null;
@@ -2349,9 +2369,9 @@ const zoningLayer = L.geoJSON(null, { renderer:canvasRenderer,
 let zoningOn=false, zoningBusy=false, zoningKey='';
 function zoningDistrictOf(props, reg){
   if(!props) return 'Zoning';
-  let codeF = reg && reg.codeField, descF = reg && reg.descField;
-  if(!codeF){ const det=detectZoningFields(Object.keys(props)); codeF=det.code; descF=descF||det.desc; }
-  const code = codeF ? props[codeF] : null;
+  const code = zoneCodeOf(props, reg);
+  let descF = reg && reg.descField;
+  if(!descF){ const det=detectZoningFields(Object.keys(props)); descF=det.desc; }
   const desc = descF ? props[descF] : null;
   let s = code ? String(code) : 'Zoning';
   if(desc && String(desc).trim() && String(desc)!==String(code)) s += ' · '+desc;
@@ -3577,6 +3597,161 @@ function renderSarasotaSetbacks(districtCode){
   h+=`<div class="note warnbox">Required minimums from Sarasota County's Unified Development Code (Ch. 124, § 124-76), keyed to the detected district. Tiered districts (RE-1/2/3, RSF-1/2/3/4, RMF-1/2/3) vary by tier — confirm the exact tier in § 124-76. Barrier-island, Siesta Key (SKOD), waterfront and coastal-setback overlays add their own standards. Cities (Sarasota, Venice, North Port, Longboat Key) use separate codes.</div>`;
   // Sarasota's generator/equipment exemption applies countywide — always append it.
   h+=renderSarasotaEquipmentNote();
+  return h;
+}
+
+/* ================================ CITY OF VENICE ================================
+   Venice Land Development Code (Municode Chapter 87 / "LDR"), as updated by the modified
+   form-based code (Ord. 2022-15). Hand-entered & verified from the uploaded Code of Ordinances:
+   traditional districts from the Sec. 2.2.2 / 2.2.3 development-standards tables, planned from
+   Sec. 2.2.4, and the mixed-use/form-based districts from the Sec. 2.3 tables (build-to min/max).
+   Venice is a Sarasota County city with its OWN code, so it's excluded from the county renderer
+   (SARASOTA_INCORP) and handled here. Values: numbers = minimum feet; strings = verbatim from the
+   code (form-based build-to "min/max", "None", "Not required", etc.). wf = waterfront yard.
+   GENERATOR NOTE: Venice has no generator-specific setback exemption. A standby generator is an
+   accessory structure (LDC § 3.1.9.C): min 5 ft from a side or rear property line, never in any
+   front yard, never in a utility/drainage easement, right-of-way or visibility triangle, and it
+   must be screened (§ 7.10.10). That note rides on every Venice result. */
+const VENICE_SETBACKS = {
+  // --- Residential, Single-Family (Table 2.2.2.A) — height 35 ft, no height exception ---
+  "RSF-1": { front:20, side:8,  rear:10, wf:20, height:"35 ft (no exception)", width:100, minLot:"15,000 sq ft", cov:"35%", sideNote:"Side 8 ft min each; 18 ft combined (both sides).", note:"Residential Single-Family RSF-1. Density 2.5 du/ac." },
+  "RSF-2": { front:20, side:8,  rear:10, wf:20, height:"35 ft (no exception)", width:80,  minLot:"10,000 sq ft", cov:"35%", sideNote:"Side 8 ft min each; 18 ft combined (both sides).", note:"Residential Single-Family RSF-2. Density 3.5 du/ac." },
+  "RSF-3": { front:20, side:6,  rear:10, wf:20, height:"35 ft (no exception)", width:75,  minLot:"7,500 sq ft",  cov:"35%", sideNote:"Side 6 ft min each; 15 ft combined (both sides).", note:"Residential Single-Family RSF-3. Density 5.0 du/ac." },
+  "RSF-4": { front:20, side:6,  rear:10, wf:20, height:"35 ft (no exception)", width:50,  minLot:"5,000 sq ft",  cov:"35%", sideNote:"Side 6 ft min each; 15 ft combined (both sides).", note:"Residential Single-Family RSF-4. Density 5.5 du/ac." },
+  // --- Residential, Multifamily (Table 2.2.2.B) — *standards apply per building for SF-attached ---
+  "RMF-1": { front:20, side:12, rear:10, wf:20, height:"35 ft (46 ft w/ exception; +10 ft for understory parking)", width:75,  minLot:"7,260 sq ft/du", cov:"35%", note:"Residential Multifamily RMF-1." },
+  "RMF-2": { front:20, side:12, rear:10, wf:20, height:"35 ft (46 ft w/ exception; +10 ft for understory parking)", width:75,  minLot:"4,840 sq ft/du", cov:"35%", note:"Residential Multifamily RMF-2." },
+  "RMF-3": { front:20, side:15, rear:10, wf:20, height:"46 ft (57 ft w/ exception; +10 ft understory parking)",     width:100, minLot:"3,350 sq ft/du", cov:"40%", note:"Residential Multifamily RMF-3." },
+  "RMF-4": { front:20, side:15, rear:10, wf:20, height:"46 ft (75 ft w/ exception; +10 ft understory parking)",     width:100, minLot:"2,420 sq ft/du", cov:"45%", note:"Residential Multifamily RMF-4." },
+  // --- Manufactured home districts (Tables 2.2.2.C / 2.2.2.D) ---
+  "RMHP": { front:5,  side:5,  rear:5,  wf:20, height:"25 ft (homes) / 35 ft (park buildings)", width:30, minLot:"1,500 sq ft/site", note:"Manufactured Home Park — individual home-site standards. Park as a whole: min 15 acres, 25 ft perimeter setback, max 80% coverage, Type 4 perimeter buffer." },
+  "RMHS": { front:10, side:5,  rear:5,  wf:20, height:"35 ft", width:40, minLot:"3,000 sq ft", cov:"65%", note:"Manufactured Home Subdivision (platted; RVs not permitted)." },
+  // --- Non-residential (Tables 2.2.3.A–F) ---
+  "OPI": { front:20, side:10, rear:15, wf:20,      height:"35 ft (46 ft w/ exception)", width:100, minLot:"10,000 sq ft", cov:"40%", note:"Office, Professional & Institutional." },
+  "CM":  { front:20, side:8,  rear:10, wf:"None",  height:"35 ft (46 ft w/ exception)", width:100, minLot:"10,000 sq ft", cov:"70%", note:"Commercial (CM). No residential density allotted." },
+  "IND": { front:15, side:15, rear:15, wf:"None",  height:"46 ft (75 ft w/ exception)", width:100, cov:"80%", note:"Industrial (also allows agricultural uses)." },
+  "CON": { front:50, side:50, rear:50, height:"20 ft", note:"Conservation — only accessory structures to the conservation district are permitted; no lot min/width/coverage. No height exceptions." },
+  "REC": { front:50, side:50, rear:50, height:"35 ft (46 ft w/ exception)", note:"Recreation — parks/open space; no residential. No lot min/width/coverage." },
+  "GOV": { front:20, side:8,  rear:10, height:"35 ft (57 ft w/ exception)", cov:"70%", note:"Government Use." },
+  // --- Planned ---
+  "PUD": { front:null, side:null, rear:null, formula:true, note:"Planned Unit Development — front/side/rear, height and density are set by the approved Binding Master Plan (LDC § 2.2.4). A 25 ft buffer/setback applies around the PUD perimeter. Read the parcel's adopting PUD ordinance." },
+  "PID": { front:null, side:null, rear:null, formula:true, note:"Planned Industrial Development — front/side/rear, height and density are set by the approved Binding Master Plan (LDC § 2.2.4). Read the parcel's adopting PID ordinance." },
+  // County designations retained on annexation (Sarasota County UDC, not Venice districts).
+  "OUE": { front:50, side:50, rear:50, wf:50, height:"35 ft", cov:"20%", sideNote:"Side (single) 50 ft; side total, both sides, 100 ft.", note:"County Open Use Estate — a Sarasota County designation retained when the parcel was annexed (NOT a Venice district). Street/rear 50 ft; waterfront 50 ft; density 1 du/5 ac. Governed by Sarasota County UDC § 124-76." },
+  "OUR": { front:50, side:50, rear:50, wf:50, height:"35 ft", note:"County Open Use Rural — a Sarasota County designation retained on annexation (NOT a Venice district). All yards 50 ft; density 1 du/10 ac. Governed by Sarasota County UDC § 124-76." },
+  "ENCLAVE": { soft:true, note:"This parcel is mapped as an unincorporated enclave (surrounded by the city but not city-zoned). Zoning is governed by Sarasota County's Unified Development Code — confirm the county district and use § 124-76 for setbacks." },
+  // --- Mixed-Use / form-based districts (Sec. 2.3). Setbacks are BUILD-TO min/max. ---
+  "VA":   { front:"0'/2'",    side:"0'/2'",  rear:"0'/20'", wf:20,      formBased:true, height:"35 ft (45 ft w/ exception)", width:25, cov:"75%/100%", note:"Venice Avenue mixed-use (Mixed Use Downtown). Build-to zone; Venice historical architecture; no parking required." },
+  "DE":   { front:"0'/20'",   side:"0'/10'", rear:"0'/20'", wf:20,      formBased:true, height:"35 ft by right (55–75 ft w/ exception, eligibility-based)", width:50, note:"Downtown Edge mixed-use (Mixed Use Downtown)." },
+  "ST-1": { front:"5'/25'",   side:"0'/15'", rear:"0'/20'", wf:"N/A",   formBased:true, height:"35 ft (57 ft w/ exception)", width:50, cov:"35%/75%", note:"South Trail mixed-use, Subarea 1 (north of Milan Ave)." },
+  "ST-2": { front:"5'/90'",   side:"0'/50'", rear:"0'/75'", wf:20,      formBased:true, height:"35 ft (57 ft w/ exception)", width:50, cov:"35%/75%", note:"South Trail mixed-use, Subarea 2 (south of Milan Ave)." },
+  "AA":   { front:"10'/25'",  side:"5'/15'", rear:"5'/20'", formBased:true, height:"35 ft by right (57 ft w/ exception); Airport Master Plan compliance required", width:50, cov:"35%/75%", note:"Airport Avenue mixed-use." },
+  "SBI":  { front:"None",     side:"None",   rear:"None",   formBased:true, height:"up to 75 ft w/ exception", width:50, note:"Seaboard Improvement mixed-use (Gateway). No required yards; subject to Section 4 compatibility." },
+  "NTG":  { front:"0'/150'",  side:"0'/50'", rear:"Not required", formBased:true, height:"57 ft by right (75 ft w/ exception)", width:25, cov:"5%/75%", note:"North Trail Gateway mixed-use. Rear/waterfront not required." },
+  "LW":   { front:"15'/100'", side:"10'/50'", rear:"10'/None", formBased:true, height:"up to 75 ft w/ exception", width:50, cov:"10%/75%", note:"Laurel West mixed-use (Laurel Road corridor)." },
+  "LE":   { front:"15'/100'", side:"10'/50'", rear:"10'/None", formBased:true, height:"up to 46 ft w/ exception", width:50, cov:"10%/75%", note:"Laurel East mixed-use (Laurel Road corridor)." },
+  "KT":   { front:null, side:"10'/50' (non-res & multifamily); 5' min (single-family detached); 0' min (single-family attached)", rear:"10'/50' (non-res & multifamily); 10' min (single-family)", formBased:true, height:"up to 46 ft w/ exception", width:"50' (non-res/MF) / 40' (SF detached) / 20' (SF attached)", cov:"75% max", note:"Knights Trail mixed-use. Front (street) and side/rear vary by building type — read Table 2.3.11." },
+  "KTT":  { front:20, side:"6' min, 15' combined (or 15' where noted)", rear:"10' (15' where noted)", formBased:true, height:"35 ft by right (75 ft w/ exception)", width:"50'–100'", cov:"10%/75%", note:"Knights Trail Transitional mixed-use. Two building-type columns in Table 2.3.12 — confirm which applies." }
+};
+const VENICE_DISTRICT_ALIASES = {
+  "RESIDENTIALSINGLEFAMILY":"RSF-3","RESIDENTIALMULTIFAMILY":"RMF-2",
+  "MANUFACTUREDHOMEPARK":"RMHP","RESIDENTIALMANUFACTUREDHOMEPARK":"RMHP",
+  "MANUFACTUREDHOMESUBDIVISION":"RMHS","RESIDENTIALMANUFACTUREDHOMESUBDIVISION":"RMHS",
+  "OFFICEPROFESSIONALANDINSTITUTIONAL":"OPI","OFFICEPROFESSIONALINSTITUTIONAL":"OPI","OFFICEPROFESSIONAL":"OPI",
+  "COMMERCIAL":"CM","INDUSTRIAL":"IND","CONSERVATION":"CON","RECREATION":"REC","GOVERNMENT":"GOV","GOVERNMENTUSE":"GOV",
+  "PLANNEDUNITDEVELOPMENT":"PUD","PLANNEDDEVELOPMENT":"PUD",
+  "VENICEAVENUE":"VA","DOWNTOWNEDGE":"DE","SOUTHTRAIL":"ST-1","SOUTHTRAIL1":"ST-1","SOUTHTRAIL2":"ST-2",
+  "AIRPORTAVENUE":"AA","SEABOARDIMPROVEMENT":"SBI","NORTHTRAILGATEWAY":"NTG",
+  "LAURELWEST":"LW","LAURELEAST":"LE","KNIGHTSTRAIL":"KT","KNIGHTSTRAILTRANSITIONAL":"KTT"
+};
+// Inactive Venice districts (Table 2.2.1) — no new development under them; mapped to their successor.
+const VENICE_INACTIVE = { "RMH":"RMHP/RMHS", "CN":"(inactive)", "CG":"CM", "CI":"CM", "CSC":"(inactive)", "RTR":"(inactive)", "ILW":"IND", "RE":"RSF-1", "RSF":"RSF (confirm tier)", "RMF":"RMF (confirm tier)" };
+/* The city's GIS "zoning_district" column carries LONG descriptive strings, not LDC codes. Map the
+   normalized value (uppercase, letters+digits only) to the code the setback table is keyed on. The
+   form-based subareas and Areas of Unique Consideration all roll up to their parent district. */
+const VENICE_GIS_VALUE_MAP = {
+  "RESIDENTIALSINGLEFAMILY1":"RSF-1","RESIDENTIALSINGLEFAMILY2":"RSF-2","RESIDENTIALSINGLEFAMILY3":"RSF-3","RESIDENTIALSINGLEFAMILY4":"RSF-4",
+  "RESIDENTIALMULTIFAMILY1":"RMF-1","RESIDENTIALMULTIFAMILY2":"RMF-2","RESIDENTIALMULTIFAMILY3":"RMF-3","RESIDENTIALMULTIFAMILY4":"RMF-4",
+  "OFFICEPROFESSIONALANDINSTITUTIONAL":"OPI",
+  "COMMERCIAL":"CM","COMMERCIALINTENSIVE":"CI","COMMERCIALGENERAL":"CG","COMMERCIALSHOPPINGCENTER":"CSC",
+  "INDUSTRIAL":"IND","INDUSTRIALLIGHTWAREHOUSING":"ILW",
+  "PLANNEDUNITDEVELOPMENT":"PUD","PLANNEDINDUSTRIALDEVELOPMENT":"PID",
+  "AIRPORTAVENUE":"AA","DOWNTOWNEDGE":"DE","KNIGHTSTRAIL":"KT","KNIGHTSTRAILTRANSITIONAL":"KTT",
+  "LAURELEAST":"LE","LAURELWEST":"LW","NORTHTRAILGATEWAY":"NTG","SEABOARDIMPROVEMENT":"SBI","VENICEAVENUE":"VA",
+  "SOUTHTRAILSUBAREA1":"ST-1","SOUTHTRAILSUBAREA2":"ST-2","SOUTHTRAILSUBAREA2AUC":"ST-2",
+  "AREASOFUNIQUECONSIDERATION1A":"ST-2","AREASOFUNIQUECONSIDERATION1B":"ST-2","AREASOFUNIQUECONSIDERATION2":"ST-2",
+  "CONSERVATION":"CON","RECREATION":"REC","GOVERNMENT":"GOV",
+  "RESIDENTIALMANUFACTUREDHOME":"RMH","RESIDENTIALTOURISTRESORT":"RTR",
+  "OPENUSEESTATE":"OUE","OPENUSEESTATE1":"OUE","OPENUSEESTATE2":"OUE","OPENUSERURAL":"OUR",
+  "ENCLAVE":"ENCLAVE"
+};
+let _veniceNoHyphen=null;
+function _veniceInactiveSoft(code){
+  const succ=VENICE_INACTIVE[code];
+  return { soft:true, note:`"${code}" is an inactive or former Venice district (LDC Table 2.2.1). New development is governed by ${succ==='(inactive)'?'its successor district':('district '+succ)} — confirm the parcel's current district before relying on a number.` };
+}
+function veniceSetbacks(districtCode){
+  if(!districtCode) return null;
+  const raw=String(districtCode).toUpperCase().trim();
+  if(VENICE_SETBACKS[raw]) return VENICE_SETBACKS[raw];
+  const nh=raw.replace(/[^A-Z0-9]/g,'');
+  // GIS long-string value (or any code) → LDC code, then resolve that code.
+  const mapped = VENICE_GIS_VALUE_MAP[nh];
+  if(mapped){
+    if(VENICE_SETBACKS[mapped]) return VENICE_SETBACKS[mapped];
+    if(VENICE_INACTIVE[mapped]) return _veniceInactiveSoft(mapped);
+  }
+  if(!_veniceNoHyphen){ _veniceNoHyphen={}; for(const k in VENICE_SETBACKS) _veniceNoHyphen[k.replace(/[^A-Z0-9]/g,'')]=k; }
+  if(_veniceNoHyphen[nh]) return VENICE_SETBACKS[_veniceNoHyphen[nh]];
+  const alpha=raw.replace(/[^A-Z]/g,'');
+  if(VENICE_DISTRICT_ALIASES[alpha]) return VENICE_SETBACKS[VENICE_DISTRICT_ALIASES[alpha]];
+  if(VENICE_DISTRICT_ALIASES[nh]) return VENICE_SETBACKS[VENICE_DISTRICT_ALIASES[nh]];
+  if(VENICE_INACTIVE[alpha]) return _veniceInactiveSoft(alpha);
+  if(VENICE_INACTIVE[raw]) return _veniceInactiveSoft(raw);
+  return null;
+}
+const VENICE_CODE_URL='https://library.municode.com/fl/venice/codes/code_of_ordinances';
+/* Venice generator/equipment placement — a standby generator is an accessory structure (no special
+   exemption like Sarasota County's). Rides on every Venice result. */
+function renderVeniceGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment placement · Venice LDC § 3.1.9 / § 7.10.10</div>`;
+  h+=`<div class="note"><b>A standby generator is treated as an accessory structure</b> — Venice has no generator-specific setback exemption. It must be <b>at least 5 ft from any side or rear property line</b>, <b>may not be located in any front yard</b>, and may not sit in a utility or drainage easement, right-of-way, or visibility (sight) triangle.</div>`;
+  h+=`<div class="note">Generators and ground-mounted mechanical equipment must also be <b>screened</b> (walls, fence, or landscape) per § 7.10.10. Mechanical equipment is exempt from building-height limits but not from these placement rules.</div>`;
+  h+=`<a class="palink" href="${VENICE_CODE_URL}" target="_blank" rel="noopener" style="margin-top:6px">↗ Venice LDC (Municode) — § 3.1.9 Accessory Uses & § 7.10.10</a>`;
+  return h;
+}
+/* Render required setbacks for a City of Venice district. Handles numeric minimums AND the
+   form-based build-to "min/max" strings. Falls back to a general Venice reference when the
+   district code is null/unrecognized. */
+function renderVeniceSetbacks(districtCode){
+  const s = districtCode ? veniceSetbacks(districtCode) : null;
+  let h='';
+  const fmtV = v => v==null ? '<span class="muted">see code</span>'
+                  : (typeof v==='number' ? (v===0?'0 ft':v+' ft') : esc(String(v)));
+  if(!s || s.soft){
+    h+=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · City of Venice${districtCode?(' · '+esc(String(districtCode))):''} (confirm district)</div>`;
+    if(s && s.soft && s.note) h+=`<div class="note">${esc(s.note)}</div>`;
+    h+=`<div class="note">Venice setbacks are set per zoning district (LDC § 2.2 traditional districts) and per build-to standards in the mixed-use/form-based districts (§ 2.3). Common minimums: single-family (RSF) front 20 ft, side 6–8 ft, rear 10 ft; multifamily (RMF) front 20 ft, side 12–15 ft, rear 10 ft; commercial (CM) front 20 ft, side 8 ft, rear 10 ft. Waterfront yard is 20 ft in most districts.</div>`;
+    h+=`<a class="palink" href="${VENICE_CODE_URL}" target="_blank" rel="noopener" style="margin-top:6px">↗ Venice LDC (Municode) — Chapter 87, § 2.2 & § 2.3</a>`;
+    h+=`<div class="note warnbox"><b>Confirm the district.</b> Look up the parcel's zoning on the City of Venice zoning map / Development Services portal, then read that district's standards in LDC § 2.2 (traditional) or § 2.3 (mixed-use, build-to). Overlays (Historic Venice, Venetian Theme, coastal/waterfront) add their own standards.</div>`;
+    h+=renderVeniceGeneratorNote();
+    return h;
+  }
+  h+=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(String(districtCode))} (Venice LDC Ch. 87)</div>`;
+  const frontLabel = s.formBased ? 'Front / street (build-to min/max)' : 'Front (street yard)';
+  h+=fieldRow(frontLabel, fmtV(s.front), 'big');
+  h+=fieldRow(s.formBased?'Side (build-to min/max)':'Side', fmtV(s.side));
+  h+=fieldRow(s.formBased?'Rear (build-to min/max)':'Rear', fmtV(s.rear));
+  if(s.wf!=null) h+=fieldRow('Waterfront yard', fmtV(s.wf));
+  if(s.height) h+=fieldRow('Max height', esc(String(s.height)));
+  if(s.formBased) h+=`<div class="note"><b>Form-based district:</b> values are build-to (minimum/maximum) placement from the § 2.3 standards table, not simple minimum setbacks — buildings are generally held to the street. Frontage, encroachment and primary-street rules also apply.</div>`;
+  if(s.sideNote) h+=`<div class="note"><b>Side detail:</b> ${esc(s.sideNote)}</div>`;
+  const dims=[]; if(s.width) dims.push('min width '+(typeof s.width==='number'?s.width+' ft':esc(String(s.width)))); if(s.minLot) dims.push('min lot '+esc(String(s.minLot))); if(s.cov) dims.push('max coverage '+esc(String(s.cov)));
+  if(dims.length) h+=`<div class="note"><b>Lot:</b> ${dims.join(' · ')}.</div>`;
+  if(s.note) h+=`<div class="note">${esc(s.note)}</div>`;
+  h+=`<a class="palink" href="${VENICE_CODE_URL}" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify in the Venice LDC (Municode) — Chapter 87</a>`;
+  h+=`<div class="note warnbox">Required minimums from the City of Venice Land Development Code (Chapter 87 / "LDR", as amended by the form-based-code update). Tiered districts (RSF-1/2/3/4, RMF-1/2/3/4) and the mixed-use build-to districts vary — confirm the exact tier/subarea. Overlays (Historic Venice, Venetian Theme, coastal-construction, waterfront) add standards.</div>`;
+  h+=renderVeniceGeneratorNote();
   return h;
 }
 
@@ -7787,6 +7962,10 @@ async function runLookup(lat,lng,searchCtx){
   // self-guards if the zoning layer handed back a "LABELLE"/"CLEWISTON" city placeholder as the code.
   // Always renders the county generator note even when no district code was detected.
   if(norm(countyName)==='HENDRY' && !HENDRY_INCORP.has(norm(cityName))){ html += renderHendrySetbacks(zhit && zhit.code ? zhit.code : null); }
+  // City of Venice — a Sarasota County city with its OWN code (LDC Ch. 87), excluded from the county
+  // renderer via SARASOTA_INCORP. Rendered for any Venice parcel (not gated on a detected code);
+  // renderVeniceSetbacks falls back to a general Venice reference + district picker when none.
+  if(norm(cityName)==='VENICE'){ html += renderVeniceSetbacks(zhit && zhit.code ? zhit.code : null); }
   // (building-to-line estimate feature removed)
   if(z){
     if(z.permit) html += `<a class="palink" href="${esc(z.permit)}" target="_blank" rel="noopener">↗ ${esc(jurName)} permitting / planning portal</a>`;
