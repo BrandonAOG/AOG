@@ -1762,6 +1762,17 @@ const ZONING_LIVE_CITY = {
   // server reprojects. Moore Haven is the only city in Glades, so this is its sole zoning source.
   MOOREHAVEN: { label:"City of Moore Haven Zoning", codeField:"Z010_ZONG", urls:[
     "https://gis1.hcpao.org/arcgiscv/rest/services/Glades/GladesCounty_Zoning/MapServer/1/query"
+  ]},
+  // ✅ City of North Port zoning — Hosted/Current_Zoning/FeatureServer/241, the layer the city's OWN
+  // public P&Z Zoning Map app queries on a parcel click (confirmed from live app traffic). VERIFIED
+  // field list (from an actual /query response): the district code is in "zone_abbr" (e.g. "AC-4",
+  // "R-1") and the name in "zone_des" ("Activity Center 4"). NOTE the trap: there is also a field named
+  // "zone" (alias "Zoning Code") that is NULL on these features — and detectZoningFields() matches a
+  // bare /^ZONE$/ BEFORE ZONE_ABBR, so auto-detection picks the wrong (null/garbage) column and yields
+  // no district (this is what produced the earlier "V for the whole city"). So we PIN codeField/descField
+  // to the proven fields. SR is 2882 (FL State Plane ft); arcQuery sends 4326 and the server reprojects.
+  NORTHPORT: { label:"City of North Port Zoning", codeField:"zone_abbr", descField:"zone_des", urls:[
+    "https://npgis.northportfl.gov/cnpserver/rest/services/Hosted/Current_Zoning/FeatureServer/241/query"
   ]}
 };
 
@@ -4056,6 +4067,165 @@ function renderMooreHavenSetbacks(districtCode){
   h+=`<a class="palink" href="https://library.municode.com/fl/moore_haven/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify ${esc(secRef)} — Moore Haven Code of Ordinances (Municode)</a>`;
   h+=`<div class="note warnbox">Required minimums from the City of Moore Haven's adopted LDC (Ch. 4, § 9), keyed to the detected district. Where a district sets standards by housing type, the headline figures are the common values — check the by-type breakdown. Variances cap at 35% deviation (§ 5.4.G). Verify overlays, corner-lot rules and any PD terms before relying on these.</div>`;
   h+=renderMooreHavenGeneratorNote();
+  return h;
+}
+
+/* ================================ CITY OF NORTH PORT ================================
+   City of North Port Unified Land Development Code (ULDC), adopted by Ord. 2024-13 (8-6-2024),
+   Chapter 3 ZONING. North Port is a Sarasota County city with its OWN code and is excluded from the
+   Sarasota County renderer via SARASOTA_INCORP. Numbers below are transcribed verbatim from the
+   adopted ULDC dimensional-standards tables (verified against the PDF):
+     • Standard districts — § 3.2.3, Table 3.2.3.2 (EC, AG, R-1, R-2, R-3, MH, C, CT, COR, I-1, I-2, GU)
+     • Activity Center districts — § 3.3.1, Table 3.3.1.2 (AC-1 … AC-10). AC districts are build-to:
+       they set a MAX front (or % min building frontage), not a conventional min front setback — so
+       `front` is null and `frontNote` carries the build-to figure.
+   Values are minimum feet unless a string note says otherwise. SETBACKS(FT) columns are
+   front / side / rear / waterfront. The "V" (Village / Wellen Park) districts are governed by their
+   individual Village District Pattern Plans (dozens of structure-type sub-tables, § 3.4.1) and are
+   NOT encoded here — they resolve to a pattern-plan pointer instead. The generator rule is citywide
+   (ULDC § 3.5.1, Table 3.5.1.1 "Ancillary Mechanical Equipment, Residential") and is always shown. */
+const NORTHPORT_SETBACKS = {
+  // --- Standard districts (Table 3.2.3.2) ---
+  "EC":  { name:"Environmental Conservation", front:50, side:50, rear:100, waterfront:35, height:35, minLot:"None", lotWidth:"None", note:"Open/conservation district. Additional restrictions apply in the Conservation Restricted Overlay, the Myakka River Protection Zone and adjacent to wetlands (Ch. 6, Arts. III/VI/VIII)." },
+  "AG":  { name:"Agriculture", front:30, side:25, rear:35, waterfront:35, height:35, minLot:"3 acres", lotWidth:"None" },
+  "R-1": { name:"Residential, Low", front:25, side:7.5, rear:15, waterfront:20, height:35, minLot:"7,500 sq ft", lotWidth:"70 ft", note:"Minimum dwelling-unit size 900 SF (all area under air)." },
+  "R-2": { name:"Residential, Medium", front:20, side:6, rear:15, waterfront:20, height:35, minLot:"6,500 sq ft", lotWidth:"65 ft" },
+  "R-3": { name:"Residential, Multi-family", front:20, side:7.5, rear:15, waterfront:20, height:70, minLot:"5,000 sq ft", lotWidth:"35 ft" },
+  "MH":  { name:"Manufactured Housing", front:20, side:5, rear:10, waterfront:10, height:35, minLot:"4,000 sq ft", lotWidth:"40 ft" },
+  "C":   { name:"Commercial", front:null, frontNote:"No minimum front setback (—).", side:10, rear:10, waterfront:20, height:70, minLot:"None", lotWidth:"50 ft", note:"Side/rear shown are the base minimums; a required landscape buffer (Ch. 4, Art. III, § 4.3.12) can set a larger effective setback." },
+  "CT":  { name:"Corridor, Transitional", front:null, frontNote:"No minimum front setback (—).", side:10, rear:10, waterfront:20, height:50, minLot:"None", lotWidth:"50 ft", note:"Side/rear shown are the base minimums; a required landscape buffer can set a larger effective setback." },
+  "COR": { name:"Corridor", front:null, frontNote:"No minimum front setback (—).", side:null, rear:null, sideNote:"No minimum side/rear setback in the table (—); buffer requirements (§ 4.3.12) typically govern.", height:100, minLot:"None", lotWidth:"50 ft", note:"Corridor district has no tabular front/side/rear minimums — the landscape-buffer width usually establishes the effective setback. Confirm the buffer requirement for the abutting use." },
+  "I-1": { name:"Industrial, Light", front:20, side:10, rear:10, waterfront:20, height:70, minLot:"None", lotWidth:"100 ft" },
+  "I-2": { name:"Industrial, Heavy", front:50, side:25, rear:25, waterfront:100, height:70, minLot:"None", lotWidth:"100 ft" },
+  "GU":  { name:"Government Use", front:20, side:10, rear:10, waterfront:10, height:70, minLot:"None", lotWidth:"None" },
+  // Districts the authoritative Data/Zoning layer exposes that aren't in the Ord. 2024-13 standard
+  // table verbatim: CD (Conservation District) tracks EC's open/conservation standards; CG (Commercial
+  // General) tracks the C commercial standards. Verify against the adopted ULDC for the exact parcel.
+  "CD":  { name:"Conservation District", front:50, side:50, rear:100, waterfront:35, height:35, minLot:"None", lotWidth:"None", note:"Conservation district — mirrors the Environmental Conservation (EC) open/conservation standards. Myakka River Protection Zone and wetland-adjacency overlays add their own standards. Confirm the exact figures in the adopted ULDC." },
+  "CG":  { name:"Commercial General", front:null, frontNote:"No minimum front setback (—) in the commercial standard; buffer width governs.", side:10, rear:10, waterfront:20, height:70, minLot:"None", lotWidth:"50 ft", note:"Commercial General — mirrors the Commercial (C) standards. A required landscape buffer (§ 4.3.12) can set a larger effective setback." },
+  // --- Activity Center districts (Table 3.3.1.2) — build-to MAX front, no conventional min front ---
+  "AC-1":  { name:"Activity Center 1",  front:null, frontNote:"Build-to: min 50% building frontage, max front 25 ft.", side:10, rear:10, waterfront:10, height:100 },
+  "AC-2":  { name:"Activity Center 2",  front:null, frontNote:"Build-to: min 65% building frontage, max front 15 ft.", side:10, rear:20, waterfront:10, height:100, note:"Marsh Creek / Heron Creek standards are governed by the Heron Creek Pattern Book, not this table." },
+  "AC-3":  { name:"Activity Center 3",  front:null, frontNote:"Build-to: min 65% building frontage, max front 25 ft.", side:20, rear:20, waterfront:10, height:100 },
+  "AC-4":  { name:"Activity Center 4",  front:null, frontNote:"Build-to: min 65% building frontage, max front 15 ft.", side:10, rear:20, waterfront:10, height:100, note:"Panacea/The Woodlands & North Port Gardens are governed by DRI development orders, not this table." },
+  "AC-5":  { name:"Activity Center 5",  front:null, frontNote:"Build-to: min 65% building frontage, max front 15 ft.", side:10, rear:20, waterfront:10, height:100 },
+  "AC-6":  { name:"Activity Center 6",  front:null, frontNote:"Build-to: min 40% building frontage, max front 25 ft.", side:10, rear:20, waterfront:10, height:100 },
+  "AC-7":  { name:"Activity Center 7",  front:null, frontNote:"No min building frontage / no max front specified (—).", side:25, rear:null, sideNote:"Side 25 ft; rear not specified (—).", waterfront:50, height:40 },
+  "AC-7A": { name:"Activity Center 7A", front:null, frontNote:"Build-to: min 50% building frontage, max front 15 ft.", side:10, rear:10, waterfront:20, height:40 },
+  "AC-7B": { name:"Activity Center 7B", front:null, frontNote:"No min building frontage / no max front specified (—).", side:25, rear:40, waterfront:10, height:40 },
+  "AC-8":  { name:"Activity Center 8",  allFormula:true, height:70, note:"Setbacks per the West River Villages Development Master Plan DMP-22-093 (min 100% building frontage). Read the approved DMP." },
+  "AC-9":  { name:"Activity Center 9",  allFormula:true, height:307, note:"Setbacks per the Central Parc Planned Community Development Pattern Plan (Exhibit A to Ord. 2025-28; min 100% building frontage). Read the approved pattern plan." },
+  "AC-10": { name:"Activity Center 10", front:null, frontNote:"Build-to: min 40% building frontage, max front 25 ft.", side:10, rear:20, waterfront:10, height:100 }
+};
+const NORTHPORT_DISTRICT_ALIASES = {
+  "ENVIRONMENTALCONSERVATION":"EC","AGRICULTURE":"AG","CONSERVATIONDISTRICT":"CD","CONSERVATION":"CD",
+  "RESIDENTIALLOW":"R-1","RESIDENTIALMEDIUM":"R-2","RESIDENTIALMULTIFAMILY":"R-3","RESIDENTIALHIGH":"R-3",
+  "MANUFACTUREDHOUSING":"MH","MANUFACTUREDHOME":"MH","COMMERCIAL":"C","COMMERCIALGENERAL":"CG",
+  "CORRIDORTRANSITIONAL":"CT","CORRIDOR":"COR",
+  "INDUSTRIALLIGHT":"I-1","INDUSTRIALHEAVY":"I-2","GOVERNMENTUSE":"GU"
+};
+/* Resolve a North Port zoning value to a setbacks entry. North Port serves zoning from TWO divergent
+   layers with DIFFERENT value formats, so this must accept all of:
+     • Authoritative Data/Zoning layer: "(AG) Agriculture", "(R1) Residential, Low", "(CD) Conservation
+       District", "(CG) Commercial General", "(AC1) ..." — a parenthetical code + name.
+     • Accela permitting layer: "R-1", "AC-7A", "C", "COR" — bare ZONE_ABBR codes.
+     • A bare full name (e.g. "Residential, Low") via the alias table.
+   Strategy: first peel any leading "(CODE)" parenthetical and try THAT, then fall back to matching the
+   whole string / a hyphen-normalized form / the alpha-only token / the full-name alias. We deliberately
+   don't use the global norm() (it strips digits, collapsing R-1 -> R and the AC tiers). */
+function northPortSetbacks(districtCode){
+  if(!districtCode) return null;
+  const raw=String(districtCode).toUpperCase().trim();
+  // 1) Peel a leading parenthetical code: "(AG) AGRICULTURE" -> try "AG"; "(R1) ..." -> try "R1"/"R-1".
+  const paren=raw.match(/^\(([^)]+)\)/);
+  if(paren){
+    const inner=paren[1].trim();
+    const hit=northPortSetbacks(inner);   // recurse on just the code token
+    if(hit) return hit;
+  }
+  if(NORTHPORT_SETBACKS[raw]) return NORTHPORT_SETBACKS[raw];
+  // Normalize separators: collapse whitespace, unify dashes, then try a canonical hyphenated form.
+  const compact=raw.replace(/\s+/g,'').replace(/[\u2010-\u2015]/g,'-');
+  if(NORTHPORT_SETBACKS[compact]) return NORTHPORT_SETBACKS[compact];
+  // AC7 / AC7A / AC-7 / AC 7A  ->  AC-7 / AC-7A
+  let m=compact.match(/^AC-?(\d{1,2})([AB])?$/);
+  if(m){ const k='AC-'+m[1]+(m[2]||''); if(NORTHPORT_SETBACKS[k]) return NORTHPORT_SETBACKS[k]; }
+  // R1 / R-1 / I1 / I-1  ->  R-1 / I-1
+  m=compact.match(/^([RI])-?(\d)$/);
+  if(m){ const k=m[1]+'-'+m[2]; if(NORTHPORT_SETBACKS[k]) return NORTHPORT_SETBACKS[k]; }
+  // Single-token codes (C, CD, CG, CT, COR, MH, AG, EC, GU)
+  const alpha=raw.replace(/[^A-Z]/g,'');
+  if(NORTHPORT_SETBACKS[alpha]) return NORTHPORT_SETBACKS[alpha];
+  // Full-name fallback (e.g. layer handed back "Residential, Low")
+  if(NORTHPORT_DISTRICT_ALIASES[alpha]) return NORTHPORT_SETBACKS[NORTHPORT_DISTRICT_ALIASES[alpha]];
+  return null;
+}
+/* North Port generator / mechanical-equipment placement (ULDC § 3.5.1, Table 3.5.1.1 — "Ancillary
+   Mechanical Equipment, Residential"). North Port has NO standalone generator ordinance; a permanent
+   standby generator is ancillary residential mechanical equipment and is governed by the allowable-
+   encroachment table. The numbers are the MAXIMUM REDUCTION to the required setback (i.e. how far the
+   unit may intrude past the district line) — NOT a standalone distance. Always shown for any North
+   Port parcel. */
+function renderNorthPortGeneratorNote(district){
+  const s = district ? northPortSetbacks(district) : null;
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> placement · North Port ULDC § 3.5.1 (Table 3.5.1.1)</div>`;
+  h+=`<div class="note"><b>North Port has no separate generator ordinance.</b> A permanently installed standby generator is <b>"Ancillary Mechanical Equipment, Residential"</b> and is governed by the allowable-encroachment table. It may encroach into the required setbacks by at most: <b>Front — not allowed</b> (must meet the full front setback); <b>Side — up to 2 ft</b>; <b>Rear — up to 5 ft</b>; <b>Waterfront — up to 5 ft</b>. The figure is the maximum <i>reduction</i> of the required setback, so the equipment's minimum distance to a line = the district setback minus that allowance.</div>`;
+  // If we know the district's side/rear, show the resulting minimum clearances for the generator.
+  if(s && !s.allFormula){
+    const calc=(base,enc)=>{ if(base==null) return null; const v=Math.max(0, base-enc); return (v===0?'0 ft':(Number.isInteger(v)?v:v.toFixed(1))+' ft'); };
+    const sideMin=calc(s.side,2), rearMin=calc(s.rear,5), wfMin=calc(s.waterfront,5);
+    const parts=[];
+    if(sideMin!=null) parts.push(`side ≥ ${sideMin} (from the ${s.side} ft side setback)`);
+    if(rearMin!=null) parts.push(`rear ≥ ${rearMin} (from the ${s.rear} ft rear setback)`);
+    if(wfMin!=null && s.waterfront!=null) parts.push(`waterfront ≥ ${wfMin} (from the ${s.waterfront} ft waterfront setback)`);
+    if(parts.length) h+=`<div class="note"><b>For ${esc(String(district))}, that works out to:</b> ${parts.join('; ')}. Front: site the unit fully behind the front setback line.</div>`;
+  }
+  h+=`<div class="note">Equipment may not sit in a recorded easement, and these allowances do <b>not</b> apply to zero-lot-line structures. A granted variance does not stack additional encroachment on top of these. Above-ground LP/fuel tanks also follow Florida Fire Code separation distances. Confirm placement with North Port Neighborhood Development Services before siting.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/north_port/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify § 3.5.1 — North Port ULDC (Municode)</a>`;
+  return h;
+}
+/* Render required setbacks for a City of North Port district (ULDC Tables 3.2.3.2 / 3.3.1.2). Always
+   appends the citywide generator/encroachment note. Falls back to a general reference + the generator
+   note when no district was detected or the code isn't in the table (e.g. a "V" village parcel). */
+function renderNorthPortSetbacks(districtCode){
+  const s = districtCode ? northPortSetbacks(districtCode) : null;
+  const ft=v=>{ if(v==null) return null; if(typeof v==='number') return v===0?'0 ft':(Number.isInteger(v)?v:v)+' ft'; const t=String(v).trim(); return t?(/[a-zA-Z%,]/.test(t)?t:t+' ft'):null; };
+  if(!s){
+    // Only treat as a Village/Wellen parcel on a GENUINE standalone village token — NOT any code that
+    // merely contains a "v". Each alternative is anchored; "V" / "V-1" must be the whole token, and the
+    // named villages are matched as words. (The old /^V\b|VILLAGE.../ left VILLAGE/WELLEN/etc. unanchored
+    // and let "V\b" match loosely, which mislabeled parcels citywide.)
+    const dc = String(districtCode).toUpperCase().trim().replace(/^\(([^)]+)\).*$/,'$1').trim();
+    const isVillage = /^(V|V-?\d+|VILLAGE.*|WELLEN.*|TOLEDO.*|STAR\s*FARMS.*)$/.test(dc);
+    let g=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> City of North Port — ${districtCode?('district '+esc(String(districtCode))+' not in the standard tables'):'district not detected'}</div>`;
+    if(isVillage){
+      g+=`<div class="note">This looks like a <b>Village (V) / Wellen Park</b> parcel. Village setbacks are not citywide numbers — they're set per structure type in the parcel's <b>Village District Pattern Plan</b> (ULDC § 3.4.1), which has its own front/side/rear tables and frequent zero-setback allowances where the lot abuts open space, water bodies or easements ≥ 30 ft wide. Read the governing pattern plan for the exact figures.</div>`;
+    } else {
+      g+=`<div class="note">No standard ULDC district could be matched for this parcel. Confirm the district with North Port Neighborhood Development Services, then read its front/side/rear setbacks in ULDC § 3.2.3 (standard districts, Table 3.2.3.2) or § 3.3.1 (Activity Centers, Table 3.3.1.2). The generator placement rule below applies citywide.</div>`;
+    }
+    g+=renderNorthPortGeneratorNote(districtCode);
+    return g;
+  }
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(s.name||String(districtCode))} (North Port ULDC ${/^AC-/.test(String(districtCode))?'Table 3.3.1.2':'Table 3.2.3.2'})</div>`;
+  if(s.minLot!=null) h+=fieldRow('Minimum lot', esc(String(s.minLot))+(s.lotWidth?(' · '+esc(String(s.lotWidth))+' wide'):''));
+  else if(s.lotWidth) h+=fieldRow('Minimum lot width', esc(String(s.lotWidth)));
+  if(s.allFormula){
+    h+=fieldRow('Setbacks', '<span class="muted">per the approved master/pattern plan — see note</span>', 'big');
+  } else {
+    if(s.front!=null) h+=fieldRow('Front', esc(ft(s.front)), 'big');
+    else h+=fieldRow('Front', '<span class="muted">'+esc(s.frontNote||'build-to / no min — see note')+'</span>', 'big');
+    h+=fieldRow('Side', s.side!=null?esc(ft(s.side)):'<span class="muted">see note</span>');
+    h+=fieldRow('Rear', s.rear!=null?esc(ft(s.rear)):'<span class="muted">see note</span>');
+    if(s.waterfront!=null) h+=fieldRow('Waterfront', esc(ft(s.waterfront)));
+  }
+  if(s.height!=null) h+=fieldRow('Max building height', esc(String(s.height))+' ft');
+  if(s.front!=null && s.frontNote) h+=`<div class="note"><b>Front:</b> ${esc(s.frontNote)}</div>`;
+  if(s.sideNote) h+=`<div class="note"><b>Side/rear detail:</b> ${esc(s.sideNote)}</div>`;
+  if(s.note) h+=`<div class="note">${esc(s.note)}</div>`;
+  h+=`<div class="note"><b>Accessory structures:</b> residential accessory structures go in side/rear yards only; those ≤ 300 SF use a 5 ft side / 10 ft rear (20 ft waterfront) setback, while accessory structures > 300 SF must meet the primary-structure setbacks. A required landscape buffer (§ 4.3.12) can override and enlarge a tabular setback.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/north_port/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify ${/^AC-/.test(String(districtCode))?'§ 3.3.1':'§ 3.2.3'} — North Port ULDC (Municode)</a>`;
+  h+=`<div class="note warnbox">Required minimums from North Port's adopted ULDC (Ord. 2024-13), keyed to the detected district. Activity-Center (AC) districts are build-to — they cap the front and set a min building frontage rather than a min front setback. Conservation, Myakka River Protection Zone, wetland-adjacency and other overlays add their own standards. Verify any PUD/Village pattern-plan terms before relying on these.</div>`;
+  h+=renderNorthPortGeneratorNote(districtCode);
   return h;
 }
 
@@ -7966,6 +8136,11 @@ async function runLookup(lat,lng,searchCtx){
   // renderer via SARASOTA_INCORP. Rendered for any Venice parcel (not gated on a detected code);
   // renderVeniceSetbacks falls back to a general Venice reference + district picker when none.
   if(norm(cityName)==='VENICE'){ html += renderVeniceSetbacks(zhit && zhit.code ? zhit.code : null); }
+  // City of North Port — a Sarasota County city with its OWN code (ULDC, Ord. 2024-13), excluded from
+  // the county renderer via SARASOTA_INCORP. Rendered for any North Port parcel (not gated on a
+  // detected code); renderNorthPortSetbacks falls back to a general reference + the citywide generator
+  // note (and a Village-pattern-plan pointer) when the code is null or not in the standard tables.
+  if(norm(cityName)==='NORTHPORT'){ html += renderNorthPortSetbacks(zhit && zhit.code ? zhit.code : null); }
   // (building-to-line estimate feature removed)
   if(z){
     if(z.permit) html += `<a class="palink" href="${esc(z.permit)}" target="_blank" rel="noopener">↗ ${esc(jurName)} permitting / planning portal</a>`;
