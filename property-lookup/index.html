@@ -884,7 +884,7 @@
     </div>
     <div class="kick">Florida Parcel &amp; Flood Instrument</div>
     <h1>Property Lookup</h1>
-    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> where wired (Collier, Lee, Charlotte, Manatee, Sarasota) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
+    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> where wired (Collier, Lee, Charlotte, Manatee, Sarasota, Glades) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
   </header>
 
   <div class="search">
@@ -1309,6 +1309,30 @@ const COUNTY_LIVE = {
   ]},
   SARASOTA: { label:"Sarasota (SWFWMD/PA)", urls:[
     "https://www25.swfwmd.state.fl.us/arcgiswmis/rest/services/r27/LocationInfo/MapServer/79/query"
+  ]},
+  GLADES  : { label:"Glades County (Property Appraiser roll, 2026-06-01)", urls:[
+    // ✅ verified queryable (capabilities:"Query") public AGOL layer on Glades County's own org —
+    // the parcel layer behind the county's FLUM Experience app. Token-free, CORS-open (the app reads
+    // it unauthenticated cross-origin). Service name carries its roll date (glades_parcels_2026_06_01).
+    // Rich layer: owner own1/own2, PARCELNO + strap, site addr_1/s_city, owner mailing o_city/o_state/o_zip,
+    // acreage, tax_val/land_cm_va/bld_val/xf_val, use_cd, zone_cd, lgl1..22 legal, 3 sales rows. Owner +
+    // parcel + site + use auto-detect & render; market/land value + year-built/living-area splice from the
+    // statewide roll fallback (this layer carries taxable value, not a single market "just value" field).
+    // qPublic "Verify on appraiser" link keys on PARCELNO (AppID=818, LayerID=14562). Source: Glades FLUM
+    // web map 13630fbe10054c46982f5b3117323f6c.
+    "https://services6.arcgis.com/90Aakxb3SLGcQGor/arcgis/rest/services/glades_parcels_2026_06_01/FeatureServer/0/query"
+  ]},
+  HENDRY  : { label:"Hendry County (Property Appraiser parcel layer)", urls:[
+    // ✅ verified queryable (capabilities:"Query") public AGOL layer on Hendry County's own org
+    // (services7.arcgis.com/8l7Qq5t0CPLAJwJK). The "Matix" parcel layer (layer name BASEMAP) behind the
+    // county's Future Land Use & Zoning Experience app — token-free, reads cross-origin unauthenticated.
+    // Fields: owner ONAME, parcel PARCELNO + PROP_ID, site LOCAD/SITUS_NUM/LOCCTY/LOCZIP, value Just_Value
+    // (market) + Assessed_V + Taxable_Va, acreage MAP_ACRES/PACS_ACRES, LEGAL, use PUSE1/PUSE2, Date_of_La
+    // (last sale date — no price field). Owner+parcel+site+value+use auto-detect; assessed/taxable/legal/
+    // sale-date surfaced via Hendry enrichment. Year-built/living-area splice from the statewide roll.
+    // SR 2881 (FL State Plane ft); tool sends inSR=4326 and the server reprojects. Source: Hendry FLU&Zoning
+    // app 1646b3dc60244981802b689b0b30f9c9.
+    "https://services7.arcgis.com/8l7Qq5t0CPLAJwJK/arcgis/rest/services/Matix/FeatureServer/0/query"
   ]}
 };
 
@@ -1425,7 +1449,9 @@ const ZONING_COUNTY = {
   LEE:{code:"https://library.municode.com/fl/lee_county/codes/land_development_code", permit:"https://aca-prod.accela.com/leeco/default.aspx"},
   CHARLOTTE:{code:"https://library.municode.com/fl/charlotte_county/codes/code_of_ordinances", permit:"https://www.charlottecountyfl.gov/services/buildingconstruction/"},
   SARASOTA:{code:"https://library.municode.com/fl/sarasota_county/codes/code_of_ordinances", permit:"https://www.scgov.net/government/planning-and-development-services"},
-  MANATEE:{code:"https://library.municode.com/fl/manatee_county/codes/code_of_ordinances", permit:"https://www.mymanatee.org/departments/building___development_services"}
+  MANATEE:{code:"https://library.municode.com/fl/manatee_county/codes/code_of_ordinances", permit:"https://www.mymanatee.org/departments/building___development_services"},
+  GLADES:{code:"https://library.municode.com/fl/glades_county/codes/code_of_ordinances", permit:"https://gladescounty.portal.iworq.net/portalhome/gladescounty"},
+  HENDRY:{code:"https://library.municode.com/fl/hendry_county/codes/land_development_code", permit:"https://hendryfla.net/planning-zoning/"}
 };
 const ZONING_CITY = {
   MARCOISLAND:{code:"https://library.municode.com/fl/marco_island/codes/code_of_ordinances", zoningCh:"https://library.municode.com/fl/marco_island/codes/code_of_ordinances?nodeId=PTIICOOR_CH30LADECO", permit:"https://www.cityofmarcoisland.com/o/comi/page/permitting-portal-information"},
@@ -1441,7 +1467,8 @@ const ZONING_CITY = {
   VENICE:{code:"https://library.municode.com/fl/venice/codes/code_of_ordinances", permit:"https://www.venicegov.com/government/development-services"},
   NORTHPORT:{code:"https://library.municode.com/fl/north_port/codes/code_of_ordinances", permit:"https://www.northportfl.gov/government/neighborhood-development-services"},
   BRADENTON:{code:"https://library.municode.com/fl/bradenton/codes/code_of_ordinances", permit:"https://www.cityofbradenton.com/162/Planning-Community-Development"},
-  PALMETTO:{code:"https://library.municode.com/fl/palmetto/codes/code_of_ordinances", permit:"https://www.palmettofl.org/152/Planning-Zoning"}
+  PALMETTO:{code:"https://library.municode.com/fl/palmetto/codes/code_of_ordinances", permit:"https://www.palmettofl.org/152/Planning-Zoning"},
+  MOOREHAVEN:{code:"https://library.municode.com/fl/moore_haven/codes/code_of_ordinances", permit:"https://moorehaven.org/zoning-building-code-enforcement/"}
 };
 /* Resolve zoning config: city first (by municipality), else county. */
 function resolveZoning(cityName, countyName){
@@ -1471,6 +1498,9 @@ const CHARLOTTE_INCORP = new Set(['PUNTAGORDA']);
 /* Incorporated municipalities within Sarasota County that adopt their OWN codes and must NOT inherit
    unincorporated Sarasota County's UDC (Ch. 124) setbacks. norm()-form. */
 const SARASOTA_INCORP = new Set(['SARASOTA','VENICE','NORTHPORT','LONGBOATKEY']);
+/* Incorporated cities in Hendry County — LaBelle & Clewiston run their OWN zoning/setbacks, so they
+   must NOT inherit unincorporated Hendry's Ch. 1-53 Table 53-2 standards. norm()-form. */
+const HENDRY_INCORP = new Set(['LABELLE','CLEWISTON']);
 
 /* ---------- City of Naples setback QUICK-REFERENCE (Code of Ordinances, Ch. 58) ----------
    Hand-entered from Municode. These are a CONVENIENCE COPY — the live § deep-link beside each
@@ -1651,6 +1681,30 @@ const ZONING_LIVE = {
   SARASOTA: { label:"Sarasota County Zoning (UDC)", urls:[
     "https://services1.arcgis.com/RatJUQXQHIYjpRMG/arcgis/rest/services/CountyZoning/FeatureServer/0/query",
     "https://ags3.scgov.net/server/rest/services/Hosted/CountyZoning/FeatureServer/0/query"
+  ]},
+  // ✅ Glades County zoning — hosted on the shared HCPAO GIS server (Glades + Hendry share GIS).
+  // Layer 2 "county_zoning" is the countywide layer: field "Zoning" = district code (AR, ARS, C-1,
+  // C-2, CRV, ID-1, ID-2, OUA, OUFP, PD, PS, RG, RM, RMH, RS — matching the §125-158 table), and
+  // "ZonDistNam" = the full district name. Layer 1 "MH_Zoning" is the Moore Haven municipal area
+  // (its own R1/R2/R3/C1/C2/M-* scheme) — listed second as a fallback. Service is SR 2881 (FL State
+  // Plane ft); arcQuery sends the point as 4326 and the server reprojects. codeField/descField are
+  // pinned so detection can't drift to the petition-number / notes columns.
+  GLADES: { label:"Glades County Zoning", codeField:"Zoning", descField:"ZonDistNam", urls:[
+    "https://gis1.hcpao.org/arcgiscv/rest/services/Glades/GladesCounty_Zoning/MapServer/2/query",
+    "https://gis1.hcpao.org/arcgiscv/rest/services/Glades/GladesCounty_Zoning/MapServer/1/query"
+  ]},
+  // ✅ Hendry County zoning — the dedicated "Zoning" feature service on Hendry's own AGOL org
+  // (services7.arcgis.com/8l7Qq5t0CPLAJwJK), the polygon layer behind the county's Future Land Use &
+  // Zoning app. Token-free, CORS-open. The zoning layer is id 1 (NOT 0 — layer 0 404s). Field
+  // "Current_Zo" = the live district code (A-1, A-2, RR, RR-5, RG-1..RG-4, C-1/C-2/C-3, I-1/I-2, PUD,
+  // AOPD, DSAP, etc.); codeField+descField both pinned to it so detection can't drift to the
+  // Old_Zoning/New_Zoning/Ordinance history columns. SR 2236 (FL State Plane ft); arcQuery sends 4326
+  // and the server reprojects. NOTE: parcels inside LaBelle/Clewiston city limits return Current_Zo =
+  // "LABELLE" or "CLEWISTON" (a placeholder, not a real district) — those cities run their own zoning;
+  // handled gracefully (shows the city, points to Municode/permit). Source: Hendry Zoning service
+  // item 9ec63c115d3a40509559ebc5e2cb8991.
+  HENDRY: { label:"Hendry County Zoning", codeField:"Current_Zo", descField:"Current_Zo", urls:[
+    "https://services7.arcgis.com/8l7Qq5t0CPLAJwJK/arcgis/rest/services/Zoning/FeatureServer/1/query"
   ]}
 };
 
@@ -1690,6 +1744,16 @@ const ZONING_LIVE_CITY = {
     "https://services7.arcgis.com/OnCt8XFWOgmkvMJE/ArcGIS/rest/services/Sanibel_Parcel_Address/FeatureServer/0/query",
     "https://services7.arcgis.com/OnCt8XFWOgmkvMJE/ArcGIS/rest/services/Sanibel_Future_Land_Use_Map_Series_Ecological_Zones_Map_1989/FeatureServer/0/query",
     "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/0/query"
+  ]},
+  // City of Moore Haven zoning — layer 1 "MH_Zoning" of the shared Glades service (gis1.hcpao.org).
+  // Field Z010_ZONG = the CITY's district code (verified live: e.g. "M-MDR"). Codes: R1, R2, R3,
+  // RMH-MH, C1, C2, I, P, Con, M-COM, M-HDR, M-HMS, M-MDR, M-REC — mooreHavenSetbacks() maps these
+  // to the LDC Ch. 4 table, which also supplies the full district NAME. We deliberately do NOT pin a
+  // descField: the only other string column, Z020_FLUM, is a future-land-use code ("MA-Med"), not a
+  // district name, so showing it as "District name" would mislead. SR 2881; arcQuery sends 4326 & the
+  // server reprojects. Moore Haven is the only city in Glades, so this is its sole zoning source.
+  MOOREHAVEN: { label:"City of Moore Haven Zoning", codeField:"Z010_ZONG", urls:[
+    "https://gis1.hcpao.org/arcgiscv/rest/services/Glades/GladesCounty_Zoning/MapServer/1/query"
   ]}
 };
 
@@ -2170,6 +2234,34 @@ function naplesColor(code){
   const c=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   return NAPLES_ZONE_COLOR[c] || null;
 }
+/* Glades County — per-district colors keyed to the §125-158 district list (the same codes the
+   county_zoning layer returns in its "Zoning" field). Without this the broad category colorizer
+   lumps OUA/OUFP/AR/ARS into one "other" purple, so the agricultural districts that make up most of
+   Glades become indistinguishable. Families: open-use ag = greens/teal, residential = blues/indigo,
+   commercial = reds/orange, industrial = browns, planned/public = amber/gray. Matched on the
+   normalized code (letters+digits, no hyphens), so "C-1"→"C1", "ID-2"→"ID2", "RF-1"→"RF1". */
+const GLADES_ZONE_COLOR = {
+  "OUFP":"#0d9488",  // teal — Open Use Floodplain (conservation/floodplain overlay)
+  "OUA":"#4d7c0f",   // dark olive — Open Use Agriculture (20-ac min)
+  "ARS":"#65a30d",   // green — Agricultural Residential Single-Family
+  "AR":"#84cc16",    // lime — Agricultural Residential
+  "RF1":"#bef264",   // pale lime — Residential Rural Family (RF-1)
+  "RS":"#0ea5e9",    // sky — Residential Single-Family
+  "RG":"#2563eb",    // blue — Residential General
+  "RM":"#7c6cff",    // indigo — Residential Mixed
+  "RMH":"#06b6d4",   // cyan — Residential Mobile Home
+  "C1":"#fca5a5",    // light red — Neighborhood Commercial
+  "C2":"#ef4444",    // red — Commercial General
+  "CRV":"#fb923c",   // orange — Commercial Recreational Vehicle Park
+  "ID1":"#b08968",   // tan — Light Industrial
+  "ID2":"#78350f",   // dark brown — Heavy Industrial
+  "PS":"#9aa7b3",    // gray — Public Service
+  "PD":"#f59e0b"     // amber — Planned Development
+};
+function gladesColor(code){
+  const c=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  return GLADES_ZONE_COLOR[c] || null;
+}
 const ZL_GENERIC=[["#34d399","Estate / rural res."],["#0ea5e9","Single-family"],["#2563eb","Dense single-family"],
   ["#7c6cff","Multi-family"],["#06b6d4","Mobile / manufactured"],["#ff6b6b","Commercial"],
   ["#b06b3a","Industrial"],["#5fc26a","Agricultural"],["#ffb000","Planned / mixed"],
@@ -2178,21 +2270,28 @@ const ZL_NAPLES=[["#10b981","R1-E / RE (estate)"],["#14b8a6","R1-15"],["#0ea5e9"
   ["#2563eb","R1-7.5 (small lot)"],["#a78bfa","R3-6 / R3-12"],["#6d28d9","R3-15 / R3-18"],
   ["#e879f9","R3T (tourist MF)"],["#ef4444","C1 / C2 commercial"],["#fbbf24","D — Downtown"],
   ["#f59e0b","PD — Planned"],["#9aa7b3","Public / civic"]];
+const ZL_GLADES=[["#0d9488","OUFP — open-use floodplain"],["#4d7c0f","OUA — open-use agriculture"],
+  ["#84cc16","AR / ARS — ag-residential"],["#bef264","RF-1 — rural family"],["#0ea5e9","RS — single-family"],
+  ["#2563eb","RG — general residential"],["#7c6cff","RM — residential mixed"],["#06b6d4","RMH — mobile home"],
+  ["#fca5a5","C-1 / C-2 — commercial"],["#fb923c","C-RV — RV park"],["#b08968","ID-1 / ID-2 — industrial"],
+  ["#f59e0b","PD — planned dev."],["#9aa7b3","PS — public service"]];
 function setZoningLegend(reg){
   const body=document.getElementById('zoningLegendBody'); if(!body) return;
   const title=document.querySelector('#zoningLegend .zl-title');
   const isNaples = reg && /naples/i.test(reg.label||'');
-  const rows = isNaples ? ZL_NAPLES : ZL_GENERIC;
-  if(title) title.textContent = isNaples ? 'Naples Zoning' : 'Zoning';
+  const isGlades = reg && /glades/i.test(reg.label||'');
+  const rows = isNaples ? ZL_NAPLES : (isGlades ? ZL_GLADES : ZL_GENERIC);
+  if(title) title.textContent = isNaples ? 'Naples Zoning' : (isGlades ? 'Glades Zoning' : 'Zoning');
   body.innerHTML = rows.map(([c,l])=>`<div><i style="background:${c}"></i>${l}</div>`).join('');
 }
 function zoningStyleFor(props, reg){
   let codeF = reg && reg.codeField;
   if(!codeF){ const det=detectZoningFields(Object.keys(props||{})); codeF=det.code; }
   const code = codeF && props ? props[codeF] : null;
-  // Naples gets its fine per-district palette; everywhere else uses the broad category colors.
+  // Naples & Glades get their fine per-district palettes; everywhere else uses the broad category colors.
   let col=null;
   if(reg && /naples/i.test(reg.label||'')) col=naplesColor(code);
+  else if(reg && /glades/i.test(reg.label||'')) col=gladesColor(code);
   if(!col) col = ZONE_CAT_COLOR[zoneCategory(code)];
   return { color:col, weight:1.2, opacity:.85, fillColor:col, fillOpacity:ZONING_FILL_OPACITY };
 }
@@ -2679,11 +2778,11 @@ function detectFields(fields){
   const F=fields.map(f=>({raw:f,U:String(f).toUpperCase()}));
   const find=(res)=>{ for(const re of res){ const m=F.find(f=>re.test(f.U)); if(m) return m.raw; } return null; };
   return {
-    owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^NAME1$/,/^O_NAME/,/OWN.*NAME/,/^GRANTEE/]),
-    owner2:find([/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^NAME2$/,/OWN.*NAME2/]),
-    pid:   find([/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/]),
-    site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/SITUS/,/^S_ADDR/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/]),
-    city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/SITUS.*CITY/]),
+    owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^OWN1$/,/^NAME1$/,/^ONAME$/,/^O_NAME/,/OWN.*NAME/,/^GRANTEE/]),
+    owner2:find([/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^OWN2$/,/^NAME2$/,/OWN.*NAME2/]),
+    pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/]),
+    site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/]),
+    city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/]),
     jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/]),
     land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/]),
     yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/]),
@@ -2691,8 +2790,8 @@ function detectFields(fields){
     saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/]),
     saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/]),
     mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/]),
-    mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/OWNER_?CITY/]),
-    use:   find([/^USE_?CODE$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^DOR_?DESC/]),
+    mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/^O_CITY$/,/OWNER_?CITY/]),
+    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/]),
     lotSqft: find([/^LND_?SQFOOT$/,/^LOT_?SQ/,/^LOTSQFT$/,/^LAND_?SQFT$/,/^SQFT_?LND$/,/^LOTSF$/,/^LOT_?SIZE$/,/LOTSQUARE/,/^LAND_?SQ/])
   };
 }
@@ -3429,6 +3528,492 @@ function renderSarasotaSetbacks(districtCode){
   h+=`<div class="note warnbox">Required minimums from Sarasota County's Unified Development Code (Ch. 124, § 124-76), keyed to the detected district. Tiered districts (RE-1/2/3, RSF-1/2/3/4, RMF-1/2/3) vary by tier — confirm the exact tier in § 124-76. Barrier-island, Siesta Key (SKOD), waterfront and coastal-setback overlays add their own standards. Cities (Sarasota, Venice, North Port, Longboat Key) use separate codes.</div>`;
   // Sarasota's generator/equipment exemption applies countywide — always append it.
   h+=renderSarasotaEquipmentNote();
+  return h;
+}
+
+/* ============================ UNINCORPORATED GLADES COUNTY ============================
+   Glades County LDC Chapter 125, Article IV — Zoning District Regulations. All districts'
+   dimensional standards come from the §125-158 master "Minimum Standards for Principal
+   Permitted Uses" table. Hand-entered & verified from the adopted Code of Ordinances. Glades
+   has NO incorporated cities other than Moore Haven (which uses its OWN code), so the county
+   code governs the entire unincorporated area. front/rear/side are minimum feet.
+   IMPORTANT: Glades has NO emergency-/standby-generator ordinance and NO mechanical-equipment
+   encroachment allowance — a generator is an accessory structure (§125-158 note 4 + §125-202):
+   rear or side yard only, never a front yard, min 5 ft from the rear lot line and 5 ft from any
+   other building. That generator note rides on every Glades result. */
+const GLADES_SETBACKS = {
+  "OUFP": { name:"Open Use Floodplain (OUFP)", front:50, side:35, rear:35, height:35, overlay:true,
+            secRef:"§ 125-159",
+            note:"Floodplain overlay. Min parcel 20 ac / 300 ft wide; lot coverage unrestricted. No permanent residential except an owner/employee dwelling (1 per 20 ac). Development must demonstrate floodplain compliance." },
+  "OUA":  { name:"Open Use Agriculture (OUA)", front:50, side:35, rear:35, height:45, coverage:"10%",
+            secRef:"§ 125-160", minLot:"20 acres", lotWidth:300,
+            note:"Min parcel 20 ac / 300 ft wide." },
+  "ARS":  { name:"Agricultural Residential Single-Family (ARS)", front:50, side:35, rear:35, height:35, coverage:"10%",
+            secRef:"§ 125-162", minLot:"5 acres", lotWidth:220 },
+  "AR":   { name:"Agricultural Residential (AR)", front:35, side:25, rear:25, height:35, coverage:"10%",
+            secRef:"§ 125-164", minLot:"5 acres", lotWidth:220 },
+  "RF-1": { name:"Residential Rural Family (RF-1)", front:35, side:25, rear:25, height:35, coverage:"20%",
+            secRef:"§ 125-163", minLot:"1 acre", lotWidth:150, note:"Max 1 unit/acre." },
+  "RS":   { name:"Residential Single-Family (RS)", front:25, side:7, rear:10, height:35, coverage:"40%",
+            secRef:"§ 125-161", minLot:10000, lotWidth:80, note:"Max 4.5 units/acre." },
+  "RG":   { name:"Residential General (RG)", front:25, side:7, rear:10, height:35, coverage:"45%",
+            secRef:"§ 125-165", minLot:10000, lotWidth:80,
+            sideNote:"Single-family & duplex side 7 ft; multifamily side 10 ft.",
+            note:"Single-family 10,000 sq ft lot (4.35 du/ac); duplex 10,000 sq ft (4.5 du/ac); multifamily 6,222 sq ft (10.9 du/ac, 100 ft wide)." },
+  "RM":   { name:"Residential Mixed (RM)", front:25, side:7, rear:10, height:35, coverage:"75%",
+            secRef:"§ 125-166", minLot:10000, lotWidth:80,
+            note:"Single-family 80 ft wide; duplex/mobile home/multifamily 65 ft wide. All 4.35 du/ac, 10,000 sq ft min lot." },
+  "RMH":  { name:"Residential Mobile Home (RMH)", front:10, side:10, rear:10, coverage:"50%",
+            secRef:"§ 125-167", minLot:8000, lotWidth:80, note:"Max 5.44 units/acre. Min lot 8,000 sq ft / 80 ft wide." },
+  "C-1":  { name:"Neighborhood Commercial (C-1)", front:30, side:10, rear:25, height:45, coverage:"70%",
+            secRef:"§ 125-168", minLot:15000, lotWidth:100,
+            sideNote:"Commercial building abutting residential zoning: setback >= the building height (note 2)." },
+  "C-2":  { name:"Commercial General (C-2)", front:30, side:10, rear:25, height:45, coverage:"90%",
+            secRef:"§ 125-169", minLot:22500, lotWidth:150,
+            sideNote:"Commercial building abutting residential zoning: setback >= the building height (note 2)." },
+  "C-RV": { name:"Commercial Recreational Vehicle Park (C-RV)", front:5, side:5, rear:5, height:35, coverage:"80%",
+            secRef:"§ 125-170", minLot:1500, lotWidth:30, note:"Per-pad standards. Max 29 units/acre. Min lot 1,500 sq ft / 30 ft wide." },
+  "ID-1": { name:"Light Industrial (ID-1)", front:30, side:15, rear:25, height:45, coverage:"80%",
+            secRef:"§ 125-171", minLot:50000, lotWidth:200,
+            rearNote:"Rear & side abutting a railroad ROW may be reduced to 0 ft where approved as part of the overall site (note 3)." },
+  "ID-2": { name:"Heavy Industrial (ID-2)", front:30, side:15, rear:25, height:45, coverage:"80%",
+            secRef:"§ 125-172", minLot:75000, lotWidth:250,
+            rearNote:"Rear & side abutting a railroad ROW may be reduced to 0 ft where approved as part of the overall site (note 3)." },
+  "PS":   { name:"Public Service (PS)", front:null, side:null, rear:null, allFormula:true,
+            secRef:"§ 125-173", note:"Public-service district (utilities, civic, landfill, parks). Dimensional standards are set per use/site — verify in § 125-173 and any approved site plan." },
+  "PD":   { name:"Planned Development (PD)", pud:true, secRef:"§ 125-174",
+            note:"Stand-alone PD ordinance. All setbacks, lot, height, coverage, density & buffer standards are set in this property's approved PD ordinance & master plan — not a fixed table. Residential developments over 150 units must be a residential PD on central water/sewer." }
+};
+const GLADES_DISTRICT_ALIASES = {
+  "OPENUSEFLOODPLAIN":"OUFP","OPENUSEAGRICULTURE":"OUA","OPENUSEAGRICULTURAL":"OUA",
+  "AGRICULTURALRESIDENTIALSINGLEFAMILY":"ARS","AGRICULTURALRESIDENTIAL":"AR",
+  "RESIDENTIALRURALFAMILY":"RF-1","RESIDENTIALRURAL":"RF-1",
+  "RESIDENTIALSINGLEFAMILY":"RS","RESIDENTIALGENERAL":"RG","RESIDENTIALMIXED":"RM",
+  "RESIDENTIALMOBILEHOME":"RMH","MOBILEHOME":"RMH",
+  "NEIGHBORHOODCOMMERCIAL":"C-1","COMMERCIALGENERAL":"C-2",
+  "COMMERCIALRECREATIONALVEHICLE":"C-RV","RECREATIONALVEHICLE":"C-RV","RECREATIONALVEHICLEPARK":"C-RV",
+  "LIGHTINDUSTRIAL":"ID-1","HEAVYINDUSTRIAL":"ID-2","PUBLICSERVICE":"PS","PLANNEDDEVELOPMENT":"PD"
+};
+/* Resolve a Glades district code (e.g. "RS", "RF-1", "RF1", "C-RV", "ID-2", or a full-word form). */
+function gladesSetbacks(districtCode){
+  if(!districtCode) return null;
+  const raw=String(districtCode).toUpperCase().trim();
+  if(GLADES_SETBACKS[raw]) return GLADES_SETBACKS[raw];
+  const alpha=raw.replace(/[^A-Z]/g,'');
+  if(GLADES_DISTRICT_ALIASES[alpha]) return GLADES_SETBACKS[GLADES_DISTRICT_ALIASES[alpha]];
+  // normalize hyphen between letters and number: RF1 -> RF-1, ID2 -> ID-2
+  let k=raw.replace(/\s+/g,'').replace(/^([A-Z]+)[- ]?(\d)/,'$1-$2');
+  if(GLADES_SETBACKS[k]) return GLADES_SETBACKS[k];
+  // C-RV special (letters + letters): "CRV" -> "C-RV"
+  if(alpha==='CRV') return GLADES_SETBACKS["C-RV"];
+  const base=raw.split(/[\s(/]/)[0].replace(/^([A-Z]+)[- ]?(\d)/,'$1-$2');
+  if(GLADES_SETBACKS[base]) return GLADES_SETBACKS[base];
+  const baseAlpha=base.replace(/[^A-Z]/g,'');
+  if(GLADES_DISTRICT_ALIASES[baseAlpha]) return GLADES_SETBACKS[GLADES_DISTRICT_ALIASES[baseAlpha]];
+  return null;
+}
+/* Glades treats a generator as an accessory structure — no special generator ordinance exists.
+   This note rides on every Glades result so the siting rule is explicit. */
+function renderGladesGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> placement · Glades County LDC § 125-158(4) & § 125-202</div>`;
+  h+=`<div class="note"><b>Glades County has no dedicated generator ordinance and no special yard-encroachment allowance for mechanical equipment.</b> A permanently installed generator is treated as an <b>accessory structure</b>, so it must sit in a <b>rear or side yard — never in a required front yard</b> — and no closer than <b>5 ft to the rear lot line</b>, and no closer than <b>5 ft to any other building</b> (§ 125-158 note 4; § 125-202(4)).</div>`;
+  h+=`<div class="note">Architectural features (eaves, chimneys, etc.) may project 3 ft into a required yard where it is >= 8 ft wide, but that allowance does not extend to a generator. Above-ground LP tanks follow the same accessory-structure setbacks plus the Fire Code separation distances. Confirm placement with Glades County Community Development (198 6th St., Moore Haven · 863-946-6020) before siting.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/glades_county/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify §§ 125-158 & 125-202 — Glades County LDC (Municode)</a>`;
+  return h;
+}
+/* Render required setbacks for an unincorporated Glades County district (§ 125-158 numbers). */
+function renderGladesSetbacks(districtCode){
+  const s=gladesSetbacks(districtCode);
+  if(!s){
+    // Glades parcel with an unrecognized/empty code: still show the generator placement rule.
+    let g=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> Glades County — district not detected</div>`;
+    g+=`<div class="note">No zoning district could be read for this parcel. Look it up in the Glades County zoning map / Community Development (863-946-6020), then read that district's setbacks in § 125-158. The generator placement rule below applies countywide.</div>`;
+    g+=renderGladesGeneratorNote();
+    return g;
+  }
+  const setVal=v=>{
+    if(v==null) return null;
+    if(typeof v==='number') return v===0?'0 ft':v+' ft';
+    const t=String(v).trim(); if(!t) return null;
+    return /[a-zA-Z]/.test(t) ? t : t+' ft';
+  };
+  const secRef=s.secRef||'§ 125-158';
+  // PD: setbacks come from the approved PD ordinance, not a fixed table.
+  if(s.pud){
+    let p=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ PD</span> ${esc(s.name||String(districtCode))} · setbacks set by the approved PD ordinance (Glades LDC ${esc(secRef)})</div>`;
+    if(s.note) p+=`<div class="note">${esc(s.note)}</div>`;
+    p+=`<div class="note warnbox">Look up this parcel's specific PD ordinance & master plan for its exact setbacks before siting a generator or LP tank. Confirm with Glades County Community Development (863-946-6020).</div>`;
+    p+=renderGladesGeneratorNote();
+    return p;
+  }
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(s.name||String(districtCode))} (Glades LDC ${esc(secRef)})</div>`;
+  if(s.minLot!=null){ const lv=(typeof s.minLot==='number')?(fmtNum(s.minLot)+' sq ft'):String(s.minLot); h+=fieldRow('Minimum lot', esc(lv)+(s.lotWidth?(' · '+s.lotWidth+' ft wide'):'')); }
+  if(s.allFormula){
+    h+=fieldRow('Setbacks', '<span class="muted">per use / site — see note</span>', 'big');
+  } else {
+    h+=fieldRow('Front', esc(setVal(s.front)), 'big');
+    h+=fieldRow('Side', esc(setVal(s.side)));
+    h+=fieldRow('Rear', esc(setVal(s.rear)));
+  }
+  if(s.height!=null) h+=fieldRow('Max building height', esc(setVal(s.height)));
+  if(s.coverage) h+=fieldRow('Max lot coverage', esc(s.coverage));
+  if(s.sideNote) h+=`<div class="note"><b>Side detail:</b> ${esc(s.sideNote)}</div>`;
+  if(s.rearNote) h+=`<div class="note"><b>Rear detail:</b> ${esc(s.rearNote)}</div>`;
+  if(s.note) h+=`<div class="note">${esc(s.note)}</div>`;
+  h+=`<div class="note"><b>Accessory structures</b> (incl. generators, sheds): 5 ft setback, side & rear yards only (§ 125-158 note 4). Lots over 5 acres fronting a collector/arterial add 30 ft to the front yard (and 30 ft to the side if adjacent to one).</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/glades_county/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify ${esc(secRef)} — Glades County LDC (Municode)</a>`;
+  h+=`<div class="note warnbox">Required minimums from Glades County's adopted LDC (Ch. 125, Art. IV, § 125-158 master table), keyed to the detected district. Multifamily over 25 ft tall, and commercial abutting residential, must set back at least the building height. Verify overlays, corner-lot rules and any PD terms before relying on these.</div>`;
+  // Glades has no special generator ordinance — append the accessory-structure placement rule.
+  h+=renderGladesGeneratorNote();
+  return h;
+}
+
+/* ============================ CITY OF MOORE HAVEN ============================
+   Moore Haven Land Development Code, Chapter 4 (Zoning), adopted 2009 / amended Oct 5 2010,
+   Section 9 (Zoning Districts). Moore Haven is the ONLY incorporated city in Glades County and
+   uses its OWN code — separate from the county's Ch. 125. Hand-entered & verified from the city's
+   published Ch. 4 PDF. front/side/rear are minimum feet; "h" is stories/feet. Where a district sets
+   different standards by housing type (R-2, R-3, the Marina residential districts), the table holds
+   the by-type breakdown in `types` and the headline front/side/rear reflect the common values.
+   GENERATORS: Moore Haven has NO dedicated generator ordinance. A generator is a "customary
+   accessory use/structure" (§ 9.x.3). Siting is governed by the yard definitions: rear yard —
+   accessory buildings/appurtenances may occupy up to 30% of the required rear yard (§ 8 def. 69);
+   side yard — only architectural appurtenances projecting <= 24 in, or fire escapes/stairways <= 4 ft
+   (§ 8 def. 70). Practical rule: put the generator in the rear yard, clear of required side/front
+   yards, and confirm with the City Building & Zoning Official. Variance cap: 35% (§ 5.4.G). */
+const MOOREHAVEN_SETBACKS = {
+  "R-1":  { name:"Single-Family Residential (R-1)", front:25, side:5, rear:15, height:"3 stories / 35 ft",
+            coverage:"35% interior / 40% corner", secRef:"§ 9.2", minLot:7200, lotWidth:"60 ft (50 ft with sewer)",
+            note:"Min gross land 10,890 sq ft per unit. Up to 4 du/ac." },
+  "R-2":  { name:"Medium Density Residential (R-2)", front:25, side:5, rear:15, height:"3 stories / 35 ft (multifamily 4/45)",
+            coverage:"35–50% interior", secRef:"§ 9.3", minLot:6000, lotWidth:"50–60 ft",
+            note:"Up to 8 du/ac. Standards vary by housing type — see breakdown.",
+            types:[
+              { label:"Single-family", front:25, side:5, rear:15, lot:"6,000 sq ft / 50 ft", cov:"35% / 40%", h:"3 / 35" },
+              { label:"Duplex", front:25, side:5, rear:15, lot:"11,000 sq ft / 50 ft (5,445 sq ft/unit)", cov:"35% / 40%", h:"3 / 35" },
+              { label:"Mobile home", front:25, side:5, rear:15, lot:"6,000 sq ft", cov:"45%", h:"1 / 15" },
+              { label:"Multi-family", front:25, side:5, rear:20, lot:"16,500 sq ft / 60 ft (5,445 sq ft/unit)", cov:"50% / 60%", h:"4 / 45" }
+            ] },
+  "R-3":  { name:"High Density Residential (R-3)", front:25, side:5, rear:15, height:"3 stories / 35 ft (multifamily 4/45)",
+            coverage:"35–50% interior", secRef:"§ 9.4", minLot:6000, lotWidth:"50–60 ft",
+            note:"Up to 12 du/ac. Standards vary by housing type — see breakdown.",
+            types:[
+              { label:"Single-family", front:25, side:5, rear:15, lot:"6,000 sq ft / 50 ft", cov:"35% / 40%", h:"3 / 35" },
+              { label:"Duplex", front:25, side:5, rear:15, lot:"7,500 sq ft / 50 ft (3,630 sq ft/unit)", cov:"35% / 40%", h:"3 / 35" },
+              { label:"Group home", front:25, side:5, rear:15, lot:"6,000 sq ft / 60 ft", cov:"40% / 50%", h:"3 / 35" },
+              { label:"Multi-family & other", front:25, side:5, rear:20, lot:"12,000 sq ft / 60 ft (3,630 sq ft/unit)", cov:"50% / 60%", h:"4 / 45" }
+            ] },
+  "RMH":  { name:"Mobile Home Residential Subdivision (RMH)", front:25, side:5, rear:15, height:"2 stories / 25 ft",
+            coverage:"45%", secRef:"§ 9.5", minLot:6000, lotWidth:"50 ft" },
+  "RPD":  { name:"Residential Planned Development (RPD)", pud:true, secRef:"§ 9.7",
+            note:"20 ft perimeter setback from ALL property boundaries; front/side/rear & lot dimensions per the R-3 district; max building coverage 40% (60% incl. other impervious); height 4 stories/45 ft. Min parcel 5 ac. Density set by Future Land Use (Low 4, Med 8, High 12 du/ac). All exact standards are fixed in the approved RPD plan." },
+  "C-1":  { name:"Light Commercial (C-1)", front:15, side:"0 (but >= 5 ft if any side yard is provided)", rear:"none required",
+            height:"3 stories / 35 ft", far:"0.75", secRef:"§ 9.8", minLot:5000, lotWidth:"50 ft",
+            note:"Neighborhood-scale commercial compatible with adjoining residential." },
+  "C-2":  { name:"Heavy Commercial (C-2)", front:15, side:"0 (but >= 5 ft if any side yard is provided)", rear:20,
+            height:"5 stories / 60 ft", far:"0.75", secRef:"§ 9.9", minLot:5000, lotWidth:"50 ft" },
+  "PCD":  { name:"Planned Commercial Development (PCD)", pud:true, secRef:"§ 9.10",
+            note:"20 ft perimeter setback from ALL property boundaries; front/side/rear & lot per the C-2 district (Commercial FLU) or the I district (Industrial FLU). FAR 0.75 commercial / 0.50 industrial; coverage 65% building (75% incl. other impervious); height 4 stories/45 ft. Min parcel 5 ac. Exact standards fixed in the approved PCD plan." },
+  "I":    { name:"Industrial (I)", front:15, side:4, rear:10, height:"5 stories / 60 ft", far:"0.50",
+            secRef:"§ 9.11", minLot:20000, lotWidth:"75 ft" },
+  "AG":   { name:"Rural Estate – Agricultural (Ag)", front:25, side:15, rear:20, height:"3 stories / 35 ft",
+            coverage:"30%", secRef:"§ 9.13", minLot:"1 acre", lotWidth:"100 ft",
+            note:"Single-family dwellings on minimum 1½-acre lots." },
+  "P":    { name:"Public (P)", front:null, side:null, rear:null, allFormula:true, secRef:"§ 9.14",
+            note:"Public buildings, recreational & educational uses. Dimensional standards are set per use/site — verify in § 9.14 and any approved site plan." },
+  "CON":  { name:"Conservation (CON)", front:null, side:null, rear:null, allFormula:true, secRef:"§ 9.15",
+            note:"Conservation lands. Minimal/limited development — verify any standards in § 9.15 and the approved site plan." },
+  "MUPD": { name:"Mixed Use Planned Development (MUPD)", pud:true, secRef:"§ 9.16",
+            note:"Mixed-use PD. All setbacks, lot, height, coverage & buffer standards are fixed in the approved MUPD development & design standards (§ 9.16.4–.5). Not a fixed table." },
+  // ---- Marina Area sub-districts (§ 9.12) ----
+  "M-MDR": { name:"Marina Medium Density Residential (M-MDR)", front:10, side:5, rear:15, height:"3 stories / 35 ft (multifamily 4/45)",
+            coverage:"35–50% interior", secRef:"§ 9.12.1", minLot:"10,000–11,000 sq ft",
+            note:"Duplex: 11,000 sq ft / 50 ft, cov 35%/40%, h 3/35. Multifamily: 10,000 sq ft / 60 ft, rear 20 ft, cov 50%/60%, h 4/45. 5,445 sq ft/unit." },
+  "M-HDR": { name:"Marina High Density Residential (M-HDR)", front:10, side:5, rear:15, height:"3 stories / 35 ft (multifamily 5/60)",
+            coverage:"35–50% interior", secRef:"§ 9.12.2", minLot:"7,500–12,000 sq ft",
+            note:"Duplex: 7,500 sq ft / 50 ft, cov 35%/40%, h 3/35. Multifamily: 12,000 sq ft / 60 ft, rear 20 ft, cov 50%/60%, h 5/60 — front & side may be 0 for ground-floor commercial with residential above (side >= 5 ft if provided). Nonresidential FAR 0.25. 3,630 sq ft/unit." },
+  "M-COM": { name:"Marina Commercial (M-COM)", front:0, side:"0 (but >= 5 ft if provided)", rear:"20 ft (rear service area)",
+            height:"4 stories / 45 ft", far:"1.00", coverage:"60%", secRef:"§ 9.12.3", minLot:5000, lotWidth:"75 ft",
+            note:"Residential up to 12 du/ac only above ground-floor nonresidential." },
+  "M-HMS": { name:"Marina Historic Main Street (M-HMS)", front:0, side:"0 (no side yard along interior lot lines except a connecting walkway)", rear:0,
+            height:"2 stories / 30 ft", far:"1.00", coverage:"100%", secRef:"§ 9.12.4", minLot:5000, lotWidth:"50 ft",
+            note:"Zero-setback historic main-street form. Residential only above ground-floor nonres, up to 30 du/ac." },
+  "M-REC": { name:"Marina Recreation (M-REC)", front:25, side:15, rear:20, height:"2 stories / 30 ft",
+            far:"0.25", coverage:"25%", secRef:"§ 9.12.5", lotWidth:"50 ft",
+            note:"Parks, dockmaster & marine-support facilities. No min lot area." }
+};
+/* Map the MH_Zoning GIS layer codes (field Z010_ZONG) and full names to the table keys above. */
+const MH_DISTRICT_ALIASES = {
+  // GIS layer-1 codes:
+  "R1":"R-1","R2":"R-2","R3":"R-3","RMHMH":"RMH","RMH":"RMH",
+  "C1":"C-1","C2":"C-2","I":"I","P":"P","CON":"CON","MUPD":"MUPD",
+  "MMDR":"M-MDR","MHDR":"M-HDR","MCOM":"M-COM","MHMS":"M-HMS","MREC":"M-REC",
+  // full-word / spelled-out forms:
+  "SINGLEFAMILYRESIDENTIAL":"R-1","MEDIUMDENSITYRESIDENTIAL":"R-2","HIGHDENSITYRESIDENTIAL":"R-3",
+  "MOBILEHOMERESIDENTIALSUBDIVISION":"RMH","RESIDENTIALPLANNEDDEVELOPMENT":"RPD",
+  "LIGHTCOMMERCIAL":"C-1","HEAVYCOMMERCIAL":"C-2","PLANNEDCOMMERCIALDEVELOPMENT":"PCD",
+  "INDUSTRIAL":"I","AGRICULTURAL":"AG","RURALESTATEAGRICULTURAL":"AG","PUBLIC":"P","CONSERVATION":"CON",
+  "MIXEDUSEPLANNEDDEVELOPMENT":"MUPD",
+  "MARINAMEDIUMDENSITYRESIDENTIAL":"M-MDR","MARINAHIGHDENSITYRESIDENTIAL":"M-HDR",
+  "MARINACOMMERCIAL":"M-COM","MARINAHISTORICMAINSTREET":"M-HMS","MARINARECREATION":"M-REC"
+};
+/* Resolve a Moore Haven district code (handles "R-1"/"R1", "M-COM"/"MCOM", "Ag", full names). */
+function mooreHavenSetbacks(districtCode){
+  if(!districtCode) return null;
+  const raw=String(districtCode).toUpperCase().trim();
+  if(MOOREHAVEN_SETBACKS[raw]) return MOOREHAVEN_SETBACKS[raw];
+  // try inserting a hyphen: R1 -> R-1, C2 -> C-2 (won't touch single-letter I / P)
+  let k=raw.replace(/\s+/g,'').replace(/^([A-Z])(\d)$/,'$1-$2').replace(/^M([A-Z]{2,4})$/,'M-$1');
+  if(MOOREHAVEN_SETBACKS[k]) return MOOREHAVEN_SETBACKS[k];
+  const alpha=raw.replace(/[^A-Z]/g,'');
+  if(MH_DISTRICT_ALIASES[alpha]) return MOOREHAVEN_SETBACKS[MH_DISTRICT_ALIASES[alpha]];
+  if(MH_DISTRICT_ALIASES[raw]) return MOOREHAVEN_SETBACKS[MH_DISTRICT_ALIASES[raw]];
+  if(alpha==='AG') return MOOREHAVEN_SETBACKS["AG"];
+  return null;
+}
+/* Moore Haven generator/accessory note — no dedicated generator ordinance exists. */
+function renderMooreHavenGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> placement · Moore Haven LDC Ch. 4, § 8 (defs. 69–70) & § 9.x.3</div>`;
+  h+=`<div class="note"><b>The City of Moore Haven has no dedicated generator ordinance.</b> A permanently installed generator is a <b>customary accessory use/structure</b>. The yard rules govern placement: in the <b>rear yard</b>, accessory buildings/appurtenances may occupy up to <b>30% of the required rear yard</b>; in a <b>side yard</b>, only architectural appurtenances projecting <= 24 in (or fire escapes/stairways <= 4 ft) are allowed. Practical rule: <b>site the generator in the rear yard, clear of the required front and side yards.</b></div>`;
+  h+=`<div class="note">Above-ground LP tanks follow the same accessory placement plus Fire Code separation distances. A variance can deviate at most 35% from a district standard (§ 5.4.G). Confirm placement with the City of Moore Haven Building &amp; Zoning Official before siting.</div>`;
+  h+=`<a class="palink" href="https://moorehaven.org/zoning-building-code-enforcement/" target="_blank" rel="noopener" style="margin-top:6px">↗ City of Moore Haven — Zoning, Building &amp; Code Enforcement</a>`;
+  return h;
+}
+/* Render required setbacks for a City of Moore Haven district (LDC Ch. 4, § 9). */
+function renderMooreHavenSetbacks(districtCode){
+  const s=mooreHavenSetbacks(districtCode);
+  if(!s){
+    let g=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> City of Moore Haven — district not detected</div>`;
+    g+=`<div class="note">No city zoning district could be read for this parcel. Look it up with the City of Moore Haven Building &amp; Zoning Official, then read that district's standards in LDC Ch. 4, § 9. The generator placement rule below applies citywide.</div>`;
+    g+=renderMooreHavenGeneratorNote();
+    return g;
+  }
+  const setVal=v=>{
+    if(v==null) return null;
+    if(typeof v==='number') return v===0?'0 ft':v+' ft';
+    const t=String(v).trim(); if(!t) return null;
+    return /[a-zA-Z%]/.test(t) ? t : t+' ft';
+  };
+  const secRef=s.secRef||'§ 9';
+  if(s.pud){
+    let p=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ PD</span> ${esc(s.name||String(districtCode))} · setbacks set by the approved PD plan (Moore Haven LDC ${esc(secRef)})</div>`;
+    if(s.note) p+=`<div class="note">${esc(s.note)}</div>`;
+    p+=`<div class="note warnbox">Look up this parcel's specific PD ordinance & site plan for its exact setbacks before siting a generator or LP tank. Confirm with the City Building & Zoning Official.</div>`;
+    p+=renderMooreHavenGeneratorNote();
+    return p;
+  }
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(s.name||String(districtCode))} (Moore Haven LDC ${esc(secRef)})</div>`;
+  if(s.minLot!=null){ const lv=(typeof s.minLot==='number')?(fmtNum(s.minLot)+' sq ft'):String(s.minLot); h+=fieldRow('Minimum lot', esc(lv)+(s.lotWidth?(' · '+esc(String(s.lotWidth))+' wide'):'')); }
+  else if(s.lotWidth){ h+=fieldRow('Minimum lot width', esc(String(s.lotWidth))); }
+  if(s.allFormula){
+    h+=fieldRow('Setbacks', '<span class="muted">per use / site — see note</span>', 'big');
+  } else {
+    h+=fieldRow('Front', esc(setVal(s.front)), 'big');
+    h+=fieldRow('Side', esc(setVal(s.side)));
+    h+=fieldRow('Rear', esc(setVal(s.rear)));
+  }
+  if(s.height!=null) h+=fieldRow('Max building height', esc(String(s.height)));
+  if(s.far) h+=fieldRow('Max floor area ratio', esc(s.far));
+  if(s.coverage) h+=fieldRow('Max building coverage', esc(s.coverage));
+  // Per-housing-type breakdown (R-2, R-3).
+  if(s.types && s.types.length){
+    h+=`<div class="note"><b>By housing type:</b><ul style="margin:4px 0 0 16px;padding:0">`;
+    s.types.forEach(t=>{
+      h+=`<li style="margin:2px 0">${esc(t.label)}: front ${esc(setVal(t.front))}, side ${esc(setVal(t.side))}, rear ${esc(setVal(t.rear))}`;
+      if(t.lot) h+=` · lot ${esc(t.lot)}`;
+      if(t.cov) h+=` · cov ${esc(t.cov)}`;
+      if(t.h) h+=` · h ${esc(t.h)}`;
+      h+=`</li>`;
+    });
+    h+=`</ul></div>`;
+  }
+  if(s.note) h+=`<div class="note">${esc(s.note)}</div>`;
+  h+=`<div class="note"><b>Accessory structures</b> (incl. generators): rear yard — may occupy up to 30% of the required rear yard; side yard — appurtenances only (<= 24 in projection). Corner-lot building-coverage limits differ from interior lots where shown.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/moore_haven/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify ${esc(secRef)} — Moore Haven Code of Ordinances (Municode)</a>`;
+  h+=`<div class="note warnbox">Required minimums from the City of Moore Haven's adopted LDC (Ch. 4, § 9), keyed to the detected district. Where a district sets standards by housing type, the headline figures are the common values — check the by-type breakdown. Variances cap at 35% deviation (§ 5.4.G). Verify overlays, corner-lot rules and any PD terms before relying on these.</div>`;
+  h+=renderMooreHavenGeneratorNote();
+  return h;
+}
+
+/* ============================ HENDRY COUNTY ============================
+   Hendry County Land Development Code (Code of Ordinances Part I, Chapter 1-53 ZONING). The
+   district list & full names are verified from § 1-53-2.1; the dimensional standards (minimum lot
+   size, front/side/rear setbacks, lot width, building height, min living area) all live in ONE
+   master table — § 1-53-4.1 "Table 53-2, Table of Dimensional and Density Regulations".
+   IMPORTANT — WHY THERE ARE NO HARD-CODED FEET HERE: Hendry publishes Table 53-2 as a GRAPHIC
+   (image) in both Municode and eLaws, so its per-district numbers are NOT machine-readable and were
+   NOT verifiable from text. Rather than fabricate siting numbers, each district carries its verified
+   name + the governing section, and the renderer sends the user to Table 53-2 for the exact
+   front/side/rear. (If the exact numbers get hand-verified from the table later, drop them into the
+   front/side/rear fields below and the renderer will show them automatically — same shape as the
+   Glades/Collier tables.)
+   GENERATORS: Hendry has NO dedicated emergency-/standby-generator ordinance and no special
+   mechanical-equipment yard-encroachment allowance. A permanently installed generator is an
+   accessory structure, governed by the same Table 53-2 yard setbacks for its district and the
+   accessory-use rules in § 1-53-6 (placement in side/rear yards, out of required front yards and
+   easements). That note rides on every Hendry result.
+   CITIES: LaBelle and Clewiston are incorporated and run their OWN zoning/setbacks (the county
+   zoning layer just stamps parcels inside them "LABELLE"/"CLEWISTON") — excluded via HENDRY_INCORP. */
+const HENDRY_SETBACKS = {
+  "A-1":  { name:"Agriculture / Conservation (A-1)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:50, side:50, rear:50, height:35, minLot:"20 acres", lotWidth:400,
+            note:"Lowest-intensity agricultural/conservation district. Min lot 20 ac (400 ft wide); min dwelling 600 sq ft / mobile home 500 sq ft." },
+  "A-2":  { name:"General Agriculture (A-2)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:50, side:25, rear:40, height:35, minLot:"5 acres", lotWidth:200,
+            note:"County's primary agricultural district (min lot 5 ac, 200 ft wide × 200 ft deep). Existing recorded parcels under 5 ac in the Agriculture FLU are vested for residential use as of 1/1/2015 (Table 53-2 note 2). Min dwelling 600 sq ft / mobile home 500 sq ft." },
+  "A-3":  { name:"Agriculture Transitional (A-3)", secRef:"§ 1-53-4.1 Table 53-2",
+            note:"A-3 is not a separate row in Table 53-2 — confirm the governing district and its lot/yard/height with Hendry County Planning & Zoning (863-675-5240)." },
+  "RR":   { name:"Rural Residential (RR)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:40, side:15, rear:25, height:35, minLot:"1–5 acres (varies by subdivision)", lotWidth:150,
+            note:"Front/side/rear (40/15/25 ft) and 35 ft height are uniform for all RR subdivisions; only the minimum lot size differs — Flaghole 1 ac; Pioneer Plantation & Fort Denaud 2 ac; Big Oak Acres Units 1 & 2 5 ac; all other RR 2 ac (150 ft wide × 200 ft deep). Min dwelling 600 sq ft / mobile home 500 sq ft. New ag uses on 5+ ac allowed by special permit (§ 1-53-6.7)." },
+  "RR-5": { name:"Rural Residential — 5 acre (RR-5)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:40, side:15, rear:25, height:35, minLot:"5 acres", lotWidth:150,
+            note:"Rural residential at a 5-acre minimum (e.g. Big Oak Acres Units 1 & 2; 150 ft wide × 200 ft deep). Min dwelling 600 sq ft / mobile home 500 sq ft." },
+  "RR-F": { name:"Rural Residential Farm (RR-F) — Montura", secRef:"§ 1-53-4.1 Table 53-2",
+            front:40, side:15, rear:25, height:35, minLot:"1.10 acres", lotWidth:150,
+            note:"Montura. Min lot 1.10 ac (150 ft wide × 200 ft deep); min dwelling 600 sq ft / mobile home 500 sq ft. Same criteria/uses as RR except as modified by § 1-53-6.7(g) (§ 1-53-2.1A)." },
+  "RR-WE":{ name:"Rural Residential — Wheeler Estates (RR-WE)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:25, side:15, rear:15, height:35, minLot:"1.1 acres", lotWidth:135, coverage:"— residential / 50% nonresidential",
+            rearNote:"Setbacks are measured from the road right-of-way, easement, or property line — whichever is MOST restrictive (Table 53-2 note 3).",
+            note:"Wheeler Estates. Numbers shown are for residential uses (min lot 1.1 ac, 135 ft wide × 200 ft deep, min dwelling 1,000 sq ft). Nonresidential uses use a 1-acre min lot and 50% max coverage. Single-family only; mobile homes & RVs as living quarters prohibited." },
+  "RG-1": { name:"Residential / Low Density (RG-1)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:40, side:15, rear:25, height:35, minLot:"1 acre", lotWidth:150,
+            note:"Min lot 1 ac (150 ft wide × 200 ft deep); min dwelling 800 sq ft / mobile home 500 sq ft." },
+  "RG-1M":{ name:"Residential / Low Density — Mobile Home (RG-1M)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:40, side:15, rear:25, height:35, minLot:"1 acre", lotWidth:150,
+            note:"Same dimensional standards as RG-1. Min lot 1 ac (150 ft wide × 200 ft deep); min dwelling 800 sq ft / mobile home 500 sq ft." },
+  "RG-2": { name:"Residential / Medium Density (RG-2)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:35, side:15, rear:25, height:35, minLot:21780, lotWidth:100,
+            note:"Numbers shown are for a single-family dwelling or mobile home (min lot 21,780 sq ft, 100 ft wide × 150 ft deep; min dwelling 600 sq ft / mobile home 500 sq ft). All OTHER uses: 1-acre min lot, 150 ft wide, front 40 / side 15 / rear 25 ft." },
+  "RG-2M":{ name:"Residential / Medium Density — Mobile Home (RG-2M)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:35, side:15, rear:25, height:35, minLot:21780, lotWidth:100,
+            note:"Numbers shown are for a single-family dwelling or mobile home (min lot 21,780 sq ft, 100 ft wide × 150 ft deep; min dwelling 600 sq ft / mobile home 500 sq ft). All OTHER uses: 1-acre min lot, 150 ft wide, front 40 / side 15 / rear 25 ft." },
+  "RG-3": { name:"Residential / High Density (RG-3)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:25, side:10, rear:15, height:35, minLot:7500, lotWidth:75,
+            note:"Numbers shown are for a single-family dwelling or mobile home (min lot 7,500 sq ft, 75 ft wide × 100 ft deep; min dwelling 600 sq ft / mobile home 500 sq ft). All OTHER uses: 1-acre min lot, 150 ft wide, front 40 / side 15 / rear 25 ft, 50% max coverage." },
+  "RG-3M":{ name:"Residential / High Density — Mobile Home (RG-3M)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:25, side:10, rear:15, height:35, minLot:7500, lotWidth:75,
+            note:"Numbers shown are for a single-family dwelling or mobile home (min lot 7,500 sq ft, 75 ft wide × 100 ft deep; min dwelling 600 sq ft / mobile home 500 sq ft). All OTHER uses: 1-acre min lot, 150 ft wide, front 40 / side 15 / rear 25 ft, 50% max coverage." },
+  "RG-4": { name:"Residential / Multifamily (RG-4)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:25, side:10, rear:15, height:35, minLot:7500, lotWidth:75,
+            sideNote:"Townhouse interior units have NO required side setback (0 ft); townhouse end units require 15 ft.",
+            note:"RG-4 setbacks are use-specific; numbers shown are for a single-family dwelling (7,500 sq ft, 75 ft wide, min dwelling 600 sq ft). Per Table 53-2: Two-family — 10,000 sq ft, 100 ft wide, front 40 / side 15 / rear 25, min 400 sq ft. Townhouse interior — 1,500 sq ft, front 15 / side 0 / rear 25. Townhouse end — 2,500 sq ft, front 15 / side 15 / rear 25. Multifamily — 1-acre min, front 40 / side 15 / rear 25, 50% coverage, min 400 sq ft/unit. All cap at 35 ft height." },
+  "C-1":  { name:"Convenience Commercial (C-1)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:40, side:15, rear:25, height:35, minLot:10000, lotWidth:100, coverage:"40%",
+            note:"Min lot 10,000 sq ft (100 ft wide × 100 ft deep)." },
+  "C-2":  { name:"General Commercial (C-2)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:40, side:15, rear:25, height:35, minLot:10000, lotWidth:100, coverage:"40%",
+            note:"Min lot 10,000 sq ft (100 ft wide × 100 ft deep)." },
+  "C-3":  { name:"High Intensity Commercial (C-3)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:40, side:15, rear:25, height:35, minLot:10000, lotWidth:100, coverage:"30%",
+            note:"Min lot 10,000 sq ft (100 ft wide × 100 ft deep)." },
+  "I-1":  { name:"Light Industrial (I-1)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:40, side:15, rear:25, height:35, minLot:10000, lotWidth:100, coverage:"30%",
+            note:"Min lot 10,000 sq ft (100 ft wide × 100 ft deep)." },
+  "I-2":  { name:"Heavy Industrial (I-2)", secRef:"§ 1-53-4.1 Table 53-2",
+            front:40, side:15, rear:25, height:35, minLot:10000, lotWidth:100, coverage:"30%",
+            note:"Min lot 10,000 sq ft (100 ft wide × 100 ft deep)." },
+  "AOPD": { name:"Airglades Airport Overlay (AOPD)", secRef:"§ 1-53-6", overlay:true, note:"Airport overlay around Airglades. Aircraft Noise Control Zone land-use restrictions & sound-level-reduction requirements apply ON TOP of the underlying district's Table 53-2 standards (§ 1-53-6)." },
+  "PUD":  { name:"Planned Unit Development (PUD)", pud:true, secRef:"§ 1-53-5", note:"Stand-alone PUD ordinance. All setbacks, lot, height, density & buffers are set in this parcel's approved PUD ordinance & master plan — not Table 53-2." },
+  "DSAP": { name:"Detailed Specific Area Plan (DSAP)", pud:true, secRef:"§ 1-53-7", note:"Site-specific DSAP. Dimensional standards come from the adopted DSAP, not Table 53-2." },
+  "RDSAP":{ name:"Rural Detailed Specific Area Plan (RDSAP)", pud:true, secRef:"§ 1-53-8", note:"Rural DSAP under the Southwest Hendry County Sector Plan. Standards set by the adopted plan/order, not Table 53-2." }
+};
+const HENDRY_DISTRICT_ALIASES = {
+  "AGRICULTURECONSERVATION":"A-1","AGRICULTURALCONSERVATION":"A-1","GENERALAGRICULTURE":"A-2",
+  "AGRICULTURETRANSITIONAL":"A-3","AGRICULTURALTRANSITIONAL":"A-3",
+  "RURALRESIDENTIAL":"RR","RURALRESIDENTIALFARM":"RR-F","RURALRESIDENTIALWHEELERESTATES":"RR-WE","WHEELERESTATES":"RR-WE",
+  "RESIDENTIALLOWDENSITY":"RG-1","RESIDENTIALMEDIUMDENSITY":"RG-2","RESIDENTIALHIGHDENSITY":"RG-3","RESIDENTIALMULTIFAMILY":"RG-4",
+  "CONVENIENCECOMMERCIAL":"C-1","GENERALCOMMERCIAL":"C-2","HIGHINTENSITYCOMMERCIAL":"C-3",
+  "LIGHTINDUSTRIAL":"I-1","HEAVYINDUSTRIAL":"I-2","PLANNEDUNITDEVELOPMENT":"PUD",
+  "DETAILEDSPECIFICAREAPLAN":"DSAP","RURALDETAILEDSPECIFICAREAPLAN":"RDSAP",
+  "AIRGLADESAIRPORTOVERLAY":"AOPD","AIRPORTOVERLAY":"AOPD"
+};
+/* Resolve a Hendry district code: "A-2", "RG-2", "RG2", "RR-5", "RR5", "C-1", a mobile-home variant
+   like "RG-2M"/"RG2M", or a full-word form. */
+function hendrySetbacks(districtCode){
+  if(!districtCode) return null;
+  const raw=String(districtCode).toUpperCase().trim();
+  if(HENDRY_SETBACKS[raw]) return HENDRY_SETBACKS[raw];
+  const alpha=raw.replace(/[^A-Z]/g,'');
+  if(HENDRY_DISTRICT_ALIASES[alpha]) return HENDRY_SETBACKS[HENDRY_DISTRICT_ALIASES[alpha]];
+  // normalize: insert hyphen between a letter-run and a digit, keep a trailing M: RG2 -> RG-2, RG2M -> RG-2M, RR5 -> RR-5
+  let k=raw.replace(/\s+/g,'').replace(/^([A-Z]+)[- ]?(\d)/,'$1-$2');
+  if(HENDRY_SETBACKS[k]) return HENDRY_SETBACKS[k];
+  // letter-letter codes (A-1/A-2/A-3, C-1..C-3, I-1/I-2 already covered above); RR-F / RR-WE letter suffix:
+  if(/^RRF$/.test(alpha)) return HENDRY_SETBACKS["RR-F"];
+  if(/^RRWE$/.test(alpha)) return HENDRY_SETBACKS["RR-WE"];
+  const base=raw.split(/[\s(/]/)[0].replace(/^([A-Z]+)[- ]?(\d)/,'$1-$2');
+  if(HENDRY_SETBACKS[base]) return HENDRY_SETBACKS[base];
+  const baseAlpha=base.replace(/[^A-Z]/g,'');
+  if(HENDRY_DISTRICT_ALIASES[baseAlpha]) return HENDRY_SETBACKS[HENDRY_DISTRICT_ALIASES[baseAlpha]];
+  return null;
+}
+/* Hendry treats a generator as an accessory structure — no dedicated generator ordinance exists.
+   This note rides on every unincorporated-Hendry result so the siting rule is explicit. */
+function renderHendryGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> placement · Hendry County LDC § 1-53-4.1 (Table 53-2) &amp; § 1-53-6</div>`;
+  h+=`<div class="note"><b>Hendry County has no dedicated generator ordinance and no special yard-encroachment allowance for mechanical equipment.</b> A permanently installed generator is treated as an <b>accessory structure</b>: it must observe the <b>same yard setbacks as its zoning district</b> (the front/side/rear in Table 53-2) and the accessory-use placement rules of <b>§ 1-53-6</b> — kept out of the required <b>front yard</b> and out of any platted <b>utility/drainage easement</b>, generally in a side or rear yard.</div>`;
+  h+=`<div class="note">Above-ground LP/propane tanks follow the same accessory-structure setbacks plus the Florida Fire Prevention Code separation distances. Within the <b>Airglades Airport overlay (AOPD)</b>, additional noise-zone limits apply. Confirm exact placement with <b>Hendry County Planning &amp; Zoning (863-675-5240, LaBelle)</b> before siting.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/hendry_county/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify §§ 1-53-4.1 &amp; 1-53-6 — Hendry County LDC (Municode)</a>`;
+  return h;
+}
+/* Render required setbacks for an unincorporated Hendry County district. The per-district feet are
+   hand-entered into HENDRY_SETBACKS from the adopted LDC Table 53-2 (§ 1-53-4.1) and render directly.
+   Districts whose standards come from an approved plan (PUD/DSAP/RDSAP) carry pud:true and route to
+   the plan instead; A-3 has no Table 53-2 row, so it falls back to the "see the table" path. */
+function renderHendrySetbacks(districtCode){
+  // Parcels inside LaBelle / Clewiston: the county zoning layer stamps the city name as the "code".
+  const rawU = districtCode!=null ? String(districtCode).toUpperCase().trim() : '';
+  if(rawU==='LABELLE' || rawU==='CLEWISTON'){
+    const city = rawU==='LABELLE' ? 'LaBelle' : 'Clewiston';
+    let c=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> Parcel is inside the City of ${esc(city)}</div>`;
+    c+=`<div class="note">This parcel lies within <b>${esc(city)}</b>, which is incorporated and administers its <b>own zoning &amp; setbacks</b> — the Hendry County district table does not apply. Look up the city district and its front/side/rear setbacks, then confirm generator/LP-tank placement with the city before siting.</div>`;
+    c+=`<a class="palink" href="https://library.municode.com/fl/hendry_county/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Hendry County / municipal codes (Municode)</a>`;
+    return c;
+  }
+  const s=hendrySetbacks(districtCode);
+  if(!s){
+    let g=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> Hendry County — district not detected</div>`;
+    g+=`<div class="note">No zoning district could be read for this parcel. Look it up via Hendry County Planning &amp; Zoning (863-675-5240), then read that district's front/side/rear setbacks in <b>Table 53-2</b> (§ 1-53-4.1). The generator placement rule below applies countywide.</div>`;
+    g+=renderHendryGeneratorNote();
+    return g;
+  }
+  const secRef=s.secRef||'§ 1-53-4.1 Table 53-2';
+  const setVal=v=>{ if(v==null) return null; if(typeof v==='number') return v===0?'0 ft':v+' ft'; const t=String(v).trim(); if(!t) return null; return /[a-zA-Z]/.test(t)?t:t+' ft'; };
+  // PUD / DSAP / RDSAP: standards come from the approved plan, not Table 53-2.
+  if(s.pud){
+    let p=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ${esc(rawU.indexOf('DSAP')>=0?'DSAP':'PUD')}</span> ${esc(s.name||String(districtCode))} · setbacks set by the approved plan (Hendry LDC ${esc(secRef)})</div>`;
+    if(s.note) p+=`<div class="note">${esc(s.note)}</div>`;
+    p+=`<div class="note warnbox">Look up this parcel's specific PUD/DSAP ordinance &amp; master plan for its exact setbacks before siting a generator or LP tank. Confirm with Hendry County Planning &amp; Zoning (863-675-5240).</div>`;
+    p+=renderHendryGeneratorNote();
+    return p;
+  }
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(s.name||String(districtCode))} (Hendry LDC ${esc(secRef)})</div>`;
+  // If verified feet are present, show them; otherwise direct to the graphic Table 53-2.
+  const haveNums = (s.front!=null || s.side!=null || s.rear!=null);
+  if(haveNums){
+    h+=fieldRow('Front', esc(setVal(s.front)), 'big');
+    h+=fieldRow('Side', esc(setVal(s.side)));
+    h+=fieldRow('Rear', esc(setVal(s.rear)));
+    if(s.height!=null) h+=fieldRow('Max building height', esc(setVal(s.height)));
+    if(s.minLot!=null){ const lv=(typeof s.minLot==='number')?(fmtNum(s.minLot)+' sq ft'):String(s.minLot); h+=fieldRow('Minimum lot', esc(lv)+(s.lotWidth?(' · '+s.lotWidth+' ft wide'):'')); }
+    if(s.coverage) h+=fieldRow('Max lot coverage', esc(s.coverage));
+  } else {
+    h+=fieldRow('Front / side / rear', '<span class="muted">see Table 53-2 for this district</span>', 'big');
+  }
+  if(s.overlay) h+=`<div class="note"><b>Overlay:</b> this is an overlay district — its requirements apply on top of the underlying base district's Table 53-2 standards.</div>`;
+  if(s.sideNote) h+=`<div class="note"><b>Side detail:</b> ${esc(s.sideNote)}</div>`;
+  if(s.rearNote) h+=`<div class="note"><b>Yard detail:</b> ${esc(s.rearNote)}</div>`;
+  if(s.note) h+=`<div class="note">${esc(s.note)}</div>`;
+  if(haveNums){
+    h+=`<div class="note">Front/side/rear, height, minimum lot &amp; coverage above are taken from <b>Table 53-2</b> (§ 1-53-4.1). Where a district sets different standards per use, the headline figures are the common single-family/primary case and the per-use variations are noted above.</div>`;
+  } else {
+    h+=`<div class="note"><b>Where the exact numbers live:</b> Hendry's minimum lot size and front/side/rear setbacks for <b>${esc(s.name||String(districtCode))}</b> are in <b>Table 53-2</b> (§ 1-53-4.1 of the LDC), published as a table in the code. Read the row for this district for the governing feet.</div>`;
+  }
+  h+=`<div class="note"><b>Countywide:</b> no permanent residential structure may sit within <b>100 ft of a state or federal highway right-of-way</b> (§ 1-53-4.3), regardless of the district minimums above. Setbacks are measured per § 1-53-4.2 (corner lots have two front yards; flag-lot fronts run along the access easement).</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/hendry_county/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify ${esc(secRef)} — Hendry County LDC (Municode)</a>`;
+  h+=`<div class="note warnbox">District read live from Hendry County's zoning GIS. The per-district setback feet come from the adopted LDC's Table 53-2 (a graphic table, not a queryable number). Verify overlays (esp. the Airglades AOPD), corner-lot rules and any PUD/DSAP terms before relying on these.</div>`;
+  h+=renderHendryGeneratorNote();
   return h;
 }
 
@@ -6427,6 +7012,7 @@ function renderParcelGeneric(a, d){
   if(mail) h += fieldRow('Owner mailing', esc(mail)+(mailCity?'<br>'+esc(mailCity):''));
   if(use)  h += fieldRow('Existing use', esc(use));
   if(jv)   h += fieldRow('Just (market) value'+(a.__asmtYr?' '+esc(String(a.__asmtYr)):''), jv);
+  else if(a.__gladesMkt!=null) h += fieldRow('Market value'+(a.__asmtYr?' '+esc(String(a.__asmtYr)):'')+' (land + building)', fmtMoney(a.__gladesMkt));
   if(a.__assessedVal!=null) h += fieldRow('Assessed value', fmtMoney(a.__assessedVal));
   if(a.__taxableVal!=null)  h += fieldRow('Taxable value', fmtMoney(a.__taxableVal));
   if(land) h += fieldRow('Land value', land);
@@ -6434,6 +7020,8 @@ function renderParcelGeneric(a, d){
     const bldExtra = (a.__bldgCount!=null && Number(a.__bldgCount)>1) ? ` · ${esc(String(a.__bldgCount))} bldgs` : '';
     h += fieldRow('Year built', esc(String(yr))+effExtra+bldExtra); }
   if(sp)   h += fieldRow('Last sale', sp+(sy?' ('+esc(sy)+')':''));
+  else if(a.__saleP!=null) h += fieldRow('Last sale', fmtMoney(a.__saleP)+(a.__saleY?' ('+esc(String(a.__saleY))+')':''));
+  else if(a.__saleDateOnly) h += fieldRow('Last sale', esc(String(a.__saleDateOnly)));
   if(a.__legal) h += fieldRow('Legal', '<span style="font-size:11px">'+esc(String(a.__legal))+'</span>');
   return h;
 }
@@ -6736,6 +7324,39 @@ async function runLookup(lat,lng,searchCtx){
       const _tv=pick(_ra,'TV_SD','TV_NSD','TAXABLE_VAL'); if(_num(_tv)) _la.__taxableVal=_tv;
       const _ay=pick(_ra,'ASMNT_YR'); if(_ay!=null&&String(_ay).trim()!=='') _la.__asmtYr=_ay;
       const _lg=pick(_ra,'S_LEGAL','LEGAL','LEGAL_1'); if(_lg!=null&&String(_lg).trim()!=='') _la.__legal=_lg;
+    }
+    // Glades' own roll fields live ON the parcel layer (land_cm_va, bld_val, xf_val, tax_val, lgl1..22).
+    // Surface them directly so value/legal render even if the statewide roll fallback missed this point.
+    // Only fills gaps — never overwrites a value already detected/spliced above. Guarded to Glades.
+    if(norm(countyName)==='GLADES'){
+      const _la=liveRes.features[0].attributes;
+      const _n=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+      // market (just) value: Glades has no single JV field — sum land + building + extra-feature value.
+      if(!det.jv){ const _lc=Number(_la.land_cm_va)||0,_bv=Number(_la.bld_val)||0,_xf=Number(_la.xf_val)||0,_mk=_lc+_bv+_xf;
+        if(_mk>0){ _la.__gladesMkt=_mk; } }
+      if(!det.land && _n(_la.land_cm_va)){ _la.LND_VAL=_la.land_cm_va; det.land='LND_VAL'; }
+      if(_la.__taxableVal==null && _n(_la.tax_val)) _la.__taxableVal=_la.tax_val;
+      if(_la.__asmtYr==null && _n(_la.tax_yr)) _la.__asmtYr=_la.tax_yr;
+      if(_la.__legal==null){ const _lj=[]; for(let _i=1;_i<=22;_i++){ const _v=_la['lgl'+_i]; if(_v!=null&&String(_v).trim()!=='') _lj.push(String(_v).trim()); }
+        if(_lj.length) _la.__legal=_lj.join(' '); }
+      // most recent sale from the 3 stacked sale rows (prc1/dos1 newest)
+      if(!det.saleP){ for(const _s of ['1','2','3']){ const _p=_la['prc'+_s],_d=_la['dos'+_s];
+        if(_n(_p)){ _la.__saleP=_p; if(_d!=null&&String(_d).trim()!=='') _la.__saleY=String(_d).trim(); break; } } }
+    }
+    // Hendry's parcel layer carries assessed/taxable value, legal, and a last-sale DATE (epoch ms, no
+    // price). Surface them via the existing custom-key channels. Gap-only; guarded to Hendry.
+    if(norm(countyName)==='HENDRY'){
+      const _la=liveRes.features[0].attributes;
+      const _n=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+      if(_la.__assessedVal==null && _n(_la.Assessed_V)) _la.__assessedVal=_la.Assessed_V;
+      if(_la.__taxableVal==null && _n(_la.Taxable_Va)) _la.__taxableVal=_la.Taxable_Va;
+      if(_la.__asmtYr==null && _n(_la.prop_val_y)) _la.__asmtYr=_la.prop_val_y;
+      if(_la.__legal==null && _la.LEGAL!=null && String(_la.LEGAL).trim()!=='') _la.__legal=String(_la.LEGAL).trim();
+      // last-sale date only (no sale price in this layer) — show the year from the epoch-ms date field
+      if(!det.saleP && _la.__saleP==null && _n(_la.Date_of_La)){
+        try{ const _yr=new Date(Number(_la.Date_of_La)).getUTCFullYear();
+          if(_yr>1900 && _yr<2100) _la.__saleDateOnly=String(_yr); }catch(e){}
+      }
     }
     if(det.yr){ const _y=pick(liveRes.features[0].attributes,det.yr); if(_y) parcelYearBuilt=_y; }
     const le=liveMeta&&liveMeta.lastEdit;
@@ -7105,6 +7726,18 @@ async function runLookup(lat,lng,searchCtx){
   // ecological-zone GIS isn't reliably point-queryable here — pass the zone code when we DID get one
   // (renderSanibelSetbacks falls back to a general reference when the code is null/unrecognized).
   if(norm(cityName)==='SANIBEL'){ html += renderSanibelSetbacks(zhit && zhit.code ? zhit.code : null); }
+  // City of Moore Haven — the ONLY incorporated city in Glades, with its OWN code (LDC Ch. 4).
+  // Rendered for any Moore Haven parcel (not gated on a detected code); the city table maps the
+  // MH_Zoning layer's Z010_ZONG codes, and falls back to a citywide generator note when none.
+  if(norm(cityName)==='MOOREHAVEN'){ html += renderMooreHavenSetbacks(zhit && zhit.code ? zhit.code : null); }
+  // Unincorporated Glades County (LDC Ch. 125, Art. IV, § 125-158). Moore Haven (handled above)
+  // uses its own code, so exclude it here. Always renders the county generator note even with no code.
+  if(norm(countyName)==='GLADES' && norm(cityName)!=='MOOREHAVEN'){ html += renderGladesSetbacks(zhit && zhit.code ? zhit.code : null); }
+  // Unincorporated Hendry County (LDC Ch. 1-53, § 1-53-4.1 Table 53-2). LaBelle & Clewiston are
+  // incorporated and run their own codes (excluded via HENDRY_INCORP); renderHendrySetbacks also
+  // self-guards if the zoning layer handed back a "LABELLE"/"CLEWISTON" city placeholder as the code.
+  // Always renders the county generator note even when no district code was detected.
+  if(norm(countyName)==='HENDRY' && !HENDRY_INCORP.has(norm(cityName))){ html += renderHendrySetbacks(zhit && zhit.code ? zhit.code : null); }
   // (building-to-line estimate feature removed)
   if(z){
     if(z.permit) html += `<a class="palink" href="${esc(z.permit)}" target="_blank" rel="noopener">↗ ${esc(jurName)} permitting / planning portal</a>`;
