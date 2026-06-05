@@ -582,6 +582,8 @@ function calc(){
   var parallelViol=sets>1&&!exceeded&&conductor&&lt1_0.indexOf(conductor)!==-1;
 
   var egcSize=pickEGC(breaker,mat);
+  var egcCu=pickEGC(breaker,'copper');
+  var egcAl=pickEGC(breaker,'aluminum');
 
   /* ════ BUILD HTML ════ */
   var h='';
@@ -667,8 +669,10 @@ function calc(){
   /* EGC card */
   h+='<div class="metric">'+
      '<div class="metric-label">Min EGC Size</div>'+
-     '<div class="metric-value" style="font-size:clamp(1rem,3vw,1.4rem)">'+egcSize+'</div>'+
-     '<div class="metric-sub">'+matLabel+'</div>'+
+     '<div class="metric-value" style="font-size:clamp(1rem,3vw,1.4rem)">'+egcCu+'</div>'+
+     '<div class="metric-sub">Copper</div>'+
+     '<div class="metric-value" style="font-size:clamp(1rem,3vw,1.4rem);margin-top:.35rem">'+egcAl+'</div>'+
+     '<div class="metric-sub">Aluminum / CU-clad AL</div>'+
      '<span class="tag tag-info">250.122</span></div>';
 
   h+='</div><div class="hr"></div>';
@@ -716,7 +720,7 @@ function calc(){
        'or adjust the breaker rating.</div>';
   }
   h+='<div class="note-block"><strong>Equipment grounding conductor \u2014 250.122</strong>'+
-     'Minimum '+egcSize+' ('+matLabel+') based on '+breaker+'A OCPD. '+
+     'Minimum '+egcCu+' (Copper) or '+egcAl+' (Aluminum / CU-clad AL) based on '+breaker+'A OCPD. '+
      'If circuit conductors are upsized for any reason, the EGC must be proportionally '+
      'increased per 250.122(B).</div>';
   if(exceeded){
