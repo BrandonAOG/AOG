@@ -2008,33 +2008,40 @@ function localKeyFromCountyName(name){
   return LOCAL_AERIAL_ACTIVE[n] ? n : null;   // keys are county names already (SARASOTA, LEE, ...)
 }
 const R_MERC = 20037508.342789244;
-// On high-DPI/Retina/phone screens, ask the ImageServer to render each 256px tile slot at 512px so the
-// county aerial resolves to its true pixel sharpness instead of being scaled up by the browser.
-const LOCAL_TILE_PX = (typeof window!=='undefined' && window.devicePixelRatio>1) ? 512 : 256;
+// SPEED NOTE: the export-kind counties RENDER each tile on demand (slow), so we (a) cap native zoom at
+// the level where the 3-inch imagery's real detail ends and let Leaflet UPSCALE the last few levels —
+// this cuts tile-request volume 4–16× with almost no visible loss — and (b) only request 2× pixels on
+// retina for the fast pre-cached (tilexyz) services, where it's cheap; for on-demand export we keep
+// 256 so the server isn't rendering 4× the pixels per tile. Cached services have no such cost.
+const IS_RETINA = (typeof window!=='undefined' && window.devicePixelRatio>1);
 const LocalAerial = L.TileLayer.extend({
   getTileUrl: function(coords){
     if(!LOCAL_URL_REF.url) return L.Util.emptyImageUrl;     // no county here → blank (Esri shows under)
+    if(LOCAL_URL_REF.kind==="tilexyz"){
+      // Pre-cached tiles: instant, just fetch the cached PNG/JPEG at z/y/x.
+      return LOCAL_URL_REF.url + "/tile/" + coords.z + "/" + coords.y + "/" + coords.x;
+    }
     const n = Math.pow(2, coords.z), t = 2*R_MERC/n;
     const xmin=-R_MERC+coords.x*t, xmax=-R_MERC+(coords.x+1)*t;
     const ymax= R_MERC-coords.y*t, ymin= R_MERC-(coords.y+1)*t;
-    if(LOCAL_URL_REF.kind==="tilexyz"){
-      return LOCAL_URL_REF.url + "/tile/" + coords.z + "/" + coords.y + "/" + coords.x;
-    }
     const bbox=[xmin,ymin,xmax,ymax].join(",");
-    return LOCAL_URL_REF.url + "/exportImage?f=image&format=jpgpng&transparent=true" +
-           "&bbox=" + bbox + "&bboxSR=3857&imageSR=3857&size=" + LOCAL_TILE_PX + "," + LOCAL_TILE_PX;
+    // jpeg (not jpgpng) is smaller/faster over the wire for opaque aerials; no transparency needed since
+    // Esri imagery sits underneath. 256px keeps the server's render cost low.
+    return LOCAL_URL_REF.url + "/exportImage?f=image&format=jpeg&bbox=" + bbox +
+           "&bboxSR=3857&imageSR=3857&size=256,256";
   }
 });
 const localAerial = new LocalAerial("", {
-  maxZoom:23, maxNativeZoom:23, minZoom:11,   // exportImage renders crisp detail at any z; 23 lets the
-                                              // 3-inch flights show their true resolution (~grass level)
-  attribution:"Local county aerial", updateWhenIdle:L.Browser.mobile,
-  updateWhenZooming:false, keepBuffer:2, crossOrigin:true
+  // Native z20 holds essentially all the 3-inch detail; z21–23 are upscaled by the browser (free, no
+  // extra requests). This is the single biggest speed win vs. the old maxNativeZoom:23.
+  maxZoom:23, maxNativeZoom:20, minZoom:11,
+  attribution:"Local county aerial", updateWhenIdle:false,   // update during pan too → feels snappier
+  updateWhenZooming:false, keepBuffer:6, crossOrigin:true    // keep more off-screen tiles so panning back is instant
 });
 // Esri imagery sits UNDER the local aerial so any gap (outside a wired county, or a not-yet-loaded
 // tile) still shows photography rather than blank. It caps at native z19 and upsamples to fill.
 const localEsriBase = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  {maxZoom:23,maxNativeZoom:19,updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:2});
+  {maxZoom:23,maxNativeZoom:19,updateWhenIdle:false,updateWhenZooming:false,keepBuffer:6});
 const sarcoGroup = L.layerGroup([localEsriBase, localAerial, labels]);   // the "Local HD" basemap
 // Switch the local layer to the county under the current map center; returns the active key (or null).
 let _localActiveKey = "__init__";
@@ -2135,11 +2142,18 @@ document.addEventListener('click', closeBasemapMenu);
           .then(r=>r.ok?r.json():Promise.reject(r.status))
           .then(j=>{
             clearTimeout(t);
-            // ImageServer → has extent + raster meta. Tiled MapServer → singleFusedMapCache + tileInfo.
-            const isImg  = j && !j.error && j.extent && (j.bandCount!=null || j.pixelType || j.serviceDataType);
-            const isTile = j && !j.error && j.singleFusedMapCache===true && j.tileInfo;
-            if(isImg || isTile){
-              LOCAL_AERIAL_ACTIVE[key] = { url, kind:(isTile?"tilexyz":"export"), label:cfg.label };
+            if(!j || j.error){ next(); return; }
+            const isImg  = j.extent && (j.bandCount!=null || j.pixelType || j.serviceDataType);
+            const isCache = j.singleFusedMapCache===true && j.tileInfo;
+            // A pre-cached service only serves /tile/{z}/{y}/{x} in the projection it was CACHED in.
+            // We can only use that fast path if the cache is Web Mercator (3857/102100) — otherwise the
+            // tiles won't align with our Leaflet map, so we fall back to exportImage (which reprojects).
+            const tsr = isCache && j.tileInfo.spatialReference ?
+                        (j.tileInfo.spatialReference.latestWkid || j.tileInfo.spatialReference.wkid) : null;
+            const cacheIsWebMerc = isCache && (tsr===3857 || tsr===102100);
+            if(isImg || isCache){
+              const kind = cacheIsWebMerc ? "tilexyz" : "export";   // export still works on a cached ImageServer
+              LOCAL_AERIAL_ACTIVE[key] = { url, kind, label:cfg.label };
               resolve(LOCAL_AERIAL_ACTIVE[key]);
             } else next();
           })
