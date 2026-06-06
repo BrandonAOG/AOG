@@ -438,9 +438,9 @@
 
   /* ---- INPUT FIELD WIDTHS — PHONE ---- */
   --w-phone-gen-size:        15ch;  /* Generator size input (phone)                     */
-  --w-phone-num-panels:      8ch;   /* # Electrical Panels input (phone)                */
-  --w-phone-num-ts:          8ch;   /* # Transfer Switches input (phone)                */
-  --w-phone-ts-type:         20ch;  /* Transfer switch specs input (phone)              */
+  --w-phone-num-panels:      3ch;   /* # Electrical Panels input (phone) — narrow, single digit */
+  --w-phone-num-ts:          3ch;   /* # Transfer Switches input (phone) — narrow, single digit */
+  --w-phone-ts-type:         22ch;  /* Transfer switch specs (phone) — fits e.g. "200A 20-SPACE" */
   --w-phone-ts-placement:    25ch;  /* Transfer switch placement input (phone)          */
   --w-phone-circuits:        5ch;   /* 60A and 100A circuits inputs (phone)             */
   --w-phone-stand-height:    6ch;   /* Stand/pad height input (phone)                   */
@@ -449,8 +449,8 @@
 
   /* ---- INPUT FIELD WIDTHS — iPAD ---- */
   --w-ipad-gen-size:         15ch;
-  --w-ipad-num-panels:       8ch;
-  --w-ipad-num-ts:           8ch;
+  --w-ipad-num-panels:       3ch;
+  --w-ipad-num-ts:           3ch;
   --w-ipad-ts-type:          25ch;
   --w-ipad-ts-placement:     25ch;
   --w-ipad-circuits:         5ch;
@@ -463,7 +463,7 @@
   --w-desktop-num-panels:    8ch;
   --w-desktop-num-ts:        8ch;
   --w-desktop-ts-type:       20ch;
-  --w-desktop-ts-placement:  25ch;
+  --w-desktop-ts-placement:  40ch;  /* longer: fits e.g. "Install Back To Back With Panel" */
   --w-desktop-circuits:      5ch;
   --w-desktop-stand-height:  10ch;
   --w-desktop-tank-size:     10ch;
@@ -474,7 +474,7 @@
   --w-print-num-panels:      8ch;
   --w-print-num-ts:          8ch;
   --w-print-ts-type:         20ch;
-  --w-print-ts-placement:    25ch;
+  --w-print-ts-placement:    40ch;  /* longer: fits e.g. "Install Back To Back With Panel" (phone print) */
   --w-print-circuits:        5ch;
   --w-print-stand-height:    4ch;
   --w-print-tank-size:       10ch;
@@ -485,7 +485,7 @@
   --w-print-ipad-num-panels:     8ch;
   --w-print-ipad-num-ts:         8ch;
   --w-print-ipad-ts-type:        25ch;
-  --w-print-ipad-ts-placement:   25ch;
+  --w-print-ipad-ts-placement:   40ch;  /* longer: fits e.g. "Install Back To Back With Panel" */
   --w-print-ipad-circuits:       5ch;
   --w-print-ipad-stand-height:   4ch;
   --w-print-ipad-tank-size:      12ch;
@@ -496,7 +496,7 @@
   --w-print-desktop-num-panels:  8ch;
   --w-print-desktop-num-ts:      8ch;
   --w-print-desktop-ts-type:     20ch;
-  --w-print-desktop-ts-placement:25ch;
+  --w-print-desktop-ts-placement:40ch;  /* longer: fits e.g. "Install Back To Back With Panel" */
   --w-print-desktop-circuits:    5ch;
   --w-print-desktop-stand-height:10ch;
   --w-print-desktop-tank-size:   10ch;
@@ -862,6 +862,10 @@ input[type="text"], input[type="email"], input[type="tel"], input[type="date"], 
   min-height: var(--h-phone-input); height: var(--h-phone-input); -webkit-appearance: none; appearance: none;
   caret-color: var(--cyan); box-sizing: border-box;
 }
+/* Remove the up/down spinner arrows on number inputs (Chrome/Safari/Edge + Firefox). */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 input[type="text"]:-webkit-autofill, input[type="email"]:-webkit-autofill,
 input[type="tel"]:-webkit-autofill, input[type="number"]:-webkit-autofill {
   -webkit-box-shadow: 0 0 0px 1000px rgba(255,255,255,0.55) inset !important;
@@ -946,6 +950,13 @@ body.dark-mode .inline-label { color: #7DD3FC; }
     min-width: 60px;
     flex: 1 1 60px;
   }
+  /* The panel / transfer-switch COUNT boxes hold a single digit — keep them narrow
+     (~3ch) instead of stretching to fill the row like the other inline inputs. */
+  #num_panels { flex: 0 0 auto; width: var(--w-phone-num-panels); min-width: var(--w-phone-num-panels); }
+  #num_ts     { flex: 0 0 auto; width: var(--w-phone-num-ts);     min-width: var(--w-phone-num-ts); }
+  /* Transfer Switch Type holds specs like "200A 20-SPACE" — give it a fixed width that fits
+     that text instead of being squeezed by the inline-row flex. Overrides input.med width:100%. */
+  #ts_type_desc { flex: 0 0 auto; width: var(--w-phone-ts-type) !important; min-width: var(--w-phone-ts-type) !important; }
 }
 
 .divider { border: none; border-top: 1px solid rgba(217,119,6,0.15); margin: var(--divider-margin-screen); position: relative; background: var(--panel); transition: all 0.3s ease; }
@@ -1085,6 +1096,20 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
   .grid-4 .field-block, .grid-3 .field-block, .grid-2 .field-block { min-width: 0 !important; overflow: hidden !important; }
   .field-row { margin-bottom: 2px !important; flex-wrap: nowrap !important; min-height: var(--h-print-phone-field-row) !important; }
   .inline-row { margin-bottom: 2px !important; flex-wrap: wrap !important; min-height: var(--h-print-phone-inline-row) !important; }
+  /* FIX: on phone the @media(max-width:768px) rule sets inline-row inputs to flex:1 1 60px so they
+     fill the narrow screen. That rule is still active when printing from a phone, so on the 1050px
+     print page the inputs balloon into long blank underlines and shove the labels apart. Cancel the
+     flex-grow so each input keeps its intended fixed width (from its inline width var) instead of
+     stretching. We deliberately do NOT set an !important width here — that would override the
+     per-input inline width vars; killing flex-grow is enough to restore the designed sizing. */
+  .inline-row input[type="text"],
+  .inline-row input[type="number"] {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+  }
+  /* Transfer Switch Placement — wider on print so long entries like
+     "Install Back To Back With Panel" aren't cut off (this is the phone-print path). */
+  #ts_placement { width: var(--w-print-ts-placement) !important; min-width: var(--w-print-ts-placement) !important; flex: 0 0 auto !important; }
   label { color: #6B7280 !important; font-size: var(--fs-print-phone-label) !important; white-space: nowrap !important; }
   legend { font-size: var(--fs-print-phone-label) !important; color: #6B7280 !important; font-weight: 500 !important; font-family: var(--font-display) !important; letter-spacing: 1.5px !important; text-transform: uppercase !important; }
   .inline-label { color: #6B7280 !important; white-space: nowrap !important; font-size: var(--fs-print-phone-inline-label) !important; }
@@ -1344,6 +1369,9 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
   .yn-group .yn-label    { min-height: var(--h-desktop-yn-label) !important; height: var(--h-desktop-yn-label) !important; line-height: var(--h-desktop-yn-label) !important; }
   .field-row             { min-height: var(--h-desktop-field-row) !important; }
   .inline-row            { min-height: var(--h-desktop-inline-row) !important; }
+  /* Transfer Switch Placement — wider on desktop screen so long entries like
+     "Install Back To Back With Panel" fit without truncating. */
+  #ts_placement          { width: var(--w-desktop-ts-placement) !important; min-width: var(--w-desktop-ts-placement) !important; flex: 0 0 auto !important; }
   .gas-appliances-label  { font-size: var(--fs-desktop-gas-label) !important; }
   .gas-appliances-box    { padding: var(--pd-desktop-gas-box) !important; }
   .footer-text           { font-size: var(--fs-desktop-footer) !important; }
@@ -1496,7 +1524,18 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
 <script>
 (function () {
   var ua = navigator.userAgent;
-  if (/iP(hone|od|ad)/.test(ua) && /WebKit/.test(ua)) {
+  // Classic iOS/iPadOS Safari (UA still says iPhone/iPad/iPod).
+  var isClassicIOS = /iP(hone|od|ad)/.test(ua) && /WebKit/.test(ua);
+  // iPadOS 13+ defaults to "desktop" Safari, whose UA reports as Macintosh with NO
+  // "iPad" token. The reliable tell is a touch-capable "Mac": real Macs report
+  // maxTouchPoints 0/1, iPads report >1. Treat these as mobile-safari so the print
+  // path runs the span-replace that draws the filled checkbox/radio boxes (otherwise
+  // the PDF falls back to native controls and the amber fill is lost).
+  var isIpadDesktopMode = /Macintosh/.test(ua) && /WebKit/.test(ua)
+                          && !/Chrome|Chromium|Edg|Firefox/.test(ua)
+                          && typeof navigator.maxTouchPoints === 'number'
+                          && navigator.maxTouchPoints > 1;
+  if (isClassicIOS || isIpadDesktopMode) {
     document.documentElement.classList.add('mobile-safari');
     if (document.body) { document.body.classList.add('mobile-safari'); }
     else { document.addEventListener('DOMContentLoaded', function () { document.body.classList.add('mobile-safari'); }); }
@@ -2294,6 +2333,7 @@ function printForm() {
   printStyle.id = 'force-print-light';
   printStyle.textContent = [
     ':root, body {',
+    '  -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;',
     '  --cyan: #D97706 !important; --cyan-dim: #B45309 !important; --cyan-dark: #92400E !important;',
     '  --amber: #D97706 !important; --bg: #FFFFFF !important; --bg3: #F8F8F8 !important;',
     '  --panel: #FFFFFF !important; --text: #1F2937 !important; --text-muted: #6B7280 !important;',
@@ -2301,7 +2341,13 @@ function printForm() {
     '}',
     'input[type=radio],input[type=checkbox],.check-item input[type=radio],.check-item input[type=checkbox] { accent-color:#D97706!important; }',
     '@media print {',
+    '  *, *::before, *::after { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }',
     '  *, *::before, *::after { background:white!important;color:#1F2937!important;box-shadow:none!important;text-shadow:none!important;border-color:rgba(217,119,6,0.4)!important;animation:none!important;animation-play-state:paused!important;transition:none!important; }',
+    '  /* The drawn checkbox/radio boxes must keep their amber fill — the universal white-background',
+    '     rule above would otherwise wipe it out, leaving only an outline + faint tick. */',
+    '  .print-cb-box.cb-checked { background:#D97706!important; border-color:#D97706!important; }',
+    '  .print-cb-box.cb-unchecked { background:#ffffff!important; border-color:#9CA3AF!important; }',
+    '  .print-cb-mark { background:transparent!important; border-color:#ffffff!important; }',
     '  svg, svg * { background:transparent!important; }',
     '  .doc-title,.company-name { color:#D97706!important;text-shadow:none!important; }',
     '  .doc-title::before,.doc-title::after,.company-name::before,.company-name::after,.header::after { content:none!important;display:none!important; }',
@@ -2383,14 +2429,16 @@ function printForm() {
       var origStyle = input.getAttribute('style') || '';
       input.style.cssText = 'opacity:0!important;position:absolute!important;width:0!important;height:0!important;';
       var box = document.createElement('span');
+      box.className = 'print-cb-box';
       if (isChecked) {
+        box.className = 'print-cb-box cb-checked';
         box.style.cssText = 'display:inline-flex!important;width:14px!important;height:14px!important;min-width:14px!important;min-height:14px!important;background:#D97706!important;border:2px solid #D97706!important;border-radius:' + (isRadio ? '50%' : '2px') + '!important;flex-shrink:0!important;vertical-align:middle!important;box-sizing:border-box!important;align-items:center!important;justify-content:center!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;';
-        if (!isRadio) {
-          var mark = document.createElement('span');
-          mark.style.cssText = 'display:block!important;width:8px!important;height:4px!important;border-left:2.5px solid #ffffff!important;border-bottom:2.5px solid #ffffff!important;transform:rotate(-45deg)!important;margin-top:-2px!important;flex-shrink:0!important;';
-          box.appendChild(mark);
-        }
+        var mark = document.createElement('span');
+        mark.className = 'print-cb-mark';
+        mark.style.cssText = 'display:block!important;width:8px!important;height:4px!important;border-left:2.5px solid #ffffff!important;border-bottom:2.5px solid #ffffff!important;transform:rotate(-45deg)!important;margin-top:-2px!important;flex-shrink:0!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;';
+        box.appendChild(mark);
       } else {
+        box.className = 'print-cb-box cb-unchecked';
         box.style.cssText = 'display:inline-block!important;width:13px!important;height:13px!important;min-width:13px!important;min-height:13px!important;background:#ffffff!important;border:1.5px solid #9CA3AF!important;border-radius:' + (isRadio ? '50%' : '2px') + '!important;flex-shrink:0!important;vertical-align:middle!important;box-sizing:border-box!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;';
       }
       input.parentNode.insertBefore(box, input);
@@ -2472,7 +2520,10 @@ function printForm() {
   // ══════════════════════════════════════════
   // ── DESKTOP SAFARI / NON-SAFARI — print path ──
   // ══════════════════════════════════════════
-  if (isAnySafari) { doSpanReplace(); }
+  // Run the span-replace for ALL browsers here, not just Safari: native checkbox/radio
+  // controls print unreliably everywhere (often losing the amber fill and showing a bare
+  // accent-color tick), so drawing the filled boxes guarantees a consistent PDF.
+  doSpanReplace();
   void document.body.offsetHeight;
   armRestoreAndPrint(false);
 
@@ -2579,6 +2630,13 @@ function capturePageToCanvas() {
       '  --icon-color-gps: #10B981 !important;',
       '}',
       '.icon-themed { color: #D97706 !important; }',
+      '/* ROOT-CAUSE FIX: .col-label is display:inline-flex on screen, and html2canvas drops the',
+      '   injected dot + icon inside inline-flex containers (the block-level .section-header works',
+      '   fine). Switch the pills to block-level flex with fit-content width for capture so they keep',
+      '   their compact pill shape but render their children reliably. */',
+      '.col-label { display: flex !important; width: -webkit-fit-content !important; width: fit-content !important; align-items: center !important; min-height: 26px !important; overflow: visible !important; }',
+      '.section-header { min-height: 26px !important; align-items: center !important; overflow: visible !important; }',
+      '.col-label canvas[data-capture-icon], .section-header canvas[data-capture-icon] { display: inline-block !important; flex-shrink: 0 !important; vertical-align: middle !important; }',
       '.doc-title { color: #D97706 !important; text-shadow: none !important; }',
       '.company-name { color: #D97706 !important; text-shadow: none !important; }',
       '.section-header { color: #D97706 !important; }',
@@ -2634,6 +2692,57 @@ function capturePageToCanvas() {
       injectedDots.push(dot);
     });
 
+    // ── Pre-rasterize the inline icon SVGs to <canvas> on the LIVE DOM before capture ──
+    // html2canvas 1.4.1 will not reliably paint complex inline <svg> (or SVG-via-<img>) — a
+    // long-standing, documented limitation — so the icons came out blank. The reliable fix
+    // (used widely): draw each SVG onto its own <canvas>, swap that canvas in for the SVG, let
+    // html2canvas render the canvas (which it handles dependably), then restore. We bake the
+    // amber color in first so there's no currentColor to resolve. Each draw is async (Image
+    // onload), so we collect promises and await them before triggering html2canvas.
+    var _iconSwaps = [];
+    var _iconPromises = [];
+    document.querySelectorAll('.icon-themed').forEach(function(svg) {
+      if (svg.tagName.toLowerCase() !== 'svg') return;
+      var rect = svg.getBoundingClientRect();
+      var attrW = parseFloat(svg.getAttribute('width'))  || 0;
+      var attrH = parseFloat(svg.getAttribute('height')) || 0;
+      // Prefer the declared width/height; fall back to the measured box; never below the
+      // declared size (the measured box can collapse small inside a tight flex pill at capture
+      // time, which is what was shrinking the icon to nothing).
+      var w = Math.max(1, Math.round(Math.max(attrW, rect.width  || 0) || attrW || 22));
+      var h = Math.max(1, Math.round(Math.max(attrH, rect.height || 0) || attrH || 22));
+      var s = svg.cloneNode(true);
+      s.setAttribute('width', w); s.setAttribute('height', h);
+      s.setAttribute('color', '#D97706');
+      if (!s.getAttribute('xmlns')) s.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      s.querySelectorAll('path, line, circle, rect, polyline, polygon, ellipse').forEach(function(p) {
+        var st = p.getAttribute('stroke');
+        if (st && st !== 'none') p.setAttribute('stroke', '#D97706');
+        var fl = p.getAttribute('fill');
+        if (fl && /currentcolor/i.test(fl)) p.setAttribute('fill', '#D97706');
+      });
+      var markup = new XMLSerializer().serializeToString(s);
+      var uri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup);
+      var dpr = 2;
+      var cv = document.createElement('canvas');
+      cv.width = w * dpr; cv.height = h * dpr;
+      cv.setAttribute('data-capture-icon', '1');
+      cv.style.cssText = 'width:' + w + 'px;height:' + h + 'px;flex-shrink:0;display:inline-block;vertical-align:middle;';
+      var p = new Promise(function(resolve) {
+        var im = new Image();
+        im.onload = function() {
+          try { cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); } catch (e) {}
+          resolve();
+        };
+        im.onerror = function() { resolve(); };
+        im.src = uri;
+      });
+      _iconPromises.push(p);
+      svg.style.display = 'none';
+      svg.parentNode.insertBefore(cv, svg);
+      _iconSwaps.push({ svg: svg, canvas: cv });
+    });
+
     var restored = false;
     var restore = function() {
       if (restored) return;
@@ -2641,6 +2750,12 @@ function capturePageToCanvas() {
       // Remove injected dots
       injectedDots.forEach(function(d) { if (d.parentNode) d.parentNode.removeChild(d); });
       injectedDots = [];
+      // Restore icon SVGs (remove the temp canvases, un-hide the originals)
+      _iconSwaps.forEach(function(sw) {
+        if (sw.canvas && sw.canvas.parentNode) sw.canvas.parentNode.removeChild(sw.canvas);
+        if (sw.svg) sw.svg.style.display = '';
+      });
+      _iconSwaps = [];
       // ── PATCH: Restore seasonal theme classes, dark-mode, and canvas ──
       seasonalClasses.forEach(function(c) { document.body.classList.add(c); });
       document.documentElement.classList.remove('dark-mode');
@@ -2657,11 +2772,12 @@ function capturePageToCanvas() {
       var fs = document.getElementById('capture-force-style'); if (fs) fs.remove();
     };
 
+    Promise.all(_iconPromises).then(function() {
     requestAnimationFrame(function() { requestAnimationFrame(function() {
       var CAPTURE_H = Math.max(page.scrollHeight, PAPER_H);
       try {
         html2canvas(page, {
-          scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false,
+          scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false, imageTimeout: 15000,
           width: CAPTURE_W, height: CAPTURE_H, windowWidth: CAPTURE_W, scrollX: 0, scrollY: 0,
           onclone: function(clonedDoc) {
             // Strip dark-mode and seasonal classes + their style tags from clone
@@ -2721,10 +2837,7 @@ function capturePageToCanvas() {
                 var box = clonedDoc.createElement('span');
                 box.style.cssText = 'display:inline-flex!important;width:14px!important;height:14px!important;min-width:14px!important;min-height:14px!important;background:#D97706!important;border:2px solid #D97706!important;border-radius:' + (isRadio ? '50%' : '2px') + '!important;flex-shrink:0!important;vertical-align:middle!important;margin-right:3px!important;box-sizing:border-box!important;align-items:center!important;justify-content:center!important;';
                 var mark = clonedDoc.createElement('span');
-                if (!isRadio) {
-                  mark.style.cssText = 'display:block!important;width:8px!important;height:4px!important;border-left:2.5px solid #ffffff!important;border-bottom:2.5px solid #ffffff!important;transform:rotate(-45deg)!important;margin-top:-2px!important;';
-                  box.appendChild(mark);
-                }
+                mark.style.cssText = 'display:block!important;width:8px!important;height:4px!important;border-left:2.5px solid #ffffff!important;border-bottom:2.5px solid #ffffff!important;transform:rotate(-45deg)!important;margin-top:-2px!important;';
                 box.appendChild(mark);
                 input.parentNode.insertBefore(box, input);
               } else {
@@ -2761,6 +2874,7 @@ function capturePageToCanvas() {
         reject(syncErr);
       }
     }); });
+    });
   });
 }
 
