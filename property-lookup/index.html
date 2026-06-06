@@ -8864,9 +8864,58 @@ function renderSuggest(items){
 }
 function setSugMsg(msg){ sugEl.innerHTML=`<div class="sgmsg">${esc(msg)}</div>`; sugEl.classList.add('show'); sugItems=[]; sugActive=-1; }
 
+/* ---- Autocomplete tuning: in-session cache + relevance ranking (no new dependency) ----
+   The cache makes re-typing / backspacing instant and cuts redundant network calls.
+   The ranker reorders merged candidates so the one that best matches what the user typed
+   (house number + street prefix) and is nearest the current map view floats to the top,
+   instead of relying on raw source order (Census→Esri→OSM). */
+const SUG_CACHE = new Map();         // normalized query -> candidate array
+const SUG_CACHE_MAX = 40;
+function sugCacheGet(k){ return SUG_CACHE.get(k) || null; }
+function sugCacheSet(k,v){
+  SUG_CACHE.set(k,v);
+  if(SUG_CACHE.size>SUG_CACHE_MAX){ SUG_CACHE.delete(SUG_CACHE.keys().next().value); } // drop oldest
+}
+
+// Score a candidate against the typed query: higher = better match. Free, purely local.
+function rankSuggestions(items, typed){
+  const t = (typed||'').toLowerCase().trim();
+  const tHouse = houseNum(t);
+  const tTokens = streetTokens(t).map(s=>s.toLowerCase());
+  let center=null;
+  try{ if(typeof map!=='undefined' && map.getCenter){ const c=map.getCenter(); center={lat:c.lat,lng:c.lng}; } }catch(e){}
+
+  function score(it){
+    const lbl=(it.label||'').toLowerCase();
+    let s=0;
+    // Exact house-number match is the strongest signal.
+    if(tHouse && new RegExp('(^|\\D)'+tHouse+'(\\D|$)').test(lbl)) s+=50;
+    // Street-token overlap (each distinctive token the user typed that appears in the label).
+    for(const tok of tTokens){ if(tok.length>1 && lbl.includes(tok)) s+=8; }
+    // Prefix match — label starts with what they typed (minus trailing fragments).
+    if(t && lbl.startsWith(t.split(',')[0].trim())) s+=15;
+    // Source quality nudge: Census/Esri tend to be cleaner for US street addresses than OSM.
+    if(it.src==='US Census') s+=4; else if(it.src==='Esri') s+=3;
+    // Proximity to current map view (closer = small bonus), so a nearby match outranks a far twin.
+    if(center && typeof it.lat==='number' && typeof it.lng==='number'){
+      const d=Math.hypot(it.lat-center.lat, it.lng-center.lng);   // degrees; fine for ranking
+      if(d<0.05) s+=6; else if(d<0.25) s+=3; else if(d<1) s+=1;
+    }
+    return s;
+  }
+  // Stable sort by score desc; keep original order among equals (Array.sort is stable in modern JS).
+  return items
+    .map((it,i)=>({it,i,sc:score(it)}))
+    .sort((a,b)=> b.sc-a.sc || a.i-b.i)
+    .map(x=>x.it);
+}
+
 /* fetch up to ~6 candidate addresses; Census first (best for US street addresses), then Esri
    (strong on rural addresses the others miss, e.g. Glades/Moore Haven), Nominatim as backup */
-async function fetchSuggestions(q){
+async function fetchSuggestions(q, signal){
+  const cacheKey = q.toLowerCase().replace(/\s+/g,' ').trim();
+  const cached = sugCacheGet(cacheKey);
+  if(cached) return cached;                 // instant: re-typed / backspaced query
   let qq = /\b(fl|florida)\b/i.test(q) ? q : q+', Florida';
   const out=[];
   // run Census + Esri in parallel; Esri is what catches rural addresses the Census geocoder lacks
@@ -8874,9 +8923,10 @@ async function fetchSuggestions(q){
   const esriU=`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates`+
     `?SingleLine=${encodeURIComponent(qq)}&f=json&outFields=*&maxLocations=6&outSR=4326`+
     `&searchExtent=${encodeURIComponent('-87.6,24.4,-80.0,31.0')}`;
+  const fopt = signal ? {signal} : {};
   const [cR,eR]=await Promise.allSettled([
-    fetch(censusU).then(r=>r.json()),
-    fetch(esriU).then(r=>r.json())
+    fetch(censusU,fopt).then(r=>r.json()),
+    fetch(esriU,fopt).then(r=>r.json())
   ]);
   if(cR.status==='fulfilled'){
     const ms=(cR.value&&cR.value.result&&cR.value.result.addressMatches)||[];
@@ -8896,7 +8946,7 @@ async function fetchSuggestions(q){
   if(out.length<5){
     try{
       const u=`https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=us&q=${encodeURIComponent(qq)}`;
-      const j=await (await fetch(u)).json();
+      const j=await (await fetch(u, signal?{signal}:{})).json();
       for(const m of (j||[])){
         if(out.length>=6) break;
         if(out.some(o=>o.label===m.display_name)) continue;
@@ -8904,7 +8954,9 @@ async function fetchSuggestions(q){
       }
     }catch(e){}
   }
-  return out;
+  const ranked = rankSuggestions(out, q);
+  sugCacheSet(cacheKey, ranked);
+  return ranked;
 }
 
 async function chooseSuggestion(it){
@@ -8927,22 +8979,38 @@ async function chooseSuggestion(it){
   results.insertAdjacentHTML('afterbegin',conf);
 }
 
+let sugAbort=null;
 addrEl.addEventListener('input',()=>{
   const q=addrEl.value.trim();
   STORE.set('fl_addr',addrEl.value||'');
   clearTimeout(sugTimer);
   if(q.length<4){ hideSuggest(); return; }
   if(q===lastSugQ) return;
+
+  // Instant path: if we've already fetched this exact query this session, show it with no delay.
+  const cachedNow = sugCacheGet(q.toLowerCase().replace(/\s+/g,' ').trim());
+  if(cachedNow){
+    lastSugQ=q; ++sugSeq;
+    if(cachedNow.length) renderSuggest(cachedNow);
+    else setSugMsg('no matches — try adding a city or ZIP, or tap the map');
+    return;
+  }
+
   sugTimer=setTimeout(async()=>{
     lastSugQ=q;
     const seq=++sugSeq;
+    // Cancel any still-in-flight request from a previous keystroke so it doesn't waste mobile data.
+    if(sugAbort){ try{ sugAbort.abort(); }catch(e){} }
+    sugAbort = (typeof AbortController!=='undefined') ? new AbortController() : null;
     setSugMsg('searching addresses…');
-    const items=await fetchSuggestions(q);
+    let items=[];
+    try{ items=await fetchSuggestions(q, sugAbort?sugAbort.signal:undefined); }
+    catch(e){ if(e&&e.name==='AbortError') return; }   // superseded — newer keystroke owns the UI
     if(seq!==sugSeq) return;              // a newer keystroke superseded this
     if(addrEl.value.trim().length<4){ hideSuggest(); return; }
     if(!items.length){ setSugMsg('no matches — try adding a city or ZIP, or tap the map'); return; }
     renderSuggest(items);
-  },320);                                  // debounce so we don't hammer the geocoder
+  },180);                                  // snappier than before; cache + abort keep it cheap
 });
 
 sugEl.addEventListener('mousedown',e=>{      // mousedown beats input blur
