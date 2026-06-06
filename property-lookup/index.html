@@ -2885,9 +2885,50 @@ async function fetchCone(){
   if(coneCache && (Date.now()-coneFetchedAt) < 12*60*1000) return coneCache;
   const get=u=>fetch(u).then(r=>r.ok?r.json():null).catch(()=>null);
   const [cone,track,pts]=await Promise.all([ get(NHC_BASE+'/7'+NHC_Q), get(NHC_BASE+'/6'+NHC_Q), get(NHC_BASE+'/5'+NHC_Q) ]);
-  coneCache={cone,track,pts}; coneFetchedAt=Date.now(); return coneCache;
+  coneCache=filterAtlantic({cone,track,pts}); coneFetchedAt=Date.now(); return coneCache;
 }
 function coneStormCount(data){ return (data && data.cone && data.cone.features) ? data.cone.features.length : 0; }
+
+/* ---- Restrict to the ATLANTIC basin + GULF OF MEXICO only ----
+   The NHC summary service returns systems from every basin (Atlantic, Eastern
+   Pacific, Central Pacific). For our Florida service area we only care about
+   Atlantic + Gulf storms — a system off Baja or Hawaii should not light the
+   button or zoom the map away. We filter by geography rather than a basin field
+   name (which varies), keeping only features whose coordinates fall in the
+   Atlantic/Gulf box: longitude -100°W → -10°E, latitude 0° → 65°N. -100°W is the
+   standard NHC dividing line between the Atlantic and Eastern Pacific basins. */
+const ATL_BOX = { wLng:-100, eLng:-10, sLat:0, nLat:65 };
+function _lngLatInAtl(lng,lat){
+  return (typeof lng==='number' && typeof lat==='number' &&
+          lng>=ATL_BOX.wLng && lng<=ATL_BOX.eLng &&
+          lat>=ATL_BOX.sLat && lat<=ATL_BOX.nLat);
+}
+// Does any coordinate in a GeoJSON geometry fall inside the Atlantic/Gulf box?
+function _geomTouchesAtl(geom){
+  if(!geom || !geom.coordinates) return false;
+  let hit=false;
+  (function walk(c){
+    if(hit || !Array.isArray(c)) return;
+    if(typeof c[0]==='number' && typeof c[1]==='number'){
+      if(_lngLatInAtl(c[0],c[1])) hit=true;
+      return;
+    }
+    for(let i=0;i<c.length && !hit;i++) walk(c[i]);
+  })(geom.coordinates);
+  return hit;
+}
+// Return a copy of the {cone,track,pts} bundle with only Atlantic/Gulf features.
+function filterAtlantic(data){
+  if(!data) return data;
+  const keep=fc=>{
+    if(!fc || !fc.features) return fc;
+    return Object.assign({}, fc, {
+      features: fc.features.filter(f=>_geomTouchesAtl(f && f.geometry))
+    });
+  };
+  return { cone:keep(data.cone), track:keep(data.track), pts:keep(data.pts) };
+}
+
 function stormLabel(props){
   props=props||{};
   const name=props.STORMNAME||props.stormname||props.STORMNME||props.TCNAME||props.STORMTYPE||'Tropical system';
