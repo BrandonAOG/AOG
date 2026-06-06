@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.1.0';
+var CACHE_NAME = 'aog-forms-v2.1.1';
 var DEV_MODE   = false;
 
 // Stores last known cache progress so late-loading pages can request it
@@ -20,6 +20,9 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
+  '⚡ Faster loads — pages now open instantly from cache, then update in the background',
+  '📦 Optimized logo (506 KB → 6 KB) and removed a 486 KB embedded image from Gas Install',
+  '📡 All map & export libraries (Leaflet, XLSX, jsPDF, pdf.js, pdf-lib) now precached for full offline use',
   '🗺️ Property Lookup replaces Sketch Pad (use Site plan annotator) — search for info on any FL address',
   '⚠️ Property Lookup loads offline by design (no errors), but live searches require data/Wi-Fi',
   '📋 Auto-pulls owner, parcel ID, just value, year built, living area & last sale from live county feeds',
@@ -62,6 +65,13 @@ var PRECACHE_URLS = [
 // CDN assets that must be cached on install for 100% offline support
 var PRECACHE_CDN = [
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
 ];
 
 // Google Fonts CSS URLs — cached on install so fonts load offline
@@ -220,7 +230,7 @@ self.addEventListener('fetch', function(event) {
   var accept = request.headers.get('Accept') || '';
 
   if (accept.includes('text/html')) {
-    event.respondWith(networkFirst(request));
+    event.respondWith(staleWhileRevalidate(request));
     return;
   }
 
@@ -311,6 +321,14 @@ function staleWhileRevalidate(request) {
         return networkResponse;
       }).catch(function(err) {
         console.log('[SW] Revalidate failed:', err);
+        var accept = request.headers.get('Accept') || '';
+        // For navigations with no cache + no network, serve the offline page
+        if (accept.includes('text/html')) {
+          var offlineUrl = self.registration.scope + 'offline.html';
+          return caches.match(offlineUrl).then(function(r) {
+            return r || new Response('Service Unavailable', { status: 503 });
+          });
+        }
         // Return a valid empty response so respondWith never gets undefined
         return new Response('', { status: 503 });
       });
