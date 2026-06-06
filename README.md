@@ -12,7 +12,7 @@ A mobile-first Progressive Web App (PWA) built for Always On Generators field te
 
 ## Features
 
-- **11 field tool modules** accessible from a single dashboard
+- **14 field tool modules** accessible from a single dashboard
 - **Offline support** via service worker — works in the field without a connection
 - **Installable PWA** — add to home screen on iOS or Android, works like a native app
 - **Auto-update toast** — notifies technicians when a new version is available, shows changelog
@@ -39,8 +39,17 @@ Structured service report covering battery (voltage, CCA, SOH, brand, date, wate
 ### 📍 Site Visit / Permitting Info Request
 Pre-installation assessment form. Captures new construction status, panel readiness, blueprint availability, meter type, service and breaker size, existing wiring details, generator clearances, window sealing, grounding requirements, run lengths for electric and gas, LP tank size, and other appliance connections. Includes a material table for fittings, wireway, and Polaris taps with footage tracking, and a site plan section for connection mapping.
 
-### ✏️ Sketch Pad
-Full-featured freehand drawing tool for field diagrams and site sketches. Tools: Select, Pen, Line, Arrow, Rectangle, Circle, Text, Measure, and Eraser. Supports solid, dashed, and dotted line styles, adjustable stroke widths, and unit switching (ft / m / in). Includes zoom (+/-), pan (Alt+drag or middle-click), undo/redo (Ctrl+Z / Ctrl+Y), canvas clear, and a keyboard shortcut reference panel. Measure tool labels distances directly on the canvas.
+### 🗺️ Property Lookup
+Live FL address intelligence tool. Searches any Florida address and auto-pulls owner, parcel ID, just value, year built, and living area from live county feeds (Collier, Lee, Charlotte, Sarasota). Detects FEMA flood zone (NFHL) with county DFIRM cross-check, zoning district and required setbacks, ASCE 7-22 wind speed interpolated at the point, electric utility by territory polygon (FPL / LCEC / Duke / TECO), and natural gas vs propane by LDC service territory. Exports a PDF report and Excel, and can import owner/address/flood zone straight into the Estimate sheet. Loads offline by design; live searches require a connection.
+
+### ✏️ Site Annotator
+Field diagram and site-plan annotation tool (replaces the former Sketch Pad). Freehand drawing and markup tools for sketching connection layouts, generator placement, and site measurements directly on a canvas, with a keyboard-shortcut reference panel.
+
+### ✅ Quality Control Checklist
+Structured QC checklist module for verifying completed work against standards before sign-off.
+
+### 🛠️ Service Work
+Service work logging module for capturing field service activity.
 
 ### 📐 Conduit Fill Calculator
 NEC Chapter 9 conduit fill calculator. Supports 11 raceway types: RMC, IMC, EMT, FMC, LFMC, LFNC-A, LFNC-B, PVC Sch 40, PVC Sch 80, HDPE, and ENT. Trade sizes from 3/8" through 6". Add multiple wire types and quantities; calculates total fill percentage and flags green (under 40%), yellow (at 40%), or red (over limit). Displays a recommendation with conduit type and fill status.
@@ -75,7 +84,10 @@ AOG/
 ├── estimate/               # Customer estimate / quote form
 ├── maintenance/            # Generator maintenance report
 ├── site-visit/             # Site visit / permitting info request
-├── sketch-pad/             # Freehand drawing & site diagram tool
+├── property-lookup/        # Live FL address / parcel / flood / utility lookup
+├── site-annotator/         # Field diagram & site-plan annotation tool
+├── qc-checklist/           # Quality control checklist
+├── service-work/           # Service work log
 ├── conduit-fill/           # NEC Chapter 9 conduit fill calculator
 ├── load-calcs/             # NEC 220.82 residential load calculation
 ├── gas-calc/               # Generac gas BTU & pipe sizing calculator
@@ -104,7 +116,7 @@ AOG/
 1. Open the site in Safari
 2. Tap the Share button → *Add to Home Screen* → *Add*
 
-Once installed the app opens full-screen with no browser chrome, and all 11 tools are available offline after the first load.
+Once installed the app opens full-screen with no browser chrome, and all 14 tools are available offline after the first load.
 
 ---
 
@@ -113,7 +125,7 @@ Once installed the app opens full-screen with no browser chrome, and all 11 tool
 When you push changes, bump the version and update the changelog in `sw.js`:
 
 ```js
-var CACHE_NAME = 'aog-forms-v1.0.11'; // bump this every time
+var CACHE_NAME = 'aog-forms-v2.2.0'; // bump this every time
 
 var CHANGELOG = [
   'Description of what changed',
