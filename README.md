@@ -43,7 +43,7 @@ Pre-installation assessment form. Captures new construction status, panel readin
 Live FL address intelligence tool. Searches any Florida address and auto-pulls owner, parcel ID, just value, year built, and living area from live county feeds (Collier, Lee, Charlotte, Sarasota). Detects FEMA flood zone (NFHL) with county DFIRM cross-check, zoning district and required setbacks, ASCE 7-22 wind speed interpolated at the point, electric utility by territory polygon (FPL / LCEC / Duke / TECO), and natural gas vs propane by LDC service territory. Exports a PDF report and Excel, and can import owner/address/flood zone straight into the Estimate sheet. Loads offline by design; live searches require a connection.
 
 ### ✏️ Site Annotator
-Field diagram and site-plan annotation tool (replaces the former Sketch Pad). Freehand drawing and markup tools for sketching connection layouts, generator placement, and site measurements directly on a canvas, with a keyboard-shortcut reference panel.
+Field diagram and site-plan annotation tool. Freehand drawing and markup tools for sketching connection layouts, generator placement, and site measurements directly on a canvas, with a keyboard-shortcut reference panel.
 
 ### ✅ Quality Control Checklist
 Structured QC checklist module for verifying completed work against standards before sign-off.
@@ -54,7 +54,7 @@ Service work logging module for capturing field service activity.
 ### 📐 Conduit Fill Calculator
 NEC Chapter 9 conduit fill calculator. Supports 11 raceway types: RMC, IMC, EMT, FMC, LFMC, LFNC-A, LFNC-B, PVC Sch 40, PVC Sch 80, HDPE, and ENT. Trade sizes from 3/8" through 6". Add multiple wire types and quantities; calculates total fill percentage and flags green (under 40%), yellow (at 40%), or red (over limit). Displays a recommendation with conduit type and fill status.
 
-### ⚡ Load Calculation *(experimental)*
+### ⚡ Load Calculation 
 NEC 2020 Article 220.82 Optional Method residential load calculation. Five-step workflow: (1) general lighting, small appliance & laundry by square footage, (2) HVAC loads, (3) fixed appliances, (4) dryers, (5) cooking equipment. Includes a separate pool panel tab. Outputs demand load in VA and amps, conductor sizing per NEC 310.12 (83% 1&2 family) and 310.16 (75°C standard), feeder sets (1–10), copper or aluminum, and neutral demand. Fuel source (NG/LP) and conductor material are configurable.
 
 ### 🔥 Gas Calculator
