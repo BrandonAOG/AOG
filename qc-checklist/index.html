@@ -83,17 +83,17 @@
      ╚══════════════════════════════════════════════╝ */
 
   /* ── 1a. Screen — Phone (base) ── */
-  --fs-phone-company:       0.75rem;  /* "Always On Generators" text in header           */
-  --fs-phone-title:         0.78rem;  /* "Quality Control Checklist" text in header      */
-  --fs-phone-info-label:    0.45rem;  /* Customer Name / Date / Technician / Gas Crew labels */
-  --fs-phone-info-input:    0.62rem;  /* text typed into Customer Name, Address, Date… fields */
-  --fs-phone-section:       0.55rem;  /* Transfer Switch / Meter / Generator… section bars */
-  --fs-phone-item:          0.52rem;  /* Check All Wire Connections, Vacuumed… item text */
-  --fs-phone-option:        0.47rem;  /* Good / Bad / Yes / No / Installed / Removed labels */
-  --fs-phone-summary:       0.45rem;  /* Overall Job Status / Items Requiring Follow-Up / Additional Comments */
-  --fs-phone-footer:        0.38rem;  /* "Quality Control Checklist · Always On Generators · Confidential" */
-  --fs-phone-pagenum:       0.38rem;  /* "Page 1 of 2" / "Page 2 of 2"                  */
-  --fs-phone-notes:         0.4rem;   /* notes text field next to Good / Bad / Yes / No checkboxes — phone */
+  --fs-phone-company:       1rem;  /* "Always On Generators" text in header           */
+  --fs-phone-title:         1.05rem;  /* "Quality Control Checklist" text in header      */
+  --fs-phone-info-label:    0.75rem;  /* Customer Name / Date / Technician / Gas Crew labels */
+  --fs-phone-info-input:    0.7rem;  /* text typed into Customer Name, Address, Date… fields */
+  --fs-phone-section:       0.7rem;  /* Transfer Switch / Meter / Generator… section bars */
+  --fs-phone-item:          0.7rem;  /* Check All Wire Connections, Vacuumed… item text */
+  --fs-phone-option:        0.7rem;  /* Good / Bad / Yes / No / Installed / Removed labels */
+  --fs-phone-summary:       0.6rem;  /* Overall Job Status / Items Requiring Follow-Up / Additional Comments */
+  --fs-phone-footer:        0.5rem;  /* "Quality Control Checklist · Always On Generators · Confidential" */
+  --fs-phone-pagenum:       0.5rem;  /* "Page 1 of 2" / "Page 2 of 2"                  */
+  --fs-phone-notes:         0.7rem;   /* notes text field next to Good / Bad / Yes / No checkboxes — phone */
 
   /* ── 1b. Screen — iPad ── */
   --fs-ipad-company:        0.75rem;  /* "Always On Generators" text in header           */
@@ -109,17 +109,17 @@
   --fs-ipad-notes:          0.4rem;   /* notes text field next to Good / Bad / Yes / No checkboxes — iPad */
 
   /* ── 1b2. Screen — iPhone (mobile Safari, not iPad) ── */
-  --fs-iphone-company:      0.75rem;  /* "Always On Generators" text in header — iPhone          */
-  --fs-iphone-title:        0.78rem;  /* "Quality Control Checklist" text in header — iPhone      */
-  --fs-iphone-info-label:   0.45rem;  /* Customer Name / Date / Technician / Gas Crew labels — iPhone */
-  --fs-iphone-info-input:   0.62rem;  /* text typed into Customer Name, Address, Date… fields — iPhone */
-  --fs-iphone-section:      0.55rem;  /* Transfer Switch / Meter / Generator… section bars — iPhone */
-  --fs-iphone-item:         0.52rem;  /* Check All Wire Connections, Vacuumed… item text — iPhone */
-  --fs-iphone-option:       0.47rem;  /* Good / Bad / Yes / No / Installed / Removed labels — iPhone */
-  --fs-iphone-summary:      0.45rem;  /* Overall Job Status / Items Requiring Follow-Up — iPhone  */
-  --fs-iphone-footer:       0.38rem;  /* "Quality Control Checklist · Always On Generators · Confidential" — iPhone */
-  --fs-iphone-pagenum:      0.38rem;  /* "Page 1 of 2" / "Page 2 of 2" — iPhone                  */
-  --fs-iphone-notes:        0.4rem;   /* notes text field next to Good / Bad / Yes / No checkboxes — iPhone */
+  --fs-iphone-company:      1rem;  /* "Always On Generators" text in header — iPhone          */
+  --fs-iphone-title:        1.05rem;  /* "Quality Control Checklist" text in header — iPhone      */
+  --fs-iphone-info-label:   .75rem;  /* Customer Name / Date / Technician / Gas Crew labels — iPhone */
+  --fs-iphone-info-input:   0.7rem;  /* text typed into Customer Name, Address, Date… fields — iPhone */
+  --fs-iphone-section:      0.7rem;  /* Transfer Switch / Meter / Generator… section bars — iPhone */
+  --fs-iphone-item:         0.7rem;  /* Check All Wire Connections, Vacuumed… item text — iPhone */
+  --fs-iphone-option:       0.7rem;  /* Good / Bad / Yes / No / Installed / Removed labels — iPhone */
+  --fs-iphone-summary:      0.6rem;  /* Overall Job Status / Items Requiring Follow-Up — iPhone  */
+  --fs-iphone-footer:       0.5rem;  /* "Quality Control Checklist · Always On Generators · Confidential" — iPhone */
+  --fs-iphone-pagenum:      0.5rem;  /* "Page 1 of 2" / "Page 2 of 2" — iPhone                  */
+  --fs-iphone-notes:        0.7rem;   /* notes text field next to Good / Bad / Yes / No checkboxes — iPhone */
 
   /* ── 1c. Screen — Desktop ── */
   --fs-desktop-company:     0.95rem;  /* "Always On Generators" text in header           */
@@ -658,13 +658,23 @@ body.offline { padding-top: 0; }
   flex: 1; border: none; border-bottom: 1px solid rgba(217,119,6,0.3);
   background: transparent; min-height: 14px;
   min-width: 60px; font-size: var(--fs-phone-notes);
+  resize: none; line-height: 1.3; font-family: inherit; color: inherit;
+  padding: 0; overflow: hidden;
+  height: calc(var(--fs-phone-notes) * 1.3 + 2px); /* 1 line by default */
+  white-space: nowrap;
 }
-/* On small screens: notes-line drops to its own full-width row */
+/* On small screens: notes-line drops to its own full-width row, 2 lines tall */
 @media screen and (max-width: 600px) {
   .notes-line {
     flex-basis: 100%;
     margin-left: 18px; /* align with label, past the item-num */
     min-width: 0;
+    height: calc(var(--fs-phone-notes) * 1.3 * 2 + 4px); /* 2 rows */
+    white-space: normal;
+    border: 1px solid rgba(217,119,6,0.3);
+    border-radius: 4px;
+    padding: 2px 4px;
+    overflow: auto;
   }
   .check-item { align-items: flex-start; }
   .item-num { padding-top: 3px; }
@@ -909,7 +919,13 @@ body.dark-mode .summary-sig-line { border-bottom-color: rgba(0,255,200,0.3) !imp
   .opt input[value="removed"],
   .opt input[value="not_done"]  { accent-color: #DC2626 !important; }
   .footer-text   { font-size: var(--fs-print-phone-footer) !important; }
-  .notes-line    { font-size: var(--fs-print-desktop-notes) !important; }
+  .notes-line    { font-size: var(--fs-print-desktop-notes) !important;
+    height: 1.2em !important; min-height: 0 !important; max-height: 1.4em !important;
+    border: none !important; border-bottom: 1px solid rgba(217,119,6,0.3) !important;
+    border-radius: 0 !important; padding: 0 !important; margin-left: 0 !important;
+    line-height: 1.2 !important; overflow: hidden !important;
+    white-space: nowrap !important; resize: none !important;
+    flex: 1 !important; flex-basis: auto !important; vertical-align: bottom !important; }
   .page-num      { font-size: var(--fs-print-phone-footer) !important; }
   .page-footer   { margin-top: 4px !important; padding: var(--pd-print-desktop-footer) !important; }
 }
@@ -928,7 +944,7 @@ body.dark-mode .summary-sig-line { border-bottom-color: rgba(0,255,200,0.3) !imp
   .check-item     { min-height: var(--h-print-ipad-item) !important; padding: var(--pd-print-ipad-item) !important; flex-wrap: nowrap !important; }
   .opt input[type="checkbox"] { width: var(--h-print-ipad-checkbox) !important; height: var(--h-print-ipad-checkbox) !important; min-width: var(--h-print-ipad-checkbox) !important; min-height: var(--h-print-ipad-checkbox) !important; }
   .footer-text    { font-size: var(--fs-print-ipad-footer) !important; }
-  .notes-line     { font-size: var(--fs-print-ipad-notes) !important; }
+  .notes-line     { font-size: var(--fs-print-ipad-notes) !important; height:1.2em!important; min-height:0!important; max-height:1.4em!important; line-height:1.2!important; overflow:hidden!important; white-space:nowrap!important; resize:none!important; padding:0!important; margin-left:0!important; border:none!important; border-bottom:1px solid rgba(217,119,6,0.3)!important; border-radius:0!important; }
   .section        { margin-bottom: var(--gap-print-ipad-sections) !important; }
   .page           { padding: var(--pd-print-ipad-page) !important; }
   .page-header   { padding: var(--pd-print-ipad-header) !important; }
@@ -955,7 +971,7 @@ body.dark-mode .summary-sig-line { border-bottom-color: rgba(0,255,200,0.3) !imp
   html.macos .check-item     { min-height: var(--h-print-macos-item) !important; padding: var(--pd-print-macos-item) !important; }
   html.macos .opt input[type="checkbox"] { width: var(--h-print-macos-checkbox) !important; height: var(--h-print-macos-checkbox) !important; min-width: var(--h-print-macos-checkbox) !important; min-height: var(--h-print-macos-checkbox) !important; }
   html.macos .footer-text    { font-size: var(--fs-print-macos-footer) !important; }
-  html.macos .notes-line     { font-size: var(--fs-print-macos-notes) !important; }
+  html.macos .notes-line     { font-size: var(--fs-print-macos-notes) !important; height:1.2em!important; min-height:0!important; max-height:1.4em!important; line-height:1.2!important; overflow:hidden!important; white-space:nowrap!important; resize:none!important; padding:0!important; margin-left:0!important; border:none!important; border-bottom:1px solid rgba(217,119,6,0.3)!important; border-radius:0!important; }
   html.macos .section        { margin-bottom: var(--gap-print-macos-sections) !important; }
   html.macos .page           { padding: var(--pd-print-macos-page) !important; }
   /* iPad PDF summary→footer gap */
@@ -987,7 +1003,13 @@ body.dark-mode .summary-sig-line { border-bottom-color: rgba(0,255,200,0.3) !imp
   .opt            { font-size: var(--fs-print-desktop-option) !important; }
   .check-item     { min-height: var(--h-print-desktop-item) !important; }
   .footer-text    { font-size: var(--fs-print-desktop-footer) !important; }
-  .notes-line     { font-size: var(--fs-print-desktop-notes) !important; }
+  .notes-line     { font-size: var(--fs-print-desktop-notes) !important;
+    height: 1.2em !important; min-height: 0 !important; max-height: 1.4em !important;
+    line-height: 1.2 !important; overflow: hidden !important;
+    white-space: nowrap !important; resize: none !important;
+    padding: 0 !important; margin-left: 0 !important;
+    border: none !important; border-bottom: 1px solid rgba(217,119,6,0.3) !important;
+    border-radius: 0 !important; vertical-align: bottom !important; }
   .section        { margin-bottom: var(--gap-print-desktop-sections) !important; }
   .page           { padding: var(--pd-print-desktop-page) !important; }
 }
@@ -1061,7 +1083,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="ts_wire" value="bad"><span>Bad</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_1" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_1" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">2.</span>
@@ -1071,7 +1093,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="ts_conduit" value="bad"><span>Bad</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_2" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_2" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">3.</span>
@@ -1081,7 +1103,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="ts_lock" value="bad"><span>Bad</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_3" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_3" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">4.</span>
@@ -1091,7 +1113,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="ts_bond" value="removed"><span>Removed</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_4" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_4" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">5.</span>
@@ -1101,7 +1123,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="ts_vac" value="no"><span>No</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_5" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_5" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
     </div>
 
@@ -1120,7 +1142,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <div class="options">
             <label class="opt check-solo"><input type="checkbox" name="meter_grnd" value="done"></label>
           </div>
-          <input class="notes-line" type="text" name="note_6" placeholder="" autocomplete="off">
+          <textarea class="notes-line" name="note_6" rows="2" placeholder="" autocomplete="off"></textarea>
         </div>
         <div class="check-item">
           <span class="item-num">2.</span>
@@ -1128,7 +1150,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <div class="options">
             <label class="opt check-solo"><input type="checkbox" name="meter_icb" value="done"></label>
           </div>
-          <input class="notes-line" type="text" name="note_7" placeholder="" autocomplete="off">
+          <textarea class="notes-line" name="note_7" rows="2" placeholder="" autocomplete="off"></textarea>
         </div>
       </div>
 
@@ -1141,7 +1163,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
             <label class="opt"><input type="checkbox" name="mm_wire" value="good"><span>Good</span></label>
             <label class="opt"><input type="checkbox" name="mm_wire" value="bad"><span>Bad</span></label>
           </div>
-          <input class="notes-line" type="text" name="note_8" placeholder="" autocomplete="off">
+          <textarea class="notes-line" name="note_8" rows="2" placeholder="" autocomplete="off"></textarea>
         </div>
         <div class="check-item">
           <span class="item-num">2.</span>
@@ -1150,7 +1172,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
             <label class="opt"><input type="checkbox" name="mm_conduit" value="good"><span>Good</span></label>
             <label class="opt"><input type="checkbox" name="mm_conduit" value="bad"><span>Bad</span></label>
           </div>
-          <input class="notes-line" type="text" name="note_9" placeholder="" autocomplete="off">
+          <textarea class="notes-line" name="note_9" rows="2" placeholder="" autocomplete="off"></textarea>
         </div>
         <div class="check-item">
           <span class="item-num">3.</span>
@@ -1159,7 +1181,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
             <label class="opt"><input type="checkbox" name="mm_ptaps" value="good"><span>Good</span></label>
             <label class="opt"><input type="checkbox" name="mm_ptaps" value="bad"><span>Bad</span></label>
           </div>
-          <input class="notes-line" type="text" name="note_10" placeholder="" autocomplete="off">
+          <textarea class="notes-line" name="note_10" rows="2" placeholder="" autocomplete="off"></textarea>
         </div>
         <div class="check-item">
           <span class="item-num">4.</span>
@@ -1168,7 +1190,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
             <label class="opt"><input type="checkbox" name="mm_vac" value="yes"><span>Yes</span></label>
             <label class="opt"><input type="checkbox" name="mm_vac" value="no"><span>No</span></label>
           </div>
-          <input class="notes-line" type="text" name="note_11" placeholder="" autocomplete="off">
+          <textarea class="notes-line" name="note_11" rows="2" placeholder="" autocomplete="off"></textarea>
         </div>
       </div>
     </div>
@@ -1184,7 +1206,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="cp_wire" value="bad"><span>Bad</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_12" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_12" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">2.</span>
@@ -1194,7 +1216,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="cp_gnd" value="no"><span>No</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_13" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_13" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">3.</span>
@@ -1204,7 +1226,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="cp_bond" value="removed"><span>Removed</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_14" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_14" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
     </div>
 
@@ -1219,7 +1241,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="ls_settings" value="no"><span>No</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_15" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_15" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">2.</span>
@@ -1229,7 +1251,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="ls_scroll" value="no"><span>No</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_16" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_16" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
     </div>
 
@@ -1243,7 +1265,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="cs_caulk" value="yes"><span>Yes</span></label>
           <label class="opt"><input type="checkbox" name="cs_caulk" value="no"><span>No</span></label>
         </div>
-        <input class="notes-line" type="text" name="note_17" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_17" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">2.</span>
@@ -1252,7 +1274,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="cs_strap" value="good"><span>Good</span></label>
           <label class="opt"><input type="checkbox" name="cs_strap" value="bad"><span>Bad</span></label>
         </div>
-        <input class="notes-line" type="text" name="note_18" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_18" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
     </div>
 
@@ -1292,7 +1314,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gen_clear" value="bad"><span>Bad</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_19" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_19" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">2.</span>
@@ -1302,7 +1324,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gen_batt" value="bad"><span>Bad</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_20" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_20" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">3.</span>
@@ -1312,7 +1334,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gen_conn" value="bad"><span>Bad</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_21" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_21" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">4.</span>
@@ -1322,7 +1344,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gen_ctrl" value="not_done"><span>Not Done</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_22" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_22" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">5.</span>
@@ -1332,7 +1354,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gen_gas" value="not_done"><span>Not Done</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_23" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_23" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
     </div>
 
@@ -1346,7 +1368,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gt_filled" value="yes"><span>Yes</span></label>
           <label class="opt"><input type="checkbox" name="gt_filled" value="no"><span>No</span></label>
         </div>
-        <input class="notes-line" type="text" name="note_24" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_24" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">2.</span>
@@ -1355,7 +1377,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gt_vac" value="yes"><span>Yes</span></label>
           <label class="opt"><input type="checkbox" name="gt_vac" value="no"><span>No</span></label>
         </div>
-        <input class="notes-line" type="text" name="note_25" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_25" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">3.</span>
@@ -1364,7 +1386,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gt_bond" value="yes"><span>Yes</span></label>
           <label class="opt"><input type="checkbox" name="gt_bond" value="no"><span>No</span></label>
         </div>
-        <input class="notes-line" type="text" name="note_26" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_26" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">4.</span>
@@ -1373,7 +1395,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gt_leak" value="yes"><span>Yes</span></label>
           <label class="opt"><input type="checkbox" name="gt_leak" value="no"><span>No</span></label>
         </div>
-        <input class="notes-line" type="text" name="note_27" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_27" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
     </div>
 
@@ -1388,7 +1410,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gas_leak" value="no"><span>No</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_28" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_28" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">2.</span>
@@ -1398,7 +1420,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gas_threads" value="no"><span>No</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_29" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_29" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">3.</span>
@@ -1408,7 +1430,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gas_supp" value="bad"><span>Bad</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_30" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_30" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">4.</span>
@@ -1418,7 +1440,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gas_sed" value="no"><span>No</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_31" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_31" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">5.</span>
@@ -1428,7 +1450,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gas_vent" value="bad"><span>Bad</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_32" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_32" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">6.</span>
@@ -1438,7 +1460,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="gas_ldc" value="no"><span>No</span></label>
           
         </div>
-        <input class="notes-line" type="text" name="note_33" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_33" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
     </div>
 
@@ -1452,7 +1474,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="site_clean" value="yes"><span>Yes</span></label>
           <label class="opt"><input type="checkbox" name="site_clean" value="no"><span>No</span></label>
         </div>
-        <input class="notes-line" type="text" name="note_34" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_34" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
       <div class="check-item">
         <span class="item-num">2.</span>
@@ -1461,7 +1483,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
           <label class="opt"><input type="checkbox" name="site_placards" value="yes"><span>Yes</span></label>
           <label class="opt"><input type="checkbox" name="site_placards" value="no"><span>No</span></label>
         </div>
-        <input class="notes-line" type="text" name="note_35" placeholder="" autocomplete="off">
+        <textarea class="notes-line" name="note_35" rows="2" placeholder="" autocomplete="off"></textarea>
       </div>
     </div>
 
@@ -1597,6 +1619,7 @@ function clearForm() {
   if (!confirm('Clear all fields?')) return;
   document.querySelectorAll('input[type="text"],input[type="date"]').forEach(function(el){ el.value=''; });
   document.querySelectorAll('input[type="checkbox"]').forEach(function(el){ el.checked=false; });
+  document.querySelectorAll('textarea').forEach(function(el){ el.value=''; });
   var today = new Date().toISOString().split('T')[0];
   document.getElementById('cust_date').value = today;
   document.getElementById('cust_date2').value = today;
@@ -1640,6 +1663,8 @@ function printForm() {
   _debugT0 = performance.now();
 
   var isMobileSafari = document.body.classList.contains('mobile-safari');
+  var isMobileChrome = document.body.classList.contains('mobile-chrome');
+  var isNarrowMobile = isMobileSafari || isMobileChrome;
   var wasDark        = document.body.classList.contains('dark-mode');
 
 
@@ -1739,7 +1764,18 @@ function printForm() {
     document.documentElement.style.colorScheme = '';
     document.body.style.colorScheme = '';
     if (_darkStyleEl) _darkStyleEl.disabled = false;
-    if (wasDark) { document.body.classList.add('dark-mode'); document.documentElement.setAttribute('data-theme','dark'); }
+    if (wasDark) {
+      document.body.classList.add('dark-mode'); document.documentElement.setAttribute('data-theme','dark');
+      // iOS Safari sometimes won't repaint dark mode after the print sheet
+      // closes. The draft auto-saves on every input/change, so a reload is
+      // safe and restores form data via restoreDraft() on load. Chrome
+      // repaints correctly, so only reload on Safari.
+      if (isMobileSafari) {
+        saveDraft();
+        window.location.reload();
+        return;
+      }
+    }
     else { document.body.classList.remove('dark-mode'); document.documentElement.setAttribute('data-theme','light'); }
     var ct = document.getElementById('doc-title-continued');
     if (ct) ct.style.removeProperty('display');
@@ -1750,45 +1786,56 @@ function printForm() {
     applyMeterTab();
   }
 
-  if (isMobileSafari && vp) {
+  if (isNarrowMobile && vp) {
 
     // Build safari-page-fix style
     var fix = document.createElement('style');
     fix.id = 'safari-print-fix';
     fix.textContent = [
-      '@page { size:8.5in 11in; margin:0.15in; }',
+      // Safari print made identical to desktop print output:
+      // force a desktop-width layout, then apply the SAME sizing the
+      // desktop @media print blocks use (desktop vars, phone checkbox size).
+      '@page { size:8.5in 11in; margin:0.18in 0.18in 0.12in 0.18in; }',
       '@media print {',
       '  * { animation:none!important; transition:none!important; }',
       '  html, body { height:auto!important; }',
       '  .wrapper { display:block!important; padding:0!important; gap:0!important; }',
-      '  html { width:820px!important; }',
+      '  html { width:820px!important; font-size:var(--fs-print-desktop-base)!important; }',
       '  body { width:820px!important; transform-origin:top left!important; }',
       '  .page { display:block!important; width:100%!important; max-width:none!important;',
       '    page-break-after:always!important; break-after:page!important;',
       '    page-break-inside:avoid!important; break-inside:avoid!important;',
-      '    padding:var(--pd-print-ipad-page)!important;',
+      '    padding:var(--pd-print-desktop-page)!important;',
       '    border:1.5pt solid #D97706!important; box-shadow:none!important;',
       '    margin:0!important; position:static!important; overflow:visible!important; }',
       '  .page:last-child { page-break-after:auto!important; break-after:auto!important; }',
-      '  .company-name   { font-size:var(--fs-print-ipad-company)!important; }',
-      '  .doc-title      { font-size:var(--fs-print-ipad-title)!important; }',
-      '  .info-label     { font-size:var(--fs-print-ipad-info-label)!important; }',
-      '  .info-input     { font-size:var(--fs-print-ipad-info-input)!important; min-height:var(--h-print-ipad-info-input)!important; }',
-      '  .section-header { font-size:var(--fs-print-ipad-section)!important; padding:var(--pd-print-ipad-section)!important; color:#D97706!important; background:#f5f5f5!important; border-left-color:#D97706!important; }',
-      '  .item-label     { font-size:var(--fs-print-ipad-item)!important; }',
-      '  .item-num       { font-size:var(--fs-print-ipad-option)!important; }',
-      '  .opt            { font-size:var(--fs-print-ipad-option)!important; }',
-      '  .check-item     { min-height:var(--h-print-ipad-item)!important; padding:var(--pd-print-ipad-item)!important; flex-wrap:nowrap!important; }',
-      '  .section        { margin-bottom:var(--gap-print-ipad-sections)!important; }',
-      '  .opt input[type="checkbox"] { width:var(--h-print-ipad-checkbox)!important; height:var(--h-print-ipad-checkbox)!important; min-width:var(--h-print-ipad-checkbox)!important; min-height:var(--h-print-ipad-checkbox)!important; }',
+      '  .page-header    { padding-bottom:3px!important; margin-bottom:4px!important; }',
+      '  .logo-img       { width:38px!important; height:38px!important; }',
+      '  .company-name   { font-size:var(--fs-print-desktop-company)!important; }',
+      '  .doc-title      { font-size:var(--fs-print-desktop-title)!important; }',
+      '  .info-label     { font-size:var(--fs-print-desktop-info-label)!important; }',
+      '  .info-input     { font-size:var(--fs-print-desktop-info-input)!important; min-height:var(--h-print-desktop-info-input)!important; }',
+      '  .info-grid      { grid-template-columns:1fr!important; gap:2px 6px!important; margin-top:3px!important; }',
+      '  #name-date-row, #addr-elec-row, #tech-crew-row { flex-wrap:nowrap!important; }',
+      '  .section-header { font-size:var(--fs-print-desktop-section)!important; margin-bottom:1px!important; color:#D97706!important; background:#f5f5f5!important; border-left-color:#D97706!important; }',
+      '  .item-label     { font-size:var(--fs-print-desktop-item)!important; }',
+      '  .item-num       { font-size:var(--fs-print-desktop-option)!important; }',
+      '  .opt            { font-size:var(--fs-print-desktop-option)!important; gap:2px!important; }',
+      '  .options        { gap:3px!important; }',
+      '  .check-item     { min-height:var(--h-print-desktop-item)!important; padding:var(--pd-print-desktop-item)!important; border-bottom-color:rgba(217,119,6,0.1)!important; flex-wrap:nowrap!important; }',
+      '  .section        { margin-bottom:var(--gap-print-desktop-sections)!important; }',
+      '  .opt input[type="checkbox"] { width:var(--h-print-phone-checkbox)!important; height:var(--h-print-phone-checkbox)!important; min-width:var(--h-print-phone-checkbox)!important; min-height:var(--h-print-phone-checkbox)!important; }',
       '  .opt input[value="good"],.opt input[value="yes"],.opt input[value="installed"],.opt input[value="complete"] { accent-color:#059669!important; }',
       '  .opt input[value="bad"],.opt input[value="no"],.opt input[value="removed"],.opt input[value="not_done"] { accent-color:#DC2626!important; }',
-      '  .footer-text    { font-size:var(--fs-print-ipad-footer)!important; }',
-      '  .notes-line     { font-size:var(--fs-print-ipad-notes)!important; }',
+      '  .footer-text    { font-size:var(--fs-print-desktop-footer)!important; }',
+      '  .notes-line     { font-size:var(--fs-print-desktop-notes)!important; height:1.2em!important; min-height:0!important; max-height:1.4em!important; border:none!important; border-bottom:1px solid rgba(217,119,6,0.3)!important; border-radius:0!important; padding:0!important; margin-left:0!important; line-height:1.2!important; overflow:hidden!important; white-space:nowrap!important; resize:none!important; flex:1!important; flex-basis:auto!important; vertical-align:bottom!important; }',
+      '  .page-num       { font-size:var(--fs-print-phone-footer)!important; }',
       '  #doc-title-continued { display:none!important; }',
-      '  #additional_comments { margin-bottom:var(--gap-print-ipad-summary-footer)!important; }',
-      '  #page2 .page-footer { margin-top:var(--gap-print-ipad-summary-footer)!important; }',
-      '  .page-footer { padding:var(--pd-print-ipad-footer)!important; }',
+      '  .summary-label   { font-size:var(--fs-print-desktop-summary)!important; color:#6B7280!important; }',
+      '  .status-btn      { font-size:var(--fs-print-desktop-summary)!important; min-height:var(--h-print-desktop-item)!important; padding:var(--pd-print-desktop-item)!important; }',
+      '  .status-btn span { font-size:var(--fs-print-desktop-summary)!important; }',
+      '  .summary-textarea{ font-size:var(--fs-print-desktop-summary)!important; }',
+      '  .page-footer { margin-top:4px!important; padding:var(--pd-print-desktop-footer)!important; }',
       '  #page2 .summary-body { padding-bottom:0!important; }',
       '}'
     ].join('\n');
@@ -1811,40 +1858,88 @@ function printForm() {
       mmItems.style.setProperty('display', _meterTab === 'meter-main' ? '' : 'none', 'important');
     }
 
+    // Blur any focused field (e.g. a notes textarea) and dismiss the keyboard
+    // before printing — on iOS Safari, calling window.print() while a textarea
+    // is focused / keyboard is up can cause the print sheet to immediately close.
+    if (document.activeElement && document.activeElement.blur) {
+      document.activeElement.blur();
+    }
+
     requestAnimationFrame(function() {
       window.print();
     });
 
-    // Detect when print dialog closes
+    // ── Restore trigger ──
+    // ── Restore strategy ──
+    // restore() does two jobs: (1) cheap style teardown (remove print
+    // stylesheets) and (2) on Safari, a destructive page reload to repaint
+    // dark mode. We must NOT reload while the print sheet is open, and iOS
+    // gives no clean "sheet closed" event. So we split them:
+    //   • Style teardown happens on whatever print-end signal we can get.
+    //   • The dark-mode reload is deferred until the user's FIRST real
+    //     interaction with the page after printing — if they're touching the
+    //     page, the sheet is definitely gone. No timing races.
+    var isMobile = isNarrowMobile;
     var _restored = false;
-    function _tryRestore() {
+    var _printMql = window.matchMedia ? window.matchMedia('print') : null;
+
+    function _tryRestore(delay) {
       if (_restored) return;
       _restored = true;
-      document.removeEventListener('visibilitychange', _visHandler);
-      window.removeEventListener('focus', _focusHandler);
-      restore();
+      clearTimeout(_safety);
+      window.removeEventListener('afterprint', _apHandler);
+      if (_printMql) {
+        if (_printMql.removeEventListener) _printMql.removeEventListener('change', _mqlHandler);
+        else if (_printMql.removeListener) _printMql.removeListener(_mqlHandler);
+      }
+      setTimeout(restore, delay || 0);
     }
 
-    // visibilitychange — fires on most iOS versions when dialog closes
-    function _visHandler() {
-      if (document.hidden) { _wentHidden = true; }
-      else if (_wentHidden) { _tryRestore(); }
+    // On mobile Safari in dark mode, defer the reload until the user interacts
+    // with the page. A real tap/touch is the ONLY signal that cannot fire while
+    // the print sheet is covering the screen — matchMedia and timers both proved
+    // unreliable on iOS (they signal "print done" while the sheet is still open,
+    // which reloaded into the open sheet and closed it). So there is NO timed
+    // backstop here: we wait for a genuine interaction, however long that takes.
+    function _armDeferredRestore() {
+      if (isMobileSafari && wasDark) {
+        clearTimeout(_safety);
+        function _onInteract() {
+          window.removeEventListener('pointerdown', _onInteract, true);
+          window.removeEventListener('touchstart', _onInteract, true);
+          window.removeEventListener('click', _onInteract, true);
+          _tryRestore(0);
+        }
+        window.addEventListener('pointerdown', _onInteract, true);
+        window.addEventListener('touchstart', _onInteract, true);
+        window.addEventListener('click', _onInteract, true);
+      } else {
+        // Not the reload case — safe to tear down immediately.
+        _tryRestore(isMobile ? 300 : 0);
+      }
     }
-    var _wentHidden = false;
-    document.addEventListener('visibilitychange', _visHandler);
 
-    // focus — fires on iPhone when returning from print dialog
-    function _focusHandler() { if (_wentHidden) _tryRestore(); }
-    window.addEventListener('focus', _focusHandler);
+    // matchMedia('print') change -> matches:false means print media stopped.
+    var _sawPrint = false;
+    function _mqlHandler(mql) {
+      if (mql.matches) { _sawPrint = true; }
+      else if (_sawPrint) { _armDeferredRestore(); }
+    }
+    if (_printMql) {
+      if (_printMql.addEventListener) _printMql.addEventListener('change', _mqlHandler);
+      else if (_printMql.addListener) _printMql.addListener(_mqlHandler);
+    }
 
-    // pageshow — another Safari event that fires on return
-    window.addEventListener('pageshow', function _psHandler() {
-      window.removeEventListener('pageshow', _psHandler);
-      setTimeout(function() { _tryRestore(); }, 300);
-    });
+    // afterprint — fallback for engines without matchMedia('print') support.
+    function _apHandler() { if (!isMobile && !_sawPrint) _tryRestore(0); }
+    window.addEventListener('afterprint', _apHandler);
 
-    // Fallback — shortened to 2s just in case nothing else fires
-    setTimeout(function() { _tryRestore(); }, 2000);
+    // Safety net — cleans up if nothing else fires. NOT armed on the dark
+    // Safari path: there the reload must wait for a genuine interaction, and a
+    // timer could fire into a still-open print sheet (which closes it).
+    var _safety = (isMobileSafari && wasDark)
+      ? null
+      : setTimeout(function() { _tryRestore(0); }, 30000);
 
   } else {
     window.addEventListener('afterprint', restore);
