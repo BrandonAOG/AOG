@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Always On Generators - Maintenance Report</title>
@@ -99,7 +99,7 @@ body.dark-mode {
   display: flex;
   flex-direction: column;
   min-height: -webkit-fill-available;
-  min-height: 100vh;
+  min-height: auto;
   padding: 0;
   box-sizing: border-box;
   transition: background-color 0.3s ease, box-shadow 0.3s ease;
@@ -326,6 +326,30 @@ body.dark-mode .btn:hover { background: rgba(0,255,200,0.12); border-color: #00F
 }
 @media (max-width: 480px) { .content { padding: 6px 4px; } }
 
+/* Mobile: Customer & Job Info — each label+input pair on its own line */
+@media screen and (max-width: 600px) {
+  /* Make everything bigger on mobile screen (rem-based text scales from this) */
+  html { font-size: 19px !important; }
+  #cust-info-body .field-row,
+  #cust-info-body .field-row-nowrap {
+    flex-wrap: wrap !important; row-gap: 4px !important; column-gap: 6px !important;
+  }
+  #cust-info-body .field-row label {
+    flex: 0 0 70px !important; width: 70px !important; text-align: left !important; margin: 0 !important;
+  }
+  #cust-info-body .field-row input,
+  #cust-info-body .field-row select {
+    flex: 1 1 calc(100% - 80px) !important; width: auto !important;
+    min-width: 0 !important; max-width: none !important;
+  }
+  /* Override the inline widths on Tech/Model/Serial/Hrs and the date cap */
+  #cust-info-body #tech, #cust-info-body #model, #cust-info-body #serial,
+  #cust-info-body #hours, #cust-info-body #date, #cust-info-body #name,
+  #cust-info-body #number {
+    width: auto !important; max-width: none !important; flex: 1 1 calc(100% - 80px) !important;
+  }
+}
+
 /* ── SECTIONS ── */
 .section {
   border: 1px solid var(--border);
@@ -500,11 +524,17 @@ input.short { width: 48px; min-width: 48px; flex-shrink: 0; }
 input.med   { width: 80px; flex: 0 0 auto; }
 input.long  { flex: 1; min-width: 70px; }
 /* Exercise Schedule: ~10 characters wide on screen */
-@media screen { #exercisetime { width: 15ch !important; min-width: 15ch !important; flex: 0 0 auto !important; } }
-/* Name/Job/Date row: Name fills half the page, Job# and Date split the rest */
-#name-job-date-row #name   { flex: 2 1 0 !important; width: auto !important; min-width: 0 !important; }
-#name-job-date-row #number { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
-#name-job-date-row #date   { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+/* Exercise Schedule, Generator Voltage, Voltage During Simulation:
+   widened ~5 characters, on screen and in all prints. */
+#exercisetime { width: 20ch !important; min-width: 20ch !important; flex: 0 0 auto !important; }
+#genvolt, #simvolt { width: 12ch !important; min-width: 12ch !important; flex: 0 0 auto !important; }
+/* Name/Job/Date row: Name fills half the page, Job# and Date split the rest
+   (larger screens only — on mobile each field stacks on its own line). */
+@media screen and (min-width: 601px) {
+  #name-job-date-row #name   { flex: 2 1 0 !important; width: auto !important; min-width: 0 !important; }
+  #name-job-date-row #number { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+  #name-job-date-row #date   { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+}
 
 textarea {
   width: 100%;
@@ -652,7 +682,7 @@ body.dark-mode .yn-group .yn-n:checked + .yn-label-n { background: #DC2626; colo
   flex-wrap: wrap;
   gap: 4px;
   border-top: 1px solid var(--border-bright);
-  margin-top: auto;
+  margin-top: 0;
   flex-shrink: 0;
   transition: all 0.3s ease;
   width: 100%;
@@ -1070,7 +1100,7 @@ body.dark-mode .action-bar {
     <!-- Customer & Job Info -->
     <div class="section">
       <div class="section-header">Customer & Job Info</div>
-      <div class="section-body">
+      <div class="section-body" id="cust-info-body">
         <div class="field-row field-row-nowrap" id="name-job-date-row">
           <label for="name">Name</label>
           <input type="text" id="name" class="long" placeholder="Name">
