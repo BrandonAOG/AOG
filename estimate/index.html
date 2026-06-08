@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scatextarea { ... min-height: 44px; height: 44px; ... }le=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Generator Installation Estimate</title>
@@ -682,7 +682,7 @@
   --pb-content-print-desktop:   4px;  /* print desktop                                       */
 
   /* ---- ACTION BAR CLEARANCE ---- */
-  --action-bar-clearance-phone:   50px;  /* pushes page down so header clears the fixed action bar (phone) */
+  --action-bar-clearance-phone:   calc(50px + env(safe-area-inset-top, 0px));  /* pushes page down so header clears the fixed action bar (phone), incl. notch inset */
   --action-bar-clearance-ipad:    50px;  /* (iPad)                                                         */
   --action-bar-clearance-desktop: 50px;  /* (desktop)                                                      */
 
@@ -887,6 +887,18 @@ body.offline { padding-top: 0; }
 body.dark-mode .toolbar {
   background: linear-gradient(90deg, rgba(15,21,53,0.8) 0%, rgba(26,40,71,0.6) 100%);
   border-bottom-color: rgba(0,255,200,0.1);
+}
+
+/* Narrow phones: scroll the toolbar left/right instead of shrinking buttons */
+@media screen and (max-width: 600px) {
+  .toolbar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none;
+  }
+  .toolbar::-webkit-scrollbar { display: none; }
+  .toolbar > *, .toolbar .btn { flex: 0 0 auto !important; width: auto !important; }
 }
 
 .btn {
@@ -1337,6 +1349,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
   padding: 4px 8px;
   padding-top: max(4px, env(safe-area-inset-top, 4px));
   display: flex; gap: 4px; flex-wrap: nowrap; align-items: center;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   box-shadow: 0 4px 18px rgba(0,0,0,0.3);
   border-bottom: 1px solid var(--border-bright);
   transition: background-color 0.3s ease; box-sizing: border-box;
@@ -1350,7 +1363,7 @@ body.dark-mode .action-bar {
   padding: 6px 8px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
   border: 1px solid rgba(217,119,6,0.4); background: rgba(217,119,6,0.05);
   border-radius: 0; cursor: pointer; color: var(--cyan); text-transform: uppercase;
-  font-family: Arial, sans-serif; white-space: nowrap; flex: 1; min-width: 0;
+  font-family: Arial, sans-serif; white-space: nowrap; flex: 0 0 auto; min-width: 0;
   text-align: center; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
   clip-path: polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
@@ -1366,12 +1379,9 @@ body.dark-mode .action-bar .ab-btn { color: #00FFC8; border-color: rgba(0,255,20
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
 body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08); border-color: rgba(0,255,200,0.2); color: #00FFC8; }
+.action-bar::-webkit-scrollbar { display: none; }
 @media (max-width: 480px) {
   .action-bar { padding: 4px 4px; gap: 3px; }
-  .action-bar .ab-btn { padding: 6px 4px; font-size: 9px; }
-}
-@media (max-width: 360px) {
-  .action-bar .ab-btn { font-size: 8px; padding: 6px 3px; letter-spacing: 0; }
 }
 
 /* ===== iPAD SCREEN — all elements ===== */
@@ -3181,6 +3191,12 @@ function capturePageToCanvas() {
       '.grid-3 { grid-template-columns: 1fr 1fr 1fr !important; }',
       '.grid-4 { grid-template-columns: repeat(4, 1fr) !important; }',
       '.logo-img { width: 48px !important; height: 48px !important; object-fit: contain !important; display: block !important; }',
+      // Tighten the space between the top page border and the header.
+      '#page { padding-top: 0 !important; }',
+      '.content { padding-top: 0 !important; }',
+      '.header { min-height: 0 !important; padding-top: 2px !important; padding-bottom: 4px !important; margin-top: 0 !important; }',
+      '.company-name { font-size: 0.85rem !important; line-height: 1.05 !important; }',
+      '.doc-title { font-size: 0.95rem !important; }',
       '.section-header::before, .col-label::before { display: none !important; content: none !important; }',
       '#transfer-switch-row .section-body { padding-bottom: 0px !important; }',
       '#transfer-switch-row .inline-row:last-child { min-height: 0 !important; height: auto !important; max-height: fit-content !important; margin-bottom: 0 !important; padding-bottom: 0 !important; flex-wrap: nowrap !important; overflow: hidden !important; }',
@@ -3295,6 +3311,15 @@ function capturePageToCanvas() {
           scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false, imageTimeout: 15000,
           width: CAPTURE_W, height: CAPTURE_H, windowWidth: CAPTURE_W, scrollX: 0, scrollY: 0,
           onclone: function(clonedDoc) {
+            // Hide placeholder hint text in the captured image (clone only —
+            // live DOM untouched). Strip the attribute AND force transparent.
+            clonedDoc.querySelectorAll('input[placeholder], textarea[placeholder]').forEach(function(el){
+              el.setAttribute('placeholder', '');
+            });
+            var _phStyle = clonedDoc.createElement('style');
+            _phStyle.textContent = 'input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!important;}' +
+              'input::-webkit-input-placeholder,textarea::-webkit-input-placeholder{color:transparent!important;opacity:0!important;}';
+            clonedDoc.head.appendChild(_phStyle);
             // Strip dark-mode and seasonal classes + their style tags from clone
             var cb = clonedDoc.body;
             cb.classList.remove('dark-mode');
@@ -3379,7 +3404,7 @@ function capturePageToCanvas() {
           }
         }).then(function(canvas) {
           restore();
-          resolve(cropCanvasToContent(canvas));
+          resolve(addCaptureMargin(cropCanvasToContent(canvas)));
         }).catch(function(err) {
           restore();
           reject(err);
@@ -3391,6 +3416,22 @@ function capturePageToCanvas() {
     }); });
     });
   });
+}
+
+// Wrap a captured canvas in a uniform 0.15in white margin on all sides.
+// 0.15in relative to an 8.5in-wide page = canvas.width * 0.15/8.5 px.
+function addCaptureMargin(canvas) {
+  try {
+    var m = Math.round(canvas.width * 0.15 / 8.5);
+    var out = document.createElement('canvas');
+    out.width  = canvas.width  + m * 2;
+    out.height = canvas.height + m * 2;
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(canvas, m, m);
+    return out;
+  } catch (e) { return canvas; }
 }
 
 // ── iPHONE SAVE ──
