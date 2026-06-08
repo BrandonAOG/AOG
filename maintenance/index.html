@@ -993,7 +993,7 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   body.mobile-chrome .field-row { margin-bottom: 1px !important; }
   body.mobile-chrome .section-body { padding: 2px 6px !important; }
 }
-@media print and (min-width: 768px) and (max-width: 1366px) {
+@media print and (min-width: 768px) {
   html { font-size: 18px !important; }
   html, body { width: 8.5in !important; max-width: 8.5in !important; }
   .form-page, .page { width: 100% !important; max-width: 100% !important; margin: 0 auto !important; padding: 0.1in !important; box-sizing: border-box !important; }
@@ -1535,9 +1535,11 @@ function openPrintPreview() {
   var isNarrowMobile = isMobileSafari || isMobileChrome;
   var wasDark        = document.body.classList.contains('dark-mode');
 
-  // ── Set document title for PDF filename ──
+  // ── Set document title for PDF filename (name + address + report) ──
   var prevTitle = document.title;
-  var cName = (document.getElementById('name') ? document.getElementById('name').value : '' || '').trim();
+  var _nm = (document.getElementById('name')    && document.getElementById('name').value    || '').trim();
+  var _ad = (document.getElementById('address') && document.getElementById('address').value || '').trim();
+  var cName = [_nm, _ad].filter(Boolean).join(' ');
   document.title = (cName ? cName + ' - ' : '') + 'Maintenance Report';
 
   // ── Strip dark mode ──
@@ -1614,7 +1616,7 @@ function openPrintPreview() {
     var fix = document.createElement('style');
     fix.id = 'safari-print-fix';
     fix.textContent = [
-      (isMobileSafari ? '@page { margin: 0 !important; }' : ''),
+      (isMobileSafari ? '@page { size: 8.5in 11in; margin: 0 !important; }' : ''),
       '@media print {',
       '  * { animation:none!important; transition:none!important; }',
       '  html, body { height:auto!important; }',
@@ -1726,17 +1728,27 @@ function capturePageToCanvas() {
     const logoImg     = page.querySelector('.logo-img');
     const logoOrigSrc = logoImg ? logoImg.getAttribute('src') : null;
 
-    const CAPTURE_WIDTH = 1050;
+    // Render at the desktop layout width; the letter canvas is 1632px wide, so
+    // drawing this up to it magnifies the whole page (text included) ~2x
+    // uniformly — bigger text with the layout fully intact.
+    const CAPTURE_WIDTH = 820;
     const PAPER_RATIO   = 11 / 8.5;
+    const CAPTURE_PAGE_H = Math.round(CAPTURE_WIDTH * PAPER_RATIO); // full 8.5x11 height (~1061px)
 
     function doCapture() {
       const prevWidth     = page.style.width;
       const prevMaxWidth  = page.style.maxWidth;
+      const prevHeight    = page.style.height;
+      const prevMinHeight = page.style.minHeight;
       const prevMarginTop = page.style.marginTop;
       const prevBodyPad   = document.body.style.padding;
 
       page.style.width     = CAPTURE_WIDTH + 'px';
       page.style.maxWidth  = CAPTURE_WIDTH + 'px';
+      // Grow the page to a full 8.5x11 sheet so the capture is always a proper
+      // portrait letter page (no trailing white space, no cropping needed).
+      page.style.height    = CAPTURE_PAGE_H + 'px';
+      page.style.minHeight = CAPTURE_PAGE_H + 'px';
       page.style.marginTop = '0';
       document.body.style.padding = '0';
 
@@ -1748,17 +1760,67 @@ function capturePageToCanvas() {
         '  display: none !important; position: static !important;',
         '  height: 0 !important; padding: 0 !important; overflow: hidden !important;',
         '}',
-        '.theme-toggle-btn { display: none !important; }'
+        '.theme-toggle-btn { display: none !important; }',
+        // Hide placeholder hint text in the captured image.
+        'input::placeholder, textarea::placeholder { color: transparent !important; opacity: 0 !important; }',
+        'input::-webkit-input-placeholder, textarea::-webkit-input-placeholder { color: transparent !important; opacity: 0 !important; }',
+        // html2canvas renders input text high in the box; push it onto the line.
+        'input[type="text"], input[type="date"], input[type="number"] {',
+        '  line-height: 1 !important; vertical-align: bottom !important;',
+        '  padding-top: 6px !important; padding-bottom: 0 !important;',
+        '}'
       ].join('\n');
       document.head.appendChild(forceStyle);
+      // Strip placeholder attributes during capture (html2canvas can paint them
+      // even with ::placeholder transparent). Restored in restoreCapture.
+      var _phSaved = [];
+      page.querySelectorAll('[placeholder]').forEach(function(el){
+        _phSaved.push([el, el.getAttribute('placeholder')]);
+        el.setAttribute('placeholder', '');
+      });
+
+      // html2canvas does NOT wrap <textarea> text (it paints one straight line)
+      // and renders input text too high. Swap each notes textarea for a <div>
+      // (divs wrap correctly), and push info-field text down onto its line.
+      var _noteProxies = [];
+      function buildNoteProxies() {
+        page.querySelectorAll('textarea').forEach(function(el){
+          var cs = getComputedStyle(el);
+          var div = document.createElement('div');
+          div.className = 'notes-proxy';
+          div.textContent = el.value || '';
+          div.style.cssText =
+            'font-family:' + cs.fontFamily + ';font-size:' + cs.fontSize + ';' +
+            'color:' + cs.color + ';line-height:1.4;' +
+            'white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;' +
+            'border:' + cs.borderTopWidth + ' solid ' + cs.borderTopColor + ';' +
+            'background:#fff;box-sizing:border-box;padding:' + cs.padding + ';' +
+            'width:100%;min-height:' + cs.height + ';border-radius:' + cs.borderRadius + ';';
+          el.style.display = 'none';
+          el.parentNode.insertBefore(div, el.nextSibling);
+          _noteProxies.push({ ta: el, div: div });
+        });
+      }
+      function removeNoteProxies() {
+        _noteProxies.forEach(function(p){
+          if (p.div && p.div.parentNode) p.div.parentNode.removeChild(p.div);
+          p.ta.style.display = '';
+        });
+        _noteProxies = [];
+      }
 
       function restoreCapture() {
         page.style.width     = prevWidth;
         page.style.maxWidth  = prevMaxWidth;
+        page.style.height    = prevHeight;
+        page.style.minHeight = prevMinHeight;
         page.style.marginTop = prevMarginTop;
         document.body.style.padding = prevBodyPad;
         const fs = document.getElementById('capture-force-style');
         if (fs) fs.remove();
+        removeNoteProxies();
+        _phSaved.forEach(function(p){ if (p[1] != null) p[0].setAttribute('placeholder', p[1]); });
+        _phSaved = [];
         if (logoImg && logoOrigSrc) {
           logoImg.src = logoOrigSrc;
           logoImg.style.visibility = '';
@@ -1767,6 +1829,7 @@ function capturePageToCanvas() {
 
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          buildNoteProxies();
           html2canvas(page, {
             scale: 2,
             useCORS: true,
@@ -1774,7 +1837,7 @@ function capturePageToCanvas() {
             backgroundColor: '#ffffff',
             logging: false,
             width:       CAPTURE_WIDTH,
-            height:      page.scrollHeight,
+            height:      CAPTURE_PAGE_H,
             windowWidth: CAPTURE_WIDTH,
             scrollX: 0,
             scrollY: 0,
@@ -1786,18 +1849,21 @@ function capturePageToCanvas() {
               el.classList.contains('theme-toggle-btn')
           }).then(srcCanvas => {
             restoreCapture();
+            // The page was grown to a full 8.5x11 sheet, so the source is
+            // already a letter page. Draw it inset by a uniform 0.15in margin
+            // onto a full letter canvas — always a clean portrait page.
             const LETTER_W = 1632;
             const LETTER_H = Math.round(LETTER_W * PAPER_RATIO);
+            const MARGIN   = Math.round(LETTER_W * 0.15 / 8.5); // ~29px
+            const drawW    = LETTER_W - MARGIN * 2;
+            const drawH    = LETTER_H - MARGIN * 2;
             const letterCanvas = document.createElement('canvas');
             letterCanvas.width  = LETTER_W;
             letterCanvas.height = LETTER_H;
             const ctx = letterCanvas.getContext('2d');
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, LETTER_W, LETTER_H);
-            const scale   = LETTER_W / srcCanvas.width;
-            const scaledH = Math.round(srcCanvas.height * scale);
-            const drawH   = Math.min(scaledH, LETTER_H);
-            ctx.drawImage(srcCanvas, 0, 0, srcCanvas.width, srcCanvas.height, 0, 0, LETTER_W, drawH);
+            ctx.drawImage(srcCanvas, 0, 0, srcCanvas.width, srcCanvas.height, MARGIN, MARGIN, drawW, drawH);
             resolve(letterCanvas);
           }).catch(err => {
             restoreCapture();
@@ -1851,7 +1917,9 @@ function saveForIPhone() {
 
   const img = document.createElement('img');
   img.style.cssText = 'width:100%;display:block;border:none;';
-  img.alt = 'AOG Maintenance Report';
+  var _nmI = (document.getElementById('name')    && document.getElementById('name').value    || '').trim();
+  var _adI = (document.getElementById('address') && document.getElementById('address').value || '').trim();
+  img.alt = [_nmI, _adI, 'Maintenance Report'].filter(Boolean).join(' ');
 
   overlay.appendChild(closeBtn);
   overlay.appendChild(lbl);
@@ -1893,8 +1961,12 @@ function saveForAndroid() {
   setTimeout(() => {
     capturePageToCanvas().then(canvas => {
       try {
+        const _nm = (document.getElementById('name')    && document.getElementById('name').value    || '').trim();
+        const _ad = (document.getElementById('address') && document.getElementById('address').value || '').trim();
+        const _base = [_nm, _ad, 'Maintenance Report'].filter(Boolean).join(' ')
+                        .replace(/[\/\\:*?"<>|]+/g, '').replace(/\s+/g, '_').slice(0, 120);
         const link = document.createElement('a');
-        link.download = 'AOG_Maintenance_Report.jpg';
+        link.download = (_base || 'AOG_Maintenance_Report') + '.jpg';
         link.href = canvas.toDataURL('image/jpeg', 0.92);
         document.body.appendChild(link);
         link.click();
