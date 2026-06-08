@@ -1809,6 +1809,56 @@ function capturePageToCanvas() {
         _noteProxies = [];
       }
 
+      // html2canvas won't render the checked-state color of radios/checkboxes,
+      // so overlay a colored span for each during capture. Radios render round.
+      var _boxProxies = [];
+      function buildBoxProxies() {
+        page.querySelectorAll('.check-item input[type="checkbox"], .check-item input[type="radio"]').forEach(function(el){
+          var cs = getComputedStyle(el);
+          var size = parseFloat(cs.width) || 14;
+          var isRadio = el.type === 'radio';
+          var v = (el.getAttribute('value') || '').toLowerCase();
+          var isGood = (v === 'good' || v === 'y' || v === 'yes' || v === 'full' || v === 'normal' || v === 'clean');
+          var isBad  = (v === 'n' || v === 'no' || v === 'poor' || v === 'replace' || v === 'abn' || v === 'empty' || v === 'broken' || v === 'damaged');
+          var fill = isGood ? '#059669' : (isBad ? '#DC2626' : '#0891b2');
+          var box = document.createElement('span');
+          box.className = 'box-proxy';
+          var base = 'display:inline-block;box-sizing:border-box;flex-shrink:0;' +
+                     'width:' + size + 'px;height:' + size + 'px;' +
+                     'border-radius:' + (isRadio ? '50%' : '2px') + ';' +
+                     'vertical-align:middle;position:relative;margin:' + cs.margin + ';';
+          if (el.checked) {
+            box.style.cssText = base + 'background:' + fill + ';border:1.5px solid ' + fill + ';';
+            if (isRadio) {
+              // inner white dot
+              var dot = document.createElement('span');
+              dot.style.cssText = 'position:absolute;left:50%;top:50%;width:' + (size*0.4) +
+                'px;height:' + (size*0.4) + 'px;background:#fff;border-radius:50%;transform:translate(-50%,-50%);';
+              box.appendChild(dot);
+            } else {
+              // white checkmark
+              var chk = document.createElement('span');
+              chk.style.cssText = 'position:absolute;left:50%;top:48%;width:' + (size*0.28) +
+                'px;height:' + (size*0.55) + 'px;border:solid #fff;border-width:0 2px 2px 0;' +
+                'transform:translate(-50%,-55%) rotate(45deg);';
+              box.appendChild(chk);
+            }
+          } else {
+            box.style.cssText = base + 'background:#fff;border:1.5px solid #9CA3AF;';
+          }
+          el.style.display = 'none';
+          el.parentNode.insertBefore(box, el.nextSibling);
+          _boxProxies.push({ input: el, box: box });
+        });
+      }
+      function removeBoxProxies() {
+        _boxProxies.forEach(function(p){
+          if (p.box && p.box.parentNode) p.box.parentNode.removeChild(p.box);
+          p.input.style.display = '';
+        });
+        _boxProxies = [];
+      }
+
       function restoreCapture() {
         page.style.width     = prevWidth;
         page.style.maxWidth  = prevMaxWidth;
@@ -1819,6 +1869,7 @@ function capturePageToCanvas() {
         const fs = document.getElementById('capture-force-style');
         if (fs) fs.remove();
         removeNoteProxies();
+        removeBoxProxies();
         _phSaved.forEach(function(p){ if (p[1] != null) p[0].setAttribute('placeholder', p[1]); });
         _phSaved = [];
         if (logoImg && logoOrigSrc) {
@@ -1830,6 +1881,7 @@ function capturePageToCanvas() {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           buildNoteProxies();
+          buildBoxProxies();
           html2canvas(page, {
             scale: 2,
             useCORS: true,
