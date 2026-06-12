@@ -203,7 +203,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
 
 /* SHORTCUTS OVERLAY */
-#shortcuts{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#shortcuts{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 #shortcuts.show{display:flex}
 #shortcuts-box{background:var(--surf);border:1px solid var(--b2);border-radius:12px;padding:20px 28px;max-width:min(860px,92vw);width:92vw;max-height:88vh;overflow-y:auto;overflow-x:hidden}
 #shortcuts-box h2{font-size:13px;letter-spacing:3px;color:var(--acc2);text-transform:uppercase;margin-bottom:14px;font-family:'Segoe UI',sans-serif}
@@ -640,7 +640,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 @media print{#aog-nav,#customer-bar{display:none!important;}}
 
 /* ══ NEW CANVAS DIALOG ══════════════════════════════════════════ */
-#new-canvas-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center}
+#new-canvas-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.78);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center}
 #new-canvas-overlay.show{display:flex}
 #new-canvas-dlg{background:var(--surf);border:1px solid var(--b2);border-radius:16px;padding:22px 26px;min-width:310px;max-width:96vw;box-shadow:0 16px 64px rgba(0,0,0,.7);animation:dlgPop .18s ease}
 @keyframes dlgPop{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
@@ -1068,7 +1068,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
   <!-- VIEWPORT -->
   <div id="viewport">
-    <div id="img-sel-bar" style="display:none;position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(14,14,20,0.96);border:1.5px solid rgba(0,212,255,0.55);border-radius:14px;padding:8px 14px;align-items:center;gap:10px;z-index:50;pointer-events:auto;white-space:nowrap;box-shadow:0 4px 24px rgba(0,0,0,0.6);backdrop-filter:blur(8px);">
+    <div id="img-sel-bar" style="display:none;position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(14,14,20,0.96);border:1.5px solid rgba(0,212,255,0.55);border-radius:14px;padding:8px 14px;align-items:center;gap:10px;z-index:50;pointer-events:auto;white-space:nowrap;box-shadow:0 4px 24px rgba(0,0,0,0.6);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);">
   <!-- Drag handle / label -->
   <span style="font-size:10px;font-weight:700;color:#00D4FF;text-transform:uppercase;letter-spacing:.08em;user-select:none;">✦ Image</span>
   <div style="width:1px;height:20px;background:rgba(255,255,255,0.12);flex-shrink:0"></div>
@@ -1276,7 +1276,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 </div>
 
 <!-- AUTO-SAVE RESTORE DIALOG -->
-<div id="restore-overlay" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);align-items:center;justify-content:center"></div>
+<div id="restore-overlay" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.8);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);align-items:center;justify-content:center"></div>
 <div id="restore-dlg" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:301;background:var(--surf);border:1.5px solid #FBBF24;border-radius:12px;padding:22px 24px;min-width:300px;max-width:90vw;box-shadow:0 0 40px rgba(251,191,36,0.3)">
   <div style="font-family:'Orbitron',monospace;font-size:0.75rem;font-weight:700;letter-spacing:3px;color:#FBBF24;margin-bottom:6px;text-transform:uppercase">⚡ Unsaved Session Found</div>
   <div id="restore-meta" style="font-size:11px;color:var(--txt2);margin-bottom:16px;line-height:1.8"></div>
@@ -2037,7 +2037,14 @@ function _cmtAutoGrow(c){
 function fitCommentToText(c, text, skipRender, mode){
   mode = mode || 'snap';
   text = (text!==undefined && text!==null ? text : (c.text||''));
-  var fs   = cmtEffFontSize(c);           // scale-locked canvas px
+  // CRITICAL: use EXACTLY the font size drawCommentBox will render with.
+  // cmtEffFontSize returns a fractional px value (points × DPI factor); the
+  // renderer rounds it (Math.max(8, Math.round(...))). Sizing the box with the
+  // raw fractional value while rendering with the rounded one meant that when
+  // rounding went UP, text wrapped wider and each line sat lower than the box
+  // was fitted for — the last line failed the renderer's clip test and the
+  // bottom text line vanished on commit (click-away).
+  var fs   = Math.max(8, Math.round(cmtEffFontSize(c)));   // matches renderer at sc=1
   var lineH= fs*1.4;
   // Padding: snap modes hug tight (CMT_SNAP_PAD on every side); live grow/draw
   // keeps the looser CMT_PAD so the cursor isn't jammed against the border.
@@ -2245,9 +2252,27 @@ function updateFillSwatch(){
 // ── iOS GESTURE & PULL-TO-REFRESH PREVENTION ────────────────
 // gesturestart/change/end are WebKit-only events. If not blocked,
 // Safari intercepts pinch as a page zoom and resets the view.
-document.addEventListener('gesturestart',  function(e){ e.preventDefault(); e.stopPropagation(); },{passive:false});
-document.addEventListener('gesturechange', function(e){ e.preventDefault(); e.stopPropagation(); },{passive:false});
-document.addEventListener('gestureend',    function(e){ e.preventDefault(); e.stopPropagation(); },{passive:false});
+// BONUS: on desktop Safari (macOS) a trackpad pinch fires ONLY these gesture
+// events (not the ctrlKey+wheel that Chrome/Firefox synthesize), so without
+// using e.scale here pinch-zoom was completely dead in desktop Safari.
+// On iOS the touch handlers already implement pinch, so gesture-zoom is
+// applied only on non-touch (desktop) devices to avoid double-zooming.
+var _gestZoom0=null;
+var _isDesktopGesture=function(){ return !IS_IOS && navigator.maxTouchPoints===0; };
+document.addEventListener('gesturestart',  function(e){
+  e.preventDefault(); e.stopPropagation();
+  _gestZoom0 = _isDesktopGesture() ? zoom : null;
+},{passive:false});
+document.addEventListener('gesturechange', function(e){
+  e.preventDefault(); e.stopPropagation();
+  if(_gestZoom0!==null && typeof e.scale==='number' && e.scale>0 && typeof zoomAt==='function'){
+    var r=viewport.getBoundingClientRect();
+    var target=Math.max(0.05,Math.min(12,_gestZoom0*e.scale));
+    var f=target/zoom;
+    if(f && isFinite(f) && Math.abs(f-1)>0.001) zoomAt(f, e.clientX-r.left, e.clientY-r.top);
+  }
+},{passive:false});
+document.addEventListener('gestureend',    function(e){ e.preventDefault(); e.stopPropagation(); _gestZoom0=null; },{passive:false});
 
 // Block touchmove everywhere EXCEPT designated scrollable zones.
 // Allowed: .panel-body (layer/props panels), #tb (toolbar horizontal scroll), #sb (subbar)
@@ -2298,6 +2323,7 @@ var compositedSnap=null;
 var undoStack=[], redoStack=[];
 var polyPoints=[], polyActive=false;
 var leaderStep=0;
+var _leaderDragPlacing=false;   // hold-and-drag leader placement in progress
 var _suppressLeaderPlaceUntil=0; // ignore placement clicks right after a select/drag/deselect
 // ── TEXT FORMATTING STATE ──
 var textFontFamily = 'Arial';
@@ -3161,6 +3187,12 @@ function setupCtx(ctx){
 
 function resetCtx(ctx){ ctx.globalAlpha=1; ctx.setLineDash([]); }
 
+// Tools that should ALWAYS draw on press — they must never hijack the press to
+// select images, text objects, or an already-selected rect/ellipse underneath.
+// (Each still re-selects its OWN object type: line tool grabs lines, leader
+// tool grabs leaders, etc.)
+var DRAW_STRICT={line:1,arrow:1,polyline:1,measure:1,pathmeasure:1,polygon:1,leader:1};
+
 // ── DRAWING EVENTS ──
 function onDown(e){
   if(!baseLoaded||pinching) return;
@@ -3174,8 +3206,11 @@ function onDown(e){
     textOv.style.display='block';
     textOv.focus();
   } else if(tool!=='text' && tool!=='comment' && document.activeElement===textOv){
-    textOv.blur();
-    textOv.style.display='none';
+    // COMMIT the open overlay instead of raw blur+hide. The old code threw the
+    // typed text away while LEAVING it inside the hidden textarea — the next
+    // leader label / text box then opened pre-filled with the previous box's
+    // text ("pulling texts from the textbox"), and the label itself was lost.
+    commitText();
   }
 
   // Compute canvas position ONCE at top — used by both the selection block and shape re-select
@@ -3226,23 +3261,28 @@ function onDown(e){
         perpW:(_imgHi===1||_imgHi===5)?_ov.w:null,perpH:(_imgHi===3||_imgHi===7)?_ov.h:null};
       return;
     }
-    if(_imgHitTest(selImg, spRaw.x, spRaw.y)){
+    if(!DRAW_STRICT[tool] && _imgHitTest(selImg, spRaw.x, spRaw.y)){
       e.preventDefault();
       selImgHandle=-1;
       selImgDrag={hi:-1,startX:spRaw.x,startY:spRaw.y,cx:selImg.cx,cy:selImg.cy,angle:selImg.angle||0};
       return;
     }
-    // Click outside image — deselect
+    // Click outside image — deselect. Drawing tools never re-select another
+    // image from the same press (the press is a draw, not a pick).
     commitImgSelection();
-    var _hit2=findImgAt(spRaw.x,spRaw.y,_isTouchEvt);
+    var _hit2=DRAW_STRICT[tool]?null:findImgAt(spRaw.x,spRaw.y,_isTouchEvt);
     if(_hit2){ selImg=_hit2; renderImgOverlays(); renderImgSelection(); return; }
-  } else {
+  } else if(!DRAW_STRICT[tool]){
+    // Fresh image pick — but NOT while a line/arrow/measure/leader-type tool is
+    // active. Pressing over an inserted picture used to select ("highlight")
+    // the picture instead of drawing, making those tools unusable over images.
     var _imgHit=findImgAt(spRaw.x,spRaw.y,_isTouchEvt);
     if(_imgHit){ selImg=_imgHit; renderImgOverlays(); renderImgSelection(); return; }
   }
 
-  // Tapping any existing text object with non-text/non-eraser tools → enter transform mode
-  if(!selectedShape && tool!=='text' && tool!=='eraser' && tool!=='pan' && !drawing){
+  // Tapping any existing text object with non-text/non-eraser tools → enter transform mode.
+  // Drawing tools are exempt — pressing over a text label must start the line/measure, not grab the text.
+  if(!selectedShape && tool!=='text' && tool!=='eraser' && tool!=='pan' && !DRAW_STRICT[tool] && !drawing){
     var _anyText=findTextObjAt(sp.x,sp.y);
     if(_anyText){
       e.preventDefault();
@@ -3252,7 +3292,14 @@ function onDown(e){
     }
   }
 
-  if(selectedShape && tool!=='measure'){
+  if(selectedShape && selectedShape.type!=='comment' && DRAW_STRICT[tool]){
+    // A rect/ellipse/etc. was left selected from earlier. Drawing tools never
+    // grab it: previously pressing its body MOVED the shape ("it switches to
+    // rect or ellipse") and pressing anywhere else only deselected and ATE the
+    // press entirely. Commit it and let this same press start the new draw.
+    commitSelection();
+  }
+  else if(selectedShape && tool!=='measure'){
     // Comments have their own full interaction logic in handleCommentDown — skip the
     // generic selected-shape block so interior clicks can open the text editor.
     if(selectedShape.type!=='comment'){
@@ -3377,7 +3424,10 @@ function onDown(e){
       renderLeaderSelection();
       return;
     }
-    // Empty space, nothing selected → fall through to placement (click handler).
+    // Empty space, nothing selected → HOLD-AND-DRAG placement:
+    // press = arrow tip (P1), drag to aim, release = text end (P2).
+    e.preventDefault();
+    leaderStep=1; leaderP1x=sp.x; leaderP1y=sp.y; _leaderDragPlacing=true;
     return;
   }
   if(tool==='stamp'){ handleStamp(e); return; }
@@ -3493,6 +3543,16 @@ function onDown(e){
 }
 
 function onMove(e){
+  // Leader hold-and-drag: live dashed preview for TOUCH (the separate drawCv
+  // mousemove listener already draws the identical preview for the mouse).
+  if(_leaderDragPlacing && tool==='leader' && leaderStep===1 && e.touches){
+    if(e.cancelable) e.preventDefault();
+    var _lpv=getPos(e);
+    composite();
+    dCtx.save(); dCtx.strokeStyle=color; dCtx.lineWidth=strokeW; dCtx.setLineDash([4,3]); dCtx.globalAlpha=0.6;
+    dCtx.beginPath(); dCtx.moveTo(leaderP1x,leaderP1y); dCtx.lineTo(_lpv.x,_lpv.y); dCtx.stroke(); dCtx.restore();
+    return;
+  }
   // ── Pending comment gesture: promote to MOVE once travel passes deadband ──
   // (Otherwise it resolves to "open editor" on pointerup — see onUp.)
   if(_cmtPending && selectedShape && selectedShape.type==='comment' && !pinching){
@@ -3591,13 +3651,17 @@ function onMove(e){
         selectedShape._commentObj.cx=selectedShape.cx;
         selectedShape._commentObj.cy=selectedShape.cy;
         _dragComment=selectedShape._commentObj;   // draw live on selCv
-        renderSelection();                         // lightweight, no full shCv redraw
+        scheduleSelRender();                       // ≤1 redraw per painted frame
         repositionCommentEditor(selectedShape._commentObj);
       }
     } else if(selHandle>=8){
-      // Rotate from any corner — use stored angle offset so shape doesn't jump
-      var rawA=Math.atan2(tp.y-selectedShape.cy, tp.x-selectedShape.cx);
-      selectedShape.angle=rawA-selDragStart.rotAngleOffset;
+      // Rotate from any corner — use stored angle offset so shape doesn't jump.
+      // Comments are always axis-aligned (drawCommentBox ignores angle); a stray
+      // rotation here would desync the hit zones from the drawn box permanently.
+      if(selectedShape.type!=='comment'){
+        var rawA=Math.atan2(tp.y-selectedShape.cy, tp.x-selectedShape.cx);
+        selectedShape.angle=rawA-selDragStart.rotAngleOffset;
+      }
     } else {
       // Resize — opposite side stays anchored (not symmetric from center).
       // We transform the mouse into local shape space, then compute new
@@ -3653,11 +3717,19 @@ function onMove(e){
     // ── For comment: all handles resize freely (manual control) ──
     if(selectedShape.type==='comment'&&selectedShape._commentObj){
       var _cobj=selectedShape._commentObj;
+      // This press turned into a real drag — disarm the "double-tap handle to
+      // snap-fit" timer. Without this, releasing a resize and re-grabbing the
+      // handle within 380ms was misread as a double-tap: the box snapped to fit
+      // and the second drag was swallowed ("handle sticks"). A ~6 screen-px
+      // travel threshold keeps finger jitter from disarming a genuine double-tap.
+      if(Math.hypot(tp.x-selDragStart.x, tp.y-selDragStart.y) > 6/zoom){
+        _cmtHandleTap=0; _cmtHandleObj=null;
+      }
       _cobj.cx=selectedShape.cx; _cobj.cy=selectedShape.cy;
       _cobj.w=Math.max(selectedShape.w,40); _cobj.h=Math.max(selectedShape.h,24);
       selectedShape.w=_cobj.w; selectedShape.h=_cobj.h;
       _dragComment=_cobj;          // draw live on the lightweight selCv
-      renderSelection();           // no full shCv redraw during the drag
+      scheduleSelRender();         // ≤1 redraw per painted frame
       repositionCommentEditor(_cobj);
       return; // skip the unconditional renderSelection() below
     }
@@ -3726,6 +3798,33 @@ function onMove(e){
 }
 
 function onUp(e){
+  // ── Leader hold-and-drag release: commit the leader, open a CLEAN label ──
+  if(_leaderDragPlacing && tool==='leader'){
+    _leaderDragPlacing=false;
+    var _pL=snapPt(getPos(e).x,getPos(e).y);
+    if(leaderStep===1 && Math.hypot(_pL.x-leaderP1x,_pL.y-leaderP1y) > 8/zoom){
+      captureState();
+      var _shD=(_pL.x > baseCv.width/2) ? -1 : 1;
+      var _shL=60;
+      leaderObjs.push({
+        id:Date.now(),
+        x1:leaderP1x, y1:leaderP1y, x2:_pL.x, y2:_pL.y,
+        shoulderDir:_shD, shoulderLen:_shL,
+        color:color, strokeW:strokeW, opacity:opacity, layerIdx:activeLayerIdx
+      });
+      renderShapeAndMeasure();
+      composite();
+      textX=_pL.x+(_shL+2)*_shD; textY=_pL.y;
+      textOv.value='';   // label must NEVER inherit text left over from a previous box
+      showTextOverlay(textX, _pL.y);
+      pushUndo();
+    } else {
+      composite();       // a mere tap: cancel placement, wipe the dashed preview
+    }
+    leaderStep=0;
+    _suppressLeaderPlaceUntil=Date.now()+700;  // swallow the trailing/synthetic click
+    return;
+  }
   // ── Pending comment gesture resolves to a CLICK (no move occurred) ──
   // If travel never exceeded the deadband, onMove never promoted it to a move,
   // so the press was a click → open the text editor now. (Acrobat behavior)
@@ -3825,13 +3924,16 @@ function onUp(e){
       var _rc=selectedShape._commentObj;
       _rc.cx=selectedShape.cx; _rc.cy=selectedShape.cy;
       _rc.w=selectedShape.w; _rc.h=selectedShape.h;
-      // After a manual resize, snap the height back so ALL text is visible at the
-      // tight snap padding (no wasted space, no clipped lines). The width the user
-      // dragged to is preserved — text re-wraps to it, then height hugs the result.
+      // After a manual resize, ensure ALL text remains visible: text re-wraps to
+      // the dragged width, then the height GROWS if lines would clip. Previously
+      // this forced a tight 'snap' on every release, which also SHRANK the box —
+      // dragging a note taller then letting go visibly snapped it back, making
+      // the side/bottom handles feel broken. Grow-only keeps the no-clipped-text
+      // guarantee while respecting the size the user just dragged to.
       // Top edge stays put so the box doesn't jump.
       if(!_editingComment){
         var _topR=_rc.cy-_rc.h/2;
-        fitCommentToText(_rc, _rc.text, true, 'snap');
+        fitCommentToText(_rc, _rc.text, true, 'grow');
         _rc.cy=_topR+_rc.h/2;
         if(selectedShape){ selectedShape.cy=_rc.cy; selectedShape.h=_rc.h; }
       }
@@ -4883,8 +4985,8 @@ drawCv.addEventListener('touchend',function(e){
   if(tool==='polyline') return;
   lastTap=now;
   if(tool==='leader'){
-    if(selectedLeader || Date.now() < _suppressLeaderPlaceUntil) return;
-    handleLeaderClick(p.x,p.y,fakeE);
+    // Placement is hold-and-drag now (onDown→onUp). Taps never place points.
+    return;
   }
 },{passive:true});
 
@@ -4910,10 +5012,8 @@ drawCv.addEventListener('click',function(e){
     plPoints.push(plp); plActive=true; redrawPolylinePreview(plp.x,plp.y);
   }
   else if(tool==='leader'){
-    // Don't place a new leader if one is selected (we're editing it) or if a
-    // selection/drag/deselect interaction just consumed this click in onDown.
-    if(selectedLeader || Date.now() < _suppressLeaderPlaceUntil) return;
-    handleLeaderClick(p.x,p.y,e);
+    // Placement is hold-and-drag now (onDown→onUp). Clicks never place points.
+    return;
   }
 });
 drawCv.addEventListener('dblclick',function(e){
@@ -5955,17 +6055,26 @@ function getHandleAt(x,y,isTouch){
   var screenTarget = isTouch ? 32 : 22;                // physical px
   var hitR = screenTarget / zoom;                      // canvas px at this zoom
   // For comments, keep handles from fully swallowing a small box's interior,
-  // but never shrink the grab target below a clickable floor.
+  // but never shrink the grab target below a clickable floor. The floor is
+  // touch-aware: after a text-commit snaps a note tight, a one-line box made
+  // the old fixed 14px floor nearly impossible to grab with a finger.
   if(selectedShape.type==='comment'){
     var hwC=selectedShape.w/2, hhC=selectedShape.h/2;
-    var floorR=14/zoom;                               // never smaller than 14 screen-px
+    var floorR=(isTouch?20:14)/zoom;                  // never smaller than this on screen
     var capR=Math.max(floorR, Math.min(hwC,hhC)*0.95);// near-full cap, with floor
     hitR=Math.min(hitR, capR);
     if(hitR<floorR) hitR=floorR;                      // guarantee the floor
   }
-  // Check rotation handles first (8-11) — they're further out so check before resize
-  for(var i=8;i<=11;i++){
-    if(Math.hypot(x-handles[i].x,y-handles[i].y)<hitR) return i;
+  // Check rotation handles first (8-11) — they're further out so check before resize.
+  // EXCEPT for comments: notes never rotate and their rotation handles are never
+  // drawn, but these invisible hit zones sat just outside each corner and silently
+  // swallowed grabs meant for the corner/side handles (drag then "rotated" the
+  // selection wrapper while the box stayed put — handles drifted out of alignment
+  // and resizing felt stuck).
+  if(selectedShape.type!=='comment'){
+    for(var i=8;i<=11;i++){
+      if(Math.hypot(x-handles[i].x,y-handles[i].y)<hitR) return i;
+    }
   }
   // Then resize handles
   for(var i=0;i<=7;i++){
@@ -6034,15 +6143,52 @@ function findObjAtStrict(x, y){
 }
 
 // ── Render selection overlay ────────────────────────────────
+// Dirty-rect tracking for comment drags: clearing/redrawing the ENTIRE
+// document-sized selCv on every pointer move forced the browser to re-upload
+// the full canvas texture to the GPU each frame. At high zoom the compositor
+// then re-rasterizes a huge scaled surface — the "note sticks and freezes
+// when zoomed in, glides when zoomed out" problem. During a comment drag we
+// instead clear only the union of the note's previous + current footprint.
+var _selPrevDirty=null;
+// Pointer events can arrive faster than the screen paints (notably 120Hz
+// iPads, where each move triggered its own full redraw and the work piled up
+// into freezes). Coalesce live-drag redraws to at most one per painted frame.
+var _selRafPending=false;
+function scheduleSelRender(){
+  if(_selRafPending) return;
+  _selRafPending=true;
+  requestAnimationFrame(function(){ _selRafPending=false; renderSelection(); });
+}
 function renderSelection(){
   if(!selectedShape){
-    if(selCv.width>1){ selCv.width=1; selCv.height=1; } return;
+    if(selCv.width>1){ selCv.width=1; selCv.height=1; } _selPrevDirty=null; return;
   }
   if(selCv.width!==drawCv.width||selCv.height!==drawCv.height){
-    selCv.width=drawCv.width; selCv.height=drawCv.height;
+    selCv.width=drawCv.width; selCv.height=drawCv.height; _selPrevDirty=null;
   }
-  selCtx.clearRect(0,0,selCv.width,selCv.height);
   var s=selectedShape, lw=1.5/zoom;
+
+  // ── Minimal clear region during a live comment drag ──
+  var _dirtyNow=null;
+  if(_dragComment && s.type==='comment' && s._commentObj===_dragComment){
+    // Margin covers handles, selection stroke, and the overflow marker —
+    // all of which hug the box. 60 screen-px is comfortably past the largest
+    // handle/offset at any zoom.
+    var _m=60/zoom + (s.strokeW||2)*2 + 8;
+    _dirtyNow={x:s.cx-s.w/2-_m, y:s.cy-s.h/2-_m, w:s.w+2*_m, h:s.h+2*_m};
+  }
+  if(_dirtyNow && _selPrevDirty){
+    var _ux=Math.min(_dirtyNow.x,_selPrevDirty.x);
+    var _uy=Math.min(_dirtyNow.y,_selPrevDirty.y);
+    var _ux2=Math.max(_dirtyNow.x+_dirtyNow.w,_selPrevDirty.x+_selPrevDirty.w);
+    var _uy2=Math.max(_dirtyNow.y+_dirtyNow.h,_selPrevDirty.y+_selPrevDirty.h);
+    selCtx.clearRect(_ux,_uy,_ux2-_ux,_uy2-_uy);
+  } else {
+    // First frame of a drag (or any non-comment-drag render): prior canvas
+    // content is unknown → full clear, exactly as before. Conservative.
+    selCtx.clearRect(0,0,selCv.width,selCv.height);
+  }
+  _selPrevDirty=_dirtyNow;
 
   // While dragging/resizing a comment, draw the full note box live here on the
   // lightweight selection canvas (it's skipped on shCv during the drag).
@@ -6481,6 +6627,33 @@ drawCv.addEventListener('mousemove',function(e){ holdCancel(); onMove(e); });
 drawCv.addEventListener('mouseup',function(e){ holdCancel(); onUp(e); });
 drawCv.addEventListener('mouseleave',function(e){ holdCancel(); if(selImg&&selImgDrag) return; onUp(e); });
 
+// ── SYNTHETIC MOUSE EVENT SUPPRESSION (touch devices) ─────────
+// After a one-finger tap, iOS/Android fire compatibility mouse events
+// (mousedown → mousemove → mouseup → click) ~300ms later at the tap point.
+// The touchstart/touchend handlers above already ran onDown/onUp, so the
+// synthetic replay caused: duplicate pen dots on tap, doubled undo entries
+// (undo needed two presses), comment editor double-triggering, and shapes
+// deselecting right after a tap-select. The existing _suppressClickUntil
+// guard only covered the 'click' handler. This guard lives on #viewport in
+// the CAPTURE phase (ancestor capture runs before any target listeners —
+// a capture flag on drawCv itself would NOT outrank its earlier-registered
+// listeners) and stops the synthetic events before they reach the canvas.
+var _synthMouseBlockUntil=0;
+viewport.addEventListener('touchstart',function(){ _synthMouseBlockUntil=Date.now()+1200; },{passive:true,capture:true});
+viewport.addEventListener('touchend',  function(){ _synthMouseBlockUntil=Date.now()+700;  },{passive:true,capture:true});
+['mousedown','mousemove','mouseup','click','dblclick'].forEach(function(t){
+  viewport.addEventListener(t,function(e){
+    if(Date.now()>=_synthMouseBlockUntil) return;
+    // Never swallow events headed for real interactive elements (the image
+    // toolbar buttons/slider, text editor, etc.) — on touch devices those
+    // ACTIVATE via the synthetic click, and preventDefault on a synthetic
+    // mousedown would also block focusing the text box.
+    var tgt=e.target;
+    if(tgt && tgt.closest && tgt.closest('button,input,select,textarea,a,label,[contenteditable]')) return;
+    e.stopPropagation(); if(e.cancelable) e.preventDefault();
+  },true);
+});
+
 // ── HOLD-TO-DELETE ─────────────────────────────────────────────
 // Press and hold 600ms on any drawn item to delete it.
 // Works for: rect/ellipse/cloud (shapeObjs), text (textObjs).
@@ -6903,7 +7076,7 @@ document.querySelectorAll('.tb-btn[data-tool]').forEach(function(btn){
       if(_editingComment) commitCommentEdit();
       if(selectedShape&&selectedShape.type==='comment') commitSelection();
     }
-    commitText(); commitSelection(); commitMeasureSelection(); commitPolylineSelection(); commitLeaderSelection(); leaderStep=0;
+    commitText(); commitSelection(); commitMeasureSelection(); commitPolylineSelection(); commitLeaderSelection(); leaderStep=0; _leaderDragPlacing=false;
     stopTextCursor(); clearTextHover();
     tool=btn.dataset.tool;
     document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
@@ -7069,10 +7242,15 @@ function closeStampPicker(){
         // no separate fontSize on selectedShape — comment obj is canonical
       }
 
-      // Update the live textarea if it's visible
+      // Update the live textarea if it's visible — using EXACTLY the same math
+      // as repositionCommentEditor. The old code floored the editor font at
+      // 12 screen px and used a (w-16) interior width: zoomed out, the canvas
+      // renders the note's true (smaller) size, so the editor text appeared
+      // 2-3× too big, wrapped differently, and spilled out of the box until
+      // commit re-drew it correctly.
       if(textOv.style.display !== 'none'){
-        var renderPx = Math.max(12, Math.round(cmtEffFontSize(target) * zoom));
-        var visualW  = Math.max((target.w - 16) * zoom, 40);
+        var renderPx = Math.max(1, cmtEffFontSize(target) * zoom);
+        var visualW  = Math.max((target.w - 2*CMT_PAD) * zoom, 40);
         textOv.style.fontSize = renderPx + 'px';
         textOv.style.transform = 'none';
         textOv.style.width    = Math.round(visualW) + 'px';
@@ -7092,10 +7270,11 @@ function closeStampPicker(){
         }catch(ex){}
       }
 
-      // Re-apply after a tick to beat any browser re-render
+      // Re-apply after a tick to beat any browser re-render (same unfloored
+      // size — the old 12px-floored re-apply undid pan/zoom corrections)
       var _ref = target;
       setTimeout(function(){
-        if(textOv.style.display !== 'none') textOv.style.fontSize = Math.max(12, Math.round(cmtEffFontSize(_ref) * zoom)) + 'px';
+        if(textOv.style.display !== 'none') textOv.style.fontSize = Math.max(1, cmtEffFontSize(_ref) * zoom) + 'px';
         if(_editingComment === _ref) _cmtAutoGrow(_ref);
       }, 0);
     });
@@ -9407,12 +9586,25 @@ commitImgSelection = function(){
 document.addEventListener('keydown',function(e){
   // Block tool shortcuts whenever the text textarea is active (focused or visible)
   if(e.target===textOv || document.activeElement===textOv) return;
+  // Block ALL shortcuts while typing in any text-entry field (project name,
+  // customer name/address, scale calculator, etc.) — otherwise letters switch
+  // tools, '[' rotates the plan, '`' toggles the grid, '/' opens the shortcut
+  // overlay and Enter commits the canvas selection mid-typing.
+  var _ae=document.activeElement;
+  if(_ae && _ae!==document.body){
+    var _tag=_ae.tagName;
+    var _isTextEntry = _tag==='TEXTAREA' || _tag==='SELECT' || _ae.isContentEditable ||
+      (_tag==='INPUT' && !/^(range|color|checkbox|radio|button|file|submit)$/i.test(_ae.type||'text'));
+    if(_isTextEntry) return;
+  }
+  // Normalise key so Shift/Caps Lock don't break combos (Cmd+Shift+Z = 'Z', not 'z')
+  var _k=(e.key||'').length===1 ? e.key.toLowerCase() : e.key;
   if(e.ctrlKey||e.metaKey){
-    if(e.key==='z'){ e.preventDefault(); e.shiftKey?redoFn():undoFn(); return; }
-    if(e.key==='y'){ e.preventDefault(); redoFn(); return; }
-    if(e.key==='s'){ e.preventDefault(); btnPng.click(); return; }
+    if(_k==='z'){ e.preventDefault(); e.shiftKey?redoFn():undoFn(); return; }
+    if(_k==='y'){ e.preventDefault(); redoFn(); return; }
+    if(_k==='s'){ e.preventDefault(); btnPng.click(); return; }
     if(e.key==='0'){ e.preventDefault(); fitToVP(); return; }
-    if(e.key==='p'){ e.preventDefault(); btnPrint.click(); return; }
+    if(_k==='p'){ e.preventDefault(); btnPrint.click(); return; }
     if(e.key==='='||e.key==='+'){ e.preventDefault(); zoomAt(1.25,viewport.clientWidth/2,viewport.clientHeight/2); return; }
     if(e.key==='-'){ e.preventDefault(); zoomAt(0.8,viewport.clientWidth/2,viewport.clientHeight/2); return; }
   }
@@ -9465,7 +9657,7 @@ document.addEventListener('keydown',function(e){
     return;
   }
   var map={q:'pen',l:'line',a:'arrow',r:'rect',e:'ellipse',c:'cloud',m:'measure',v:'pathmeasure',g:'polygon',w:'polyline',t:'text',n:'comment',x:'eraser',h:'pan'};
-  if(map[e.key]){ var b=document.querySelector('.tb-btn[data-tool="'+map[e.key]+'"]'); if(b) b.click(); }
+  if(!e.shiftKey && map[_k]){ var b=document.querySelector('.tb-btn[data-tool="'+map[_k]+'"]'); if(b) b.click(); }
 });
 document.addEventListener('keyup',function(e){ if(e.code==='Space'){ spaceDown=false; viewport.style.cursor=''; hideHint(); } });
 
@@ -10344,6 +10536,33 @@ function updateWatermark(){
 // Inline HTML uses onclick="toggleTheme()", which runs in the global
 // scope — expose it now that toggleTheme lives inside the IIFE.
 window.toggleTheme = toggleTheme;
+
+// ── UNSAVED-WORK GUARD ────────────────────────────────────────
+// An accidental refresh, back-swipe, or tab close silently destroyed all
+// annotations. Warn when a plan is loaded and any work exists.
+// (iOS Safari ignores beforeunload — desktop and Android benefit.)
+window.addEventListener('beforeunload', function(e){
+  var hasWork = baseLoaded && (
+    undoStack.length>0 || redoStack.length>0 ||
+    shapeObjs.length>0 || textObjs.length>0 || commentObjs.length>0 ||
+    markupObjs.length>0 || leaderObjs.length>0 || measureObjs.length>0 ||
+    polylineObjs.length>0 || imgOverlays.length>0
+  );
+  if(hasWork){ e.preventDefault(); e.returnValue=''; return ''; }
+});
+
+// ── ROTATION / WINDOW RESIZE ──────────────────────────────────
+// Without this, rotating a phone/tablet (or resizing the window) could leave
+// the plan stranded outside the new viewport bounds and the floating text /
+// comment editors misplaced until the next manual pan.
+window.addEventListener('resize', function(){
+  if(!baseLoaded) return;
+  clampPan(); applyTransform();
+});
+window.addEventListener('orientationchange', function(){
+  // Dimensions settle a tick after the event on iOS/Android
+  setTimeout(function(){ if(baseLoaded){ clampPan(); applyTransform(); } }, 250);
+});
 
 })();
 </script>
