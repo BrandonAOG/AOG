@@ -5514,9 +5514,15 @@ var _txtHoverX       = 0;
 var _txtHoverY       = 0;
 
 function drawTextCursorAt(x, y, alpha){
-  var h   = FONT_SIZE * 1.25;           // cursor height in canvas px
-  var sw  = Math.max(1.5, 2/zoom);      // stroke width
-  var ss  = Math.max(4, 7/zoom);        // serif width
+  // Height = the ACTUAL rendered text height (points → canvas px via the DPI
+  // factor, same as the committed text). Using raw FONT_SIZE points-as-px made
+  // the caret the wrong size relative to the text.
+  var h   = ptToCanvasPx(FONT_SIZE) * 1.25;   // cursor height in canvas px
+  // Serifs, stroke, and glow used fixed SCREEN sizes (7/zoom, 4/zoom blur) —
+  // zoomed out on a phone they dwarfed both the bar and the text, reading as a
+  // giant blob at the tap point. Cap them relative to the caret height.
+  var sw  = Math.min(Math.max(1.5, 2/zoom), Math.max(1, h*0.12));   // stroke width
+  var ss  = Math.min(Math.max(4, 7/zoom),  Math.max(2, h*0.45));    // serif width
   var col = color;
 
   selCtx.save();
@@ -5525,7 +5531,7 @@ function drawTextCursorAt(x, y, alpha){
   selCtx.lineWidth   = sw;
   selCtx.lineCap     = 'round';
   selCtx.shadowColor = col;
-  selCtx.shadowBlur  = 4/zoom;
+  selCtx.shadowBlur  = Math.min(4/zoom, h*0.25);   // glow scales with the caret, not the screen
 
   // Vertical bar
   selCtx.beginPath();
@@ -5909,17 +5915,17 @@ function repositionTextOverlay(){
   // repositionCommentEditor. Never apply text-tool sizing/transform to it.
   if(_editingComment) return;
   var cx=textOv._canvasCx||textX, cy=textOv._canvasCy||textY;
-  // Use visualViewport to account for keyboard offset on iOS
-  var vv=window.visualViewport;
-  var vvOffTop  = vv ? vv.offsetTop  : 0;
-  var vvOffLeft = vv ? vv.offsetLeft : 0;
   var FONT_PX = ptToCanvasPx(FONT_SIZE); // scale-locked canvas px for editor preview
-  var sx = panX + cx*zoom + vvOffLeft;
-  var sy = panY + cy*zoom - FONT_PX*zoom + vvOffTop;
-  // Keep textarea on screen
-  var vpH = vv ? vv.height : viewport.clientHeight;
-  sy = Math.min(sy, vpH - 60);
-  sx = Math.max(0, sx);
+  // textOv is absolutely positioned inside #viewport, whose offset parent
+  // already moves with the on-screen keyboard / page scroll. Adding
+  // visualViewport offsets here DOUBLE-counted that shift — typed text landed
+  // somewhere else on the canvas, away from the tap, every time the mobile
+  // keyboard was up. Same bug the comment editor had; same fix: position in
+  // viewport-local space only. (Desktop: offsets were 0, identical behavior.)
+  // The old "keep above keyboard" clamp (vv.height-60) also yanked any
+  // lower-half tap upward — removed for the same reason.
+  var sx = Math.max(0, panX + cx*zoom);
+  var sy = panY + cy*zoom - FONT_PX*zoom;
   textOv.style.display  = 'block';
   textOv.style.left     = sx+'px';
   textOv.style.top      = sy+'px';
