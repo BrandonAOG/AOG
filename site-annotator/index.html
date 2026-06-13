@@ -5978,8 +5978,26 @@ function repositionTextOverlay(){
   // viewport-local space only. (Desktop: offsets were 0, identical behavior.)
   // The old "keep above keyboard" clamp (vv.height-60) also yanked any
   // lower-half tap upward — removed for the same reason.
-  var sx = Math.max(0, panX + cx*zoom);
+  var sx = panX + cx*zoom;
   var sy = panY + cy*zoom - FONT_PX*zoom;
+  // Clamp so the WHOLE overlay stays inside the viewport. #viewport is
+  // overflow:hidden, so a box placed near the right/bottom edge (it's ≥200px
+  // wide) used to extend past the clip boundary and vanish entirely on mobile.
+  // We compute the box size up front and keep its position within [0, vpDim-box].
+  var vpW = viewport.clientWidth, vpH = viewport.clientHeight;
+  var boxW = Math.max(200, vpW * 0.5);
+  var boxH = Math.max(40, Math.max(16, FONT_PX*zoom) * 2);
+  // Only clamp when we actually know the viewport size (clientWidth/Height > 0).
+  // Guards against environments/timing where dimensions read 0, which would
+  // otherwise pin the box to the origin.
+  if(vpW > 0){
+    if(sx + boxW > vpW) sx = vpW - boxW;
+    if(sx < 0) sx = 0;
+  }
+  if(vpH > 0){
+    if(sy + boxH > vpH) sy = vpH - boxH;
+    if(sy < 0) sy = 0;
+  }
   textOv.style.display  = 'block';
   textOv.style.left     = sx+'px';
   textOv.style.top      = sy+'px';
@@ -5994,6 +6012,15 @@ function repositionTextOverlay(){
   textOv.style.transformOrigin='top left';
   textOv.style.color   = color;
   textOv.style.opacity = opacity;
+  // Live Text-BG highlight behind the typed text (rgba from color+opacity).
+  if(textBgOpacity>0){
+    var _hx=(textBgColor||'#ffff00').replace('#','');
+    if(_hx.length===3) _hx=_hx[0]+_hx[0]+_hx[1]+_hx[1]+_hx[2]+_hx[2];
+    var _r=parseInt(_hx.slice(0,2),16)||0,_g=parseInt(_hx.slice(2,4),16)||0,_b=parseInt(_hx.slice(4,6),16)||0;
+    textOv.style.background='rgba('+_r+','+_g+','+_b+','+textBgOpacity+')';
+  } else {
+    textOv.style.background='transparent';
+  }
   // Apply text formatting
   textOv.style.fontFamily    = textFontFamily;
   textOv.style.fontWeight    = textBold   ? 'bold'   : 'normal';
@@ -6001,7 +6028,7 @@ function repositionTextOverlay(){
   textOv.style.textDecoration= (textUnderline&&textStrike)?'underline line-through':(textUnderline?'underline':(textStrike?'line-through':'none'));
   textOv.style.textAlign     = textAlign;
   // Ensure textarea is wide enough to show text at any font size
-  textOv.style.width   = Math.max(200, viewport.clientWidth * 0.5) + 'px';
+  textOv.style.width   = boxW + 'px';
   textOv.style.height  = Math.max(40, renderSz * 2) + 'px';
 }
 
@@ -7231,7 +7258,7 @@ function updateToolbarForTool(t){
   if(ids.fillSep) ids.fillSep.style.display = isShape ? '' : 'none';
 
   // stroke color (shapes + stroke tools)
-  shFlex(ids.strokeGrp, isShape || isStroke);
+  shFlex(ids.strokeGrp, isShape || isStroke || isText);
 
   // fill color (shapes only)
   if(ids.fillGrp) ids.fillGrp.style.display = isShape ? 'contents' : 'none';
@@ -7650,10 +7677,25 @@ var txtBgInput=document.getElementById('txt-bg-input');
 var txtBgSwatch=document.getElementById('txt-bg-swatch');
 var txtBgOpSl=document.getElementById('txt-bg-op-sl');
 var txtBgOpVal=document.getElementById('txt-bg-op-val');
+// Live Text-BG preview helpers — defined in the SHARED scope so BOTH the color
+// block and the opacity block can use them. (Previously declared inside the
+// color block, so the opacity slider's call to _txtBgLive() hit an undefined
+// reference and the highlight never appeared until commit.)
+function _txtBgRgba(){
+  var hex=(textBgColor||'#ffff00').replace('#','');
+  if(hex.length===3) hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  var r=parseInt(hex.slice(0,2),16)||0, g=parseInt(hex.slice(2,4),16)||0, b=parseInt(hex.slice(4,6),16)||0;
+  return 'rgba('+r+','+g+','+b+','+(textBgOpacity||0)+')';
+}
+function _txtBgLive(){
+  if(textOv.style.display==='none' || _editingComment) return; // notes own their own styling
+  textOv.style.background = (textBgOpacity>0) ? _txtBgRgba() : 'transparent';
+}
 if(txtBgInput){
   var applyTxtBg=function(e){
     textBgColor=e.target.value;
     if(textBgOpacity>0){ txtBgSwatch.style.background=textBgColor; txtBgSwatch.style.backgroundImage='none'; }
+    _txtBgLive();
     if(editingObj){ editingObj.bgColor=textBgColor; renderTextObjs(); }
   };
   txtBgInput.addEventListener('input', applyTxtBg);
@@ -7665,6 +7707,7 @@ if(txtBgOpSl){
     txtBgOpVal.textContent=Math.round(v)+'%';
     if(textBgOpacity>0){ txtBgSwatch.style.background=textBgColor; txtBgSwatch.style.backgroundImage='none'; }
     else { txtBgSwatch.style.background=''; txtBgSwatch.style.backgroundImage='repeating-conic-gradient(#aaa 0% 25%, transparent 0% 50%)'; txtBgSwatch.style.backgroundSize='8px 8px'; }
+    _txtBgLive();
     if(editingObj){ editingObj.bgOpacity=textBgOpacity; renderTextObjs(); }
   };
   txtBgOpSl.addEventListener('input',function(e){ applyTxtBgOp(parseInt(e.target.value)); });
@@ -7696,6 +7739,11 @@ if(markupOpSl){
 // dismiss, so applying on 'input' alone silently dropped mobile color picks.
 function applyStrokeColor(v){
   color=v; clrSwatch.style.background=color;
+  // Live text-tool typing: recolor the overlay as you pick, before commit.
+  if(textOv.style.display!=='none' && !_editingComment){
+    textOv.style.color=color;
+    if(editingObj){ editingObj.color=color; }
+  }
   if(selectedShape){
     selectedShape.color=color;
     if(selectedShape._textObj) selectedShape._textObj.color=color;
