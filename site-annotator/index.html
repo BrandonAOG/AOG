@@ -7273,29 +7273,61 @@ function closeStampPicker(){
   // one repaint per animation frame — visually identical, but it can't pile up.
   var _liveRenderPending=false;
   function liveRender(){
-    if(!_editingComment) return;
     if(_liveRenderPending) return;
     _liveRenderPending=true;
     requestAnimationFrame(function(){
       _liveRenderPending=false;
-      if(!_editingComment) return;
       renderShapeAndMeasure(); composite();
+      if(selectedShape && selectedShape.type==='comment') renderSelection();
     });
   }
 
+  // ── Style pickers apply to the SELECTED note, not just while typing ──────
+  // On iPad, tapping any picker commits/closes the text editor before the
+  // input event fires, so _editingComment is already null — the change used to
+  // land on the DEFAULTS for the next note instead of the one on screen. The
+  // note stays SELECTED through the picker interaction, so target that; a
+  // snapshot ref (captured the moment the control is touched) bridges any
+  // flow where even the selection gets cleared.
+  var _cmtPickRef=null,_cmtPickAt=0;
+  function _cmtSnapRef(){
+    var t=_editingComment||(selectedShape&&selectedShape.type==='comment'&&selectedShape._commentObj)||null;
+    if(t){ _cmtPickRef=t; _cmtPickAt=Date.now(); }
+  }
+  function _cmtStyleTarget(){
+    return _editingComment
+        || (selectedShape&&selectedShape.type==='comment'&&selectedShape._commentObj)
+        || (Date.now()-_cmtPickAt<30000 ? _cmtPickRef : null);
+  }
+  [bgIn,bdIn,txIn,bgOpSl,bdWSl,bgSw,bdSw].forEach(function(el){
+    if(!el) return;
+    el.addEventListener('mousedown', _cmtSnapRef);
+    el.addEventListener('touchstart', _cmtSnapRef, {passive:true});
+  });
+  // After restyling a committed (non-editing) note, keep it hugging its text:
+  // border width changes the inner pad, which changes wrapping.
+  function _cmtRefit(t){
+    if(_editingComment===t) return;             // live grow handles the editing case
+    var _tp=t.cy-t.h/2;
+    fitCommentToText(t, t.text, true, 'snap');
+    t.cy=_tp+t.h/2;
+    if(selectedShape&&selectedShape._commentObj===t){ selectedShape.cy=t.cy; selectedShape.h=t.h; }
+  }
   if(bgIn){
     bgIn.addEventListener('input',function(e){
       _cBgColor=e.target.value; bgSw.style.background=_cBgColor;
-      if(_editingComment){ _editingComment.bgColor=_cBgColor; liveRender(); }
+      var t=_cmtStyleTarget();
+      if(t){ t.bgColor=_cBgColor; liveRender(); }
     });
     bgIn.addEventListener('change', refocus);
   }
   if(bdIn){
     bdIn.addEventListener('input',function(e){
       _cBorderColor=e.target.value; bdSw.style.background=_cBorderColor;
-      if(_editingComment){
-        _editingComment.borderColor=_cBorderColor;
-        if(selectedShape&&selectedShape._commentObj===_editingComment) selectedShape.color=_cBorderColor;
+      var t=_cmtStyleTarget();
+      if(t){
+        t.borderColor=_cBorderColor;
+        if(selectedShape&&selectedShape._commentObj===t) selectedShape.color=_cBorderColor;
         liveRender();
       }
     });
@@ -7304,9 +7336,10 @@ function closeStampPicker(){
   if(txIn){
     txIn.addEventListener('input',function(e){
       _cTxtColor=e.target.value; txSw.style.background=_cTxtColor;
-      if(_editingComment){
-        _editingComment.textColor=_cTxtColor;
-        textOv.style.color=_cTxtColor; // live color while typing
+      var t=_cmtStyleTarget();
+      if(t){
+        t.textColor=_cTxtColor;
+        if(_editingComment===t) textOv.style.color=_cTxtColor; // live color while typing
         liveRender();
       }
     });
@@ -7316,7 +7349,8 @@ function closeStampPicker(){
     function applyBgOp(v){
       _cBgOpacity=Math.round(v)/100;
       if(bgOpVal) bgOpVal.textContent=Math.round(v)+'%';
-      if(_editingComment){ _editingComment.bgOpacity=_cBgOpacity; liveRender(); }
+      var t=_cmtStyleTarget();
+      if(t){ t.bgOpacity=_cBgOpacity; liveRender(); }
     }
     bgOpSl.addEventListener('input',function(e){ applyBgOp(parseInt(e.target.value)); });
     bgOpSl.addEventListener('change', refocus);
@@ -7326,7 +7360,12 @@ function closeStampPicker(){
     function applyBdW(v){
       _cBorderW=Math.round(v);
       if(bdWVal) bdWVal.textContent=_cBorderW+'px';
-      if(_editingComment){ _editingComment.borderStrokeW=_cBorderW; liveRender(); }
+      var t=_cmtStyleTarget();
+      if(t){
+        t.borderStrokeW=_cBorderW;
+        _cmtRefit(t);          // pad follows border width — keep the box hugging
+        liveRender();
+      }
     }
     bdWSl.addEventListener('input',function(e){ applyBdW(parseInt(e.target.value)); });
     bdWSl.addEventListener('change', refocus);
