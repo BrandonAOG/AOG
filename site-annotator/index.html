@@ -776,7 +776,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   <button class="tb-btn" data-tool="pathmeasure" title="Path Measure — click waypoints along a trench/run. Double-click to finish. Measures total curved distance."><svg viewBox="0 0 24 24"><path d="M3 20 Q8 8 12 12 Q16 16 21 4" fill="none"/><circle cx="3" cy="20" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="21" cy="4" r="1.5" fill="currentColor" stroke="none"/><line x1="3" y1="20" x2="3" y2="16"/><line x1="21" y1="4" x2="17" y2="4"/></svg><span class="lbl">Path&nbsp;Dist</span></button>
   <button class="tb-btn" data-tool="polygon"><svg viewBox="0 0 24 24"><polygon points="12,3 21,9 17,19 7,19 3,9"/></svg><span class="lbl">Area</span></button>
   <button class="tb-btn" data-tool="leader"><svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="14" y2="10"/><polyline points="14 4 14 10 8 10"/></svg><span class="lbl">Leader</span></button>
-  <button class="tb-btn" data-tool="stamp" id="stamp-tool-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20h16v-2a8 8 0 0 0-16 0v2z"/></svg><span class="lbl">Stamp</span></button>
+  
   <button class="tb-btn" data-tool="text"><svg viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg><span class="lbl">Text</span></button>
   <button class="tb-btn" data-tool="comment" title="Comment box — drag to place, click to edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="13" x2="13" y2="13"/></svg><span class="lbl">Note</span></button>
   <button class="tb-btn" data-tool="highlight" title="Highlight — drag to highlight text area"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="8" rx="1" fill="rgba(253,224,71,.35)" stroke="#f59e0b"/><line x1="3" y1="20" x2="21" y2="20"/></svg><span class="lbl">Hilite</span></button>
@@ -3062,6 +3062,11 @@ function loadImageBlob(blob, _retried){
     bCtx.clearRect(0,0,w,h);
     bCtx.drawImage(img,0,0,w,h);
     URL.revokeObjectURL(url);
+    // Set the plan DPI to the SAME device default the PDF loader uses, so text
+    // placed on a converted/imported image renders at the correct physical point
+    // size instead of the tiny 72-DPI fallback (factor 1.0). Without this,
+    // _lastLoadedDpi stayed 0 and every label came out ~half size after a convert.
+    _lastLoadedDpi = IS_IPHONE ? 150 : IS_IPAD ? 200 : 300;
 
     // ── BLANK CANVAS CHECK ──────────────────────────────────
     // img.onload fired but canvas is still empty — common with HEIC
@@ -7317,7 +7322,8 @@ document.querySelectorAll('.stamp-opt').forEach(function(opt){
     opt.classList.add('sel');
   });
 });
-document.getElementById('stamp-tool-btn').addEventListener('click',function(){ openStampPicker(); });
+/* Stamp tool removed — button no longer exists, so no listener is wired.
+   Existing stamps on saved plans still render via the unchanged stamp draw code. */
 
 function openStampPicker(){
   document.getElementById('stamp-picker').style.display='block';
