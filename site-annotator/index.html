@@ -1742,6 +1742,15 @@ var _cFontSize      = 13;
 var _editingComment = null;       // comment whose text is being edited
 var CMT_PAD = 2; // canvas px interior padding between note border and text while editing/drawing
 var CMT_SNAP_PAD = 1.5; // tighter padding used when the box snaps to hug text (commit / shrink)
+// Inner text inset in canvas px: base pad + HALF the border stroke. The border
+// is stroked centered on the box edge, so half of it lands INSIDE — without
+// this the first text line sat on top of the border and visibly clipped at
+// small fonts. Used identically by the renderer, the box-fit math, and the
+// editor so they always agree.
+function cmtInnerPad(c, mode){
+  var bw = Math.max(1, (c && c.borderStrokeW) || 2);
+  return ((mode==='snap') ? CMT_SNAP_PAD : CMT_PAD) + bw/2;
+}
 var _movingComment  = null;       // comment being dragged
 var _moveCmtStart   = null;       // {x,y,cx,cy} at drag start
 // ── Movement deadband (Acrobat-style intent detection) ──────────────
@@ -1838,19 +1847,24 @@ function drawCommentBox(ctx, c, sc, skipText, onScreen){
     ctx.fillStyle=c.textColor||'#1a1a2e';
     ctx.font=fs+'px Arial,sans-serif';
     ctx.textBaseline='top'; ctx.textAlign='left';
-    // Committed boxes are sized with CMT_SNAP_PAD (tight hug), so draw text at
-    // that same inset — otherwise text would sit at a looser pad than the box
-    // was fitted to and the last line would falsely read as overflow.
-    var pad=CMT_SNAP_PAD*sc;
+    // Committed boxes are sized with cmtInnerPad(snap) — draw text at the SAME
+    // inset, or the last line would falsely read as overflow.
+    var pad=cmtInnerPad(c,'snap')*sc;
     var maxW=w-2*pad;
     var lineH=fs*1.4;
+    // Half-leading: center each glyph row inside its 1.4× line box, exactly the
+    // way CSS line-height does in the editor. Without it the first line sat
+    // flush against the top pad (clipping into the border at small fonts) while
+    // all the slack piled up at the bottom — top/bottom spacing is now even.
+    var halfLead=(lineH-fs)/2;
     var lines=cmtWrapLines(ctx,c.text,maxW);
     lines.forEach(function(line,i){
-      var ty=y+pad+i*lineH;
-      // Clip lines that don't fit (Acrobat-style: no scaling). The fit test uses
-      // the glyph box (fs*1.2) for the line, NOT a full lineH, matching the box
-      // height math in fitCommentToText so no false overflow on the last line.
-      if(ty+fs*1.2<=y+h-pad+0.5) ctx.fillText(line,x+pad,ty,maxW);
+      var ty=y+pad+halfLead+i*lineH;
+      // Clip lines that don't fit (Acrobat-style: no scaling). A line counts as
+      // fitting when its glyphs stay inside the pad; the bottom half-leading is
+      // allowed to overlap the pad zone so legacy boxes fitted under the old
+      // (tighter) math don't suddenly flag overflow.
+      if(ty+fs<=y+h-pad+halfLead+0.5) ctx.fillText(line,x+pad,ty,maxW);
       else overflow=true;
     });
   }
@@ -1954,6 +1968,11 @@ function enterCommentSelectMode(c){
 // uses the same technique in repositionTextOverlay().
 function startCommentTextEdit(c){
   _editingComment=c;
+  // Re-render NOW so the canvas hides this note's committed text (the renderer
+  // skips text for c===_editingComment, but only on its next pass). Without
+  // this, the canvas text stayed painted under the editor, showing as ghosted
+  // "letters on top of letters" slightly offset from what you type.
+  renderShapeAndMeasure(); composite();
 
   // Editor overlay shows text at the same ON-SCREEN size the canvas will
   // render it: effective(box) size in canvas px × zoom. Clamp to a legible
@@ -1966,7 +1985,7 @@ function startCommentTextEdit(c){
   var renderPx = Math.max(1, cmtEffFontSize(c) * zoom);
   var scale = 1;
 
-  var pad = CMT_PAD;
+  var pad = cmtInnerPad(c,'grow');
   var cx  = c.cx - c.w/2 + pad;
   var cy  = c.cy - c.h/2 + pad;
   var cw  = c.w - 2*pad;
@@ -1995,7 +2014,7 @@ function startCommentTextEdit(c){
   // which is in canvas px) converted to screen px, so the typed text sits exactly
   // where drawCommentBox will paint it at any zoom. CSS box-sizing:border-box keeps
   // the set width correct. This is what aligns text-in-box across zoom levels.
-  textOv.style.padding      = Math.max(0, Math.round(CMT_PAD*zoom)) + 'px';
+  textOv.style.padding      = Math.max(0, Math.round(cmtInnerPad(c,'grow')*zoom)) + 'px';
   textOv.style.boxSizing    = 'border-box';
   textOv.style.lineHeight   = '1.4';
   textOv.style.transform    = 'none';
@@ -2046,23 +2065,30 @@ function fitCommentToText(c, text, skipRender, mode){
   // bottom text line vanished on commit (click-away).
   var fs   = Math.max(8, Math.round(cmtEffFontSize(c)));   // matches renderer at sc=1
   var lineH= fs*1.4;
-  // Padding: snap modes hug tight (CMT_SNAP_PAD on every side); live grow/draw
-  // keeps the looser CMT_PAD so the cursor isn't jammed against the border.
-  var pad  = (mode==='snap') ? CMT_SNAP_PAD : CMT_PAD;
+  // Padding: snap modes hug tight; live grow/draw keeps the looser pad so the
+  // cursor isn't jammed against the border. Includes half the border stroke
+  // (cmtInnerPad) to match the renderer exactly.
+  var pad  = cmtInnerPad(c, mode);
   var maxW = Math.max(c.w - 2*pad, 10);
   // Measure with the same font the renderer uses
   tCtx.save();
   tCtx.font = fs+'px Arial,sans-serif';
   var lines = (text && text.trim()) ? cmtWrapLines(tCtx, text, maxW) : [''];
   tCtx.restore();
+  // SNAP: drop trailing blank lines before counting — a newline after the last
+  // text line (Enter at the end) produced an invisible empty line that the box
+  // reserved a full row for, leaving a text-height gap above the bottom border.
+  // GROW (live typing) keeps them: the caret needs its row on a fresh line.
+  if(mode==='snap'){
+    while(lines.length>1 && lines[lines.length-1].trim()===''){ lines.pop(); }
+  }
   var n = Math.max(lines.length, 1);
-  // Height = leading between lines + the LAST line's actual glyph box, NOT a
-  // full lineH for the final line. A trailing full lineH includes ~40% leading
-  // below the last line — that was the wasted bottom space. fs*1.2 covers
-  // ascender+descender for Arial so descenders (g, y, p) never clip.
-  var blockH  = (n-1)*lineH + fs*1.2;
+  // Full 1.4× line boxes (includes the half-leading above the first line and
+  // below the last) so top and bottom spacing come out identical.
+  var blockH  = n*lineH;
   var neededH = Math.ceil(blockH + 2*pad);
-  var minH    = Math.ceil(fs*1.2 + 2*pad);
+  var minH    = Math.ceil(lineH + 2*pad);
+  var hBefore = c.h;
   if(mode==='grow'){
     // Only grow if the text doesn't fit; keep the user's manual height otherwise
     if(neededH > c.h) c.h = neededH;
@@ -2072,7 +2098,13 @@ function fitCommentToText(c, text, skipRender, mode){
     c.h = Math.max(neededH, minH);
   }
   if(selectedShape && selectedShape._commentObj === c) selectedShape.h = c.h;
-  if(!skipRender){
+  // Re-render ONLY if the box actually changed. This runs on EVERY keystroke
+  // while typing in a note (via _cmtAutoGrow) — unconditionally re-compositing
+  // the full document canvas per character was the desktop "freezes when I
+  // first type in it" stall. While editing, the canvas hides the note's text
+  // anyway (the editor shows it), so nothing on canvas needs repainting unless
+  // the box itself grew.
+  if(!skipRender && c.h !== hBefore){
     renderShapeAndMeasure(); composite();
     if(selectedShape) renderSelection();
   }
@@ -2088,6 +2120,7 @@ function snapCommentToFit(c){
   renderShapeAndMeasure(); composite();
   if(_editingComment===c) repositionCommentEditor(c);
   if(selectedShape) renderSelection();
+  if(!_preOp) captureState(false);   // avoid pushUndo's full pixel-readback fallback
   pushUndo();
 }
 
@@ -2095,7 +2128,7 @@ function snapCommentToFit(c){
 // textarea from scrolling its content out of the visible box).
 function repositionCommentEditorHeight(c){
   if(_editingComment !== c || textOv.style.display === 'none') return;
-  var interiorH = Math.max((c.h - 2*CMT_PAD) * zoom, 16);
+  var interiorH = Math.max((c.h - 2*cmtInnerPad(c,'grow')) * zoom, 16);
   textOv.style.height    = Math.round(interiorH) + 'px';
   textOv.style.minHeight = Math.round(interiorH) + 'px';
   textOv.style.maxHeight = Math.round(interiorH) + 'px';
@@ -2103,18 +2136,21 @@ function repositionCommentEditorHeight(c){
 }
 
 // ── Save text, close textOv, KEEP selection handles ──────────────
-function commitCommentEdit(){
+function commitCommentEdit(keepSize){
   if(!_editingComment) return;
   var c = _editingComment;
   _editingComment = null;
-  c.text = textOv.value;
+  c.text = textOv.value.replace(/\s+$/,'');   // strip trailing newlines — they reserved a phantom empty line
   if(selectedShape && selectedShape.type==='comment' && selectedShape._commentObj===c){
     c.cx=selectedShape.cx; c.cy=selectedShape.cy;
     c.w=selectedShape.w; c.h=selectedShape.h;
   }
   // On commit (click away), snap the box tight to hug the text.
+  // keepSize=true (used when the commit happens because the user just grabbed a
+  // resize handle): only GROW if text would clip — never shrink, so the box
+  // doesn't snap out from under the cursor at the exact moment of the grab.
   var _topE = c.cy - c.h/2;
-  fitCommentToText(c, c.text, true, 'snap');
+  fitCommentToText(c, c.text, true, keepSize ? 'grow' : 'snap');
   c.cy = _topE + c.h/2;
   if(selectedShape && selectedShape._commentObj===c){ selectedShape.cy=c.cy; selectedShape.h=c.h; }
   textOv.style.display = 'none'; textOv.blur();
@@ -2133,7 +2169,12 @@ function commitCommentEdit(){
   textOv.style.transformOrigin = '';
   textOv.style.padding         = '';  // revert to CSS default (2px 4px) for the text tool
   textOv.style.boxSizing       = '';
-  renderShapeAndMeasure(); composite(); pushUndo();
+  renderShapeAndMeasure(); composite();
+  // If no pre-op snapshot survived to here (the create/edit press already
+  // consumed it), take a cheap vector-only one — otherwise pushUndo's fallback
+  // does a FULL per-layer pixel readback, a visible freeze on big plans.
+  if(!_preOp) captureState(false);
+  pushUndo();
   if(selectedShape) renderSelection();
 }
 
@@ -2146,7 +2187,7 @@ function openCommentEditor(c){
 // Reposition textOv when box is resized while editing
 function repositionCommentEditor(c){
   if(_editingComment !== c || textOv.style.display === 'none') return;
-  var pad = CMT_PAD;
+  var pad = cmtInnerPad(c,'grow');
   var cx2 = c.cx - c.w/2 + pad;
   var cy2 = c.cy - c.h/2 + pad;
   var cw2 = c.w - 2*pad;
@@ -2169,9 +2210,14 @@ function repositionCommentEditor(c){
   }
   var newFont = Math.max(1, cmtEffFontSize(c) * zoom) + 'px';
   if(textOv.style.fontSize !== newFont) textOv.style.fontSize = newFont;
-  var newPad = Math.max(0, Math.round(CMT_PAD*zoom)) + 'px';
+  var newPad = Math.max(0, Math.round(cmtInnerPad(c,'grow')*zoom)) + 'px';
   if(textOv.style.padding !== newPad) textOv.style.padding = newPad;
   if(textOv.style.boxSizing !== 'border-box') textOv.style.boxSizing = 'border-box';
+  // Own these outright — if any other styler (text tool, picker handlers) left a
+  // scale transform or its 1.2 line-height behind, the note text rendered shrunken
+  // and wrapped wrong until commit.
+  if(textOv.style.transform !== 'none') textOv.style.transform = 'none';
+  if(textOv.style.lineHeight !== '1.4') textOv.style.lineHeight = '1.4';
   // Match editor height to the (already-fitted) box interior — cheap, no re-render.
   repositionCommentEditorHeight(c);
 }
@@ -2449,12 +2495,23 @@ function lctx(){ return layers[activeLayerIdx].ctx; }
 // ALL layers are snapshotted so undo works globally across layers.
 var _preOp = null;
 
-function captureState(){
+function captureState(includePixels){
+  if(includePixels===undefined) includePixels=true;
   try{
-    var snaps=layers.map(function(l){
+    // The per-layer getImageData below copies EVERY pixel of EVERY layer at full
+    // document resolution and forces a GPU→CPU readback stall — hundreds of MB
+    // and hundreds of ms on a large plan. Vector-only operations (notes, shapes,
+    // text, measures, leaders…) never touch layer pixels, so callers pass
+    // includePixels=false and the undo snapshot stores layerData:null — the
+    // restore path already skips null layer entries, leaving pixels untouched.
+    // (This was the desktop "note moves barely then sticks and freezes" bug:
+    // every press paid the full readback. It "fixed itself after a while"
+    // because the browser demotes a repeatedly-read canvas to software backing,
+    // which makes later readbacks cheap.)
+    var snaps = includePixels ? layers.map(function(l){
       if(!l.canvas.width||!l.canvas.height) return null;
       return l.ctx.getImageData(0,0,l.canvas.width,l.canvas.height);
-    });
+    }) : null;
     _preOp={
       layerData:  snaps,
       activeIdx:  activeLayerIdx,
@@ -3217,8 +3274,10 @@ function onDown(e){
   var sp=snapPt(getPos(e).x,getPos(e).y);
   // Raw (unsnapped) position for image overlay hit-testing — handles must never snap
   var spRaw=getPos(e);
-  // Capture pre-operation state for undo (before anything changes)
-  if(tool!=='pan'&&!spaceDown) captureState();
+  // Capture pre-operation state for undo (before anything changes).
+  // Only pen and eraser modify raster layer pixels from a pointer press —
+  // every other tool is vector — so only they pay for the pixel snapshot.
+  if(tool!=='pan'&&!spaceDown) captureState(tool==='pen'||tool==='eraser');
 
   // ── If a shape is selected, handle transform interaction first ──
   var _isTouchEvt = !!(e.touches && e.touches.length);
@@ -3803,7 +3862,7 @@ function onUp(e){
     _leaderDragPlacing=false;
     var _pL=snapPt(getPos(e).x,getPos(e).y);
     if(leaderStep===1 && Math.hypot(_pL.x-leaderP1x,_pL.y-leaderP1y) > 8/zoom){
-      captureState();
+      captureState(false);   // vector op — no pixel snapshot needed
       var _shD=(_pL.x > baseCv.width/2) ? -1 : 1;
       var _shL=60;
       leaderObjs.push({
@@ -3844,7 +3903,7 @@ function onUp(e){
     if(compositedSnap) dCtx.putImageData(compositedSnap,0,0);
     var mw=Math.abs(p_.x-startX), mh=Math.abs(p_.y-startY);
     if(mw>4||mh>4){
-      captureState();
+      captureState(false);   // vector op — no pixel snapshot needed
       markupObjs.push({
         id:Date.now(),
         type:tool==='highlight'?'highlight':tool==='strikeout'?'strikeout':'underlinemark',
@@ -3864,7 +3923,7 @@ function onUp(e){
     if(compositedSnap) dCtx.putImageData(compositedSnap,0,0);
     var w=Math.abs(p.x-startX), h=Math.abs(p.y-startY);
     if(w>15&&h>25){
-      captureState();
+      captureState(false);   // vector op — no pixel snapshot needed
       var nc={
         id:Date.now(),
         cx:(startX+p.x)/2, cy:(startY+p.y)/2,
@@ -3924,16 +3983,13 @@ function onUp(e){
       var _rc=selectedShape._commentObj;
       _rc.cx=selectedShape.cx; _rc.cy=selectedShape.cy;
       _rc.w=selectedShape.w; _rc.h=selectedShape.h;
-      // After a manual resize, ensure ALL text remains visible: text re-wraps to
-      // the dragged width, then the height GROWS if lines would clip. Previously
-      // this forced a tight 'snap' on every release, which also SHRANK the box —
-      // dragging a note taller then letting go visibly snapped it back, making
-      // the side/bottom handles feel broken. Grow-only keeps the no-clipped-text
-      // guarantee while respecting the size the user just dragged to.
-      // Top edge stays put so the box doesn't jump.
+      // After a manual resize: text re-wraps to the dragged WIDTH, then the
+      // height snaps to hug the result (top edge stays put). Width is the
+      // dimension the user is really steering — height follows the text, so
+      // no dead space is left at the bottom of the box.
       if(!_editingComment){
         var _topR=_rc.cy-_rc.h/2;
-        fitCommentToText(_rc, _rc.text, true, 'grow');
+        fitCommentToText(_rc, _rc.text, true, 'snap');
         _rc.cy=_topR+_rc.h/2;
         if(selectedShape){ selectedShape.cy=_rc.cy; selectedShape.h=_rc.h; }
       }
@@ -5172,7 +5228,7 @@ function redrawPolyPreview(mx,my){
 
 function closePolygon(){
   if(polyPoints.length<3){ polyPoints=[]; polyActive=false; composite(); return; }
-  captureState(); // save before polygon is committed
+  captureState(false); // vector op — save before polygon is committed
   polygonObjs.push({
     id:Date.now(), pts:polyPoints.slice(),
     color:color, strokeW:strokeW, opacity:opacity,
@@ -5203,7 +5259,7 @@ function handleLeaderClick(x,y,e){
     // show crosshair hint
   } else if(leaderStep===1){
     // Commit a LIVE leader object (never burned to the layer canvas)
-    captureState();
+    captureState(false);
     var shoulderDir = (x > baseCv.width/2) ? -1 : 1;
     var shoulderLen = 60;
     leaderObjs.push({
@@ -5223,7 +5279,7 @@ function handleLeaderClick(x,y,e){
 
 // ── STAMPS ──
 function handleStamp(e){
-  captureState(); // save before stamp is placed
+  captureState(false); // vector op — save before stamp is placed
   var p=snapPt(getPos(e).x,getPos(e).y);
   var sz=Math.max(20,Math.min(60,40/zoom));
   stampObjs.push({
@@ -5661,7 +5717,13 @@ function handleCommentDown(e, sp, isTouch){
         return;
       }
       _cmtHandleTap=_hNow; _cmtHandleObj=selectedShape._commentObj;
-      // Resize handle: grab it (works whether or not we're editing)
+      // Resize handle: grab it. If the note is open for typing, RELEASE the
+      // text cursor first — the mouse-down on a handle commits the edit
+      // (grow-only, so the box never snaps out from under the press) and the
+      // same press continues straight into the resize.
+      if(_editingComment && _editingComment===selectedShape._commentObj){
+        commitCommentEdit(true);
+      }
       e.preventDefault();
       selHandle=sh;
       selDragStart={x:sp.x,y:sp.y,
@@ -5685,7 +5747,12 @@ function handleCommentDown(e, sp, isTouch){
       var onBorder = isOnCommentBorder(selectedShape, sp.x, sp.y, isTouch);
 
       if(onBorder){
-        // Drag on the border (between handles) = move, even while editing
+        // Drag on the border (between handles) = move. Grabbing the box to
+        // move it releases the text cursor — commit on mouse-down, then the
+        // same press continues as the move.
+        if(_editingComment && _editingComment===selectedShape._commentObj){
+          commitCommentEdit(true);
+        }
         e.preventDefault();
         selHandle=-2;
         selDragStart={x:sp.x,y:sp.y,
@@ -5838,6 +5905,9 @@ function showTextOverlay(cx,cy){
 
 function repositionTextOverlay(){
   if(textOv.style.display==='none') return;
+  // The shared textarea currently belongs to a NOTE — its styling is owned by
+  // repositionCommentEditor. Never apply text-tool sizing/transform to it.
+  if(_editingComment) return;
   var cx=textOv._canvasCx||textX, cy=textOv._canvasCy||textY;
   // Use visualViewport to account for keyboard offset on iOS
   var vv=window.visualViewport;
@@ -5878,17 +5948,66 @@ function repositionTextOverlay(){
 // Listen for keyboard appearance / viewport resize on iOS
 if(window.visualViewport){
   window.visualViewport.addEventListener('resize', function(){
-    repositionTextOverlay();
+    // Route to ONE styler. Calling repositionTextOverlay while a NOTE was being
+    // edited let the TEXT tool's styling stomp the comment editor every time the
+    // mobile keyboard opened — including a transform:scale() shrink based on the
+    // text tool's font size. The comment repositioner fixed the font number but
+    // never cleared that transform, so typed note text displayed tiny on
+    // phones/iPads until commit. Desktop never fires these events.
     if(_editingComment) repositionCommentEditor(_editingComment);
+    else repositionTextOverlay();
   });
   window.visualViewport.addEventListener('scroll', function(){
-    repositionTextOverlay();
     if(_editingComment) repositionCommentEditor(_editingComment);
+    else repositionTextOverlay();
   });
 }
 
 // Stop mousedown on the textarea from propagating to canvas handlers
-textOv.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+// ── Edge-grab: release the caret when grabbing the box from inside ──────────
+// While editing, the textarea covers the box interior and swallowed every
+// press — including presses on the side/corner handle zones it overlaps. The
+// caret never released and the canvas never saw the grab, so resizing/moving
+// an open note felt stuck. A press within the edge zone now commits the edit
+// (keepSize — no snap under the cursor) and hands the SAME press to the
+// canvas, which resolves it as a handle resize or border move as usual.
+// Presses in the middle still place the caret normally.
+var _textOvFwdTouch=false;
+function _textOvEdgeGrab(e){
+  if(!_editingComment) return false;
+  var t=(e.touches&&e.touches[0])||e;
+  if(t.clientX===undefined) return false;
+  var r=textOv.getBoundingClientRect();
+  var m=e.touches?16:9;   // edge zone in screen px (bigger for fingers)
+  // On a tiny box (low zoom) the edge zones would swallow the whole textarea
+  // and make the caret unplaceable — prefer the caret; the handles still stick
+  // out past the border and remain grabbable on the canvas itself.
+  if(r.width < m*3 || r.height < m*3) return false;
+  var nearEdge = t.clientX < r.left+m || t.clientX > r.right-m ||
+                 t.clientY < r.top+m  || t.clientY > r.bottom-m;
+  if(!nearEdge) return false;
+  var c=_editingComment;
+  commitCommentEdit(true);                       // release caret, keep box size
+  if(!selectedShape || selectedShape._commentObj!==c) enterCommentSelectMode(c);
+  if(e.cancelable) e.preventDefault();
+  onDown(e);                                     // same press starts the grab
+  return true;
+}
+textOv.addEventListener('mousedown', function(e){
+  if(_textOvEdgeGrab(e)) return;                 // forwarded — textOv now hidden,
+  e.stopPropagation();                           // mousemoves reach the canvas
+});
+// Touch events keep firing at the element where the touch STARTED, even after
+// the textarea is hidden — forward the rest of the gesture explicitly.
+textOv.addEventListener('touchstart', function(e){
+  _textOvFwdTouch=_textOvEdgeGrab(e);
+},{passive:false});
+textOv.addEventListener('touchmove', function(e){
+  if(_textOvFwdTouch){ if(e.cancelable) e.preventDefault(); onMove(e); }
+},{passive:false});
+textOv.addEventListener('touchend', function(e){
+  if(_textOvFwdTouch){ _textOvFwdTouch=false; onUp(e); }
+});
 textOv.addEventListener('mouseup',   function(e){ e.stopPropagation(); });
 textOv.addEventListener('click',     function(e){ e.stopPropagation(); });
 textOv.addEventListener('keydown',function(e){
@@ -6339,7 +6458,7 @@ function commitSelection(){
     var c=s._commentObj;
     c.cx=s.cx; c.cy=s.cy; c.w=s.w; c.h=s.h;
     if(_editingComment===c){
-      c.text=textOv.value;
+      c.text=textOv.value.replace(/\s+$/,'');   // strip trailing newlines
       _editingComment=null;
       textOv.style.display='none'; textOv.blur();
       textOv.style.background=''; textOv.style.borderBottom='';
@@ -6423,7 +6542,7 @@ function cancelSelection(){
   if(selectedShape&&selectedShape.type==='comment'&&selectedShape._commentObj){
     var _cc=selectedShape._commentObj;
     if(_editingComment===_cc){
-      _cc.text=textOv.value;
+      _cc.text=textOv.value.replace(/\s+$/,'');   // strip trailing newlines
       _editingComment=null;
       textOv.style.display='none'; textOv.blur();
       textOv.style.background=''; textOv.style.borderBottom='';
@@ -7250,7 +7369,7 @@ function closeStampPicker(){
       // commit re-drew it correctly.
       if(textOv.style.display !== 'none'){
         var renderPx = Math.max(1, cmtEffFontSize(target) * zoom);
-        var visualW  = Math.max((target.w - 2*CMT_PAD) * zoom, 40);
+        var visualW  = Math.max((target.w - 2*cmtInnerPad(target,'grow')) * zoom, 40);
         textOv.style.fontSize = renderPx + 'px';
         textOv.style.transform = 'none';
         textOv.style.width    = Math.round(visualW) + 'px';
@@ -7335,8 +7454,11 @@ fontSizeSel.addEventListener('change',function(e){
   if(ref){ ref.fontSize = FONT_SIZE; }
 
   if(textOv.style.display !== 'none'){
-    // Apply font size directly without focus() — focus is blocked on iOS
-    var screenSz = FONT_SIZE * zoom;
+    // Apply font size directly without focus() — focus is blocked on iOS.
+    // MUST convert points → canvas px (ptToCanvasPx) like repositionTextOverlay
+    // does; using FONT_SIZE raw as px made the editor text display at half size
+    // (or less) on high-DPI plans until commit.
+    var screenSz = ptToCanvasPx(FONT_SIZE) * zoom;
     var renderSz = Math.max(16, screenSz);
     var scaleV   = screenSz / renderSz;
     textOv.style.fontSize  = renderSz + 'px';
@@ -9225,8 +9347,8 @@ function commitImgSelection(){
 // Piggyback on the existing undo system by serialising imgOverlays state
 // into captureState/applySnap via monkey-patch
 var _origCaptureState=captureState;
-captureState=function(){
-  _origCaptureState();
+captureState=function(includePixels){
+  _origCaptureState(includePixels);   // forward the pixel-skip flag — dropping it forced a full readback on EVERY call
   if(_preOp) _preOp.imgOverlays=imgOverlays.map(function(ov){
     return {img:ov.img,cx:ov.cx,cy:ov.cy,w:ov.w,h:ov.h,angle:ov.angle,
             flipH:ov.flipH,flipV:ov.flipV,opacity:ov.opacity};
