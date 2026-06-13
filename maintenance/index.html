@@ -340,6 +340,14 @@ body.dark-mode .btn:hover { background: rgba(0,255,200,0.12); border-color: #00F
 }
 @media (max-width: 480px) { .content { padding: 3px; } }
 
+@media (max-width: 400px) {
+  .ts-row { flex-direction: column !important; align-items: flex-start !important; gap: 4px !important; }
+  .ts-row > label[for^="tsserial"] { width: 100% !important; }
+  .ts-row > input[id^="tsserial"] { width: 100% !important; max-width: 100% !important; flex: 1 1 100% !important; box-sizing: border-box !important; }
+  .ts-row > div { width: 100% !important; }
+  .ts-row .check-group { width: 100% !important; }
+}
+
 /* Mobile: Customer & Job Info — each label+input pair on its own line */
 @media screen and (max-width: 600px) {
   /* Make everything bigger on mobile screen (rem-based text scales from this) */
@@ -758,6 +766,13 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
 @media print {
   @page { size: 8.5in 11in; margin: 0.15in 0.15in 0.06in 0.15in !important; }
 
+  .leak-loc .check-group { flex-wrap: nowrap !important; white-space: nowrap !important; gap: 4px !important; }
+
+  /* Tighten the two TS Serial rows a hair in print */
+  .ts-row { margin-bottom: 2px !important; gap: 6px !important; }
+  .ts-row label { margin: 0 !important; }
+  .ts-row .check-group { gap: 1px !important; }
+
   html {
     height: auto !important; margin: 0 !important; padding: 0 !important;
     overflow: visible !important;
@@ -936,7 +951,7 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   #name-job-date-row #number { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
   #name-job-date-row #date   { flex: 0 0 100px !important; width: 100px !important; min-width: 100px !important; }
   /* Spread the grouped gas/oil rows a bit wider in print (not full-width) */
-  #gas-top-row, #oil-top-row { justify-content: flex-start !important; gap: 56px !important; flex-wrap: nowrap !important; }
+  #gas-top-row, #oil-top-row { justify-content: flex-start !important; gap: 20px !important; flex-wrap: nowrap !important; }
   label { color: #6B7280 !important; font-size: calc(0.626rem + 0.3px) !important; letter-spacing: 0.3px !important; }
 
   input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input[type="number"], textarea, select {
@@ -999,7 +1014,8 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
    layout, so the page must NOT be re-zoomed (that's what made the output
    change with screen scale). */
 @media print {
-  body.mobile-safari .page { padding: 4px 3px 0.5px 3px !important; min-height: 0 !important; height: auto !important; margin-top: 0 !important; }
+  body.mobile-safari .page { padding: 4px 3px 0 3px !important; min-height: 0 !important; height: auto !important; margin-top: 0 !important; margin-bottom: 0 !important; }
+  body.mobile-safari .footer { margin-top: 0 !important; margin-bottom: 0 !important; padding-bottom: 0 !important; }
   body.mobile-safari .two-column { grid-template-columns: 1fr 1fr !important; }
   body.mobile-safari .field-row-nowrap { flex-wrap: nowrap !important; }
   body.mobile-safari #name { flex: 0 1 50% !important; min-width: 0 !important; }
@@ -1014,10 +1030,13 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   body.mobile-safari .check-item span, body.mobile-safari .opt span { font-size: calc(0.66rem + 0.3px) !important; }
   body.mobile-safari label { font-size: calc(0.66rem + 0.3px) !important; }
   /* Trim vertical spacing on mobile so everything + footer fits one page */
-  body.mobile-safari .section { margin-bottom: 1.5px !important; }
-  body.mobile-safari .two-column { margin-bottom: 1.5px !important; gap: 2px !important; }
-  body.mobile-safari .field-row { margin-bottom: 1px !important; }
-  body.mobile-safari .section-body { padding: 2px 6px !important; }
+  body.mobile-safari .section { margin-bottom: 1px !important; }
+  body.mobile-safari .two-column { margin-bottom: 0 !important; gap: 2px !important; }
+  body.mobile-safari .two-column + .section { margin-top: 0 !important; }
+  body.mobile-safari .field-row { margin-bottom: 0.5px !important; }
+  body.mobile-safari .section-body { padding: 1.5px 6px !important; }
+  body.mobile-safari .leak-loc .check-group { flex-wrap: nowrap !important; white-space: nowrap !important; gap: 3px !important; }
+  body.mobile-safari #gas-top-row, body.mobile-safari #oil-top-row { gap: 16px !important; }
 }
 
 /* ── Mobile Chrome print fix (Android Chrome + Chrome on iOS) ── */
@@ -1411,6 +1430,15 @@ body.dark-mode .action-bar {
               <label class="yn-label yn-label-n" for="gl_n">N</label>
             </div>
           </span>
+          <span class="leak-loc" style="display:flex;flex-direction:column;gap:2px;">
+            <label>Location</label>
+            <div class="check-group" style="flex-wrap:wrap;gap:2px;">
+              <label class="check-item"><input type="radio" name="leakloc" value="front"><span>Front</span></label>
+              <label class="check-item"><input type="radio" name="leakloc" value="back"><span>Back</span></label>
+              <label class="check-item"><input type="radio" name="leakloc" value="left"><span>Left</span></label>
+              <label class="check-item"><input type="radio" name="leakloc" value="right"><span>Right</span></label>
+            </div>
+          </span>
         </div>
         <div class="field-row">
           <label>Visual Inspection</label>
@@ -1437,10 +1465,17 @@ body.dark-mode .action-bar {
     <div class="section">
       <div class="section-header">Transfer Switch</div>
       <div class="section-body">
-        <div class="field-row" style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;margin-bottom:6px;">
+        <div class="field-row ts-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
           <label for="tsserial1" style="white-space:nowrap;">TS Serial # 1</label>
           <input type="text" id="tsserial1" placeholder="SN" style="width:140px;flex-shrink:0;">
           <div style="display:flex;flex-direction:column;gap:2px;">
+            <label>Location</label>
+            <div class="check-group" style="flex-wrap:wrap;gap:2px;">
+              <label class="check-item"><input type="radio" name="tsloc1" value="inside"><span>Inside</span></label>
+              <label class="check-item"><input type="radio" name="tsloc1" value="outside"><span>Outside</span></label>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;margin-left:10px;">
             <label>Condition</label>
             <div class="check-group" style="flex-wrap:wrap;gap:2px;">
               <label class="check-item"><input type="radio" name="tscond1" value="good"><span>Good</span></label>
@@ -1450,10 +1485,17 @@ body.dark-mode .action-bar {
             </div>
           </div>
         </div>
-        <div class="field-row" style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;margin-bottom:6px;">
+        <div class="field-row ts-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
           <label for="tsserial2" style="white-space:nowrap;">TS Serial # 2</label>
           <input type="text" id="tsserial2" placeholder="SN" style="width:140px;flex-shrink:0;">
           <div style="display:flex;flex-direction:column;gap:2px;">
+            <label>Location</label>
+            <div class="check-group" style="flex-wrap:wrap;gap:2px;">
+              <label class="check-item"><input type="radio" name="tsloc2" value="inside"><span>Inside</span></label>
+              <label class="check-item"><input type="radio" name="tsloc2" value="outside"><span>Outside</span></label>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;margin-left:10px;">
             <label>Condition</label>
             <div class="check-group" style="flex-wrap:wrap;gap:2px;">
               <label class="check-item"><input type="radio" name="tscond2" value="good"><span>Good</span></label>
