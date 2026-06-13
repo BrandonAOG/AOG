@@ -7314,15 +7314,19 @@ function closeStampPicker(){
     if(selectedShape&&selectedShape._commentObj===t){ selectedShape.cy=t.cy; selectedShape.h=t.h; }
   }
   if(bgIn){
-    bgIn.addEventListener('input',function(e){
+    // iOS/iPadOS color sheets often fire only 'change' (on dismiss), not the
+    // live 'input' stream desktop browsers send — apply on BOTH so a color
+    // picked on mobile lands on the highlighted note.
+    var applyBg=function(e){
       _cBgColor=e.target.value; bgSw.style.background=_cBgColor;
       var t=_cmtStyleTarget();
       if(t){ t.bgColor=_cBgColor; liveRender(); }
-    });
-    bgIn.addEventListener('change', refocus);
+    };
+    bgIn.addEventListener('input',applyBg);
+    bgIn.addEventListener('change',function(e){ applyBg(e); refocus(); });
   }
   if(bdIn){
-    bdIn.addEventListener('input',function(e){
+    var applyBd=function(e){
       _cBorderColor=e.target.value; bdSw.style.background=_cBorderColor;
       var t=_cmtStyleTarget();
       if(t){
@@ -7330,11 +7334,12 @@ function closeStampPicker(){
         if(selectedShape&&selectedShape._commentObj===t) selectedShape.color=_cBorderColor;
         liveRender();
       }
-    });
-    bdIn.addEventListener('change', refocus);
+    };
+    bdIn.addEventListener('input',applyBd);
+    bdIn.addEventListener('change',function(e){ applyBd(e); refocus(); }); // iOS fires change on dismiss
   }
   if(txIn){
-    txIn.addEventListener('input',function(e){
+    var applyTx=function(e){
       _cTxtColor=e.target.value; txSw.style.background=_cTxtColor;
       var t=_cmtStyleTarget();
       if(t){
@@ -7342,8 +7347,9 @@ function closeStampPicker(){
         if(_editingComment===t) textOv.style.color=_cTxtColor; // live color while typing
         liveRender();
       }
-    });
-    txIn.addEventListener('change', refocus);
+    };
+    txIn.addEventListener('input',applyTx);
+    txIn.addEventListener('change',function(e){ applyTx(e); refocus(); }); // iOS fires change on dismiss
   }
   if(bgOpSl){
     function applyBgOp(v){
