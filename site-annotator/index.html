@@ -805,6 +805,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       <option value="Courier New">Courier</option>
       <option value="Georgia">Georgia</option>
       <option value="Verdana">Verdana</option>
+      <option value="Calibri">Calibri</option>
       <option value="Trebuchet MS">Trebuchet</option>
       <option value="Impact">Impact</option>
       <option value="Comic Sans MS">Comic Sans</option>
@@ -911,6 +912,30 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <option value="84">84</option><option value="96">96</option>
         <option value="108">108</option><option value="120">120</option>
       </select>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
+      <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">FONT</span>
+      <select id="cmt-font-family-sel" title="Note font" style="background:var(--surf2);border:1.5px solid var(--b2);color:var(--txt);border-radius:6px;padding:2px 3px;font-size:11px;outline:none;cursor:pointer;height:30px;width:92px;-webkit-appearance:none;">
+        <option value="Arial">Arial</option>
+        <option value="Helvetica">Helvetica</option>
+        <option value="Times New Roman">Times NR</option>
+        <option value="Courier New">Courier</option>
+        <option value="Georgia">Georgia</option>
+        <option value="Verdana">Verdana</option>
+        <option value="Calibri">Calibri</option>
+        <option value="Trebuchet MS">Trebuchet</option>
+        <option value="Impact">Impact</option>
+        <option value="Comic Sans MS">Comic Sans</option>
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
+      <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">STYLE</span>
+      <div style="display:flex;gap:2px;align-items:center">
+        <button class="fmt-btn" id="cmt-fmt-bold" title="Bold"><b>B</b></button>
+        <button class="fmt-btn" id="cmt-fmt-italic" title="Italic"><i>I</i></button>
+        <button class="fmt-btn" id="cmt-fmt-underline" title="Underline"><u>U</u></button>
+        <button class="fmt-btn" id="cmt-fmt-strike" title="Strikethrough"><s>S</s></button>
+      </div>
     </div>
     <div class="sep"></div>
   </div>
@@ -1776,6 +1801,8 @@ var _cBorderColor   = '#4B5563';
 var _cBorderW       = 2;          // border stroke width in canvas px
 var _cTxtColor      = '#1a1a2e';
 var _cFontSize      = 10;
+var _cFontFamily    = 'Arial';
+var _cBold = false, _cItalic = false, _cUnderline = false, _cStrike = false;
 var _editingComment = null;       // comment whose text is being edited
 var CMT_PAD = 2; // canvas px interior padding between note border and text while editing/drawing
 var CMT_SNAP_PAD = 1.5; // tighter padding used when the box snaps to hug text (commit / shrink)
@@ -1789,6 +1816,29 @@ var CMT_LINE_H = 1.15;
 // this the first text line sat on top of the border and visibly clipped at
 // small fonts. Used identically by the renderer, the box-fit math, and the
 // editor so they always agree.
+// ── Note font helpers ────────────────────────────────────────────────
+// Map a stored family name to a CSS stack with safe OFFLINE fallbacks. Calibri
+// isn't on iOS/iPad/Mac; 'Segoe UI'/sans-serif stand in there with no network.
+function cmtFontStack(fam){
+  switch(fam){
+    case 'Calibri':          return "Calibri,'Segoe UI',Candara,Optima,sans-serif";
+    case 'Helvetica':        return "Helvetica,Arial,sans-serif";
+    case 'Times New Roman':  return "'Times New Roman',Times,serif";
+    case 'Courier New':      return "'Courier New',Courier,monospace";
+    case 'Georgia':          return "Georgia,'Times New Roman',serif";
+    case 'Verdana':          return "Verdana,Geneva,sans-serif";
+    case 'Trebuchet MS':     return "'Trebuchet MS',Tahoma,sans-serif";
+    case 'Impact':           return "Impact,Haettenschweiler,'Arial Narrow Bold',sans-serif";
+    case 'Comic Sans MS':    return "'Comic Sans MS','Comic Sans',cursive";
+    case 'Arial': default:   return "Arial,Helvetica,sans-serif";
+  }
+}
+// Build a canvas ctx.font string honoring bold/italic for a note.
+function cmtCtxFont(c, fsPx){
+  var style = c && c.italic ? 'italic ' : '';
+  var weight= c && c.bold   ? 'bold '   : '';
+  return style + weight + fsPx + 'px ' + cmtFontStack(c && c.fontFamily);
+}
 function cmtInnerPad(c, mode){
   var bw = Math.max(1, (c && c.borderStrokeW) || 2);
   return ((mode==='snap') ? CMT_SNAP_PAD : CMT_PAD) + bw/2;
@@ -1887,26 +1937,32 @@ function drawCommentBox(ctx, c, sc, skipText, onScreen){
     var fs=Math.max(8,Math.round(cmtEffFontSize(c)*sc));
     ctx.globalAlpha=1;
     ctx.fillStyle=c.textColor||'#1a1a2e';
-    ctx.font=fs+'px Arial,sans-serif';
+    ctx.font=cmtCtxFont(c, fs);
     ctx.textBaseline='top'; ctx.textAlign='left';
     // Committed boxes are sized with cmtInnerPad(snap) — draw text at the SAME
     // inset, or the last line would falsely read as overflow.
     var pad=cmtInnerPad(c,'snap')*sc;
     var maxW=w-2*pad;
     var lineH=fs*CMT_LINE_H;
-    // Half-leading: center each glyph row inside its 1.4× line box, exactly the
-    // way CSS line-height does in the editor. Without it the first line sat
-    // flush against the top pad (clipping into the border at small fonts) while
-    // all the slack piled up at the bottom — top/bottom spacing is now even.
     var halfLead=(lineH-fs)/2;
     var lines=cmtWrapLines(ctx,c.text,maxW);
+    var _deco = (c.underline||c.strike);
     lines.forEach(function(line,i){
       var ty=y+pad+halfLead+i*lineH;
-      // Clip lines that don't fit (Acrobat-style: no scaling). A line counts as
-      // fitting when its glyphs stay inside the pad; the bottom half-leading is
-      // allowed to overlap the pad zone so legacy boxes fitted under the old
-      // (tighter) math don't suddenly flag overflow.
-      if(ty+fs<=y+h-pad+halfLead+0.5) ctx.fillText(line,x+pad,ty,maxW);
+      if(ty+fs<=y+h-pad+halfLead+0.5){
+        ctx.fillText(line,x+pad,ty,maxW);
+        // Canvas has no underline/strikethrough — draw the rules manually,
+        // clamped to the box width so they don't run past the text area.
+        if(_deco && line){
+          var lw=Math.min(ctx.measureText(line).width, maxW);
+          ctx.save();
+          ctx.strokeStyle=ctx.fillStyle;
+          ctx.lineWidth=Math.max(1, fs*0.07);
+          if(c.underline){ var uy=ty+fs*0.92; ctx.beginPath(); ctx.moveTo(x+pad,uy); ctx.lineTo(x+pad+lw,uy); ctx.stroke(); }
+          if(c.strike){    var sy=ty+fs*0.55; ctx.beginPath(); ctx.moveTo(x+pad,sy); ctx.lineTo(x+pad+lw,sy); ctx.stroke(); }
+          ctx.restore();
+        }
+      }
       else overflow=true;
     });
   }
@@ -1973,6 +2029,8 @@ function _syncCommentPickers(c){
   _cBorderW    = c.borderStrokeW !== undefined ? c.borderStrokeW : 2;
   _cTxtColor   = c.textColor  || '#1a1a2e';
   _cFontSize   = c.fontSize   || 10;
+  _cFontFamily = c.fontFamily || 'Arial';
+  _cBold=!!c.bold; _cItalic=!!c.italic; _cUnderline=!!c.underline; _cStrike=!!c.strike;
   var el;
   el=document.getElementById('cmt-bg-swatch');   if(el) el.style.background=_cBgColor;
   el=document.getElementById('cmt-bg-input');    if(el) el.value=_cBgColor;
@@ -1985,6 +2043,11 @@ function _syncCommentPickers(c){
   el=document.getElementById('cmt-bd-w-sl');     if(el) el.value=_cBorderW;
   el=document.getElementById('cmt-bd-w-val');    if(el) el.textContent=_cBorderW+'px';
   el=document.getElementById('cmt-font-size-sel'); if(el) el.value=_cFontSize;
+  el=document.getElementById('cmt-font-family-sel'); if(el) el.value=c.fontFamily||'Arial';
+  el=document.getElementById('cmt-fmt-bold');      if(el) el.classList.toggle('active', !!c.bold);
+  el=document.getElementById('cmt-fmt-italic');    if(el) el.classList.toggle('active', !!c.italic);
+  el=document.getElementById('cmt-fmt-underline'); if(el) el.classList.toggle('active', !!c.underline);
+  el=document.getElementById('cmt-fmt-strike');    if(el) el.classList.toggle('active', !!c.strike);
 }
 
 // ── Select a comment: show handles, sync pickers, NO textOv ──────
@@ -2112,9 +2175,10 @@ function fitCommentToText(c, text, skipRender, mode){
   // (cmtInnerPad) to match the renderer exactly.
   var pad  = cmtInnerPad(c, mode);
   var maxW = Math.max(c.w - 2*pad, 10);
-  // Measure with the same font the renderer uses
+  // Measure with the SAME font (family + bold/italic) the renderer uses, or
+  // wrapping would be wrong for wide/bold fonts (text would clip or leave gaps).
   tCtx.save();
-  tCtx.font = fs+'px Arial,sans-serif';
+  tCtx.font = cmtCtxFont(c, fs);
   var lines = (text && text.trim()) ? cmtWrapLines(tCtx, text, maxW) : [''];
   tCtx.restore();
   // SNAP: drop trailing blank lines before counting — a newline after the last
@@ -2270,6 +2334,13 @@ function repositionCommentEditor(c){
   // and wrapped wrong until commit.
   if(textOv.style.transform !== 'none') textOv.style.transform = 'none';
   if(textOv.style.lineHeight !== String(CMT_LINE_H)) textOv.style.lineHeight = String(CMT_LINE_H);
+  // Font family + style so what you type LOOKS like what the canvas will draw.
+  var _ff = cmtFontStack(c.fontFamily);
+  if(textOv.style.fontFamily !== _ff) textOv.style.fontFamily = _ff;
+  var _fw = c.bold ? 'bold' : 'normal';   if(textOv.style.fontWeight !== _fw) textOv.style.fontWeight = _fw;
+  var _fs = c.italic ? 'italic' : 'normal'; if(textOv.style.fontStyle !== _fs) textOv.style.fontStyle = _fs;
+  var _td = (c.underline&&c.strike)?'underline line-through':(c.underline?'underline':(c.strike?'line-through':'none'));
+  if(textOv.style.textDecoration !== _td) textOv.style.textDecoration = _td;
   // Match editor height to the (already-fitted) box interior — cheap, no re-render.
   repositionCommentEditorHeight(c);
 }
@@ -3991,6 +4062,7 @@ function onUp(e){
         bgColor:_cBgColor, bgOpacity:_cBgOpacity,
         borderColor:_cBorderColor, borderStrokeW:_cBorderW,
         fontSize:_cFontSize,
+        fontFamily:_cFontFamily, bold:_cBold, italic:_cItalic, underline:_cUnderline, strike:_cStrike,
         opacity:opacity,
         layerIdx:activeLayerIdx
       };
@@ -7536,6 +7608,45 @@ function closeStampPicker(){
       }, 0);
     });
   }
+
+  // ── NOTE FONT FAMILY ────────────────────────────────────────────
+  var ffSel = document.getElementById('cmt-font-family-sel');
+  if(ffSel){
+    ffSel.addEventListener('mousedown',  _cmtSnapRef);
+    ffSel.addEventListener('touchstart', _cmtSnapRef, {passive:true});
+    ffSel.addEventListener('change', function(e){
+      var t=_cmtStyleTarget(); if(!t){ refocus(); return; }
+      t.fontFamily = e.target.value; _cFontFamily = e.target.value;
+      _cmtRefit(t);                 // wrapping depends on the font
+      if(_editingComment===t) repositionCommentEditor(t);  // live editor font
+      liveRender();
+      refocus();
+    });
+  }
+
+  // ── NOTE BOLD / ITALIC / UNDERLINE / STRIKETHROUGH ──────────────
+  function _wireCmtFmt(id, prop){
+    var btn=document.getElementById(id);
+    if(!btn) return;
+    btn.addEventListener('mousedown', function(e){ e.preventDefault(); _cmtSnapRef(); });
+    btn.addEventListener('touchstart', function(){ _cmtSnapRef(); }, {passive:true});
+    btn.addEventListener('click', function(){
+      var t=_cmtStyleTarget(); if(!t){ refocus(); return; }
+      t[prop] = !t[prop];
+      if(prop==='bold') _cBold=t.bold; else if(prop==='italic') _cItalic=t.italic;
+      else if(prop==='underline') _cUnderline=t.underline; else if(prop==='strike') _cStrike=t.strike;
+      btn.classList.toggle('active', !!t[prop]);
+      // Bold/italic change glyph widths → re-wrap; underline/strike don't.
+      if(prop==='bold'||prop==='italic') _cmtRefit(t);
+      if(_editingComment===t) repositionCommentEditor(t);
+      liveRender();
+      refocus();
+    });
+  }
+  _wireCmtFmt('cmt-fmt-bold','bold');
+  _wireCmtFmt('cmt-fmt-italic','italic');
+  _wireCmtFmt('cmt-fmt-underline','underline');
+  _wireCmtFmt('cmt-fmt-strike','strike');
 })();
 // ── END COMMENT COLOR PICKERS ──────────────────────────────────
 
