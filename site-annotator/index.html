@@ -899,8 +899,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">SIZE</span>
       <select id="cmt-font-size-sel" title="Note font size" style="background:var(--surf2);border:1.5px solid var(--b2);color:var(--txt);border-radius:6px;padding:2px 3px;font-size:11px;outline:none;cursor:pointer;height:30px;width:56px;-webkit-appearance:none;text-align:center;">
         <option value="8">8</option><option value="9">9</option>
-        <option value="10">10</option><option value="11">11</option>
-        <option value="12">12</option><option value="13" selected>13</option>
+        <option value="10" selected>10</option><option value="11">11</option>
+        <option value="12">12</option><option value="13">13</option>
         <option value="14">14</option><option value="16">16</option>
         <option value="18">18</option><option value="20">20</option>
         <option value="22">22</option><option value="24">24</option>
@@ -1775,10 +1775,15 @@ var _cBgOpacity     = 0.9;
 var _cBorderColor   = '#4B5563';
 var _cBorderW       = 2;          // border stroke width in canvas px
 var _cTxtColor      = '#1a1a2e';
-var _cFontSize      = 13;
+var _cFontSize      = 10;
 var _editingComment = null;       // comment whose text is being edited
 var CMT_PAD = 2; // canvas px interior padding between note border and text while editing/drawing
 var CMT_SNAP_PAD = 1.5; // tighter padding used when the box snaps to hug text (commit / shrink)
+// Line-height multiplier for note text. Adobe/Acrobat sticky-note text sits
+// tighter than the old 1.4; 1.15 matches the leading in the reference PDF.
+// Shared by the renderer, the box-fit math, and the editor overlay so the
+// drawn text, the box height, and the typing caret all use identical spacing.
+var CMT_LINE_H = 1.15;
 // Inner text inset in canvas px: base pad + HALF the border stroke. The border
 // is stroked centered on the box edge, so half of it lands INSIDE — without
 // this the first text line sat on top of the border and visibly clipped at
@@ -1888,7 +1893,7 @@ function drawCommentBox(ctx, c, sc, skipText, onScreen){
     // inset, or the last line would falsely read as overflow.
     var pad=cmtInnerPad(c,'snap')*sc;
     var maxW=w-2*pad;
-    var lineH=fs*1.4;
+    var lineH=fs*CMT_LINE_H;
     // Half-leading: center each glyph row inside its 1.4× line box, exactly the
     // way CSS line-height does in the editor. Without it the first line sat
     // flush against the top pad (clipping into the border at small fonts) while
@@ -1967,7 +1972,7 @@ function _syncCommentPickers(c){
   _cBorderColor= c.borderColor|| '#4B5563';
   _cBorderW    = c.borderStrokeW !== undefined ? c.borderStrokeW : 2;
   _cTxtColor   = c.textColor  || '#1a1a2e';
-  _cFontSize   = c.fontSize   || 13;
+  _cFontSize   = c.fontSize   || 10;
   var el;
   el=document.getElementById('cmt-bg-swatch');   if(el) el.style.background=_cBgColor;
   el=document.getElementById('cmt-bg-input');    if(el) el.value=_cBgColor;
@@ -2053,7 +2058,7 @@ function startCommentTextEdit(c){
   // the set width correct. This is what aligns text-in-box across zoom levels.
   textOv.style.padding      = Math.max(0, Math.round(cmtInnerPad(c,'grow')*zoom)) + 'px';
   textOv.style.boxSizing    = 'border-box';
-  textOv.style.lineHeight   = '1.4';
+  textOv.style.lineHeight   = String(CMT_LINE_H);
   textOv.style.transform    = 'none';
   textOv.style.transformOrigin = 'top left';
   textOv.style.color        = _cTxtColor;
@@ -2101,7 +2106,7 @@ function fitCommentToText(c, text, skipRender, mode){
   // was fitted for — the last line failed the renderer's clip test and the
   // bottom text line vanished on commit (click-away).
   var fs   = Math.max(8, Math.round(cmtEffFontSize(c)));   // matches renderer at sc=1
-  var lineH= fs*1.4;
+  var lineH= fs*CMT_LINE_H;
   // Padding: snap modes hug tight; live grow/draw keeps the looser pad so the
   // cursor isn't jammed against the border. Includes half the border stroke
   // (cmtInnerPad) to match the renderer exactly.
@@ -2264,7 +2269,7 @@ function repositionCommentEditor(c){
   // scale transform or its 1.2 line-height behind, the note text rendered shrunken
   // and wrapped wrong until commit.
   if(textOv.style.transform !== 'none') textOv.style.transform = 'none';
-  if(textOv.style.lineHeight !== '1.4') textOv.style.lineHeight = '1.4';
+  if(textOv.style.lineHeight !== String(CMT_LINE_H)) textOv.style.lineHeight = String(CMT_LINE_H);
   // Match editor height to the (already-fitted) box interior — cheap, no re-render.
   repositionCommentEditorHeight(c);
 }
@@ -2449,11 +2454,13 @@ var scalingMode=false, refLinePixels=0;
 var _lastLoadedDpi = 0; // DPI of the most recently loaded file (set by PDF loader, estimated for images)
 // ── SCALE-LOCKED TEXT ────────────────────────────────────────
 // All text / comment / note sizes are stored as TRUE POINT VALUES (1 pt = 1/72").
-// They are authored against a 96-DPI reference (typical screen). To keep a given
-// point size printing at the SAME physical size regardless of the plan's render
-// resolution, we scale the stored point value by (loadedDPI / REF_DPI) at draw &
-// export time. So "12 pt" is always 12 points on paper, at 150/200/300 DPI alike.
-var TEXT_REF_DPI = 96;
+// To render N true points onto a page rasterized at D DPI you need N*(D/72)
+// pixels, because a point is 1/72 inch BY DEFINITION. The reference was wrongly
+// set to 96 (CSS px-per-inch), which made every note/text render at 72/96 = 75%
+// of its stated size — e.g. a "13 pt" note printed at ~9.8 pt, visibly smaller
+// than the same point size in Adobe. Using 72 makes "13 pt" a true 13 pt on
+// paper at any render DPI, matching Acrobat and the size selector's numbers.
+var TEXT_REF_DPI = 72;
 function textDpiFactor(){
   var d = _lastLoadedDpi || TEXT_REF_DPI;
   return d / TEXT_REF_DPI;
