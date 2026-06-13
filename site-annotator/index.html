@@ -7643,15 +7643,21 @@ clrInput.addEventListener('input',function(e){
   if(selectedPolyline){ selectedPolyline.color=color; renderShapeAndMeasure(); renderPolylineSelection(); }
   if(selectedLeader){ selectedLeader.color=color; renderShapeAndMeasure(); renderLeaderSelection(); }
 });
-swSl.addEventListener('input',function(e){
-  strokeW=parseInt(e.target.value); swVal.textContent=strokeW+'px';
+// One applier for stroke width, used by BOTH the native 'input' events
+// (desktop drag) and the custom touch path below. On mobile Safari the touch
+// helper preventDefaults the native range drag, so no 'input' events ever
+// fire — its old callback updated only the DEFAULT width, never the selected
+// line/arrow/shape/leader. Color worked (tap-based picker, separate handler),
+// width didn't — exactly the reported symptom.
+function applyStrokeW(v){
+  strokeW=Math.round(v); swVal.textContent=strokeW+'px';
   if(selectedShape){ selectedShape.strokeW=strokeW; renderSelection(); }
   if(selectedMeasure){ selectedMeasure.strokeW=strokeW; renderMeasureSelection(); renderShapeAndMeasure(); }
   if(selectedPolyline){ selectedPolyline.strokeW=strokeW; renderShapeAndMeasure(); renderPolylineSelection(); }
   if(selectedLeader){ selectedLeader.strokeW=strokeW; renderShapeAndMeasure(); renderLeaderSelection(); }
-});
-opSl.addEventListener('input',function(e){
-  opacity=parseInt(e.target.value)/100; opVal.textContent=e.target.value+'%';
+}
+function applyOpacityAll(v){
+  opacity=Math.round(v)/100; opVal.textContent=Math.round(v)+'%';
   if(selectedShape){
     selectedShape.opacity=opacity;
     if(selectedShape._textObj) selectedShape._textObj.opacity=opacity;
@@ -7660,7 +7666,9 @@ opSl.addEventListener('input',function(e){
   if(selectedMeasure){ selectedMeasure.opacity=opacity; renderMeasureSelection(); renderShapeAndMeasure(); }
   if(selectedPolyline){ selectedPolyline.opacity=opacity; renderShapeAndMeasure(); renderPolylineSelection(); }
   if(selectedLeader){ selectedLeader.opacity=opacity; renderShapeAndMeasure(); renderLeaderSelection(); }
-});
+}
+swSl.addEventListener('input',function(e){ applyStrokeW(parseInt(e.target.value)); });
+opSl.addEventListener('input',function(e){ applyOpacityAll(parseInt(e.target.value)); });
 
 // Fill color + opacity pickers
 fillClrInput.addEventListener('input',function(e){
@@ -7693,8 +7701,8 @@ function attachSliderTouch(sl,onVal){
   sl.addEventListener('touchstart',function(e){ e.stopPropagation(); e.preventDefault(); sx=e.touches[0].clientX; sw=sl.getBoundingClientRect().width||60; mn=parseFloat(sl.min); mx=parseFloat(sl.max); sv=parseFloat(sl.value); },{passive:false});
   sl.addEventListener('touchmove',function(e){ e.stopPropagation(); e.preventDefault(); var dx=e.touches[0].clientX-sx; var v=Math.max(mn,Math.min(mx,sv+dx/sw*(mx-mn))); sl.value=v; onVal(v); },{passive:false});
 }
-attachSliderTouch(swSl,function(v){ strokeW=Math.round(v); swVal.textContent=Math.round(v)+'px'; });
-attachSliderTouch(opSl,function(v){ opacity=Math.round(v)/100; opVal.textContent=Math.round(v)+'%'; });
+attachSliderTouch(swSl, applyStrokeW);     // touch drags apply to the selected object too
+attachSliderTouch(opSl, applyOpacityAll);
 
 // ── UNDO/REDO/CLEAR ──
 btnUndo.addEventListener('click',undoFn);
