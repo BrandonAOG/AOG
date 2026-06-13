@@ -30,11 +30,11 @@ html{position:fixed;width:100%;height:100%;overflow:hidden;overscroll-behavior:n
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;height:100%;width:100%;display:flex;flex-direction:column;overflow:hidden;overscroll-behavior:none;position:fixed;touch-action:none;-webkit-overflow-scrolling:none}
 /* TOOLBAR */
-#tb{height:68px;background:var(--surf);border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:2px;padding:0 8px;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scroll-behavior:auto;will-change:scroll-position}
+#tb{height:68px;background:var(--surf);border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:2px;padding:0 8px;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;transform:translateZ(0);contain:layout style;position:relative;z-index:5}
 #tb::-webkit-scrollbar{display:none}
 .sep{width:1px;height:36px;background:var(--b2);margin:0 3px;flex-shrink:0}
-.tb-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:42px;height:56px;border-radius:var(--rad);border:1.5px solid transparent;background:transparent;color:var(--txt2);cursor:pointer;flex-shrink:0;transition:all .15s;padding:0 4px;gap:1px}
-.tb-btn:hover{background:var(--surf2);color:var(--txt)}
+.tb-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:42px;height:56px;border-radius:var(--rad);border:1.5px solid transparent;background:transparent;color:var(--txt2);cursor:pointer;flex-shrink:0;transition:background-color .15s,border-color .15s,color .15s;padding:0 4px;gap:1px}
+@media (hover:hover){.tb-btn:hover{background:var(--surf2);color:var(--txt)}}
 .tb-btn.active{background:rgba(108,99,255,.2);border-color:var(--acc);color:var(--acc2)}
 .tb-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;flex-shrink:0}
 .tb-btn .lbl{font-size:9.5px;color:inherit;white-space:nowrap;pointer-events:none;line-height:1;display:block}
@@ -124,7 +124,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .leg-swatch{width:18px;height:4px;border-radius:2px;flex-shrink:0}
 .leg-name{font-size:11px;color:var(--txt2)}
 /* VIEWPORT */
-#viewport{flex:1;overflow:hidden;position:relative;cursor:default}
+#viewport{flex:1;overflow:hidden;position:relative;cursor:default;background:var(--bg);contain:layout}
 #scene{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
 #canvas-wrap{position:relative;display:none;border-radius:3px;overflow:hidden;box-shadow:0 8px 48px rgba(0,0,0,.7)}
 #base-cv{display:block}
@@ -557,7 +557,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   animation:aogPulse 2s ease-in-out infinite;flex-shrink:0;
 }
 .aog-status-dot.offline{background:#E84118;box-shadow:0 0 6px #E84118;animation:none;}
-@keyframes aogPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+@keyframes aogPulse{0%,100%{opacity:1}50%{opacity:0.45}}
 
 /* Offline banner */
 #aog-offline{
@@ -614,7 +614,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 [data-theme="light"] #sb{background:#f0f4ff;}
 [data-theme="light"] body{background:#EDF2FF;}
 [data-theme="light"] .tb-btn{color:#4A5A7A;}
-[data-theme="light"] .tb-btn:hover{background:#dde8ff;color:#1A2640;}
+@media (hover:hover){[data-theme="light"] .tb-btn:hover{background:#dde8ff;color:#1A2640;}}
 [data-theme="light"] .tb-btn.active{background:rgba(217,119,6,0.15);border-color:#D97706;color:#D97706;}
 
 /* body flex is already set in base styles */
@@ -2134,7 +2134,17 @@ function fitCommentToText(c, text, skipRender, mode){
     // snap: tight hug
     c.h = Math.max(neededH, minH);
   }
-  if(selectedShape && selectedShape._commentObj === c) selectedShape.h = c.h;
+  // The box is centred on cy, so changing h alone moves BOTH edges — when you
+  // re-enter a committed note and type, the extra height split half upward and
+  // the box appeared to grow up past where you were typing. Pin the TOP edge so
+  // growth goes DOWNWARD (toward the new lines), like every text box should.
+  // Callers that need a different anchor (e.g. resize from a bottom handle)
+  // already set cy themselves after calling, so only adjust when h changed.
+  if(c.h !== hBefore){
+    var topEdge = (c.cy - hBefore/2);   // keep the pre-grow top in place
+    c.cy = topEdge + c.h/2;
+  }
+  if(selectedShape && selectedShape._commentObj === c){ selectedShape.h = c.h; selectedShape.cy = c.cy; }
   // Re-render ONLY if the box actually changed. This runs on EVERY keystroke
   // while typing in a note (via _cmtAutoGrow) — unconditionally re-compositing
   // the full document canvas per character was the desktop "freezes when I
@@ -7745,28 +7755,39 @@ attachSliderTouch(fillOpSl,function(v){
 });
 
 function attachSliderTouch(sl,onVal){
-  // Absolute positioning: the value maps directly to the finger's X within the
-  // track, so pressing or dragging anywhere puts the thumb under your finger
-  // and it tracks as you slide. The previous version used a RELATIVE delta from
-  // the touch start, so a tap barely moved and dragging felt detached from the
-  // thumb — the "it picks once and won't let me slide" symptom on iOS/iPad.
-  var mn=0,mx=100,step=1;
+  // Absolute positioning: the value maps to the finger's X within the track, so
+  // pressing or dragging anywhere puts the thumb under your finger and it tracks
+  // as you slide.
+  // Older-iOS correctness: native range tracks reserve HALF A THUMB of dead
+  // space at each end (the thumb centre can't reach the very edge). These
+  // sliders are only ~56px wide with a 13px thumb, so ignoring that inset put
+  // the value noticeably off from the finger and made the thumb unable to reach
+  // 0% / 100% — which on a tiny control reads as "it won't slide". Map across
+  // the REACHABLE track (width minus one thumb) instead.
+  var mn=0,mx=100,step=1,thumb=13;
+  function read(){
+    mn=parseFloat(sl.min)||0; mx=parseFloat(sl.max); if(isNaN(mx))mx=100;
+    step=parseFloat(sl.step)||1;
+  }
   function valueAtX(clientX){
     var r=sl.getBoundingClientRect();
-    var w=r.width||60;
-    var frac=Math.max(0,Math.min(1,(clientX-r.left)/w));
+    var w=r.width||56;
+    var usable=Math.max(1, w-thumb);              // reachable travel
+    var frac=Math.max(0,Math.min(1,(clientX-r.left-thumb/2)/usable));
     var v=mn+frac*(mx-mn);
-    if(step>0) v=Math.round(v/step)*step;       // honor the slider's step
+    if(step>0) v=Math.round(v/step)*step;
     return Math.max(mn,Math.min(mx,v));
   }
-  function read(){ mn=parseFloat(sl.min)||0; mx=parseFloat(sl.max); if(isNaN(mx))mx=100; step=parseFloat(sl.step)||1; }
   function apply(e){
-    var t=e.touches&&e.touches[0]; if(!t) return;
+    // Old WebKit sometimes gives an empty touches list on touchmove; fall back
+    // to changedTouches so the drag keeps tracking.
+    var t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0]);
+    if(!t) return;
     var v=valueAtX(t.clientX);
-    sl.value=v; onVal(v);
+    if(parseFloat(sl.value)!==v){ sl.value=v; onVal(v); }
   }
-  sl.addEventListener('touchstart',function(e){ e.stopPropagation(); e.preventDefault(); read(); apply(e); },{passive:false});
-  sl.addEventListener('touchmove', function(e){ e.stopPropagation(); e.preventDefault(); apply(e); },{passive:false});
+  sl.addEventListener('touchstart',function(e){ e.stopPropagation(); if(e.cancelable)e.preventDefault(); read(); apply(e); },{passive:false});
+  sl.addEventListener('touchmove', function(e){ e.stopPropagation(); if(e.cancelable)e.preventDefault(); apply(e); },{passive:false});
 }
 attachSliderTouch(swSl, applyStrokeW);     // touch drags apply to the selected object too
 attachSliderTouch(opSl, applyOpacityAll);
