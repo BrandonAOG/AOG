@@ -5662,7 +5662,7 @@ function showTextHover(x, y){
     selCtx.globalAlpha=0.45;
     selCtx.font='bold '+(Math.max(10,11/zoom))+'px Arial,sans-serif';
     selCtx.fillStyle=color; selCtx.textAlign='left';
-    selCtx.fillText('T', x + 8/zoom, y - FONT_SIZE*1.1);
+    selCtx.fillText('T', x + 8/zoom, y - ptToCanvasPx(FONT_SIZE)*1.1); // true rendered height, not points-as-px
     selCtx.restore();
   }
 }
@@ -7597,21 +7597,24 @@ var txtBgSwatch=document.getElementById('txt-bg-swatch');
 var txtBgOpSl=document.getElementById('txt-bg-op-sl');
 var txtBgOpVal=document.getElementById('txt-bg-op-val');
 if(txtBgInput){
-  txtBgInput.addEventListener('input',function(e){
+  var applyTxtBg=function(e){
     textBgColor=e.target.value;
-    // Show solid color when opacity>0
     if(textBgOpacity>0){ txtBgSwatch.style.background=textBgColor; txtBgSwatch.style.backgroundImage='none'; }
     if(editingObj){ editingObj.bgColor=textBgColor; renderTextObjs(); }
-  });
+  };
+  txtBgInput.addEventListener('input', applyTxtBg);
+  txtBgInput.addEventListener('change', applyTxtBg); // iOS dismiss
 }
 if(txtBgOpSl){
-  txtBgOpSl.addEventListener('input',function(e){
-    textBgOpacity=parseInt(e.target.value)/100;
-    txtBgOpVal.textContent=e.target.value+'%';
+  var applyTxtBgOp=function(v){
+    textBgOpacity=Math.round(v)/100;
+    txtBgOpVal.textContent=Math.round(v)+'%';
     if(textBgOpacity>0){ txtBgSwatch.style.background=textBgColor; txtBgSwatch.style.backgroundImage='none'; }
     else { txtBgSwatch.style.background=''; txtBgSwatch.style.backgroundImage='repeating-conic-gradient(#aaa 0% 25%, transparent 0% 50%)'; txtBgSwatch.style.backgroundSize='8px 8px'; }
     if(editingObj){ editingObj.bgOpacity=textBgOpacity; renderTextObjs(); }
-  });
+  };
+  txtBgOpSl.addEventListener('input',function(e){ applyTxtBgOp(parseInt(e.target.value)); });
+  attachSliderTouch(txtBgOpSl, applyTxtBgOp);   // mobile Safari: native range drag is blocked
 }
 
 // ── MARKUP TOOL COLOR/OPACITY ─────────────────────────────────
@@ -7620,20 +7623,25 @@ var markupClrSwatch=document.getElementById('markup-clr-swatch');
 var markupOpSl=document.getElementById('markup-op-sl');
 var markupOpValEl=document.getElementById('markup-op-val');
 if(markupClrInput){
-  markupClrInput.addEventListener('input',function(e){
+  var applyMarkupClr=function(e){
     markupColor=e.target.value;
     markupClrSwatch.style.background=markupColor;
-  });
+  };
+  markupClrInput.addEventListener('input', applyMarkupClr);
+  markupClrInput.addEventListener('change', applyMarkupClr); // iOS dismiss
 }
 if(markupOpSl){
-  markupOpSl.addEventListener('input',function(e){
-    markupOpacity=parseInt(e.target.value)/100;
-    markupOpValEl.textContent=e.target.value+'%';
-  });
+  var applyMarkupOp=function(v){
+    markupOpacity=Math.round(v)/100;
+    markupOpValEl.textContent=Math.round(v)+'%';
+  };
+  markupOpSl.addEventListener('input',function(e){ applyMarkupOp(parseInt(e.target.value)); });
+  attachSliderTouch(markupOpSl, applyMarkupOp); // mobile Safari: native range drag is blocked
 }
-clrInput.addEventListener('input',function(e){
-  color=e.target.value; clrSwatch.style.background=color;
-  // Live update selected item
+// Apply on 'input' AND 'change': iOS color sheets often fire only 'change' on
+// dismiss, so applying on 'input' alone silently dropped mobile color picks.
+function applyStrokeColor(v){
+  color=v; clrSwatch.style.background=color;
   if(selectedShape){
     selectedShape.color=color;
     if(selectedShape._textObj) selectedShape._textObj.color=color;
@@ -7642,7 +7650,9 @@ clrInput.addEventListener('input',function(e){
   if(selectedMeasure){ selectedMeasure.color=color; renderMeasureSelection(); renderShapeAndMeasure(); }
   if(selectedPolyline){ selectedPolyline.color=color; renderShapeAndMeasure(); renderPolylineSelection(); }
   if(selectedLeader){ selectedLeader.color=color; renderShapeAndMeasure(); renderLeaderSelection(); }
-});
+}
+clrInput.addEventListener('input', function(e){ applyStrokeColor(e.target.value); });
+clrInput.addEventListener('change', function(e){ applyStrokeColor(e.target.value); });
 // One applier for stroke width, used by BOTH the native 'input' events
 // (desktop drag) and the custom touch path below. On mobile Safari the touch
 // helper preventDefaults the native range drag, so no 'input' events ever
@@ -7671,15 +7681,16 @@ swSl.addEventListener('input',function(e){ applyStrokeW(parseInt(e.target.value)
 opSl.addEventListener('input',function(e){ applyOpacityAll(parseInt(e.target.value)); });
 
 // Fill color + opacity pickers
-fillClrInput.addEventListener('input',function(e){
-  fillColor=e.target.value; updateFillSwatch();
-  // Auto-enable fill when user picks a fill color
-  fillShape=true; fillBtn.classList.add('active');
+function applyFillColor(v){
+  fillColor=v; updateFillSwatch();
+  fillShape=true; fillBtn.classList.add('active');   // picking a fill color enables fill
   if(selectedShape&&selectedShape.type!=='text'){
     selectedShape.fillColor=fillColor; selectedShape.fill=true; renderSelection();
     if(editShapeObj){ editShapeObj.fillColor=fillColor; editShapeObj.fill=true; }
   }
-});
+}
+fillClrInput.addEventListener('input', function(e){ applyFillColor(e.target.value); });
+fillClrInput.addEventListener('change', function(e){ applyFillColor(e.target.value); }); // iOS dismiss
 fillOpSl.addEventListener('input',function(e){
   fillOpacity=parseInt(e.target.value)/100; fillOpVal.textContent=e.target.value+'%'; updateFillSwatch();
   // Auto-enable fill when user adjusts opacity (0 = transparent = disable fill)
@@ -9693,12 +9704,14 @@ function showImgBar(ov){
 }
 function hideImgBar(){ _imgSelBar.style.display='none'; }
 
-_imgOpSl.addEventListener('input',function(){
+function applyImgOp(v){
   if(!selImg) return;
-  selImg.opacity=parseInt(this.value)/100;
-  _imgOpVal.textContent=this.value+'%';
+  selImg.opacity=Math.round(v)/100;
+  _imgOpVal.textContent=Math.round(v)+'%';
   renderImgOverlays(); renderImgSelection();
-});
+}
+_imgOpSl.addEventListener('input',function(){ applyImgOp(parseInt(this.value)); });
+attachSliderTouch(_imgOpSl, applyImgOp);      // mobile Safari: native range drag is blocked
 _imgOpSl.addEventListener('change',function(){ pushImgUndo(); });
 _imgOpSl.addEventListener('mousedown',function(e){ e.stopPropagation(); });
 _imgOpSl.addEventListener('touchstart',function(e){ e.stopPropagation(); },{passive:true});
