@@ -163,6 +163,10 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   transform-origin:top left;
   pointer-events:auto;
   -webkit-user-select:text;user-select:text;
+  /* The editor lives inside #viewport, which disables the iOS callout so marker
+     drags don't pop the selection menu. Re-enable it HERE so right-click /
+     long-press Paste works when typing a note or text. */
+  -webkit-touch-callout:default;
 }
 /* STAMP PICKER */
 #stamp-picker{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surf);border:1px solid var(--b2);border-radius:12px;padding:16px;z-index:100;display:none;min-width:260px}
@@ -3495,9 +3499,15 @@ function onDown(e){
     if(_imgHit){ selImg=_imgHit; renderImgOverlays(); renderImgSelection(); return; }
   }
 
-  // Tapping any existing text object with non-text/non-eraser tools → enter transform mode.
-  // Drawing tools are exempt — pressing over a text label must start the line/measure, not grab the text.
-  if(!selectedShape && tool!=='text' && tool!=='eraser' && tool!=='pan' && !DRAW_STRICT[tool] && !drawing){
+  // Tapping an existing text label selects it for transform — but ONLY with the
+  // text tool's own handler. The shape/note/create tools (rect, ellipse, cloud,
+  // note/comment, pen, stamp) must NEVER grab a text: a press over a label has
+  // to draw the shape / place the note OVER it, not pop the text's transform
+  // outline. (Line/measure-type tools are already excluded via DRAW_STRICT.)
+  var _isCreateTool = (tool==='rect'||tool==='ellipse'||tool==='cloud'||
+                       tool==='comment'||tool==='pen'||tool==='stamp');
+  if(!selectedShape && tool!=='text' && tool!=='eraser' && tool!=='pan' &&
+     !_isCreateTool && !DRAW_STRICT[tool] && !drawing){
     var _anyText=findTextObjAt(sp.x,sp.y);
     if(_anyText){
       e.preventDefault();
@@ -3512,6 +3522,12 @@ function onDown(e){
     // grab it: previously pressing its body MOVED the shape ("it switches to
     // rect or ellipse") and pressing anywhere else only deselected and ATE the
     // press entirely. Commit it and let this same press start the new draw.
+    commitSelection();
+  }
+  else if(selectedShape && selectedShape.type==='text' && _isCreateTool){
+    // A text was left selected (oval transform outline) but the user is now on a
+    // shape/note/create tool. Don't grab the text — drop the selection and let
+    // this same press start drawing the shape / placing the note over it.
     commitSelection();
   }
   else if(selectedShape && tool!=='measure'){
@@ -3762,6 +3778,44 @@ function onDown(e){
 }
 
 function onMove(e){
+  // ── Moving a text by its dashed border ──
+  if(_txtMoving && _txtMoveObj){
+    if(e.cancelable) e.preventDefault();
+    var _mp=getPos(e);
+    _txtMoveObj.x=_txtMoveStart.ox+(_mp.x-_txtMoveStart.px);
+    _txtMoveObj.y=_txtMoveStart.oy+(_mp.y-_txtMoveStart.py);
+    renderTextObjs();
+    if(selCv.width!==drawCv.width||selCv.height!==drawCv.height){ selCv.width=drawCv.width; selCv.height=drawCv.height; }
+    selCtx.clearRect(0,0,selCv.width,selCv.height);
+    _drawTextChrome(_txtMoveObj);
+    return;
+  }
+  // ── Rotating a text by its rotate handle ──
+  if(_txtRotating && _txtRotObj){
+    if(e.cancelable) e.preventDefault();
+    var _rp=getPos(e);
+    var _na=Math.atan2(_rp.y-_txtRotStart.cy, _rp.x-_txtRotStart.cx)-_txtRotStart.off;
+    // Snap to whole degrees (1° increments). Shift = free/fine rotation.
+    if(!_shiftDown){
+      var _DEG=Math.PI/180;
+      _na=Math.round(_na/_DEG)*_DEG;
+    }
+    // Rotate about the box CENTER: re-derive the origin so the center stays put.
+    var _d=_textBoxDims(_txtRotObj);
+    var _lcx=_d.w/2, _lcy=-_d.fpx+_d.h/2;
+    var _ca=Math.cos(_na), _sa=Math.sin(_na);
+    _txtRotObj.angle=_na;
+    _txtRotObj.x=_txtRotStart.cx-(_lcx*_ca-_lcy*_sa);
+    _txtRotObj.y=_txtRotStart.cy-(_lcx*_sa+_lcy*_ca);
+    renderTextObjs();
+    if(selCv.width!==drawCv.width||selCv.height!==drawCv.height){ selCv.width=drawCv.width; selCv.height=drawCv.height; }
+    selCtx.clearRect(0,0,selCv.width,selCv.height);
+    _drawTextChrome(_txtRotObj);
+    // Live degree readout (0–359°, where 0° = upright).
+    var _deg=((Math.round(_na*180/Math.PI)%360)+360)%360;
+    _drawAngleBadge(_txtRotObj, _deg);
+    return;
+  }
   // Leader hold-and-drag: live dashed preview for TOUCH (the separate drawCv
   // mousemove listener already draws the identical preview for the mouse).
   if(_leaderDragPlacing && tool==='leader' && leaderStep===1 && e.touches){
@@ -3879,7 +3933,9 @@ function onMove(e){
       // rotation here would desync the hit zones from the drawn box permanently.
       if(selectedShape.type!=='comment'){
         var rawA=Math.atan2(tp.y-selectedShape.cy, tp.x-selectedShape.cx);
-        selectedShape.angle=rawA-selDragStart.rotAngleOffset;
+        var _sAng=rawA-selDragStart.rotAngleOffset;
+        if(!_shiftDown){ var _SD=Math.PI/180; _sAng=Math.round(_sAng/_SD)*_SD; } // 1° snap
+        selectedShape.angle=_sAng;
       }
     } else {
       // Resize — opposite side stays anchored (not symmetric from center).
@@ -3919,8 +3975,8 @@ function onMove(e){
       var wcos=Math.cos(orig.angle), wsin=Math.sin(orig.angle);
       selectedShape.cx=orig.cx+clx*wcos-cly*wsin;
       selectedShape.cy=orig.cy+clx*wsin+cly*wcos;
-      // If resizing a text object, scale fontSize with height AND
-      // update the bubble width so text stays inside the ellipse at the new size.
+      // If resizing a text object, scale fontSize with height AND keep the
+      // selection box tight to the rendered text (rectangular text-box style).
       if(selectedShape.type==='text'&&selectedShape._textObj&&selDragStart.origFontSize&&selDragStart.origH>0){
         var ratio=selectedShape.h/selDragStart.origH;
         var newFs=Math.max(6,Math.round(selDragStart.origFontSize*ratio));
@@ -3928,8 +3984,8 @@ function onMove(e){
         var _tlines=selectedShape._textObj.text.split('\n');
         var _newTextW=measureLinesW(_tlines,newFs);
         var _newTextH=_tlines.length*newFs*1.35;
-        selectedShape.w=Math.max(_newTextW*TEXT_ELLIPSE_K,40);
-        selectedShape.h=Math.max(_newTextH*TEXT_ELLIPSE_K,newFs*1.5);
+        selectedShape.w=Math.max(_newTextW,40);
+        selectedShape.h=Math.max(_newTextH,newFs*1.5);
         renderTextObjs();
       }
     }
@@ -4017,6 +4073,27 @@ function onMove(e){
 }
 
 function onUp(e){
+  // ── Text move release: persist new position, show the moved text ──
+  if(_txtMoving){
+    if(e.cancelable) e.preventDefault();
+    _txtMoving=false; _txtMoveObj=null; _txtMoveStart=null;
+    renderTextObjs();
+    if(selCv.width>1) selCtx.clearRect(0,0,selCv.width,selCv.height);
+    selCv.width=1; selCv.height=1;
+    pushUndo();
+    return;
+  }
+  // ── Text rotate release: persist angle and show the rotated text ──
+  if(_txtRotating){
+    if(e.cancelable) e.preventDefault();
+    _txtRotating=false; _txtRotObj=null; _txtRotStart=null;
+    renderTextObjs();
+    // Clear the chrome — the rotated text is now shown committed on the canvas.
+    if(selCv.width>1) selCtx.clearRect(0,0,selCv.width,selCv.height);
+    selCv.width=1; selCv.height=1;
+    pushUndo();
+    return;
+  }
   // ── Leader hold-and-drag release: commit the leader, open a CLEAN label ──
   if(_leaderDragPlacing && tool==='leader'){
     _leaderDragPlacing=false;
@@ -4178,12 +4255,23 @@ function onUp(e){
     // clear the live-drag flag, and restore the static draw at the new pose. ──
     if(selectedShape&&selectedShape.type==='text'&&selectedShape._textObj){
       var _tt=selectedShape._textObj;
-      // Position already synced live during move; ensure angle is persisted too
-      // (rotation only updates selectedShape.angle during the drag).
+      // Write the new POSE back to the text object. The move/rotate drag only
+      // updates selectedShape.cx/cy/angle (the live preview derives from those),
+      // so derive obj.x/obj.y from the selection center using the SAME inverse-
+      // rotation math as commitSelection. Without this the static copy redrew at
+      // the OLD position (it was only ever shown via the selCv preview before).
+      var _lns=_tt.text.split('\n');
+      var _fpx=ptToCanvasPx(_tt.fontSize);
+      var _ew=measureLinesWFull(_lns,_fpx,_tt.fontFamily||'Arial',_tt.bold,_tt.italic);
+      var _eh=_lns.length*_fpx*1.35;
+      var _cs=Math.cos(selectedShape.angle), _sn=Math.sin(selectedShape.angle);
+      var _lcx=_ew/2, _lcy=-_fpx+_eh/2;
+      _tt.x=selectedShape.cx-(_lcx*_cs-_lcy*_sn);
+      _tt.y=selectedShape.cy-(_lcx*_sn+_lcy*_cs);
       _tt.angle=selectedShape.angle;
-      // Font-size from resize is written live in the resize branch; nothing else
-      // to copy here. Re-establish the selection box around the final text pose.
       _dragText=null;                    // stop skipping it in renderTextObjs
+      selHandle=-1; selDragStart=null;   // reset BEFORE renderTextObjs so the
+                                         // static text is no longer flagged hidden
       renderTextObjs();                  // redraw static text at its new pose
       renderSelection();                 // keep handles, now over the static text
       pushUndo();
@@ -5752,7 +5840,14 @@ function renderTextCursorFrame(){
     selCv.height = drawCv.height;
   }
   selCtx.clearRect(0,0,selCv.width,selCv.height);
-  if(_txtCursorActive && _txtCursorBlink){
+  // Dashed box + rotate handle around the text being edited (redrawn every
+  // blink frame so it persists with the caret).
+  if(editingObj) _drawTextChrome(editingObj);
+  // The live <textarea> shows its OWN native caret (click anywhere, select, type
+  // mid-text — exactly like the notes editor). Only draw the canvas I-beam when
+  // that editor isn't up, so we don't paint a misleading second cursor.
+  var _editorUp = (textOv && textOv.style.display!=='none');
+  if(_txtCursorActive && _txtCursorBlink && !_editorUp){
     drawTextCursorAt(_txtCursorX, _txtCursorY, 1.0);
   }
 }
@@ -5781,6 +5876,11 @@ function stopTextCursor(){
 // ── Sync text-formatting toolbar state from a text object ────────
 function _syncTextFmtFromObj(obj){
   if(!obj) return;
+  if(obj.fontSize){
+    FONT_SIZE = obj.fontSize;
+    var _fss=document.getElementById('font-size-sel');
+    if(_fss) _fss.value=String(obj.fontSize);
+  }
   textFontFamily = obj.fontFamily || 'Arial';
   textBold       = !!obj.bold;
   textItalic     = !!obj.italic;
@@ -5836,15 +5936,20 @@ function showTextHover(x, y){
     var estW=measureLinesW(lines,oefpx);
     var estH=lines.length*oefpx*1.3;
     var pad=6/zoom;
+    var _hang=overExisting.angle||0;   // follow the text's rotation
     selCtx.save();
+    // Draw in the label's own rotated frame so the dashed box sits over the live
+    // (rotated) text, not its original upright position.
+    selCtx.translate(overExisting.x, overExisting.y);
+    selCtx.rotate(_hang);
     selCtx.strokeStyle=color; selCtx.lineWidth=1.5/zoom;
     selCtx.setLineDash([4/zoom,3/zoom]); selCtx.globalAlpha=0.7;
-    selCtx.strokeRect(overExisting.x-pad, overExisting.y-oefpx-pad, estW+pad*2, estH+pad*2);
+    selCtx.strokeRect(-pad, -oefpx-pad, estW+pad*2, estH+pad*2);
     // Edit pencil icon hint
     selCtx.setLineDash([]); selCtx.globalAlpha=0.8;
     selCtx.font='bold '+(Math.max(10,11/zoom))+'px Arial,sans-serif';
     selCtx.fillStyle=color; selCtx.textAlign='left';
-    selCtx.fillText('✎ edit', overExisting.x, overExisting.y-oefpx-8/zoom);
+    selCtx.fillText('✎ edit', 0, -oefpx-8/zoom);
     selCtx.restore();
   } else {
     drawCv.style.cursor='crosshair';
@@ -6046,38 +6151,170 @@ function handleCommentDown(e, sp, isTouch){
   compositedSnap=dCtx.getImageData(0,0,drawCv.width,drawCv.height);
 }
 var _txtTapTime=0, _txtTapObj=null;
+// ── Text edit chrome + rotate handle ───────────────────────────────────────
+// While a text is being edited we draw a dashed box around it with ONE rotate
+// handle above it. Grabbing that handle rotates the whole label. Clicking inside
+// the text just places the edit caret (handled natively by the textarea).
+var _txtRotating=false, _txtRotStart=null, _txtRotObj=null;
+// Grabbing the dashed BORDER (not the rotate handle, not inside the text) drags
+// the whole label to a new spot.
+var _txtMoving=false, _txtMoveObj=null, _txtMoveStart=null;
+
+function _textBoxDims(o){
+  var lines=o.text.split('\n');
+  var fpx=ptToCanvasPx(o.fontSize);
+  var w=measureLinesWFull(lines,fpx,o.fontFamily||'Arial',o.bold,o.italic);
+  var h=lines.length*fpx*1.35;
+  return {fpx:fpx,w:w,h:h};
+}
+function _textCenter(o){
+  var d=_textBoxDims(o), ang=o.angle||0, ca=Math.cos(ang), sa=Math.sin(ang);
+  var lcx=d.w/2, lcy=-d.fpx+d.h/2;
+  return {x:o.x+(lcx*ca-lcy*sa), y:o.y+(lcx*sa+lcy*ca)};
+}
+// Draw the dashed text box + rotate handle for o onto selCtx. Caller has cleared selCv.
+function _drawTextChrome(o){
+  if(!o) return;
+  var d=_textBoxDims(o);
+  var pad=6/zoom, lw=1.5/zoom, ro=ROT_OFFSET/zoom, ang=o.angle||0;
+  selCtx.save();
+  selCtx.translate(o.x,o.y); selCtx.rotate(ang);
+  // Dashed text box (rectangular, hugs the glyphs)
+  selCtx.strokeStyle='rgba(0,212,255,0.9)'; selCtx.lineWidth=lw;
+  selCtx.setLineDash([5/zoom,3/zoom]); selCtx.globalAlpha=1;
+  selCtx.strokeRect(-pad,-d.fpx-pad,d.w+pad*2,d.h+pad*2);
+  // Connector + rotate handle above top-center
+  var topx=d.w/2, topy=-d.fpx-pad, hubx=topx, huby=topy-ro;
+  selCtx.setLineDash([2/zoom,2/zoom]);
+  selCtx.beginPath(); selCtx.moveTo(topx,topy); selCtx.lineTo(hubx,huby); selCtx.stroke();
+  selCtx.setLineDash([]);
+  var r=Math.max(7,HANDLE_SIZE/zoom)*1.15;
+  selCtx.fillStyle=ROT_COLOR; selCtx.strokeStyle='#fff'; selCtx.lineWidth=lw*1.5;
+  selCtx.shadowColor=ROT_COLOR; selCtx.shadowBlur=6/zoom;
+  selCtx.beginPath(); selCtx.arc(hubx,huby,r,0,Math.PI*2); selCtx.fill(); selCtx.stroke();
+  selCtx.shadowBlur=0;
+  selCtx.strokeStyle='#fff'; selCtx.lineWidth=lw*1.2;
+  selCtx.beginPath(); selCtx.arc(hubx,huby,r*0.5,Math.PI*0.12,Math.PI*1.7,false); selCtx.stroke();
+  selCtx.restore();
+  // Store the handle's world position for hit-testing
+  var ca=Math.cos(ang), sa=Math.sin(ang);
+  o._rotHandle={x:o.x+(hubx*ca-huby*sa), y:o.y+(hubx*sa+huby*ca), r:Math.max(16,22/zoom)};
+}
+function _textRotHandleAt(o,x,y){
+  return !!(o&&o._rotHandle&&Math.hypot(x-o._rotHandle.x,y-o._rotHandle.y)<=o._rotHandle.r);
+}
+// Small "##°" readout drawn at a canvas position, screen-upright.
+function _drawAngleBadgeXY(ctx,x,y,deg){
+  var fs=Math.max(9,Math.min(15,12/zoom)), pad=4/zoom, lw=0.9/zoom, rad=3/zoom;
+  var text=deg+'\u00B0';
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.font='bold '+fs+'px "Share Tech Mono",monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  var tw=ctx.measureText(text).width, bw=tw+pad*2.4, bh=fs+pad*2;
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(-bw/2,-bh/2,bw,bh,rad); else ctx.rect(-bw/2,-bh/2,bw,bh);
+  ctx.fillStyle='rgba(8,8,18,0.88)'; ctx.fill();
+  ctx.strokeStyle=ROT_COLOR; ctx.lineWidth=lw; ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.shadowColor=ROT_COLOR; ctx.shadowBlur=3/zoom;
+  ctx.fillText(text,0,0);
+  ctx.restore();
+}
+// Degrees (0–359, 0°=upright) from a radian angle.
+function _angToDeg(a){ return ((Math.round((a||0)*180/Math.PI)%360)+360)%360; }
+// Small "##°" readout drawn just above a text's rotate handle while rotating.
+function _drawAngleBadge(o,deg){
+  if(!o||!o._rotHandle) return;
+  _drawAngleBadgeXY(selCtx, o._rotHandle.x, o._rotHandle.y-16/zoom, deg);
+}
+// True when (x,y) is on/near the dashed BOX border of o (in its rotated frame),
+// but not deep inside the text. Grabbing the border drags the whole label.
+function _textBorderAt(o,x,y){
+  var d=_textBoxDims(o);
+  var pad=6/zoom, band=Math.max(14,18/zoom);
+  var ang=o.angle||0, ca=Math.cos(-ang), sa=Math.sin(-ang);
+  var dx=x-o.x, dy=y-o.y;
+  var lx=dx*ca-dy*sa, ly=dx*sa+dy*ca;
+  var L=-pad, R=d.w+pad, T=-d.fpx-pad, B=d.h-d.fpx+pad;
+  if(lx<L-band||lx>R+band||ly<T-band||ly>B+band) return false;   // outside box+band
+  if(lx>L+band&&lx<R-band&&ly>T+band&&ly<B-band) return false;   // deep interior → not border
+  return true;
+}
+// Grab the dashed border and start moving the whole label.
+function _beginTextMove(o,p){
+  captureState(false);
+  if(editingObj===o){ o.text=textOv.value; }
+  o._editing=false; editingObj=null;
+  stopTextCursor();
+  if(textOv.style.display!=='none'){ textOv.style.display='none'; textOv.blur(); textOv.value=''; }
+  renderTextObjs();
+  _txtMoveObj=o; _txtMoving=true;
+  _txtMoveStart={px:p.x,py:p.y,ox:o.x,oy:o.y};
+  if(selCv.width!==drawCv.width||selCv.height!==drawCv.height){ selCv.width=drawCv.width; selCv.height=drawCv.height; }
+  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  _drawTextChrome(o);
+}
+// Grab the rotate handle of the text currently being edited and start rotating.
+function _beginTextRotate(o,p){
+  // Persist any in-progress edits, close the editor, show the text on canvas so
+  // it can rotate live.
+  captureState(false);   // vector op — snapshot for undo (no pixel copy needed)
+  if(editingObj===o){ o.text=textOv.value; }
+  o._editing=false; editingObj=null;
+  stopTextCursor();
+  if(textOv.style.display!=='none'){ textOv.style.display='none'; textOv.blur(); textOv.value=''; }
+  renderTextObjs();
+  var c=_textCenter(o);
+  _txtRotObj=o; _txtRotating=true;
+  _txtRotStart={cx:c.x, cy:c.y, off:Math.atan2(p.y-c.y,p.x-c.x)-(o.angle||0)};
+  if(selCv.width!==drawCv.width||selCv.height!==drawCv.height){ selCv.width=drawCv.width; selCv.height=drawCv.height; }
+  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  _drawTextChrome(o);
+}
+// (Re)open the inline editor for o — caret + dashed box + rotate handle.
+function _openTextEdit(o){
+  commitText();
+  stopTextCursor();
+  cancelSelection();
+  editingObj=o;
+  o._editing=true;
+  renderTextObjs();
+  textX=o.x; textY=o.y;
+  _textAnchorRight=(o._anchorRight===true && o._anchorX!=null);
+  // Load the text + formatting BEFORE showing/sizing the overlay, so the
+  // auto-fit measures the real (full) content and the box grows to show every
+  // line instead of clipping to the empty default height.
+  textOv.value=o.text;
+  _syncTextFmtFromObj(o);
+  startTextCursor(o.x, o.y);
+  showTextOverlay(o.x, o.y);
+  _fitTextOv();              // size to the loaded content (all lines visible)
+  renderTextCursorFrame();   // draw the box + rotate handle right away
+}
+
 function handleText(e){
   _textAnchorRight = false;  // normal text never uses the leader's left-hang anchor
   var p=getPos(e);
-  // If a text object is in transform mode, commit it first so it becomes
-  // visible and findTextObjAt can hit-test it correctly.
+  // Grabbing the rotate handle of the text being edited → rotate it.
+  if(editingObj && _textRotHandleAt(editingObj,p.x,p.y)){
+    if(e.cancelable) e.preventDefault();
+    _beginTextRotate(editingObj,p);
+    return;
+  }
+  // Grabbing the dashed border of the text being edited → move the whole label.
+  if(editingObj && _textBorderAt(editingObj,p.x,p.y)){
+    if(e.cancelable) e.preventDefault();
+    _beginTextMove(editingObj,p);
+    return;
+  }
   if(selectedShape&&selectedShape.type==='text') commitSelection();
   var existing=findTextObjAt(p.x,p.y);
   var now=Date.now();
 
   if(existing){
-    var isDouble=(now-_txtTapTime<380 && _txtTapObj===existing);
+    // Clicking a text only ever places the edit caret — no transform/move box.
     _txtTapTime=now; _txtTapObj=existing;
-    if(isDouble){
-      // Double-tap = edit text content
-      commitText();
-      stopTextCursor();
-      cancelSelection(); // close transform handles
-      editingObj=existing;
-      existing._editing=true;
-      renderTextObjs();
-      textX=existing.x; textY=existing.y;
-      _textAnchorRight = (existing._anchorRight===true && existing._anchorX!=null);
-      startTextCursor(existing.x, existing.y);
-      showTextOverlay(existing.x, existing.y);
-      textOv.value=existing.text;
-      // Sync formatting state from the existing object
-      _syncTextFmtFromObj(existing);
-    } else {
-      // Single tap = enter transform mode (move/rotate)
-      commitText();
-      enterTextTransformMode(existing);
-    }
+    _openTextEdit(existing);
   } else {
     _txtTapTime=now; _txtTapObj=null;
     commitText();
@@ -6171,6 +6408,19 @@ function repositionTextOverlay(){
   textOv.style.lineHeight = '1.2';
   textOv.style.transform = scaleV<0.99 ? 'scale('+scaleV.toFixed(3)+')' : 'none';
   textOv.style.transformOrigin='top left';
+  // ── Rotated editing (type sideways, Adobe-style) ──────────────
+  // When the text being edited is rotated, rotate the live textarea to match so
+  // the typed glyphs overlay the rotated label and the native caret lands where
+  // you click. Anchor + rotate about the glyph's top-left corner.
+  var _eAng = (editingObj && editingObj.angle) ? editingObj.angle : 0;
+  if(_eAng){
+    var _gx = cx + FONT_PX*Math.sin(_eAng);   // rotated glyph-top-left (canvas)
+    var _gy = cy - FONT_PX*Math.cos(_eAng);
+    textOv.style.left = (panX + _gx*zoom) + 'px';
+    textOv.style.top  = (panY + _gy*zoom) + 'px';
+    textOv.style.transform = 'rotate(' + _eAng + 'rad)' +
+      (scaleV < 0.99 ? (' scale(' + scaleV.toFixed(3) + ')') : '');
+  }
   textOv.style.color   = color;
   textOv.style.opacity = opacity;
   // Live Text-BG highlight behind the typed text (rgba from color+opacity).
@@ -6193,6 +6443,10 @@ function repositionTextOverlay(){
   textOv.style.width   = boxW + 'px';
   textOv.style.minWidth = '0px';           // override the CSS 200px floor so right-anchor width is exact
   textOv.style.height  = Math.max(40, renderSz * 2) + 'px';
+  // Multi-line or long pasted text would otherwise be clipped by this fixed
+  // ~2-line height (the box only grew on a typed Enter, never on paste). Grow to
+  // fit the actual content so everything the user pasted stays visible.
+  _fitTextOv();
 
   // ── Keep the canvas-drawn I-beam aligned with where the text actually
   // renders. Near the right/bottom edge the overlay gets clamped left/up
@@ -6218,7 +6472,36 @@ function repositionTextOverlay(){
   }
 }
 
-// Listen for keyboard appearance / viewport resize on iOS
+// Auto-size the TEXT-tool overlay to its content so multi-line and long pasted
+// text is fully visible while editing (the textarea is overflow:hidden, so any
+// content past the fixed box size would otherwise be invisible). Comments are
+// skipped — they manage their own sizing via _cmtAutoGrow.
+function _fitTextOv(){
+  if(_editingComment) return;
+  if(textOv.style.display==='none') return;
+  var renderSz = parseFloat(textOv.style.fontSize) || 16;
+  // Height: grow to fit every line.
+  textOv.style.height = 'auto';
+  textOv.style.height = Math.max(40, renderSz * 2, textOv.scrollHeight) + 'px';
+  // Width: grow to the longest line so long pastes aren't cut off horizontally
+  // (white-space:pre = no wrap). Left-anchored only — right-anchored leader
+  // labels keep their alignment-critical computed width. Clamp to the viewport.
+  if(editingObj && editingObj.angle){
+    // Rotated editing: the box is rotated, so viewport-axis clamping doesn't
+    // apply. Size straight to the content's natural width.
+    textOv.style.width = Math.max(60, textOv.scrollWidth + 8) + 'px';
+  } else if(!_textAnchorRight){
+    var sx     = parseFloat(textOv.style.left) || 0;
+    var vpW    = viewport.clientWidth || 0;
+    var scaleV = 1, _tr = textOv.style.transform || '', _si = _tr.indexOf('scale(');
+    if(_si >= 0) scaleV = parseFloat(_tr.slice(_si + 6)) || 1;
+    var contentW = textOv.scrollWidth + 8;
+    var maxW = vpW > 0 ? Math.max(60, (vpW - sx) / (scaleV || 1) - 4) : contentW;
+    textOv.style.width = Math.min(maxW, Math.max(200, contentW)) + 'px';
+  }
+}
+
+
 if(window.visualViewport){
   window.visualViewport.addEventListener('resize', function(){
     // Route to ONE styler. Calling repositionTextOverlay while a NOTE was being
@@ -6306,10 +6589,21 @@ textOv.addEventListener('keydown',function(e){
   }
 });
 
-// ── Auto-grow comment box when user types or pastes ───────────
+// ── Auto-grow box when user types or pastes (notes AND text objects) ───────
 textOv.addEventListener('input', function(){
-  if(!_editingComment) return;
-  _cmtAutoGrow(_editingComment);
+  if(_editingComment){ _cmtAutoGrow(_editingComment); return; }
+  _fitTextOv();
+  // Keep the dashed box + rotate handle tracking the text as it's typed.
+  if(editingObj){ editingObj.text=textOv.value; renderTextCursorFrame(); }
+});
+// Paste updates .value AFTER the event fires, so re-fit on the next tick. This
+// fixes pasted text appearing to vanish in a text object (it was just clipped
+// by the fixed box height until the overlay got re-fit to its content).
+textOv.addEventListener('paste', function(){
+  setTimeout(function(){
+    if(_editingComment) _cmtAutoGrow(_editingComment);
+    else _fitTextOv();
+  }, 0);
 });
 // While editing a note, the textarea must never scroll its own content
 // (that's what made text drift outside the box). Redirect wheel to canvas pan.
@@ -6359,7 +6653,7 @@ function commitText(){
       }
       var upd=editingObj; editingObj=null;
       renderTextObjs(); pushUndo();
-      enterTextTransformMode(upd); // allow repositioning/rotating after edit
+      // (No transform box — committing a text just places it. Re-click to edit.)
     }
   } else {
     if(!val.trim()) return;
@@ -6379,7 +6673,7 @@ function commitText(){
              bgColor:textBgColor,bgOpacity:textBgOpacity,
              _anchorRight:_textAnchorRight, _anchorX:textX};
     textObjs.push(obj); renderTextObjs(); pushUndo();
-    enterTextTransformMode(obj); // immediately allow move+rotate
+    // (No transform box — a freshly placed text just sits there. Re-click to edit.)
   }
   _textAnchorRight = false; // reset so the next text entry starts clean
 }
@@ -6387,21 +6681,26 @@ function commitText(){
 // Enter selection mode for a text object (move + rotate, no resize)
 function enterTextTransformMode(obj){
   if(!obj) return;
+  // Reset any leftover transform state FIRST. renderTextObjs() hides the static
+  // text whenever selHandle!==-1 or _dragText is set; if a stale value survived
+  // from a previous drag, the freshly selected text would be drawn hidden and
+  // only show as the selection-canvas preview (it then vanished on the next
+  // interaction until deselect/reselect). Clearing here keeps it visible.
+  selHandle=-1; selDragStart=null; _dragText=null;
   // Render text on txt-cv immediately (keep visible at all times)
   obj._editing=false;
   renderTextObjs();
   var lines=obj.text.split('\n');
   var tmfpx=ptToCanvasPx(obj.fontSize);
-  // Use actual canvas measurement so the ellipse fits the real rendered text.
+  // Tight bounds around the actual rendered text — the selection is drawn as a
+  // rectangular text box (not an oval), so it should hug the glyphs.
   var textW=measureLinesWFull(lines,tmfpx,obj.fontFamily||'Arial',obj.bold,obj.italic);
   var textH=lines.length*tmfpx*1.35;
-  // Ellipse must be TEXT_ELLIPSE_K× larger than the text bounding box so that
-  // all four text corners sit inside the ellipse (see TEXT_ELLIPSE_K comment above).
-  var estW=textW*TEXT_ELLIPSE_K;
-  var estH=textH*TEXT_ELLIPSE_K;
-  // The text is drawn rotated about its origin (obj.x, obj.y). Compute the
-  // ellipse center by rotating the local center-offset by the same angle, so
-  // the selection box sits exactly over the rotated glyphs (not drifted off).
+  var estW=textW;
+  var estH=textH;
+  // The text is drawn rotated about its origin (obj.x, obj.y). Compute the box
+  // center by rotating the local center-offset by the same angle, so the
+  // selection box sits exactly over the rotated glyphs (not drifted off).
   var _ang=obj.angle||0;
   var _lcx=textW/2, _lcy=-tmfpx+textH/2;   // center offset in the text's local frame
   var _ca=Math.cos(_ang), _sa=Math.sin(_ang);
@@ -6700,7 +6999,7 @@ function renderSelection(){
   selCtx.strokeStyle='rgba(0,212,255,0.8)';
   selCtx.lineWidth=lw; selCtx.setLineDash([4/zoom,3/zoom]); selCtx.globalAlpha=1;
   var pad=6/zoom;
-  if(s.type==='rect'||s.type==='comment') selCtx.strokeRect(-s.w/2-pad,-s.h/2-pad,s.w+pad*2,s.h+pad*2);
+  if(s.type==='rect'||s.type==='comment'||s.type==='text') selCtx.strokeRect(-s.w/2-pad,-s.h/2-pad,s.w+pad*2,s.h+pad*2);
   else{selCtx.beginPath();selCtx.ellipse(0,0,s.w/2+pad,s.h/2+pad,0,0,Math.PI*2);selCtx.stroke();}
   selCtx.restore();
 
@@ -6774,6 +7073,12 @@ function renderSelection(){
   // updates in real time as a corner handle is dragged bigger/smaller.
   if(s.type==='text' && s._textObj){
     _drawTextSizeBadge(selCtx, s);
+  }
+
+  // Live degree readout while rotating a shape (rotation handles 8-11).
+  if(selHandle>=8 && selHandle<=11 && s.type!=='comment'){
+    var _rh=handles[selHandle] || handles[9] || {x:s.cx, y:s.cy};
+    _drawAngleBadgeXY(selCtx, _rh.x, _rh.y - 16/zoom, _angToDeg(s.angle));
   }
 }
 
@@ -9599,6 +9904,11 @@ function renderImgSelection(){
   if(selImgDrag && selImgDrag.hi >= 0 && selImgDrag.hi <= 7){
     _drawDimBadges(selCtx, ov.cx, ov.cy, ov.w, ov.h, ov.angle);
   }
+  // Degree readout — while actively rotating (handles 8-11)
+  if(selImgDrag && selImgDrag.hi >= 8 && selImgDrag.hi <= 11){
+    var _irh=handles[selImgDrag.hi] || handles[9] || {x:ov.cx, y:ov.cy};
+    _drawAngleBadgeXY(selCtx, _irh.x, _irh.y - 16/zoom, _angToDeg(ov.angle));
+  }
 }
 
 // ── Shared live dimension badges (shown during resize for images AND shapes) ──
@@ -9805,7 +10115,9 @@ function handleImgPointerMove(e, sp){
     // Rotate: angle from centre to current cursor
     var angle = Math.atan2(sp.y - d.cy, sp.x - d.cx);
     var startAngle = Math.atan2(d.startY - d.cy, d.startX - d.cx);
-    selImg.angle = d.angle + (angle - startAngle);
+    var _ia = d.angle + (angle - startAngle);
+    if(!_shiftDown){ var _ID=Math.PI/180; _ia=Math.round(_ia/_ID)*_ID; } // 1° snap
+    selImg.angle = _ia;
 
   } else {
     // Resize: the fixed corner stays put; the dragged corner follows the cursor.
@@ -11073,6 +11385,15 @@ function applyWmScale(){
   }
 
   viewport.addEventListener('contextmenu', function(e){
+    // If the right-click landed in the note/text editor (or any editable field),
+    // do NOT hijack it — let the browser's native menu appear so the user can
+    // Paste clipboard text, Select All, etc. inside their note.
+    var _t = e.target;
+    if(_t === textOv ||
+       (_t && (_t.tagName==='TEXTAREA' || _t.tagName==='INPUT' || _t.isContentEditable))){
+      hideMenu();
+      return; // no preventDefault → native context menu shows
+    }
     e.preventDefault();
     if(!baseLoaded){ hideMenu(); return; }
     var cp = vpToCanvas(e.clientX, e.clientY);
