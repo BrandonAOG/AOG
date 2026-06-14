@@ -124,11 +124,11 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .leg-swatch{width:18px;height:4px;border-radius:2px;flex-shrink:0}
 .leg-name{font-size:11px;color:var(--txt2)}
 /* VIEWPORT */
-#viewport{flex:1;overflow:hidden;position:relative;cursor:default;background:var(--bg);contain:layout}
+#viewport{flex:1;overflow:hidden;position:relative;cursor:default;background:var(--bg);contain:layout;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #scene{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
 #canvas-wrap{position:relative;display:none;border-radius:3px;overflow:hidden;box-shadow:0 8px 48px rgba(0,0,0,.7)}
 #base-cv{display:block}
-#draw-cv{position:absolute;top:0;left:0;display:block;touch-action:none}
+#draw-cv{position:absolute;top:0;left:0;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #grid-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;opacity:.35}
 /* DROP ZONE */
 #drop-zone{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--txt2);pointer-events:none}
@@ -778,9 +778,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   
   <button class="tb-btn" data-tool="text"><svg viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg><span class="lbl">Text</span></button>
   <button class="tb-btn" data-tool="comment" title="Comment box — drag to place, click to edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="13" x2="13" y2="13"/></svg><span class="lbl">Note</span></button>
-  <button class="tb-btn" data-tool="highlight" title="Highlight — drag to highlight text area"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="8" rx="1" fill="rgba(253,224,71,.35)" stroke="#f59e0b"/><line x1="3" y1="20" x2="21" y2="20"/></svg><span class="lbl">Hilite</span></button>
-  <button class="tb-btn" data-tool="strikeout" title="Strikethrough — drag to mark text for deletion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12" stroke="#ef4444"/><line x1="7" y1="7" x2="17" y2="7" stroke-width="1" opacity=".4"/><line x1="7" y1="17" x2="17" y2="17" stroke-width="1" opacity=".4"/></svg><span class="lbl">Strike</span></button>
-  <button class="tb-btn" data-tool="underlinemark" title="Underline markup — drag to underline text area"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="19" x2="20" y2="19" stroke="#3b82f6"/><path d="M8 5v7a4 4 0 0 0 8 0V5" stroke-width="1.5"/></svg><span class="lbl">Uline</span></button>
+  <button class="tb-btn" data-tool="highlight" title="Highlight — drag to highlight any area"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="8" rx="1" fill="rgba(253,224,71,.35)" stroke="#f59e0b"/><line x1="3" y1="20" x2="21" y2="20"/></svg><span class="lbl">Hilite</span></button>
+  <!-- Standalone Strike / Underline markup tools removed — these are available
+       inside the Text and Note formatting bars (U / S buttons). -->
   <div id="tb-font-size-grp"><select id="font-size-sel" title="Font size">
     <option value="6">6</option><option value="7">7</option>
     <option value="8">8</option><option value="9">9</option>
@@ -837,15 +837,13 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       <span id="txt-bg-op-val" style="font-size:8px">0%</span>
     </div>
   </div>
-  <!-- MARKUP TOOLS: Highlight, Strikethrough markup, Underline markup -->
+  <!-- MARKUP TOOL: Highlight (color + opacity) -->
   <div id="tb-markup-grp" style="display:none;flex-shrink:0;align-items:center;gap:3px">
     <div class="sep" style="height:36px;background:var(--b2);width:1px;margin:0 2px;flex-shrink:0"></div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
       <span style="font-size:8px;color:var(--txt2)">MARK</span>
       <div style="display:flex;gap:2px">
-        <button class="markup-btn" id="markup-highlight" title="Highlight" style="background:rgba(255,230,0,.25);border-color:#f59e0b;color:#f59e0b;font-size:11px">▌H</button>
-        <button class="markup-btn" id="markup-strike" title="Strikethrough markup" style="font-size:11px"><s>T</s></button>
-        <button class="markup-btn" id="markup-underline" title="Underline markup" style="font-size:11px"><u>T</u></button>
+        <button class="markup-btn active" id="markup-highlight" title="Highlight" style="background:rgba(255,230,0,.25);border-color:#f59e0b;color:#f59e0b;font-size:11px">▌H</button>
       </div>
     </div>
     <!-- Markup color picker -->
@@ -1459,7 +1457,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <div class="sc-row"><span class="sc-desc">Pan</span><span class="sc-key">H</span></div>
         <div class="sc-row"><span class="sc-desc">Leader (toolbar only)</span><span class="sc-key">—</span></div>
         <div class="sc-row"><span class="sc-desc">Stamp (toolbar only)</span><span class="sc-key">—</span></div>
-        <div class="sc-row"><span class="sc-desc">Highlight / Strike / Underline (toolbar only)</span><span class="sc-key">—</span></div>
+        <div class="sc-row"><span class="sc-desc">Highlight (toolbar only)</span><span class="sc-key">—</span></div>
       </div>
 
       <div class="sc-section-title">EDIT</div>
@@ -1525,7 +1523,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <div class="sc-grid">
       <div class="sc-row"><span class="sc-desc">Leader line</span><span class="sc-key">Click anchor, click arrowhead, type label · click it again later to recolor, resize or move (drag tip / elbow / shoulder handles)</span></div>
       <div class="sc-row"><span class="sc-desc">Stamp</span><span class="sc-key">Tap Stamp tool → choose symbol → click to place</span></div>
-      <div class="sc-row"><span class="sc-desc">Highlight / Strikeout / Underline</span><span class="sc-key">Drag across an area to mark it</span></div>
+      <div class="sc-row"><span class="sc-desc">Highlight</span><span class="sc-key">Drag across any area to highlight it. (Underline &amp; strikethrough live in the Text/Note formatting bar.)</span></div>
       <div class="sc-row"><span class="sc-desc">Path Distance</span><span class="sc-key">Click waypoints along a route; dbl-click / Enter to finish</span></div>
       <div class="sc-row"><span class="sc-desc">Area / Polygon</span><span class="sc-key">Click vertices; dbl-click or Esc to close &amp; calculate area</span></div>
       <div class="sc-row"><span class="sc-desc">Pen arc length</span><span class="sc-key">Shown automatically after each freehand stroke</span></div>
@@ -2279,6 +2277,10 @@ function commitCommentEdit(keepSize){
   c.cy = _topE + c.h/2;
   if(selectedShape && selectedShape._commentObj===c){ selectedShape.cy=c.cy; selectedShape.h=c.h; }
   textOv.style.display = 'none'; textOv.blur();
+  // CRITICAL: the textarea is SHARED with the Text tool. If we leave the note's
+  // text inside it, the next tap with the Text tool re-shows the overlay with
+  // this stale value and commits it as a new text object on the plan.
+  textOv.value = '';
   // Fully restore textOv to default state for next use (clear all comment-specific styles)
   textOv.style.background      = '';
   textOv.style.borderBottom    = '';
@@ -3394,7 +3396,11 @@ function resetCtx(ctx){ ctx.globalAlpha=1; ctx.setLineDash([]); }
 // select images, text objects, or an already-selected rect/ellipse underneath.
 // (Each still re-selects its OWN object type: line tool grabs lines, leader
 // tool grabs leaders, etc.)
-var DRAW_STRICT={line:1,arrow:1,polyline:1,measure:1,pathmeasure:1,polygon:1,leader:1};
+var DRAW_STRICT={line:1,arrow:1,polyline:1,measure:1,pathmeasure:1,polygon:1,leader:1,
+  // Markup tools must draw OVER text/images/shapes, not grab them. Without this,
+  // pressing the Highlight tool on a text label selected the text instead of
+  // highlighting it. (strikeout/underlinemark kept for any legacy saved marks.)
+  highlight:1,strikeout:1,underlinemark:1};
 
 // ── DRAWING EVENTS ──
 function onDown(e){
@@ -6761,6 +6767,7 @@ function commitSelection(){
       c.text=textOv.value.replace(/\s+$/,'');   // strip trailing newlines
       _editingComment=null;
       textOv.style.display='none'; textOv.blur();
+      textOv.value='';   // shared textarea — don't leak note text into the Text tool
       textOv.style.background=''; textOv.style.borderBottom='';
       textOv.style.width=''; textOv.style.height='';
       textOv.style.minWidth=''; textOv.style.minHeight='';
@@ -6845,6 +6852,7 @@ function cancelSelection(){
       _cc.text=textOv.value.replace(/\s+$/,'');   // strip trailing newlines
       _editingComment=null;
       textOv.style.display='none'; textOv.blur();
+      textOv.value='';   // shared textarea — don't leak note text into the Text tool
       textOv.style.background=''; textOv.style.borderBottom='';
       textOv.style.width=''; textOv.style.height='';
       textOv.style.minWidth=''; textOv.style.minHeight='';
@@ -7426,7 +7434,7 @@ function updateToolbarForTool(t){
   var STROKE    = ['pen','line','arrow','polyline','measure','pathmeasure','polygon','leader'];
   var TEXT_ONLY = ['text'];
   var NOTE      = ['comment'];
-  var MARKUP    = ['highlight','strikeout','underlinemark'];
+  var MARKUP    = ['highlight']; // strike/underline markup removed (now Text/Note-only)
   var NONE      = ['eraser','pan','stamp'];
 
   function sh(el, show){ if(el) el.style.display = show ? (el._origDisplay || '') : 'none'; }
