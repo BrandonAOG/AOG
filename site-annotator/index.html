@@ -2081,6 +2081,7 @@ function enterCommentSelectMode(c){
 // uses the same technique in repositionTextOverlay().
 function startCommentTextEdit(c){
   _editingComment=c;
+  _textAnchorRight=false; // notes never use the leader's right-anchor mode
   // Re-render NOW so the canvas hides this note's committed text (the renderer
   // skips text for c===_editingComment, but only on its next pass). Without
   // this, the canvas text stayed painted under the editor, showing as ghosted
@@ -2509,6 +2510,13 @@ var textItalic     = false;
 var textUnderline  = false;
 var textStrike     = false;
 var textAlign      = 'left';
+// When a leader points LEFT (callout on the right side of the page), its label
+// must hang to the LEFT of the elbow: the first letter sits just left of the
+// line and the text grows leftward as you type, instead of marching right off
+// the page. We anchor the text box's RIGHT edge at the placement point and
+// right-align it. This flag is set only for that case and cleared for all other
+// text entry.
+var _textAnchorRight = false;
 var textBgColor    = '#ffff00';
 var textBgOpacity  = 0;
 // ── MARKUP OBJECTS (highlight / strikethrough / underline markup) ──
@@ -3541,6 +3549,10 @@ function onDown(e){
             _tobj._editing=true;
             renderTextObjs();
             textX=_tobj.x; textY=_tobj.y;
+            // Re-editing keeps the object's own anchoring: only a leader label
+            // (marked _anchorRight, with a stored _anchorX) re-hangs from the
+            // right edge. Plain right-aligned text keeps its normal box.
+            _textAnchorRight = (_tobj._anchorRight===true && _tobj._anchorX!=null);
             startTextCursor(_tobj.x,_tobj.y);
             showTextOverlay(_tobj.x,_tobj.y);
             textOv.value=_tobj.text;
@@ -4005,7 +4017,15 @@ function onUp(e){
     var _pL=snapPt(getPos(e).x,getPos(e).y);
     if(leaderStep===1 && Math.hypot(_pL.x-leaderP1x,_pL.y-leaderP1y) > 8/zoom){
       captureState(false);   // vector op — no pixel snapshot needed
-      var _shD=(_pL.x > baseCv.width/2) ? -1 : 1;
+      // Shoulder direction is based on where the elbow sits in the VISIBLE
+      // viewport (what the user perceives as "the right side of the canvas"),
+      // not the full page's center. On a large page panned/zoomed so the right
+      // edge of the screen is still left of page-center, using baseCv.width/2
+      // wrongly pointed the shoulder right and detached the label. Convert the
+      // elbow to screen space and compare against the viewport's middle.
+      var _elbowScreenX = panX + _pL.x*zoom;
+      var _vpMidX = viewport.clientWidth/2;
+      var _shD=(_elbowScreenX > _vpMidX) ? -1 : 1;
       var _shL=60;
       leaderObjs.push({
         id:Date.now(),
@@ -4017,6 +4037,12 @@ function onUp(e){
       composite();
       textX=_pL.x+(_shL+2)*_shD; textY=_pL.y;
       textOv.value='';   // label must NEVER inherit text left over from a previous box
+      // Leader on the right side (shoulder points left) → anchor text right edge
+      // here and grow leftward so the label hangs to the left of the line. A
+      // left-side leader hangs right (normal left alignment). This is driven
+      // ENTIRELY by _textAnchorRight; we must NOT touch the global textAlign,
+      // or every later text/note would inherit the leader's alignment.
+      _textAnchorRight = (_shD === -1);
       showTextOverlay(textX, _pL.y);
       pushUndo();
     } else {
@@ -5427,6 +5453,9 @@ function handleLeaderClick(x,y,e){
     renderShapeAndMeasure();
     composite();
     textX=x+(shoulderLen+2)*shoulderDir; textY=y;
+    // Right-side leader hangs left of the line (right-anchored). Driven by
+    // _textAnchorRight only — never mutate global textAlign.
+    _textAnchorRight = (shoulderDir === -1);
     showTextOverlay(textX, y);
     leaderStep=0;
     pushUndo();
@@ -6012,6 +6041,7 @@ function handleCommentDown(e, sp, isTouch){
 }
 var _txtTapTime=0, _txtTapObj=null;
 function handleText(e){
+  _textAnchorRight = false;  // normal text never uses the leader's left-hang anchor
   var p=getPos(e);
   // If a text object is in transform mode, commit it first so it becomes
   // visible and findTextObjAt can hit-test it correctly.
@@ -6031,6 +6061,7 @@ function handleText(e){
       existing._editing=true;
       renderTextObjs();
       textX=existing.x; textY=existing.y;
+      _textAnchorRight = (existing._anchorRight===true && existing._anchorX!=null);
       startTextCursor(existing.x, existing.y);
       showTextOverlay(existing.x, existing.y);
       textOv.value=existing.text;
@@ -6082,6 +6113,14 @@ function repositionTextOverlay(){
   // lower-half tap upward — removed for the same reason.
   var sx = panX + cx*zoom;
   var sy = panY + cy*zoom - FONT_PX*zoom;
+  // The box is drawn at renderSz font then visually shrunk with transform:scale
+  // when zoomed out (transform-origin top-left). That scale shrinks the box's
+  // VISUAL width to boxW*scaleV. The right-anchor must use the SCALED width or
+  // the visual right edge drifts left as you zoom out — the exact bug reported.
+  var _screenSz0 = FONT_PX * zoom;
+  var _renderSz0 = Math.max(16, _screenSz0);
+  var _scaleV0   = _screenSz0 / _renderSz0;     // <1 when zoomed out
+  if(_scaleV0 >= 0.99) _scaleV0 = 1;            // matches transform:none threshold below
   // Keep the text START (the box's left edge) anchored at the click point so
   // the I-beam and typed text land exactly where the user clicked — including
   // on the right side of the canvas. Previously the whole box was shifted left
@@ -6092,10 +6131,22 @@ function repositionTextOverlay(){
   var vpW = viewport.clientWidth, vpH = viewport.clientHeight;
   var boxW = Math.max(200, vpW * 0.5);
   var boxH = Math.max(40, Math.max(16, FONT_PX*zoom) * 2);
-  if(vpW > 0){
+  if(_textAnchorRight){
+    // Right-anchored (left-hanging leader label): the box's VISUAL right edge
+    // (after the scale transform) sits at the anchor point and the box extends
+    // LEFT, so the first letter stays put just left of the line at every zoom.
+    var rightEdge = sx;                          // anchor screen-x = visual right edge
+    sx = rightEdge - boxW*_scaleV0;              // box left edge (scaled width)
+    if(vpW > 0){
+      if(rightEdge > vpW) { rightEdge = vpW; sx = rightEdge - boxW*_scaleV0; }
+      if(rightEdge < 40)  { rightEdge = 40;  sx = rightEdge - boxW*_scaleV0; }
+      if(sx < 0){ boxW = rightEdge/_scaleV0; sx = 0; } // shrink instead of going off-screen
+      if(boxW < 60) boxW = 60;
+    }
+  } else if(vpW > 0){
     if(sx < 0) sx = 0;
     if(sx > vpW - 40) sx = vpW - 40;          // keep at least a sliver on-screen
-    if(sx + boxW > vpW) boxW = vpW - sx;       // shrink, don't shift
+    if(sx + boxW*_scaleV0 > vpW) boxW = (vpW - sx)/_scaleV0; // shrink, don't shift
     if(boxW < 60) boxW = 60;                   // minimum usable width
   }
   if(vpH > 0){
@@ -6130,9 +6181,11 @@ function repositionTextOverlay(){
   textOv.style.fontWeight    = textBold   ? 'bold'   : 'normal';
   textOv.style.fontStyle     = textItalic ? 'italic' : 'normal';
   textOv.style.textDecoration= (textUnderline&&textStrike)?'underline line-through':(textUnderline?'underline':(textStrike?'line-through':'none'));
-  textOv.style.textAlign     = textAlign;
+  textOv.style.textAlign     = _textAnchorRight ? 'right' : textAlign;
   // Ensure textarea is wide enough to show text at any font size
+  textOv.style.boxSizing = 'border-box';   // padding must not push the right edge past the anchor
   textOv.style.width   = boxW + 'px';
+  textOv.style.minWidth = '0px';           // override the CSS 200px floor so right-anchor width is exact
   textOv.style.height  = Math.max(40, renderSz * 2) + 'px';
 
   // ── Keep the canvas-drawn I-beam aligned with where the text actually
@@ -6144,7 +6197,14 @@ function repositionTextOverlay(){
   // 4px left / 2px top) and convert screen→canvas so they line up exactly.
   if(_txtCursorActive){
     var _padL = 4, _padT = 2; // matches #text-ov padding:2px 4px
-    var _caretScreenX = sx + _padL;
+    var _caretScreenX;
+    if(_textAnchorRight){
+      // Right-anchored: the caret/first-letter sits at the box's VISUAL right
+      // edge (after scaling) just left of the leader line, growing leftward.
+      _caretScreenX = (sx + boxW*_scaleV0) - _padL*_scaleV0;
+    } else {
+      _caretScreenX = sx + _padL*_scaleV0;
+    }
     var _caretScreenY = sy + _padT + FONT_PX * zoom; // baseline ≈ top + one line
     _txtCursorX = (_caretScreenX - panX) / zoom;
     _txtCursorY = (_caretScreenY - panY) / zoom;
@@ -6266,6 +6326,7 @@ function commitText(){
 
   var val=textOv.value;
   textOv.style.display='none';
+  textOv.style.minWidth='';   // clear the right-anchor width override
   textOv.blur();
 
   if(editingObj){
@@ -6279,22 +6340,42 @@ function commitText(){
       editingObj.fontSize=FONT_SIZE; editingObj.opacity=opacity;
       editingObj.fontFamily=textFontFamily; editingObj.bold=textBold;
       editingObj.italic=textItalic; editingObj.underline=textUnderline;
-      editingObj.strike=textStrike; editingObj.textAlign=textAlign;
+      editingObj.strike=textStrike; editingObj.textAlign=_textAnchorRight?'right':textAlign;
       editingObj.bgColor=textBgColor; editingObj.bgOpacity=textBgOpacity;
+      // Right-anchored label (left-hanging leader): re-pin the RIGHT edge to the
+      // stored anchor so edits grow/shrink leftward, not rightward off the page.
+      if(_textAnchorRight && editingObj._anchorX!=null){
+        var _eln=val.split('\n');
+        var _efpx=ptToCanvasPx(editingObj.fontSize);
+        var _emw=measureLinesWFull(_eln,_efpx,editingObj.fontFamily||'Arial',editingObj.bold,editingObj.italic);
+        editingObj.x = editingObj._anchorX - _emw;
+        editingObj._anchorRight = true;
+      }
       var upd=editingObj; editingObj=null;
       renderTextObjs(); pushUndo();
       enterTextTransformMode(upd); // allow repositioning/rotating after edit
     }
   } else {
     if(!val.trim()) return;
-    var obj={id:Date.now(),x:textX,y:textY,text:val,angle:0,
+    var _newAlign = _textAnchorRight ? 'right' : textAlign;
+    var _newX = textX;
+    if(_textAnchorRight){
+      // Anchor the text's RIGHT edge at textX so it hangs left of the leader.
+      var _lns=val.split('\n');
+      var _fpx=ptToCanvasPx(FONT_SIZE);
+      var _mw=measureLinesWFull(_lns,_fpx,textFontFamily||'Arial',textBold,textItalic);
+      _newX = textX - _mw;
+    }
+    var obj={id:Date.now(),x:_newX,y:textY,text:val,angle:0,
              color:color,fontSize:FONT_SIZE,opacity:opacity,layerIdx:activeLayerIdx,
              fontFamily:textFontFamily,bold:textBold,italic:textItalic,
-             underline:textUnderline,strike:textStrike,textAlign:textAlign,
-             bgColor:textBgColor,bgOpacity:textBgOpacity};
+             underline:textUnderline,strike:textStrike,textAlign:_newAlign,
+             bgColor:textBgColor,bgOpacity:textBgOpacity,
+             _anchorRight:_textAnchorRight, _anchorX:textX};
     textObjs.push(obj); renderTextObjs(); pushUndo();
     enterTextTransformMode(obj); // immediately allow move+rotate
   }
+  _textAnchorRight = false; // reset so the next text entry starts clean
 }
 
 // Enter selection mode for a text object (move + rotate, no resize)
