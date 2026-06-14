@@ -4268,9 +4268,22 @@ function onUp(e){
     composite(); pushUndo();
   }
   else {
-    dCtx.putImageData(compositedSnap,0,0);
-    drawFinalShape(lc,startX,startY,p.x,p.y, !!(e.changedTouches&&e.changedTouches.length));
-    composite();
+    // rect / ellipse / cloud: only place the shape if the user actually DRAGGED
+    // out a size. A pure tap (no real drag) must not drop a tiny shape on the
+    // canvas — nobody wants a stray dot. Below the threshold we just discard the
+    // in-progress draw and restore the canvas.
+    var spx=Math.hypot(p.x-startX,p.y-startY);
+    if(spx>4){
+      dCtx.putImageData(compositedSnap,0,0);
+      drawFinalShape(lc,startX,startY,p.x,p.y, !!(e.changedTouches&&e.changedTouches.length));
+      composite();
+      pushUndo();
+    } else {
+      // Tap with no drag → place nothing, leave the canvas untouched.
+      if(compositedSnap) dCtx.putImageData(compositedSnap,0,0);
+      composite();
+    }
+    return;
   }
   pushUndo();
 }
