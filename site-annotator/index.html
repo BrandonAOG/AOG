@@ -6490,6 +6490,24 @@ function getHandleAt(x,y,isTouch){
     var capS=Math.max(floorS, Math.min(hwS,hhS)*0.40);// leave the center free
     if(hitR>capS) hitR=capS;
   }
+  // Text was the worst case: a small label is fully covered by the 8 fixed-size
+  // handle grab rings, so every press hit a resize handle and the text was nearly
+  // impossible to MOVE. Two-part fix: (1) cap the grab radius like other shapes,
+  // and (2) guarantee a central move zone — any press inside the inner half of
+  // the box (measured in the text's own rotated frame) is treated as "move" and
+  // never grabs a handle, no matter how tiny the text is. Resize is still
+  // available by pressing nearer the edges/corners.
+  else if(selectedShape.type==='text'){
+    var hwT=selectedShape.w/2, hhT=selectedShape.h/2;
+    var floorT=(isTouch?12:8)/zoom;
+    var capT=Math.max(floorT, Math.min(hwT,hhT)*0.40);
+    if(hitR>capT) hitR=capT;
+    var _ta=-(selectedShape.angle||0);
+    var _tdx=x-selectedShape.cx, _tdy=y-selectedShape.cy;
+    var _tlx=_tdx*Math.cos(_ta)-_tdy*Math.sin(_ta);
+    var _tly=_tdx*Math.sin(_ta)+_tdy*Math.cos(_ta);
+    if(Math.abs(_tlx) < hwT*0.5 && Math.abs(_tly) < hhT*0.5) return -1; // central → move
+  }
   // Check rotation handles first (8-11) — they're further out so check before resize.
   // EXCEPT for comments: notes never rotate and their rotation handles are never
   // drawn, but these invisible hit zones sat just outside each corner and silently
@@ -6750,6 +6768,12 @@ function renderSelection(){
   if(selHandle >= 0 && selHandle <= 7 && selDragStart &&
      (s.type==='rect' || s.type==='ellipse' || s.type==='cloud')){
     _drawDimBadges(selCtx, s.cx, s.cy, s.w, s.h, s.angle);
+  }
+
+  // Live point-size readout above a selected text object's top handles —
+  // updates in real time as a corner handle is dragged bigger/smaller.
+  if(s.type==='text' && s._textObj){
+    _drawTextSizeBadge(selCtx, s);
   }
 }
 
@@ -9625,6 +9649,42 @@ function _drawDimBadges(ctx, cx, cy, w, h, angle){
   // Height badge: just right of the right edge, rotated 90°
   var rightOff = w / 2 + edgeGap + badgeH / 2;
   drawBadge(cx + cosA * rightOff, cy + sinA * rightOff, fmtDim(h), a + Math.PI / 2);
+}
+
+// ── LIVE TEXT-SIZE READOUT ────────────────────────────────────────
+// Small "## pt" badge centered above a selected text object's top handles.
+// Drawn every renderSelection() frame, so while a corner handle is dragged the
+// number updates live as the text grows or shrinks.
+function _drawTextSizeBadge(ctx, s){
+  if(!s || !s._textObj) return;
+  var a    = s.angle || 0;
+  var cosA = Math.cos(a), sinA = Math.sin(a);
+  var fontSize = Math.max(9, Math.min(16, 12 / zoom)); // screen-constant size
+  var pad      = 5 / zoom;
+  var radius   = 3 / zoom;
+  var lw       = 0.9 / zoom;
+  var badgeH   = fontSize + pad * 2;
+  var hs       = HANDLE_SIZE / zoom;
+  // Sit just above the top edge, clear of the top handle row.
+  var topOff   = s.h / 2 + hs / 2 + 7 / zoom + badgeH / 2;
+  var bx = s.cx + sinA * topOff;       // local (0, -topOff) rotated by angle
+  var by = s.cy - cosA * topOff;
+  var text = Math.round(s._textObj.fontSize) + ' pt';
+  ctx.save();
+  ctx.translate(bx, by); ctx.rotate(a);
+  ctx.font = 'bold ' + fontSize + 'px "Share Tech Mono",monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  var tw = ctx.measureText(text).width;
+  var bw = tw + pad * 2.4;
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(-bw / 2, -badgeH / 2, bw, badgeH, radius);
+  else ctx.rect(-bw / 2, -badgeH / 2, bw, badgeH);
+  ctx.fillStyle   = 'rgba(8,8,18,0.86)'; ctx.fill();
+  ctx.strokeStyle = '#00D4FF'; ctx.lineWidth = lw; ctx.stroke();
+  ctx.fillStyle   = '#E2F8FF';
+  ctx.shadowColor = '#00D4FF'; ctx.shadowBlur = 3 / zoom;
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
 }
 
 function _drawImgFlipButtons(ctx, ov){
