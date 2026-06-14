@@ -6391,6 +6391,18 @@ function getHandleAt(x,y,isTouch){
     hitR=Math.min(hitR, capR);
     if(hitR<floorR) hitR=floorR;                      // guarantee the floor
   }
+  // Same problem for rect/ellipse/cloud: on a SMALL shape the fixed-size grab
+  // rings of the 8 resize handles overlap the whole body, leaving no interior to
+  // press for MOVING — every press inside lands on a resize handle. Cap the grab
+  // radius so the handles never claim the central ~40% of a small shape; that
+  // central zone falls through to isInsideShape → move. Big shapes are
+  // unaffected (the cap only bites when the shape is smaller than ~2.5×hitR).
+  else if(selectedShape.type==='rect'||selectedShape.type==='ellipse'||selectedShape.type==='cloud'){
+    var hwS=selectedShape.w/2, hhS=selectedShape.h/2;
+    var floorS=(isTouch?12:8)/zoom;                   // keep handles grabbable
+    var capS=Math.max(floorS, Math.min(hwS,hhS)*0.40);// leave the center free
+    if(hitR>capS) hitR=capS;
+  }
   // Check rotation handles first (8-11) — they're further out so check before resize.
   // EXCEPT for comments: notes never rotate and their rotation handles are never
   // drawn, but these invisible hit zones sat just outside each corner and silently
