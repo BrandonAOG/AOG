@@ -785,7 +785,62 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   <button class="tb-btn" data-tool="highlight" title="Highlight — drag to highlight any area"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="8" rx="1" fill="rgba(253,224,71,.35)" stroke="#f59e0b"/><line x1="3" y1="20" x2="21" y2="20"/></svg><span class="lbl">Hilite</span></button>
   <!-- Standalone Strike / Underline markup tools removed — these are available
        inside the Text and Note formatting bars (U / S buttons). -->
-  <!-- TEXT FORMAT GROUPS moved to the right of Pan (see TEXT FORMAT ZONE below) -->
+  <div id="tb-font-size-grp"><select id="font-size-sel" title="Font size">
+    <option value="6">6</option><option value="7">7</option>
+    <option value="8">8</option><option value="9">9</option>
+    <option value="10">10</option><option value="12">12</option>
+    <option value="14">14</option><option value="16">16</option>
+    <option value="18" selected>18</option><option value="20">20</option>
+    <option value="24">24</option><option value="28">28</option>
+    <option value="32">32</option><option value="36">36</option>
+    <option value="48">48</option><option value="60">60</option>
+    <option value="72">72</option><option value="96">96</option>
+    <option value="120">120</option><option value="144">144</option>
+    <option value="180">180</option><option value="216">216</option>
+    <option value="240">240</option><option value="300">300</option>
+  </select></div>
+  <!-- FONT FAMILY — text tool only -->
+  <div id="tb-font-family-grp" style="display:none;flex-shrink:0">
+    <select id="font-family-sel" title="Font family">
+      <option value="Arial">Arial</option>
+      <option value="Helvetica">Helvetica</option>
+      <option value="Times New Roman">Times NR</option>
+      <option value="Courier New">Courier</option>
+      <option value="Georgia">Georgia</option>
+      <option value="Verdana">Verdana</option>
+      <option value="Calibri">Calibri</option>
+      <option value="Trebuchet MS">Trebuchet</option>
+      <option value="Impact">Impact</option>
+      <option value="Comic Sans MS">Comic Sans</option>
+    </select>
+  </div>
+  <!-- BOLD / ITALIC / UNDERLINE / STRIKETHROUGH — text tool only -->
+  <div id="tb-text-fmt-grp" style="display:none;flex-shrink:0;gap:2px;align-items:center">
+    <button class="fmt-btn" id="fmt-bold" title="Bold (Ctrl+B)"><b>B</b></button>
+    <button class="fmt-btn" id="fmt-italic" title="Italic (Ctrl+I)"><i>I</i></button>
+    <button class="fmt-btn" id="fmt-underline" title="Underline"><u>U</u></button>
+    <button class="fmt-btn" id="fmt-strike" title="Strikethrough"><s>S</s></button>
+  </div>
+  <!-- TEXT ALIGNMENT — text tool only -->
+  <div id="tb-text-align-grp" style="display:none;flex-shrink:0;gap:2px;align-items:center">
+    <button class="align-btn active" id="align-left" title="Align left" data-align="left"><svg viewBox="0 0 14 14"><line x1="1" y1="3" x2="13" y2="3"/><line x1="1" y1="6" x2="9" y2="6"/><line x1="1" y1="9" x2="13" y2="9"/><line x1="1" y1="12" x2="9" y2="12"/></svg></button>
+    <button class="align-btn" id="align-center" title="Align center" data-align="center"><svg viewBox="0 0 14 14"><line x1="1" y1="3" x2="13" y2="3"/><line x1="3" y1="6" x2="11" y2="6"/><line x1="1" y1="9" x2="13" y2="9"/><line x1="3" y1="12" x2="11" y2="12"/></svg></button>
+    <button class="align-btn" id="align-right" title="Align right" data-align="right"><svg viewBox="0 0 14 14"><line x1="1" y1="3" x2="13" y2="3"/><line x1="5" y1="6" x2="13" y2="6"/><line x1="1" y1="9" x2="13" y2="9"/><line x1="5" y1="12" x2="13" y2="12"/></svg></button>
+  </div>
+  <!-- TEXT BACKGROUND — text tool only -->
+  <div id="tb-txt-bg-grp" style="display:none;flex-shrink:0;align-items:center;gap:3px">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
+      <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">TXT BG</span>
+      <div class="clr-wrap" style="position:relative;width:30px;height:30px">
+        <div id="txt-bg-swatch" style="background:rgba(255,255,0,0);border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer;background-image:repeating-conic-gradient(#aaa 0% 25%, transparent 0% 50%);background-size:8px 8px;background-position:center"></div>
+        <input type="color" id="txt-bg-input" value="#ffff00" style="position:absolute;inset:0;opacity:0.01;width:100%;height:100%;border:none;padding:0;margin:0;cursor:pointer;-webkit-appearance:none;border-radius:50%;">
+      </div>
+    </div>
+    <div class="sl-wrap" style="min-width:44px">
+      <input type="range" id="txt-bg-op-sl" min="0" max="100" value="0">
+      <span id="txt-bg-op-val" style="font-size:8px">0%</span>
+    </div>
+  </div>
   <!-- MARKUP TOOL: Highlight (color + opacity) -->
   <div id="tb-markup-grp" style="display:none;flex-shrink:0;align-items:center;gap:3px">
     <div class="sep" style="height:36px;background:var(--b2);width:1px;margin:0 2px;flex-shrink:0"></div>
@@ -811,65 +866,6 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   <button class="tb-btn" data-tool="eraser"><svg viewBox="0 0 24 24"><path d="M20 20H7L3 16l10-10 7 7-3 3"/><path d="M6 10l8 8"/></svg><span class="lbl">Erase</span></button>
   <button class="tb-btn active" data-tool="pan"><svg viewBox="0 0 24 24"><path d="M18 11V8a2 2 0 0 0-4 0v3"/><path d="M14 11V6a2 2 0 0 0-4 0v5"/><path d="M10 11V5a2 2 0 0 0-4 0v9"/><path d="M6 14a4 4 0 0 0 3.67 4h2.5c1.74 0 3.83-.82 3.83-4v-3"/></svg><span class="lbl">Pan</span></button>
   <div class="sep"></div>
-  <!-- TEXT FORMAT ZONE — shown for Text + Leader tools (moved right of Pan for a cleaner tool row) -->
-  <div id="tb-textfmt-sep" class="sep" style="display:none"></div>
-  <div id="tb-font-size-grp"><select id="font-size-sel" title="Font size">
-    <option value="6">6</option><option value="7">7</option>
-    <option value="8">8</option><option value="9">9</option>
-    <option value="10">10</option><option value="12">12</option>
-    <option value="14">14</option><option value="16">16</option>
-    <option value="18" selected>18</option><option value="20">20</option>
-    <option value="24">24</option><option value="28">28</option>
-    <option value="32">32</option><option value="36">36</option>
-    <option value="48">48</option><option value="60">60</option>
-    <option value="72">72</option><option value="96">96</option>
-    <option value="120">120</option><option value="144">144</option>
-    <option value="180">180</option><option value="216">216</option>
-    <option value="240">240</option><option value="300">300</option>
-  </select></div>
-  <!-- FONT FAMILY — text/leader tools only -->
-  <div id="tb-font-family-grp" style="display:none;flex-shrink:0">
-    <select id="font-family-sel" title="Font family">
-      <option value="Arial">Arial</option>
-      <option value="Helvetica">Helvetica</option>
-      <option value="Times New Roman">Times NR</option>
-      <option value="Courier New">Courier</option>
-      <option value="Georgia">Georgia</option>
-      <option value="Verdana">Verdana</option>
-      <option value="Calibri">Calibri</option>
-      <option value="Trebuchet MS">Trebuchet</option>
-      <option value="Impact">Impact</option>
-      <option value="Comic Sans MS">Comic Sans</option>
-    </select>
-  </div>
-  <!-- BOLD / ITALIC / UNDERLINE / STRIKETHROUGH — text/leader tools only -->
-  <div id="tb-text-fmt-grp" style="display:none;flex-shrink:0;gap:2px;align-items:center">
-    <button class="fmt-btn" id="fmt-bold" title="Bold (Ctrl+B)"><b>B</b></button>
-    <button class="fmt-btn" id="fmt-italic" title="Italic (Ctrl+I)"><i>I</i></button>
-    <button class="fmt-btn" id="fmt-underline" title="Underline"><u>U</u></button>
-    <button class="fmt-btn" id="fmt-strike" title="Strikethrough"><s>S</s></button>
-  </div>
-  <!-- TEXT ALIGNMENT — text/leader tools only -->
-  <div id="tb-text-align-grp" style="display:none;flex-shrink:0;gap:2px;align-items:center">
-    <button class="align-btn active" id="align-left" title="Align left" data-align="left"><svg viewBox="0 0 14 14"><line x1="1" y1="3" x2="13" y2="3"/><line x1="1" y1="6" x2="9" y2="6"/><line x1="1" y1="9" x2="13" y2="9"/><line x1="1" y1="12" x2="9" y2="12"/></svg></button>
-    <button class="align-btn" id="align-center" title="Align center" data-align="center"><svg viewBox="0 0 14 14"><line x1="1" y1="3" x2="13" y2="3"/><line x1="3" y1="6" x2="11" y2="6"/><line x1="1" y1="9" x2="13" y2="9"/><line x1="3" y1="12" x2="11" y2="12"/></svg></button>
-    <button class="align-btn" id="align-right" title="Align right" data-align="right"><svg viewBox="0 0 14 14"><line x1="1" y1="3" x2="13" y2="3"/><line x1="5" y1="6" x2="13" y2="6"/><line x1="1" y1="9" x2="13" y2="9"/><line x1="5" y1="12" x2="13" y2="12"/></svg></button>
-  </div>
-  <!-- TEXT BACKGROUND — text/leader tools only -->
-  <div id="tb-txt-bg-grp" style="display:none;flex-shrink:0;align-items:center;gap:3px">
-    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
-      <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">TXT BG</span>
-      <div class="clr-wrap" style="position:relative;width:30px;height:30px">
-        <div id="txt-bg-swatch" style="background:rgba(255,255,0,0);border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer;background-image:repeating-conic-gradient(#aaa 0% 25%, transparent 0% 50%);background-size:8px 8px;background-position:center"></div>
-        <input type="color" id="txt-bg-input" value="#ffff00" style="position:absolute;inset:0;opacity:0.01;width:100%;height:100%;border:none;padding:0;margin:0;cursor:pointer;-webkit-appearance:none;border-radius:50%;">
-      </div>
-    </div>
-    <div class="sl-wrap" style="min-width:44px">
-      <input type="range" id="txt-bg-op-sl" min="0" max="100" value="0">
-      <span id="txt-bg-op-val" style="font-size:8px">0%</span>
-    </div>
-  </div>
-  <!-- /TEXT FORMAT ZONE -->
   <!-- COMMENT COLORS — only shown when Note/Comment tool is active -->
   <div id="cmt-clr-grp" style="display:none;align-items:center;gap:3px;flex-shrink:0">
     <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
@@ -2834,6 +2830,15 @@ function clearFn(){
   polygonObjs = polygonObjs.filter(function(o){ return o.layerIdx!==activeLayerIdx; });
   leaderObjs  = leaderObjs.filter(function(o){ return o.layerIdx!==activeLayerIdx; });
   stampObjs   = stampObjs.filter(function(o){ return o.layerIdx!==activeLayerIdx; });
+  // Images (imgOverlays) aren't tied to a layer, so the per-layer filters above
+  // never removed them — which is why Clear left pictures on the canvas. Wipe all
+  // image overlays here. captureState() above snapshotted them, so Undo restores.
+  if(typeof imgOverlays!=='undefined' && imgOverlays.length){
+    // If an image is currently selected, drop the selection bar/handles first.
+    if(typeof selImg!=='undefined' && selImg){ if(typeof commitImgSelection==='function') commitImgSelection(); else selImg=null; }
+    imgOverlays = [];
+    if(typeof renderImgOverlays==='function') renderImgOverlays();
+  }
   if(selectedShape){
     var tobj=selectedShape._textObj;
     var sobj=editShapeObj;
@@ -3571,9 +3576,18 @@ function onDown(e){
             e.preventDefault();
             var _tobj=selectedShape._textObj;
             commitSelection();
-            // Route through the single guarded editor opener so the synthetic
-            // touch→mouse replay can't double-open (and double-insert) the text.
-            _openTextEdit(_tobj);
+            editingObj=_tobj;
+            _tobj._editing=true;
+            renderTextObjs();
+            textX=_tobj.x; textY=_tobj.y;
+            // Re-editing keeps the object's own anchoring: only a leader label
+            // (marked _anchorRight, with a stored _anchorX) re-hangs from the
+            // right edge. Plain right-aligned text keeps its normal box.
+            _textAnchorRight = (_tobj._anchorRight===true && _tobj._anchorX!=null);
+            startTextCursor(_tobj.x,_tobj.y);
+            showTextOverlay(_tobj.x,_tobj.y);
+            textOv.value=_tobj.text;
+            _syncTextFmtFromObj(_tobj);
             return;
           }
         }
@@ -3609,24 +3623,6 @@ function onDown(e){
   if(tool==='leader'){
     // Mid-placement (first point already set) → let the click handler place P2.
     if(leaderStep>0){ return; }
-    // Double-tap a label's TEXT with the leader tool → edit the text directly,
-    // so users don't have to switch to the Text tool. Single taps fall through
-    // to leader selection (handles / recolor) below.
-    var _ldTxt=findTextObjAt(sp.x,sp.y);
-    if(_ldTxt){
-      var _lnow=Date.now();
-      var _ldDbl=(_lnow-_txtTapTime<380 && _txtTapObj===_ldTxt);
-      _txtTapTime=_lnow; _txtTapObj=_ldTxt;
-      if(_ldDbl){
-        e.preventDefault();
-        if(selectedLeader) commitLeaderSelection();
-        // iOS needs focus() synchronously inside the touch handler for the
-        // keyboard to appear — prime the textarea before opening the editor.
-        if(e.touches && e.touches.length){ textOv.value=''; textOv.style.display='block'; textOv.focus(); }
-        _openTextEdit(_ldTxt);   // guarded opener (no doubling on iPad)
-        return;
-      }
-    }
     // If a leader is already selected, check its handles first.
     if(selectedLeader){
       var lh=getLeaderHandleAt(selectedLeader,sp.x,sp.y,_isTouchEvt);
@@ -6235,31 +6231,10 @@ function _drawAngleBadgeXY(ctx,x,y,deg){
 }
 // Degrees (0–359, 0°=upright) from a radian angle.
 function _angToDeg(a){ return ((Math.round((a||0)*180/Math.PI)%360)+360)%360; }
-// Draw the "##°" readout centered on EACH of the 4 sides of a rotated box.
-// cx,cy = box center (canvas px); w,h = box size; ang = rotation (radians);
-// deg = value to print. The badge text stays screen-upright (via
-// _drawAngleBadgeXY) so it's readable from any side regardless of rotation.
-function _drawAngleBadge4Sides(ctx,cx,cy,w,h,ang,deg){
-  var ca=Math.cos(ang||0), sa=Math.sin(ang||0);
-  var off=14/zoom;                     // push each badge just outside its edge
-  var pts=[
-    {x:0,          y:-(h/2+off)},      // top
-    {x:0,          y:  h/2+off },      // bottom
-    {x:-(w/2+off), y:0          },     // left
-    {x:  w/2+off,  y:0          }      // right
-  ];
-  for(var i=0;i<pts.length;i++){
-    var wx=cx + pts[i].x*ca - pts[i].y*sa;
-    var wy=cy + pts[i].x*sa + pts[i].y*ca;
-    _drawAngleBadgeXY(ctx, wx, wy, deg);
-  }
-}
-// "##°" readout drawn on all 4 sides of a text label's box while rotating.
+// Small "##°" readout drawn just above a text's rotate handle while rotating.
 function _drawAngleBadge(o,deg){
-  if(!o) return;
-  var d=_textBoxDims(o);
-  var c=_textCenter(o);
-  _drawAngleBadge4Sides(selCtx, c.x, c.y, d.w, d.h, o.angle||0, deg);
+  if(!o||!o._rotHandle) return;
+  _drawAngleBadgeXY(selCtx, o._rotHandle.x, o._rotHandle.y-16/zoom, deg);
 }
 // True when (x,y) is on/near the dashed BOX border of o (in its rotated frame),
 // but not deep inside the text. Grabbing the border drags the whole label.
@@ -6306,21 +6281,7 @@ function _beginTextRotate(o,p){
   _drawTextChrome(o);
 }
 // (Re)open the inline editor for o — caret + dashed box + rotate handle.
-var _lastOpenEditObj=null, _lastOpenEditTime=0;
 function _openTextEdit(o){
-  // Re-entrancy guard. On touch a single tap fires the REAL touch event plus a
-  // synthetic mouse replay ~300ms later; both reach onDown → handleText → here.
-  // The second pass re-opened the SAME label while its text was already in the
-  // overlay, and iOS folded that into the box as duplicated content ("doubled
-  // text" on re-edit). If the same object is asked to open again within 700ms
-  // and its overlay is already up, the request is the synthetic echo — ignore.
-  var _now=Date.now();
-  if(o===_lastOpenEditObj && o===editingObj && (_now-_lastOpenEditTime)<700 &&
-     textOv.style.display!=='none'){
-    _lastOpenEditTime=_now;
-    return;
-  }
-  _lastOpenEditObj=o; _lastOpenEditTime=_now;
   commitText();
   stopTextCursor();
   cancelSelection();
@@ -7125,7 +7086,8 @@ function renderSelection(){
 
   // Live degree readout while rotating a shape (rotation handles 8-11).
   if(selHandle>=8 && selHandle<=11 && s.type!=='comment'){
-    _drawAngleBadge4Sides(selCtx, s.cx, s.cy, s.w, s.h, s.angle||0, _angToDeg(s.angle));
+    var _rh=handles[selHandle] || handles[9] || {x:s.cx, y:s.cy};
+    _drawAngleBadgeXY(selCtx, _rh.x, _rh.y - 16/zoom, _angToDeg(s.angle));
   }
 }
 
@@ -7791,7 +7753,6 @@ function updateToolbarForTool(t){
     textFmtGrp  : document.getElementById('tb-text-fmt-grp'),
     textAlignGrp: document.getElementById('tb-text-align-grp'),
     txtBgGrp    : document.getElementById('tb-txt-bg-grp'),
-    textFmtSep  : document.getElementById('tb-textfmt-sep'),
     markupGrp   : document.getElementById('tb-markup-grp'),
     lsGrp       : document.getElementById('tb-ls-grp'),
     lsSep       : document.getElementById('tb-ls-sep'),
@@ -7832,21 +7793,16 @@ function updateToolbarForTool(t){
   var isStroke = STROKE.indexOf(t) > -1;
   var isNone   = NONE.indexOf(t) > -1;
   var isMarkup = MARKUP.indexOf(t) > -1;
-  var isLeader = (t === 'leader');
-  // Leader labels ARE text objects, so the leader tool gets the same text
-  // formatting controls as the text tool (in addition to its stroke controls).
-  var showTextFmt = isText || isLeader;
 
   // cmt-clr-grp: only for note tool (already handled by tool button click, but keep in sync)
   shFlex(ids.cmtGrp, isNote);
 
-  // font size + text formatting (text tool + leader tool)
-  sh(ids.fontSizeGrp, showTextFmt);
-  shFlex(ids.fontFamilyGrp, showTextFmt);
-  shFlex(ids.textFmtGrp, showTextFmt);
-  shFlex(ids.textAlignGrp, showTextFmt);
-  shFlex(ids.txtBgGrp, showTextFmt);
-  if(ids.textFmtSep) ids.textFmtSep.style.display = showTextFmt ? '' : 'none';
+  // font size + text formatting (text tool only)
+  sh(ids.fontSizeGrp, isText);
+  shFlex(ids.fontFamilyGrp, isText);
+  shFlex(ids.textFmtGrp, isText);
+  shFlex(ids.textAlignGrp, isText);
+  shFlex(ids.txtBgGrp, isText);
 
   // markup color picker (markup tools only)
   shFlex(ids.markupGrp, isMarkup);
@@ -7861,7 +7817,7 @@ function updateToolbarForTool(t){
   if(ids.fillSep) ids.fillSep.style.display = isShape ? '' : 'none';
 
   // stroke color (shapes + stroke tools)
-  shFlex(ids.strokeGrp, isShape || isStroke || showTextFmt);
+  shFlex(ids.strokeGrp, isShape || isStroke || isText);
 
   // fill color (shapes only)
   if(ids.fillGrp) ids.fillGrp.style.display = isShape ? 'contents' : 'none';
@@ -8497,7 +8453,7 @@ btnClear.addEventListener('click',function(){
   if(!baseLoaded) return;
   var layerName = (layers[activeLayerIdx] && layers[activeLayerIdx].name) || ('Layer ' + (activeLayerIdx + 1));
   document.getElementById('clear-dlg-msg').textContent =
-    'This will permanently erase all drawings on "' + layerName + '". This cannot be undone without using Undo.';
+    'This will permanently erase all drawings on "' + layerName + '" and remove every placed image. This cannot be undone without using Undo.';
   document.getElementById('clear-ov').style.display  = 'block';
   document.getElementById('clear-dlg').style.display = 'block';
 });
@@ -9959,7 +9915,8 @@ function renderImgSelection(){
   }
   // Degree readout — while actively rotating (handles 8-11)
   if(selImgDrag && selImgDrag.hi >= 8 && selImgDrag.hi <= 11){
-    _drawAngleBadge4Sides(selCtx, ov.cx, ov.cy, ov.w, ov.h, ov.angle||0, _angToDeg(ov.angle));
+    var _irh=handles[selImgDrag.hi] || handles[9] || {x:ov.cx, y:ov.cy};
+    _drawAngleBadgeXY(selCtx, _irh.x, _irh.y - 16/zoom, _angToDeg(ov.angle));
   }
 }
 
