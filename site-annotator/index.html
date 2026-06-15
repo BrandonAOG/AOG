@@ -9203,20 +9203,9 @@ btnPdf.addEventListener('click',function(){
       var orientation=cw>ch?'landscape':'portrait';
       var doc=new JSPDF({orientation:orientation,unit:'mm',format:'a3'});
       var pw=doc.internal.pageSize.getWidth(), ph=doc.internal.pageSize.getHeight();
-      var tbH=18, imgH=ph-tbH-4, imgW=pw-4;
+      var imgH=ph-4, imgW=pw-4;
       if(imgH/imgW<ch/cw) imgW=imgH/(ch/cw);
       doc.addImage(imgData,'JPEG',2,2,imgW,imgH);
-      var proj=document.getElementById('tb-proj').value||'Site Plan';
-      var drwn=document.getElementById('tb-drwn').value||'';
-      var date=document.getElementById('tb-date').value||new Date().toISOString().slice(0,10);
-      var scTxt=document.getElementById('tb-scale').value||(scaleSet?'1px='+ppu.toFixed(4)+scaleUnit:'NTS');
-      doc.setFillColor(255,255,255); doc.rect(0,ph-tbH,pw,tbH,'F');
-      doc.setDrawColor(0); doc.line(0,ph-tbH,pw,ph-tbH);
-      doc.line(pw/3,ph-tbH,pw/3,ph); doc.line(2*pw/3,ph-tbH,2*pw/3,ph);
-      doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.text(proj,pw/6,ph-tbH+8,{align:'center'});
-      doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.text(drwn,pw/6,ph-tbH+14,{align:'center'});
-      doc.setFontSize(9); doc.text('Scale: '+scTxt,pw/2,ph-tbH+10,{align:'center'});
-      doc.setFontSize(8); doc.text(date,5*pw/6,ph-tbH+10,{align:'center'});
       var pdfBlob=doc.output('blob');
       writeToTarget(handle, pdfBlob, 'site-plan.pdf').then(function(){ toast('Saved as PDF ✓','ok',2500); });
     };
@@ -9304,20 +9293,9 @@ if(btnPdfEdit) btnPdfEdit.addEventListener('click', function(){
         var orientation=cw>ch?'landscape':'portrait';
         var doc=new JSPDF({orientation:orientation,unit:'mm',format:'a3'});
         var pw=doc.internal.pageSize.getWidth(), ph=doc.internal.pageSize.getHeight();
-        var tbH=18, imgH=ph-tbH-4, imgW=pw-4;
+        var imgH=ph-4, imgW=pw-4;
         if(imgH/imgW<ch/cw) imgW=imgH/(ch/cw);
         doc.addImage(imgData,'JPEG',2,2,imgW,imgH);
-        var proj=document.getElementById('tb-proj').value||'Site Plan';
-        var drwn=document.getElementById('tb-drwn').value||'';
-        var date=document.getElementById('tb-date').value||new Date().toISOString().slice(0,10);
-        var scTxt=document.getElementById('tb-scale').value||(scaleSet?'1px='+ppu.toFixed(4)+scaleUnit:'NTS');
-        doc.setFillColor(255,255,255); doc.rect(0,ph-tbH,pw,tbH,'F');
-        doc.setDrawColor(0); doc.line(0,ph-tbH,pw,ph-tbH);
-        doc.line(pw/3,ph-tbH,pw/3,ph); doc.line(2*pw/3,ph-tbH,2*pw/3,ph);
-        doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.text(proj,pw/6,ph-tbH+8,{align:'center'});
-        doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.text(drwn,pw/6,ph-tbH+14,{align:'center'});
-        doc.setFontSize(9); doc.text('Scale: '+scTxt,pw/2,ph-tbH+10,{align:'center'});
-        doc.setFontSize(8); doc.text(date,5*pw/6,ph-tbH+10,{align:'center'});
         var pdfArrayBuffer=doc.output('arraybuffer');
         // 2) Build the editable record, embed it with pdf-lib, then save.
         buildProjectRecord(0.92, function(rec){
