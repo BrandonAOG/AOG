@@ -7899,6 +7899,12 @@ document.querySelectorAll('.tb-btn[data-tool]').forEach(function(btn){
       if(selectedShape&&selectedShape.type==='comment') commitSelection();
     }
     commitText(); commitSelection(); commitMeasureSelection(); commitPolylineSelection(); commitLeaderSelection(); leaderStep=0; _leaderDragPlacing=false;
+    // Commit any selected image overlay back onto the persistent canvas.
+    // A selected image is drawn on the temporary selection canvas instead of
+    // the image canvas, so switching tools without committing would wipe it.
+    if(typeof selImg!=='undefined'&&selImg&&typeof commitImgSelection==='function'){ commitImgSelection(); }
+    // Cancel an in-progress (not-yet-placed) image ghost so it doesn't linger.
+    if(typeof _pendingImg!=='undefined'&&_pendingImg&&typeof _cancelImgPlacement==='function'){ _cancelImgPlacement(); }
     stopTextCursor(); clearTextHover();
     tool=btn.dataset.tool;
     document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
