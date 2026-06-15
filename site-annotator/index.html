@@ -10360,6 +10360,15 @@ function _clearImgGhost(){
 }
 
 function _enterImgPlacementMode(img){
+  // A currently-selected image is drawn only on selCv (it's skipped in
+  // renderImgOverlays). The placement ghost clears selCv, which would make
+  // that image vanish until the new one is placed. Commit the selection first
+  // so the previously-selected image is painted onto the persistent overlay
+  // canvas before the ghost wipes selCv.
+  if(typeof selImg!=='undefined' && selImg && typeof commitImgSelection==='function'){
+    commitImgSelection();
+    if(typeof hideImgBar==='function') hideImgBar();
+  }
   _pendingImg    = img;
   _pendingImgPos = null;
   // Crosshair cursor for the whole viewport
