@@ -861,6 +861,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       <button data-bm="sat" class="active">Satellite</button>
       <button data-bm="aerial" title="Aerial imagery with no place labels — unobstructed photo view">Aerial (clean)</button>
       <button data-bm="sarco" title="Local high-res county aerials — auto-switches to whichever county you're viewing (Sarasota, Lee, Charlotte, Collier, Manatee). Falls back to Esri imagery elsewhere.">📷 Local HD</button>
+      <button data-bm="collier2026" title="Collier County 2026 imagery (experimental). Decoded client-side from the county's LERC2D cache — only covers a small area around Naples/North Naples and may be slightly misaligned. Falls back to Esri imagery outside its coverage.">🆕 Collier 2026 (experimental)</button>
       <button id="localAerialRefresh" class="zl-refresh-row" title="Reload the local aerial for the county you're currently viewing (use after panning across a county line)">⟳ Refresh aerial to this view</button>
       <button data-bm="street">Street</button>
       <button data-bm="gray" title="Minimal light-gray basemap — makes parcel / flood / city overlays read clearly">Gray</button>
@@ -963,6 +964,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="https://unpkg.com/lerc@4.1.1/LercDecode.js"></script>
 <script>
 /* ============================================================
    VERIFIED OFFICIAL ENDPOINTS (checked against live REST dirs)
@@ -1909,7 +1911,7 @@ const map = L.map('map',{
 // Bigger canvas padding => the vector canvas is drawn well beyond the viewport, so short pans
 // reuse the already-rendered bitmap instead of triggering a full redraw on every frame.
 const canvasRenderer = L.canvas({ padding:2, tolerance:4 });   // shared canvas for all vector layers
-const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+const sat = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
   {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
 const labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
   {maxZoom:23,maxNativeZoom:19,opacity:.9,updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
@@ -1922,11 +1924,132 @@ const topo = L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/U
   {maxZoom:23,maxNativeZoom:16,attribution:"Topo &copy; USGS The National Map",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
 // Clean aerial: the same Esri imagery as Satellite but WITHOUT the place-label overlay, for an
 // unobstructed photo view of roofs / pads / setbacks.
-const aerialClean = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+const aerialClean = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
   {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
 // Light gray canvas: minimal, low-noise basemap so parcel lines / flood / city overlays read clearly.
 const gray = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
   {maxZoom:23,maxNativeZoom:16,attribution:"&copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+
+// =================== COLLIER 2026 (EXPERIMENTAL — LERC2D client-side decode) ===================
+// Collier's ImageryAll2026 service publishes its newest flight ONLY as a LERC2D pre-cached raster
+// (singleFusedMapCache, format LERC2D, max LOD 11) — NOT png/jpg, so a normal <img> tile layer
+// shows nothing even though /tile/{z}/{y}/{x} returns 200. This layer fetches the LERC blob,
+// decodes it client-side with Esri's `lerc` WASM library, draws the 3 RGB bands to a <canvas>,
+// and hands that canvas to Leaflet as the tile.
+//
+// COVERAGE & ALIGNMENT CAVEATS (read before relying on this for siting/measurements):
+//  - Service extent is small (~13km x ~11km in Web Mercator, roughly the Naples/North Naples
+//    area) — outside that box every tile is empty/error and Esri imagery shows through.
+//  - Service LODs (0-11) are NOT the same grid as standard slippy tiles: resolution at service
+//    LOD n is close to (but ~2% finer than) standard zoom (n+9), AND the tile origin differs from
+//    the standard Web-Mercator slippy origin. This layer picks the nearest LOD and the single
+//    nearest source tile — there is NO sub-tile cropping/resampling, so imagery can be offset by
+//    a fraction of a tile (visually: features may sit slightly shifted from their true position).
+//    Good enough to confirm "does the new structure exist", NOT for precise setback measurement —
+//    use the parcel polygon / survey for that.
+const COLLIER2026_R_MERC = 20037508.342789244;
+const COLLIER2026_ORIGIN_X = -20037507.8427882;
+const COLLIER2026_ORIGIN_Y = 30240971.4583861;
+const COLLIER2026_BASE_URL = "https://tiledimageservices2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/ImageryAll2026/ImageServer";
+const COLLIER2026_MAX_LOD = 11;
+// Actual resolutions per LOD level, taken from the service's tileInfo.lods (m/px, EPSG:3857).
+const COLLIER2026_LOD_RES = [
+  312.115824231649, 156.057912115825, 78.0289560579123, 39.0144780289562,
+  19.5072390144781, 9.75361950723904, 4.87680975361952, 2.43840487680976,
+  1.21920243840488, 0.60960121920244, 0.30480060960122, 0.15240030480061
+];
+const COLLIER2026_EXTENT = { // Web Mercator (3857)
+  xmin:-9116598.8339, ymin:2969998.32586421, xmax:-9000963.1214285754, ymax:3065766.2201999985
+};
+// Sub-tile cropping: spanPx≈250.8 means each Leaflet tile's content comes from a crop region inside
+// the source grid that may straddle up to 2 source tiles per axis (since frac+spanPx/256 can exceed
+// 1). We fetch the floor tile and, if the crop spans into the next tile, fetch that too and
+// composite both onto an oversized canvas before cropping to the final 256x256.
+const COLLIER2026_COL_OFFSET = 0;
+const COLLIER2026_ROW_OFFSET = 0;
+window.__collier2026Debug = [];
+let _lercReady = null;
+function lercEnsureLoaded(){
+  if(!_lercReady) _lercReady = Lerc.load();
+  return _lercReady;
+}
+const Collier2026Layer = L.GridLayer.extend({
+  options: { maxZoom:23, minZoom:11, maxNativeZoom:20, tileSize:256, updateWhenZooming:false, keepBuffer:4,
+             attribution:"Imagery © Collier County (2026, experimental)" },
+  createTile: function(coords, done){
+    const tile = document.createElement('canvas');
+    tile.width = 256; tile.height = 256;
+    const ctx = tile.getContext('2d');
+    // Compute this Leaflet tile's bounds in Web Mercator.
+    const n = Math.pow(2, coords.z), tsz = 2*COLLIER2026_R_MERC/n;
+    const xmin = -COLLIER2026_R_MERC + coords.x*tsz, ymax = COLLIER2026_R_MERC - coords.y*tsz;
+    const cx = xmin + tsz/2, cy = ymax - tsz/2;
+    // Outside the 2026 extent → transparent (Esri base shows through).
+    if(cx<COLLIER2026_EXTENT.xmin || cx>COLLIER2026_EXTENT.xmax || cy<COLLIER2026_EXTENT.ymin || cy>COLLIER2026_EXTENT.ymax){
+      setTimeout(()=>done(null, tile), 0);
+      return tile;
+    }
+    // Map standard zoom -> nearest service LOD (LOD ~= z-9, clamped to [0,11]).
+    const lod = Math.max(0, Math.min(COLLIER2026_MAX_LOD, coords.z - 9));
+    const lodRes = COLLIER2026_LOD_RES[lod];
+    // Exact (fractional) source-tile coords of this Leaflet tile's NW corner.
+    const exactCol = (xmin - COLLIER2026_ORIGIN_X) / (lodRes*256);
+    const exactRow = (COLLIER2026_ORIGIN_Y - ymax) / (lodRes*256);
+    const col0 = Math.floor(exactCol) + COLLIER2026_COL_OFFSET;
+    const row0 = Math.floor(exactRow) + COLLIER2026_ROW_OFFSET;
+    // Fractional pixel offset into tile (col0,row0), in SOURCE pixels (0-256).
+    const offX = (exactCol - Math.floor(exactCol)) * 256;
+    const offY = (exactRow - Math.floor(exactRow)) * 256;
+    // Source pixels spanned by this Leaflet tile (≈250.8).
+    const spanPx = tsz / lodRes;
+    // Crop region [offX, offX+spanPx) may spill into tile col0+1 (and similarly for rows). Fetch up
+    // to a 2x2 block of source tiles, decode each onto a combined (up to 512x512) canvas at the
+    // right offset, then crop [offX,offY,spanPx,spanPx] from that and scale to 256x256.
+    const needRight  = (offX + spanPx) > 256;
+    const needBottom = (offY + spanPx) > 256;
+    const tiles = [[col0,row0,0,0]];
+    if(needRight)            tiles.push([col0+1, row0,   256, 0]);
+    if(needBottom)           tiles.push([col0,   row0+1, 0, 256]);
+    if(needRight&&needBottom)tiles.push([col0+1, row0+1, 256, 256]);
+    if(window.__collier2026Debug) window.__collier2026Debug.push({leafletZ:coords.z, leafletX:coords.x, leafletY:coords.y, lod, col0, row0, offX, offY, spanPx, needRight, needBottom, centerLngLat: [(cx/COLLIER2026_R_MERC)*180, (Math.atan(Math.exp(cy/COLLIER2026_R_MERC*Math.PI))*2-Math.PI/2)*180/Math.PI]});
+    const combined = document.createElement('canvas');
+    combined.width = 512; combined.height = 512;
+    const cctx = combined.getContext('2d');
+    lercEnsureLoaded().then(()=>Promise.all(tiles.map(([c,r,dx,dy])=>{
+      const url = `${COLLIER2026_BASE_URL}/tile/${lod}/${r}/${c}`;
+      return fetch(url).then(resp=>{
+        if(!resp.ok) return null;             // missing neighbor → leave that quadrant blank
+        return resp.arrayBuffer();
+      }).then(buf=>{
+        if(!buf) return;
+        const result = Lerc.decode(buf);
+        const { width, height, pixels, mask } = result;
+        const img = cctx.createImageData(width, height);
+        const rr=pixels[0], gg=pixels[1]||pixels[0], bb=pixels[2]||pixels[0];
+        for(let i=0;i<width*height;i++){
+          img.data[i*4+0] = rr[i];
+          img.data[i*4+1] = gg[i];
+          img.data[i*4+2] = bb[i];
+          img.data[i*4+3] = (mask && !mask[i]) ? 0 : 255;
+        }
+        const tmp=document.createElement('canvas'); tmp.width=width; tmp.height=height;
+        tmp.getContext('2d').putImageData(img,0,0);
+        cctx.drawImage(tmp, dx, dy);
+      }).catch(()=>{});
+    }))).then(()=>{
+      // Crop [offX,offY,spanPx,spanPx] from the combined canvas and scale to fill 256x256.
+      ctx.drawImage(combined, offX, offY, spanPx, spanPx, 0, 0, 256, 256);
+      done(null, tile);
+    }).catch(()=>{
+      setTimeout(()=>done(null, tile), 0);
+    });
+    return tile;
+  }
+});
+const collier2026 = new Collier2026Layer();
+const collier2026EsriBase = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
+  {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+const collier2026Group = L.layerGroup([collier2026EsriBase, collier2026, labels]);
 
 // =================== LOCAL HD AERIAL (one toggle, auto-picks the county) ===================
 // A single "Local HD" basemap that automatically serves whichever county's OWN high-res aerial
@@ -1964,10 +2087,11 @@ const LOCAL_AERIAL = {
                  "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer",
                  "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2021/ImageServer" ] },
   COLLIER:  { label:"Collier County", bounds:[-81.90,25.80,-80.85,26.55], kind:"export",
-    // Collier's public GIS server is ags2.colliercountyfl.gov/gis, but its aerial service name couldn't
-    // be confirmed and earlier guesses failed. Lead with the VERIFIED statewide FDEP ortho so Collier
-    // reliably gets HD imagery; keep county guesses after it in case one resolves. If you capture the
-    // real county ImageServer URL from Collier's map (network tab), drop it in at the top.
+    // ⚠️ ImageryAll2026 (tiledimageservices2...SlIq32SqARUHIhSx) was investigated and is NOT usable
+    // as a Leaflet tile layer: its cache format is LERC2D (analytical raster, not png/jpeg) and its
+    // max LOD is only 11 — Leaflet's <img> tiles can't decode LERC2D regardless of zoom, so it
+    // renders nothing. Would need Esri's ImageryTileLayer (client-side LERC decode) or a server-
+    // side LERC→PNG conversion to use this source. Leading with the verified FDEP ortho instead.
     candidates:[ "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer",
                  "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2021/ImageServer",
                  "https://ags2.colliercountyfl.gov/gis/rest/services/Public/Aerials_2024/ImageServer",
@@ -1994,6 +2118,20 @@ const LOCAL_AERIAL = {
                  "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2019/ImageServer" ] }
 };
 // Resolved-at-runtime state: which counties' services actually responded, and their working URLs.
+// ✅ COLLIER is pre-seeded here (not left to the async probe below): the ImageryAll2026 tile
+// endpoint was confirmed working directly (200 OK on /tile/{z}/{y}/{x}), but the probe's
+// "?f=json" metadata check on this hosted ArcGIS Online service may fail/CORS-block or report a
+// spatialReference/cache shape the probe doesn't recognize, silently falling through to the FDEP
+// fallback. Seeding it here guarantees Collier's "Local HD" uses the 2026 imagery immediately,
+// regardless of what the probe decides. If Esri ever retires this exact URL, the probe will still
+// fall back through the remaining `candidates` for COLLIER.
+// ⚠️ ImageryAll2026 (confirmed via ?f=json): max cached LOD is level 11 (not 20), AND its tile
+// format is LERC2D — a compressed analytical raster format, NOT png/jpeg. A standard <img>-based
+// Leaflet tile layer cannot decode LERC2D, so /tile/{z}/{y}/{x} requests either 404 (z>11) or
+// return non-image bytes the browser silently fails to render (z<=11) — explaining "200 OK but
+// nothing shows". This service needs Esri's JS API (ImageryTileLayer, which decodes LERC client-
+// side) or a server-side conversion, not a Leaflet tile URL. Until that's built, COLLIER falls
+// through to the export-kind candidates below (FDEP ortho), which serve real JPEG/PNG.
 const LOCAL_AERIAL_ACTIVE = {};        // KEY -> { url, kind, label }
 // The mutable URL the layer is currently drawing from (auto-switcher repoints this).
 const LOCAL_URL_REF = { url:null, kind:"export" };
@@ -2051,7 +2189,7 @@ const localAerial = new LocalAerial("", {
 });
 // Esri imagery sits UNDER the local aerial so any gap (outside a wired county, or a not-yet-loaded
 // tile) still shows photography rather than blank. It caps at native z19 and upsamples to fill.
-const localEsriBase = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+const localEsriBase = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
   {maxZoom:23,maxNativeZoom:19,updateWhenIdle:false,updateWhenZooming:false,keepBuffer:6});
 const sarcoGroup = L.layerGroup([localEsriBase, localAerial, labels]);   // the "Local HD" basemap
 // Switch the local layer to the county under the current map center; returns the active key (or null).
@@ -2095,10 +2233,10 @@ function updateLocalAerial(force){
 const btnBasemap=document.getElementById('btnBasemap');
 const basemapMenu=document.getElementById('basemapMenu');
 const basemapLbl=document.getElementById('basemapLbl');
-const BM_LABEL={sat:'Satellite',street:'Street',topo:'⛰ Topo',aerial:'Aerial',gray:'Gray',sarco:'Local HD'};
+const BM_LABEL={sat:'Satellite',street:'Street',topo:'⛰ Topo',aerial:'Aerial',gray:'Gray',sarco:'Local HD',collier2026:'Collier 2026 (exp.)'};
 // The basemaps are mutually exclusive; overlays (city limits / flood / parcels / radar) sit on top.
 // All basemaps live in the low tilePane, so they always render beneath the overlays regardless of order.
-const BM_LAYER={sat:satGroup,street:street,topo:topo,aerial:aerialClean,gray:gray,sarco:sarcoGroup};
+const BM_LAYER={sat:satGroup,street:street,topo:topo,aerial:aerialClean,gray:gray,sarco:sarcoGroup,collier2026:collier2026Group};
 let _curBasemap='sat';
 function setBasemap(which){
   Object.values(BM_LAYER).forEach(l=>{ if(map.hasLayer(l)) map.removeLayer(l); });
