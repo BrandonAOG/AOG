@@ -814,9 +814,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   <div id="tb-font-size-grp"><select id="font-size-sel" title="Font size">
     <option value="6">6</option><option value="7">7</option>
     <option value="8">8</option><option value="9">9</option>
-    <option value="10">10</option><option value="12">12</option>
+    <option value="10">10</option><option value="12" selected>12</option>
     <option value="14">14</option><option value="16">16</option>
-    <option value="18" selected>18</option><option value="20">20</option>
+    <option value="18">18</option><option value="20">20</option>
     <option value="24">24</option><option value="28">28</option>
     <option value="32">32</option><option value="36">36</option>
     <option value="48">48</option><option value="60">60</option>
@@ -2568,7 +2568,7 @@ var pdfDoc=null, currentPage=1, baseLoaded=false;
 var isPanning=false, spaceDown=false, lastPanX=0, lastPanY=0;
 var pinching=false, twoMidX=0, twoMidY=0, pinchDist0=0, pinchZoom0=1;
 var PAN_DAMP=0.6, ZOOM_DAMP=0.2;
-var FONT_SIZE=18; // controlled by #font-size-sel
+var FONT_SIZE=12; // controlled by #font-size-sel
 var textX=0, textY=0;
 var hintTimer;
 
@@ -2906,7 +2906,7 @@ function updateLegend(){
 }
 
 // ── ZOOM/PAN ──
-function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(_editingComment) repositionCommentEditor(_editingComment); if(typeof repositionTextOverlay==='function') repositionTextOverlay(); if(_pendingImg&&_pendingImgPos) _drawImgGhost(_pendingImgPos.x,_pendingImgPos.y); }
+function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(typeof _setAnnoRes==='function') _setAnnoRes(false); if(_editingComment) repositionCommentEditor(_editingComment); if(typeof repositionTextOverlay==='function') repositionTextOverlay(); if(_pendingImg&&_pendingImgPos) _drawImgGhost(_pendingImgPos.x,_pendingImgPos.y); }
 
 function clampPan(){
   var vw=viewport.clientWidth,vh=viewport.clientHeight;
@@ -3300,6 +3300,60 @@ function resize(w,h){
   if(typeof imgCv!=='undefined'){ imgCv.height=h; }
   selCv.width=1; selCv.height=1;
   canvasWrap.style.width=w+'px'; canvasWrap.style.height=h+'px';
+  // Render the TEXT/markup AND shape/note layers at device-pixel resolution so
+  // committed text and notes stay crisp on hi-DPI / Retina screens AND when zoomed
+  // in. Display size stays w×h via CSS so they overlay the other layers exactly;
+  // the backing stores are sized for the current zoom (see _setAnnoRes). (Export
+  // re-renders these on their own canvases, and neither is read back, so nothing
+  // else is affected.)
+  _setAnnoRes(true);
+}
+
+// Size the annotation canvases (text/markup = tCv, shapes/notes = shCv) so their
+// backing stores cover the device pixels actually on screen at the current zoom —
+// committed (rasterized) text and notes then look as sharp as the live editor.
+// Both are display-only (never read back) and overlay at w×h via CSS, so this is
+// safe. Capped for mobile canvas-area / memory limits.
+var _annoEff = 0;     // effective scale currently baked into the anno canvases
+function _computeAnnoEff(){
+  var w = baseCv.width, h = baseCv.height;
+  if(!w || !h) return 1;
+  var devicePR = window.devicePixelRatio || 1;
+  var eff = Math.max(1, devicePR * Math.max(1, zoom));   // cover device px at zoom
+  eff = Math.min(eff, 3);                                // hard ceiling
+  var _CAP = 12e6;                                       // per-canvas device-px ceiling
+  if(w*h*eff*eff > _CAP) eff = Math.max(1, Math.sqrt(_CAP/(w*h)));
+  return Math.round(eff*4)/4;                            // bucket to 0.25 steps
+}
+function _sizeAnnoCanvas(cv, ctx, eff){
+  var w = baseCv.width, h = baseCv.height;
+  cv.width  = Math.max(1, Math.round(w*eff));
+  cv.height = Math.max(1, Math.round(h*eff));
+  cv.style.width  = w+'px';
+  cv.style.height = h+'px';
+  ctx.setTransform(eff,0,0,eff,0,0);                    // draw in plan coords, render at eff
+}
+function _setAnnoRes(force){
+  var w = baseCv.width, h = baseCv.height;
+  if(!w || !h) return;
+  var eff = _computeAnnoEff();
+  // Skip needless re-rasterization (e.g. during pan, where zoom is unchanged).
+  if(!force && Math.abs(eff - _annoEff) < 0.2) return;
+  _annoEff = eff;
+  _sizeAnnoCanvas(tCv,  tCtx,  eff);
+  _sizeAnnoCanvas(shCv, shCtx, eff);
+  if(baseLoaded){
+    if(typeof renderTextObjs==='function')        renderTextObjs();
+    if(typeof renderShapeAndMeasure==='function') renderShapeAndMeasure();
+  }
+}
+// Ensure shCv is at the current effective resolution before a live preview draws
+// on it (used by the path-measure / polyline preview helpers that previously
+// forced it back to plan size).
+function _ensureShcvRes(){
+  var eff = _annoEff || _computeAnnoEff();
+  var want = Math.max(1, Math.round(baseCv.width*eff));
+  if(shCv.width !== want){ _sizeAnnoCanvas(shCv, shCtx, eff); }
 }
 
 function afterLoad(){
@@ -5216,9 +5270,7 @@ function renderPathMeasureObjs(){
 // ── Draw the live in-progress path on shCv ───────────────────
 function redrawPathMeasurePreview(mouseX,mouseY){
   if(!pmActive||pmPoints.length<1) return;
-  if(shCv.width!==drawCv.width||shCv.height!==drawCv.height){
-    shCv.width=drawCv.width; shCv.height=drawCv.height;
-  }
+  _ensureShcvRes();  // keep shapes/notes canvas at hi-res (was: force to plan size)
   // Full re-render of committed objects + live preview on top
   renderShapeAndMeasure(); // draws committed items
 
@@ -5403,9 +5455,7 @@ drawCv.addEventListener('mousemove',function(e){
     var lpos=getPos(e);
     lpos=maybeConstrainHV(startX,startY,lpos.x,lpos.y);
     dCtx.putImageData(compositedSnap,0,0);
-    if(shCv.width!==drawCv.width||shCv.height!==drawCv.height){
-      shCv.width=drawCv.width; shCv.height=drawCv.height;
-    }
+  _ensureShcvRes();  // keep shapes/notes canvas at hi-res (was: force to plan size)
     renderShapeAndMeasure(); // redraw committed objects underneath
     shCtx.save();
     shCtx.globalAlpha=opacity;
@@ -5432,9 +5482,7 @@ drawCv.addEventListener('mousemove',function(e){
     dCtx.putImageData(compositedSnap,0,0);
 
     // Draw live preview on shCv so it's visible above draw-cv
-    if(shCv.width!==drawCv.width||shCv.height!==drawCv.height){
-      shCv.width=drawCv.width; shCv.height=drawCv.height;
-    }
+  _ensureShcvRes();  // keep shapes/notes canvas at hi-res (was: force to plan size)
     // Re-render committed shapes/measures, then overlay live preview
     shCtx.clearRect(0,0,shCv.width,shCv.height);
     // Redraw committed shape+measure objects underneath
@@ -5679,18 +5727,39 @@ function renderTextObjs(){
     var maxW=measureLinesWFull(lines,fpx,family,obj.bold,obj.italic);
     // Compute anchor x for alignment
     var ax=obj.x+(align==='center'?maxW/2:align==='right'?maxW:0);
-    // Draw background if bgOpacity>0
+    // Draw background if bgOpacity>0 — tight, per-line highlight.
+    // Each line gets its own rectangle hugging that line's ACTUAL glyphs with
+    // exactly 1.5px above/below — so the bar is the same tightness at any font
+    // size, and lines without ascenders/descenders (e.g. "ss") aren't padded out
+    // to full cap-height. Empty lines get no highlight; a space/letter only its
+    // own width.
     if(obj.bgOpacity&&obj.bgOpacity>0){
-      var pad=4;
-      var bgH=lines.length*fpx*1.35+pad*2;
+      var _padX=2, _padY=1.5, _lineH=fpx*1.35;
       tCtx.save();
       tCtx.globalAlpha=obj.opacity*obj.bgOpacity;
       tCtx.fillStyle=obj.bgColor||'#ffff00';
+      var _bgLine=function(line, lineLeftX, baseY){
+        var m=tCtx.measureText(line);
+        var lw=m.width; if(lw<=0) return;            // empty line → nothing
+        var asc =(m.actualBoundingBoxAscent !=null)? m.actualBoundingBoxAscent  : fpx*0.74;
+        var desc=(m.actualBoundingBoxDescent!=null)? m.actualBoundingBoxDescent : fpx*0.21;
+        if(asc<=0.01) asc=fpx*0.5;                   // whitespace-only line → x-height bar
+        if(desc<0) desc=0;
+        tCtx.fillRect(lineLeftX-_padX, baseY-asc-_padY, lw+_padX*2, asc+desc+_padY*2);
+      };
       if(obj.angle){
         tCtx.translate(obj.x,obj.y);tCtx.rotate(obj.angle);
-        tCtx.fillRect(-pad,-fpx-pad,maxW+pad*2,bgH);
+        lines.forEach(function(line,i){
+          var lw=tCtx.measureText(line).width;
+          var lx=(align==='center'?-lw/2:align==='right'?-lw:0);
+          _bgLine(line, lx, i*_lineH);
+        });
       } else {
-        tCtx.fillRect(obj.x-pad,obj.y-fpx-pad,maxW+pad*2,bgH);
+        lines.forEach(function(line,i){
+          var lw=tCtx.measureText(line).width;
+          var lx=ax-(align==='center'?lw/2:align==='right'?lw:0);
+          _bgLine(line, lx, obj.y+i*_lineH);
+        });
       }
       tCtx.restore();
       tCtx.globalAlpha=obj.opacity;
@@ -6485,6 +6554,8 @@ function repositionTextOverlay(){
   textOv.style.color   = color;
   textOv.style.opacity = opacity;
   // Live Text-BG highlight behind the typed text (rgba from color+opacity).
+  // Shown as soon as editing starts; the box hugs the text so it begins at ~1
+  // letter and grows as you type.
   if(textBgOpacity>0){
     var _hx=(textBgColor||'#ffff00').replace('#','');
     if(_hx.length===3) _hx=_hx[0]+_hx[0]+_hx[1]+_hx[1]+_hx[2]+_hx[2];
@@ -6541,24 +6612,35 @@ function _fitTextOv(){
   if(_editingComment) return;
   if(textOv.style.display==='none') return;
   var renderSz = parseFloat(textOv.style.fontSize) || 16;
-  // Height: grow to fit every line.
+  // The live editor (and its highlight background) should hug the text: about
+  // one letter wide on first click, growing a character at a time, and only as
+  // tall as the line being typed. Override the CSS 200px/40px floors that were
+  // forcing a big block behind the text.
+  textOv.style.minWidth  = '0px';
+  textOv.style.minHeight = '0px';
+  var pad   = 8;                              // 4px left + 4px right (CSS padding)
+  var oneCh = Math.max(8, renderSz * 0.62);   // ~1 character so an empty box ≈ 1 letter
+  // Height: hug the actual content — one line by default, grows with added lines.
   textOv.style.height = 'auto';
-  textOv.style.height = Math.max(40, renderSz * 2, textOv.scrollHeight) + 'px';
-  // Width: grow to the longest line so long pastes aren't cut off horizontally
-  // (white-space:pre = no wrap). Left-anchored only — right-anchored leader
-  // labels keep their alignment-critical computed width. Clamp to the viewport.
+  textOv.style.height = Math.max(renderSz, textOv.scrollHeight) + 'px';
+  // Right-anchored leader labels keep their alignment-critical computed width.
+  if(_textAnchorRight) return;
+  // Width: a textarea's scrollWidth is floored at its current VISIBLE width, so
+  // reading it while the box is still wide reports the box width (not the text)
+  // — which kept the editor/highlight full-line on an empty or short line.
+  // Collapse to 0 first so scrollWidth reflects the true content width, then
+  // size to it (with a ~1-letter minimum) so the box hugs the text.
+  textOv.style.width = '0px';
+  var contentW = textOv.scrollWidth + 4;
   if(editingObj && editingObj.angle){
-    // Rotated editing: the box is rotated, so viewport-axis clamping doesn't
-    // apply. Size straight to the content's natural width.
-    textOv.style.width = Math.max(60, textOv.scrollWidth + 8) + 'px';
-  } else if(!_textAnchorRight){
+    textOv.style.width = Math.max(oneCh + pad, contentW) + 'px';
+  } else {
     var sx     = parseFloat(textOv.style.left) || 0;
     var vpW    = viewport.clientWidth || 0;
     var scaleV = 1, _tr = textOv.style.transform || '', _si = _tr.indexOf('scale(');
     if(_si >= 0) scaleV = parseFloat(_tr.slice(_si + 6)) || 1;
-    var contentW = textOv.scrollWidth + 8;
-    var maxW = vpW > 0 ? Math.max(60, (vpW - sx) / (scaleV || 1) - 4) : contentW;
-    textOv.style.width = Math.min(maxW, Math.max(200, contentW)) + 'px';
+    var maxW = vpW > 0 ? Math.max(oneCh + pad, (vpW - sx) / (scaleV || 1) - 4) : contentW;
+    textOv.style.width = Math.min(maxW, Math.max(oneCh + pad, contentW)) + 'px';
   }
 }
 
@@ -6654,6 +6736,7 @@ textOv.addEventListener('keydown',function(e){
 textOv.addEventListener('input', function(){
   if(_editingComment){ _cmtAutoGrow(_editingComment); return; }
   _fitTextOv();
+  if(typeof _txtBgLive==='function') _txtBgLive(); // toggle/track the live highlight as text changes
   // Keep the dashed box + rotate handle tracking the text as it's typed.
   if(editingObj){ editingObj.text=textOv.value; renderTextCursorFrame(); }
 });
@@ -6687,7 +6770,12 @@ function commitText(){
 
   var val=textOv.value;
   textOv.style.display='none';
-  textOv.style.minWidth='';   // clear the right-anchor width override
+  // Clear the hug-content sizing overrides so the shared textarea resets cleanly
+  // for the next text/comment edit.
+  textOv.style.minWidth='';
+  textOv.style.minHeight='';
+  textOv.style.width='';
+  textOv.style.height='';
   textOv.blur();
 
   if(editingObj){
@@ -8351,6 +8439,9 @@ function _txtBgRgba(){
 }
 function _txtBgLive(){
   if(textOv.style.display==='none' || _editingComment) return; // notes own their own styling
+  // Show the highlight as soon as you start typing — the editor box now hugs the
+  // text (≈1 letter on first click, growing per character), so the bar tracks the
+  // content instead of filling a big block.
   textOv.style.background = (textBgOpacity>0) ? _txtBgRgba() : 'transparent';
 }
 if(txtBgInput){
@@ -8918,12 +9009,34 @@ function compositeExport(maxPx){
       ctx.textAlign=align_;
       var maxW_=measureLinesWFull(lines_,Math.round(efpx*scale),fam,obj.bold,obj.italic);
       var ax_=Math.round(obj.x*scale)+(align_==='center'?maxW_/2:align_==='right'?maxW_:0);
-      // Background
+      // Background — tight, per-line, hugs each line's actual glyphs (matches screen).
       if(obj.bgOpacity&&obj.bgOpacity>0){
         ctx.save(); ctx.globalAlpha=obj.opacity*obj.bgOpacity; ctx.fillStyle=obj.bgColor||'#ffff00';
-        var pad_=4*scale;
-        if(obj.angle){ctx.translate(Math.round(obj.x*scale),Math.round(obj.y*scale));ctx.rotate(obj.angle);ctx.fillRect(-pad_,-efpx*scale-pad_,maxW_+pad_*2,lines_.length*efpx*1.35*scale+pad_*2);}
-        else{ctx.fillRect(ax_-(align_==='center'?maxW_/2:align_==='right'?maxW_:0)-pad_,Math.round(obj.y*scale)-efpx*scale-pad_,maxW_+pad_*2,lines_.length*efpx*1.35*scale+pad_*2);}
+        var _efs=efpx*scale;
+        var _padX_=2*scale, _padY_=1.5*scale, _lineH_=_efs*1.35;
+        var _bgLine_=function(line, lineLeftX, baseY){
+          var m=ctx.measureText(line);
+          var lw_=m.width; if(lw_<=0) return;
+          var asc=(m.actualBoundingBoxAscent !=null)? m.actualBoundingBoxAscent  : _efs*0.74;
+          var desc=(m.actualBoundingBoxDescent!=null)? m.actualBoundingBoxDescent : _efs*0.21;
+          if(asc<=0.01) asc=_efs*0.5;
+          if(desc<0) desc=0;
+          ctx.fillRect(lineLeftX-_padX_, baseY-asc-_padY_, lw_+_padX_*2, asc+desc+_padY_*2);
+        };
+        if(obj.angle){
+          ctx.translate(Math.round(obj.x*scale),Math.round(obj.y*scale));ctx.rotate(obj.angle);
+          lines_.forEach(function(line,i){
+            var lw_=ctx.measureText(line).width;
+            var lx_=(align_==='center'?-lw_/2:align_==='right'?-lw_:0);
+            _bgLine_(line, lx_, Math.round(i*_lineH_));
+          });
+        } else {
+          lines_.forEach(function(line,i){
+            var lw_=ctx.measureText(line).width;
+            var lx_=ax_-(align_==='center'?lw_/2:align_==='right'?lw_:0);
+            _bgLine_(line, lx_, Math.round((obj.y+i*efpx*1.35)*scale));
+          });
+        }
         ctx.restore();
         ctx.globalAlpha=obj.opacity;
       }
