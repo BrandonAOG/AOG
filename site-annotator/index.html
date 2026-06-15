@@ -10862,11 +10862,8 @@ var _pendingLabel = null; // label text waiting to be placed by tap
 function placePreset(text, cx, cy){
   if(!baseLoaded){ toast('Open a site plan first','warn'); return; }
   captureState();
-  // Target ~48 screen pixels tall regardless of zoom level.
-  // canvas_px = screen_px / zoom, then convert to a scale-locked POINT value
-  // (divide by DPI factor) so fontSize stays resolution-independent like all text.
-  var fsPx = Math.max(10, Math.min(300, 48 / zoom));
-  var fs = Math.round(fsPx / textDpiFactor());
+  // Placed labels use a fixed 12pt size (scale-locked point value).
+  var fs = 12;
   var obj={
     id:Date.now(), x:cx, y:cy, text:text,
     angle:0, color:color, fontSize:fs,
