@@ -1689,7 +1689,7 @@ var IS_IOS    = IS_IPHONE || IS_IPAD;
 // iPad gets 10000px cap.
 // iPad canvas capped at 10000px — prevents multi-layer snapshots from
 // filling Safari's memory and crashing on reload.
-var IOS_MAX_PX = IS_IPHONE ? 2900 : (IS_IPAD ? 10000 : 25000);
+var IOS_MAX_PX = IS_IPHONE ? 3100 : (IS_IPAD ? 10000 : 25000);
 // iPad undo kept at 5 — each snapshot is ~50MB+ per layer at full res.
 var MAX_UNDO   = IS_IPHONE ? 5 : (IS_IPAD ? 5 : 20);
 
@@ -2583,11 +2583,7 @@ function initLayers(w,h){
   // Release old layer canvases before reinitialising to free Safari GPU memory
   if(layers.length) layers.forEach(function(l){ releaseCanvas(l.canvas); });
   var defs=[
-    {name:'Structures',color:'#ef4444'},
-    {name:'Boundaries',color:'#f59e0b'},
-    {name:'Services',  color:'#3b82f6'},
-    {name:'Vegetation',color:'#22c55e'},
-    {name:'Notes',     color:'#a855f7'}
+    {name:'Layer 1',color:'#ef4444'}
   ];
   layers=[];
   defs.forEach(function(d){
@@ -3063,15 +3059,15 @@ if(camBtn){
   }
   camBtn.addEventListener('click', function(){ cameraIn.click(); });
   cameraIn.addEventListener('change', function(e){
-    var f=e.target.files[0]; if(f) loadFile(f); e.target.value='';
+    var f=e.target.files[0]; if(f) loadFile(f, IS_IPHONE?2900:IOS_MAX_PX); e.target.value='';
   });
 }
-fileIn.addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadFile(f); e.target.value=''; });
+fileIn.addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadFile(f, IS_IPHONE?3200:IOS_MAX_PX); e.target.value=''; });
 viewport.addEventListener('dragover',function(e){ e.preventDefault(); viewport.style.outline='2px dashed #6c63ff'; });
 viewport.addEventListener('dragleave',function(){ viewport.style.outline=''; });
-viewport.addEventListener('drop',function(e){ e.preventDefault(); viewport.style.outline=''; var f=e.dataTransfer.files[0]; if(f) loadFile(f); });
+viewport.addEventListener('drop',function(e){ e.preventDefault(); viewport.style.outline=''; var f=e.dataTransfer.files[0]; if(f) loadFile(f, IS_IPHONE?3200:IOS_MAX_PX); });
 
-function loadFile(f){
+function loadFile(f, srcCap){
   var name=(f.name||'').toLowerCase();
   var type=(f.type||'').toLowerCase();
   if(type==='application/pdf'||name.endsWith('.pdf')){ loadPDF(f); return; }
@@ -3079,7 +3075,7 @@ function loadFile(f){
   if(type.startsWith('image/')||
      name.match(/\.(png|jpg|jpeg|gif|webp|bmp|tiff?|svg|svgz|heic|heif)$/)||
      f.size<50*1024*1024){
-    loadImageBlob(f); return;
+    loadImageBlob(f, false, srcCap); return;
   }
   toast('Unsupported file type: '+(type||name.split('.').pop()),'warn');
 }
@@ -3152,7 +3148,7 @@ function isCanvasBlank(ctx, w, h){
 }
 
 // ── Core image loader ────────────────────────────────────────
-function loadImageBlob(blob, _retried){
+function loadImageBlob(blob, _retried, srcCap){
   var name=(blob.name||'').toLowerCase();
   var url=URL.createObjectURL(blob);
   var img=new Image();
@@ -3160,11 +3156,12 @@ function loadImageBlob(blob, _retried){
   img.onload=function(){
     if(img.naturalWidth===0||img.naturalHeight===0){
       URL.revokeObjectURL(url);
-      if(!_retried) tryHEICFallback(blob, name);
+      if(!_retried) tryHEICFallback(blob, name, srcCap);
       else showImageError(name);
       return;
     }
-    var scale=Math.min(1,IOS_MAX_PX/Math.max(img.naturalWidth,img.naturalHeight));
+    var _cap = srcCap || IOS_MAX_PX;
+    var scale=Math.min(1,_cap/Math.max(img.naturalWidth,img.naturalHeight));
     var w=Math.round(img.naturalWidth*scale);
     var h=Math.round(img.naturalHeight*scale);
     pdfDoc=null; pgGrp(false);
@@ -3183,7 +3180,7 @@ function loadImageBlob(blob, _retried){
     // on browsers that "support" HEIC in <img> but not in canvas.
     if(isCanvasBlank(bCtx,w,h)){
       console.warn('[Load] Canvas blank after drawImage — retrying with heic2any');
-      if(!_retried) tryHEICFallback(blob, name);
+      if(!_retried) tryHEICFallback(blob, name, srcCap);
       else showImageError(name);
       return;
     }
@@ -3193,7 +3190,7 @@ function loadImageBlob(blob, _retried){
 
   img.onerror=function(){
     URL.revokeObjectURL(url);
-    if(!_retried) tryHEICFallback(blob, name);
+    if(!_retried) tryHEICFallback(blob, name, srcCap);
     else showImageError(name);
   };
 
@@ -3201,7 +3198,7 @@ function loadImageBlob(blob, _retried){
 }
 
 // ── HEIC fallback: convert then retry draw ───────────────────
-function tryHEICFallback(blob, name){
+function tryHEICFallback(blob, name, srcCap){
   var looksHEIC=name.endsWith('.heic')||name.endsWith('.heif')||
                 (blob.type||'').includes('heic')||(blob.type||'').includes('heif');
   if(!looksHEIC && !isCanvasBlank(bCtx,1,1)){
@@ -3214,7 +3211,7 @@ function tryHEICFallback(blob, name){
       return;
     }
     toast('Converting image format… done','ok',2000);
-    loadImageBlob(jpegBlob, true); // retry with converted blob, no more retries
+    loadImageBlob(jpegBlob, true, srcCap); // retry with converted blob, no more retries
   });
 }
 
@@ -3321,7 +3318,7 @@ function _computeAnnoEff(){
   var devicePR = window.devicePixelRatio || 1;
   var eff = Math.max(1, devicePR * Math.max(1, zoom));   // cover device px at zoom
   eff = Math.min(eff, 3);                                // hard ceiling
-  var _CAP = 12e6;                                       // per-canvas device-px ceiling
+  var _CAP = (IS_IPHONE ? 5e6 : 12e6);                  // per-canvas device-px ceiling
   if(w*h*eff*eff > _CAP) eff = Math.max(1, Math.sqrt(_CAP/(w*h)));
   return Math.round(eff*4)/4;                            // bucket to 0.25 steps
 }
