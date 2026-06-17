@@ -284,6 +284,42 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .zoning-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px;opacity:.85}
   @media (max-width:640px){ .zoning-legend{top:auto;bottom:12px;left:12px;font-size:10px;max-width:150px;max-height:40vh;overflow:auto} }
   @media (max-width:640px){ .radarclock{bottom:auto;top:54px;right:12px} }
+  /* ---- Weather info panel (NHC storm details + NWS warning legend), lower-left.
+     Stacks ABOVE the zoning legend when both are open (bottom set in JS). ---- */
+  .wx-legend{position:absolute;z-index:1000;bottom:18px;left:14px;
+    background:var(--search-bg);border:1px solid var(--line);border-radius:8px;padding:0;
+    font-family:var(--disp);font-size:11px;color:var(--dim);box-shadow:0 6px 20px var(--shadow-soft);line-height:1.5;
+    width:230px;max-width:calc(100vw - 28px);max-height:62vh;overflow:hidden;display:none;flex-direction:column}
+  .wx-legend.show{display:flex}
+  .wx-legend .wx-scroll{overflow:auto;padding:9px 11px}
+  .wx-legend .wx-sec{margin-bottom:10px}
+  .wx-legend .wx-sec:last-child{margin-bottom:0}
+  .wx-legend .wx-title{font-family:var(--mono);font-weight:600;color:var(--signal);margin-bottom:5px;
+    letter-spacing:.16em;text-transform:uppercase;font-size:9.5px}
+  .wx-legend .wx-storm{color:var(--ink);font-size:11.5px;line-height:1.55}
+  .wx-legend .wx-storm .wx-name{font-family:var(--disp);font-weight:700;font-size:13px;letter-spacing:.02em;color:var(--signal2)}
+  .wx-legend .wx-storm .wx-cat{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:600;
+    letter-spacing:.06em;padding:1px 6px;border-radius:4px;margin-left:6px;vertical-align:1px;
+    background:var(--warnbox-bg);border:1px solid var(--warnbox-line);color:var(--warnbox-ink)}
+  .wx-legend .wx-row{display:flex;justify-content:space-between;gap:10px;padding:1px 0}
+  .wx-legend .wx-row b{color:var(--ink);font-weight:600}
+  .wx-legend .wx-row span{font-family:var(--mono);color:var(--dim);white-space:nowrap}
+  .wx-legend .wx-sub{color:var(--faint);font-size:10px;margin-top:4px;line-height:1.4}
+  .wx-legend .wx-leg-item{display:flex;align-items:center;gap:7px;padding:1.5px 0;color:var(--ink);font-size:10.5px;line-height:1.3}
+  .wx-legend .wx-leg-item img{flex:none;width:16px;height:14px;border-radius:2px;image-rendering:pixelated}
+  .wx-legend .wx-leg-item i{flex:none;width:14px;height:11px;border-radius:2px;border:1px solid rgba(0,0,0,.25)}
+  .wx-legend hr{border:none;border-top:1px solid var(--line);margin:9px 0}
+  @media (max-width:640px){ .wx-legend{bottom:12px;left:12px;width:200px;max-height:48vh} }
+  /* Leaflet popup themed to the panel for NHC storm-point details */
+  .leaflet-popup.wx-pop .leaflet-popup-content-wrapper{background:var(--panel);color:var(--ink);
+    border:1px solid var(--signal2);border-radius:9px;box-shadow:0 10px 30px var(--shadow-strong)}
+  .leaflet-popup.wx-pop .leaflet-popup-tip{background:var(--panel);border:1px solid var(--signal2)}
+  .leaflet-popup.wx-pop .leaflet-popup-content{margin:10px 12px;font-family:var(--disp);font-size:12px;line-height:1.5}
+  .leaflet-popup.wx-pop .wx-name{font-weight:700;font-size:13.5px;color:var(--signal2);letter-spacing:.02em}
+  .leaflet-popup.wx-pop .wx-row{display:flex;justify-content:space-between;gap:14px}
+  .leaflet-popup.wx-pop .wx-row b{color:var(--ink);font-weight:600}
+  .leaflet-popup.wx-pop .wx-row span{font-family:var(--mono);color:var(--dim);white-space:nowrap}
+  .leaflet-popup.wx-pop .wx-when{color:var(--faint);font-size:10px;margin-top:5px;font-family:var(--mono)}
   .bnd-tip{background:var(--bnd-bg);color:var(--bnd-ink);border:none;font-family:var(--disp);font-weight:700;font-size:11px;letter-spacing:.04em;padding:2px 7px;box-shadow:0 2px 8px var(--shadow-soft)}
   .bnd-tip .leaflet-tooltip-tip{background:var(--bnd-bg)}
   /* Hover card shown over a looked-up parcel polygon (address / parcel / owner) */
@@ -462,6 +498,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     #map{ inset:var(--abh,48px) 0 0 600px; }
     .cardflow{ column-count:1; }   /* one category at a time — no masonry in tabbed mode */
     .zoning-legend{ left:614px; bottom:18px; }  /* clear the 600px sidebar; lower-left of map */
+    .wx-legend{ left:614px; }                    /* same — sits above the zoning legend */
   }
 
   /* ---- Mobile: panel becomes a snapping, draggable bottom sheet ---- */
@@ -2728,6 +2765,7 @@ function setZoningLegend(reg){
     out += `<div style="margin-top:5px;padding-top:5px;border-top:1px solid var(--line);opacity:.72;font-size:9px;line-height:1.35">Each district gets its own shade within its family color — hover any polygon for its district code.</div>`;
   }
   body.innerHTML = out;
+  if(typeof layoutLeftLegends==='function') layoutLeftLegends();
 }
 /* Resolve a feature's district code resiliently: try the registry's pinned codeField first, but if
    that field is missing/empty for this feature (e.g. the pinned name is slightly off, or the layer
@@ -2840,6 +2878,7 @@ const zoningLegend=document.getElementById('zoningLegend');
 if(btnZoning) btnZoning.onclick=function(){
   zoningOn=!zoningOn; this.classList.toggle('active',zoningOn);
   if(zoningLegend) zoningLegend.classList.toggle('show',zoningOn);
+  if(typeof layoutLeftLegends==='function') layoutLeftLegends();
   if(zoningOn){ zoningLayer.addTo(map); try{ zoningLayer.bringToBack(); }catch(e){} zoningKey='';
     const cty=(window.__lastCounty||'').toString();
     const city=(window.__lastCity||'').toString();
@@ -3076,11 +3115,129 @@ function filterAtlantic(data){
   return { cone:keep(data.cone), track:keep(data.track), pts:keep(data.pts) };
 }
 
+/* ---- Shared lower-right weather panel (NHC storm details + NWS warning legend) ----
+   Two independent sections live in one box; either can be filled/cleared on its own,
+   and the box shows itself whenever at least one section has content. */
+function wxPanelEl(){
+  let el=document.getElementById('wxLegend');
+  if(!el){
+    el=document.createElement('div'); el.id='wxLegend'; el.className='wx-legend';
+    el.innerHTML='<div class="wx-scroll"><div id="wxStorm" class="wx-sec"></div><div id="wxWarn" class="wx-sec"></div></div>';
+    (document.getElementById('map')||document.body).appendChild(el);
+  }
+  return el;
+}
+function wxPanelSync(){
+  const el=wxPanelEl();
+  const s=document.getElementById('wxStorm'), w=document.getElementById('wxWarn');
+  const has=(s&&s.innerHTML.trim())||(w&&w.innerHTML.trim());
+  el.classList.toggle('show', !!has);
+  layoutLeftLegends();
+}
+/* Both the weather panel and the zoning legend live in the lower-left. When both are
+   open, lift the weather panel above the zoning legend so they don't overlap. */
+function layoutLeftLegends(){
+  const wx=document.getElementById('wxLegend');
+  const zl=document.getElementById('zoningLegend');
+  const base=(window.matchMedia&&window.matchMedia('(max-width:640px)').matches)?12:18;
+  const zlShown=zl && zl.classList.contains('show');
+  const zlH=zlShown ? zl.offsetHeight : 0;
+  if(wx) wx.style.bottom=(base + (zlShown ? zlH+10 : 0))+'px';
+}
+window.addEventListener('resize', layoutLeftLegends);
+function wxSetStorm(html){ wxPanelEl(); const s=document.getElementById('wxStorm'); if(s) s.innerHTML=html||''; wxPanelSync(); }
+function wxSetWarn(html){ wxPanelEl(); const w=document.getElementById('wxWarn'); if(w) w.innerHTML=html||''; wxPanelSync(); }
+
+/* ---- NHC attribute helpers ----
+   Field names vary in case/spelling across NHC layers, so look up a list of candidates.
+   Winds & gusts come back in KNOTS; pressure in millibars. */
+function nhcPick(props, names){
+  if(!props) return undefined;
+  for(const n of names){
+    if(props[n]!=null && props[n]!=='' && String(props[n]).toUpperCase()!=='NULL') return props[n];
+    // case-insensitive fallback
+    for(const k in props){ if(k.toLowerCase()===n.toLowerCase() && props[k]!=null && props[k]!=='' && String(props[k]).toUpperCase()!=='NULL') return props[k]; }
+  }
+  return undefined;
+}
+const KT_TO_MPH=1.15078;
+function ktToMph(kt){ const n=parseFloat(kt); return isFinite(n)?Math.round(n*KT_TO_MPH):null; }
+function saffirCat(mph){
+  if(mph==null) return null;
+  if(mph>=157) return 'Category 5';
+  if(mph>=130) return 'Category 4';
+  if(mph>=111) return 'Category 3';
+  if(mph>=96)  return 'Category 2';
+  if(mph>=74)  return 'Category 1';
+  if(mph>=39)  return 'Tropical Storm';
+  return 'Tropical Depression';
+}
+function stormName(props){
+  props=props||{};
+  return nhcPick(props,['STORMNAME','stormname','STORMNME','TCNAME','STORMTYPE'])||'Tropical system';
+}
+function stormType(props){ return nhcPick(props,['TCDVLP','STORMTYPE','DVLBL','DVLABEL']); }
 function stormLabel(props){
   props=props||{};
-  const name=props.STORMNAME||props.stormname||props.STORMNME||props.TCNAME||props.STORMTYPE||'Tropical system';
-  const adv =props.ADVISNUM||props.advisnum||props.ADVNUM;
+  const name=stormName(props);
+  const adv =nhcPick(props,['ADVISNUM','advisnum','ADVNUM']);
   return name + (adv?(' · adv '+adv):'');
+}
+// Pull the most useful numbers from a forecast point's properties.
+function pointStats(props){
+  props=props||{};
+  const windKt=nhcPick(props,['MAXWIND','maxwind','INTENSITY','WINDSPEED']);
+  const gustKt=nhcPick(props,['GUST','gust','MAXGUST']);
+  const mslp  =nhcPick(props,['MSLP','mslp','PRESSURE','MINPRESS']);
+  const windMph=ktToMph(windKt), gustMph=ktToMph(gustKt);
+  let cat=stormType(props);
+  if(!cat || /^[hsdt]$/i.test(String(cat))) cat=saffirCat(windMph)||cat; // expand 1-letter dev codes
+  const when=nhcPick(props,['FLDATELBL','DATELBL','VALIDTIME','FCSTPRD','TAU']);
+  const moveDir=nhcPick(props,['STORMDIR','MOVEMENTDIR','DIR']);
+  const moveSpd=nhcPick(props,['STORMSPD','MOVEMENTSPD','SPEED']);
+  return {windKt,windMph,gustKt,gustMph,mslp,cat,when,moveDir,moveSpd};
+}
+function pointPopupHTML(props){
+  const s=pointStats(props), rows=[];
+  if(s.windMph!=null) rows.push(`<div class="wx-row"><b>Max sustained</b><span>${s.windMph} mph (${Math.round(parseFloat(s.windKt))} kt)</span></div>`);
+  if(s.gustMph!=null) rows.push(`<div class="wx-row"><b>Gusts</b><span>${s.gustMph} mph (${Math.round(parseFloat(s.gustKt))} kt)</span></div>`);
+  if(s.mslp!=null)    rows.push(`<div class="wx-row"><b>Pressure</b><span>${Math.round(parseFloat(s.mslp))} mb</span></div>`);
+  if(s.moveDir!=null||s.moveSpd!=null) rows.push(`<div class="wx-row"><b>Moving</b><span>${[s.moveDir,(s.moveSpd!=null?s.moveSpd+' kt':'')].filter(Boolean).join(' @ ')}</span></div>`);
+  const adv=nhcPick(props,['ADVISNUM','ADVNUM']);
+  return `<div class="wx-name">${esc(stormName(props))}</div>`
+    + (s.cat?`<div style="color:var(--warnbox-ink);font-family:var(--mono);font-size:10px;letter-spacing:.04em;margin:1px 0 5px">${esc(String(s.cat))}</div>`:'')
+    + (rows.join('')||'<div class="wx-row"><span>No intensity data on this point.</span></div>')
+    + (s.when?`<div class="wx-when">Forecast valid: ${esc(String(s.when))}</div>`:'')
+    + (adv?`<div class="wx-when">NHC advisory ${esc(String(adv))}</div>`:'');
+}
+// Build the lower-right storm summary from the strongest / first-named forecast point.
+function buildStormSummary(data){
+  const feats=(data.pts&&data.pts.features)||[];
+  if(!feats.length){ if(coneOn) wxSetStorm(''); return; }
+  // group points by storm name; for each, the lead (current) point is usually the first / lowest TAU
+  const byStorm={};
+  feats.forEach(f=>{ const p=f.properties||{}; const nm=stormName(p);
+    (byStorm[nm]=byStorm[nm]||[]).push(p); });
+  let html='<div class="wx-title">NHC active systems</div>';
+  Object.keys(byStorm).forEach((nm,i)=>{
+    // current conditions = point with smallest forecast hour, else max wind
+    const pts=byStorm[nm].slice().sort((a,b)=>{
+      const ta=parseFloat(nhcPick(a,['TAU','FCSTHR']))||0, tb=parseFloat(nhcPick(b,['TAU','FCSTHR']))||0; return ta-tb; });
+    const cur=pts[0]; const s=pointStats(cur);
+    // peak forecast wind across the track
+    let peak=null; byStorm[nm].forEach(p=>{ const w=ktToMph(nhcPick(p,['MAXWIND','INTENSITY'])); if(w!=null&&(peak==null||w>peak)) peak=w; });
+    if(i>0) html+='<hr>';
+    html+='<div class="wx-storm">';
+    html+=`<div><span class="wx-name">${esc(nm)}</span>${s.cat?`<span class="wx-cat">${esc(String(s.cat))}</span>`:''}</div>`;
+    if(s.windMph!=null) html+=`<div class="wx-row"><b>Max wind</b><span>${s.windMph} mph</span></div>`;
+    if(s.gustMph!=null) html+=`<div class="wx-row"><b>Gusts</b><span>${s.gustMph} mph</span></div>`;
+    if(s.mslp!=null)    html+=`<div class="wx-row"><b>Pressure</b><span>${Math.round(parseFloat(s.mslp))} mb</span></div>`;
+    if(s.moveDir!=null||s.moveSpd!=null) html+=`<div class="wx-row"><b>Moving</b><span>${[s.moveDir,(s.moveSpd!=null?s.moveSpd+' kt':'')].filter(Boolean).join(' @ ')}</span></div>`;
+    if(peak!=null && peak!==s.windMph) html+=`<div class="wx-row"><b>Peak forecast</b><span>${peak} mph</span></div>`;
+    html+='<div class="wx-sub">Tap any track point for the full forecast at that time.</div>';
+    html+='</div>';
+  });
+  wxSetStorm(html);
 }
 function drawCone(data){
   if(coneLayer){ map.removeLayer(coneLayer); coneLayer=null; }
@@ -3095,16 +3252,23 @@ function drawCone(data){
   }
   if(data.pts && data.pts.features && data.pts.features.length){
     L.geoJSON(data.pts,{ renderer:canvasRenderer, pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:4,color:'#ff5d5d',weight:1.5,fillColor:'#fff',fillOpacity:.9}),
-      onEachFeature:(f,l)=>l.bindTooltip(stormLabel(f.properties),{direction:'top',className:'parcel-tip'})
+      onEachFeature:(f,l)=>{
+        const s=pointStats(f.properties);
+        const tip=stormLabel(f.properties)+(s.windMph!=null?(' · '+s.windMph+' mph'):'')+(s.cat?(' · '+s.cat):'');
+        l.bindTooltip(tip,{direction:'top',className:'parcel-tip'});
+        l.bindPopup(pointPopupHTML(f.properties),{className:'wx-pop',maxWidth:260,minWidth:190});
+      }
     }).addTo(coneLayer);
   }
   coneLayer.addTo(map);
+  buildStormSummary(data);
 }
 const btnCone=document.getElementById('btnCone');
 if(btnCone) btnCone.onclick=async function(){
   if(coneOn){  // turn off
     coneOn=false; this.classList.remove('active');
     if(coneLayer){ map.removeLayer(coneLayer); coneLayer=null; }
+    wxSetStorm('');
     clearInterval(coneTimer); coneTimer=null; return;
   }
   this.classList.add('active'); mapToast('Checking NHC for active tropical systems…', 2000);
@@ -3135,13 +3299,88 @@ const warnLayer = new ArcGISExportTiles(
             + "&size=256,256&layers=show:1&f=image&bbox={bbox}",
   { tileSize:256, opacity:0.5, minZoom:5, maxZoom:19, zIndex:245,
     attribution:'Warnings &copy; NOAA/NWS', updateWhenIdle:L.Browser.mobile });
-let warnOn=false, warnRefresh=null;
+let warnOn=false, warnRefresh=null, warnLegendCache=null;
+/* Fetch the live legend swatches straight from the NWS WWA service so the labels &
+   colors always match exactly what the overlay paints. Layer 1 = Warnings. The legend
+   endpoint returns each class as a base64 PNG swatch, which we render inline.
+   We then show ONLY the swatches for warning types actually present in the current map
+   view (queried live), so the legend reflects what's on screen rather than a full list. */
+function _normType(s){ return String(s==null?'':s).toLowerCase().replace(/\s+/g,' ').trim(); }
+// Distinct warning product types intersecting the current map bounds.
+async function fetchWarnTypesInView(){
+  try{
+    const b=map.getBounds();
+    const env=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',');
+    const url=NWS_WWA_MS+'/1/query?where=1%3D1'
+      +'&geometry='+encodeURIComponent(env)+'&geometryType=esriGeometryEnvelope&inSR=4326'
+      +'&spatialRel=esriSpatialRelIntersects&outFields=prod_type&returnGeometry=false'
+      +'&returnDistinctValues=true&f=json';
+    const r=await fetch(url); if(!r.ok) return null;
+    const j=await r.json();
+    const feats=(j&&j.features)||[];
+    const set=new Set();
+    feats.forEach(f=>{ const a=f.attributes||{}; const t=a.prod_type||a.PROD_TYPE; if(t) set.add(_normType(t)); });
+    return set;
+  }catch(e){ return null; }
+}
+async function buildWarnLegend(){
+  wxSetWarn('<div class="wx-title">NWS warnings</div><div class="wx-sub">Loading…</div>');
+  try{
+    if(!warnLegendCache){
+      const r=await fetch(NWS_WWA_MS+'/legend?f=json');
+      warnLegendCache = r.ok ? await r.json() : null;
+    }
+    const lyr=(warnLegendCache&&warnLegendCache.layers||[]).find(l=>l.layerId===1)
+            || (warnLegendCache&&warnLegendCache.layers||[])[0];
+    const items=(lyr&&lyr.legend)||[];
+
+    // Which warning types are actually in the current view?
+    const inView=await fetchWarnTypesInView();
+    if(!warnOn) return;  // toggled off while we were fetching
+
+    if(inView && inView.size===0){
+      wxSetWarn('<div class="wx-title">NWS warnings</div><div class="wx-sub">No active warnings in this view. Pan or zoom out to find them.</div>');
+      return;
+    }
+
+    // Keep only legend swatches whose label matches a type on screen.
+    let shown=items;
+    if(inView && inView.size && items.length){
+      shown=items.filter(it=>{
+        const lbl=_normType(it.label);
+        for(const t of inView){ if(t===lbl || t.includes(lbl) || lbl.includes(t)) return true; }
+        return false;
+      });
+      // If nothing matched (field/label mismatch) but warnings exist, fall back to listing the
+      // raw types so the panel still tells the user what's on screen.
+      if(!shown.length){
+        let h='<div class="wx-title">NWS warnings · in view</div>';
+        Array.from(inView).sort().forEach(t=>{ h+=`<div class="wx-leg-item"><i style="background:var(--warn)"></i><span>${esc(t.replace(/\b\w/g,c=>c.toUpperCase()))}</span></div>`; });
+        h+='<div class="wx-sub">Live NOAA/NWS · refreshes as you pan.</div>';
+        wxSetWarn(h); return;
+      }
+    }
+    if(!shown.length){ wxSetWarn('<div class="wx-title">NWS warnings</div><div class="wx-sub">Legend unavailable — overlay still active.</div>'); return; }
+
+    let html='<div class="wx-title">NWS warnings · in view</div>';
+    shown.forEach(it=>{
+      const label=esc(it.label||'Warning');
+      const src=it.imageData?('data:'+(it.contentType||'image/png')+';base64,'+it.imageData):null;
+      html+='<div class="wx-leg-item">'+(src?`<img alt="" src="${src}">`:'<i></i>')+`<span>${label}</span></div>`;
+    });
+    html+='<div class="wx-sub">Showing only what\u2019s on screen · live NOAA/NWS · refreshes as you pan.</div>';
+    wxSetWarn(html);
+  }catch(e){ wxSetWarn('<div class="wx-title">NWS warnings</div><div class="wx-sub">Legend unavailable — overlay still active.</div>'); }
+}
+let warnMoveTimer=null;
+function scheduleWarnLegend(){ if(!warnOn) return; clearTimeout(warnMoveTimer); warnMoveTimer=setTimeout(buildWarnLegend, 450); }
 const btnWarn=document.getElementById('btnWarn');
 if(btnWarn) btnWarn.onclick=function(){
   warnOn=!warnOn; this.classList.toggle('active',warnOn);
-  if(warnOn){ warnLayer.addTo(map); mapToast('Live NWS watches & warnings', 2400);
-    clearInterval(warnRefresh); warnRefresh=setInterval(()=>{ if(warnOn) warnLayer.redraw(); }, 5*60*1000); }
-  else { map.removeLayer(warnLayer); clearInterval(warnRefresh); warnRefresh=null; }
+  if(warnOn){ warnLayer.addTo(map); mapToast('Live NWS watches & warnings', 2400); buildWarnLegend();
+    map.on('moveend', scheduleWarnLegend);
+    clearInterval(warnRefresh); warnRefresh=setInterval(()=>{ if(warnOn){ warnLayer.redraw(); buildWarnLegend(); } }, 5*60*1000); }
+  else { map.removeLayer(warnLayer); wxSetWarn(''); map.off('moveend', scheduleWarnLegend); clearInterval(warnRefresh); warnRefresh=null; }
 };
 
 /* ---------- Weather popup (groups Radar / Cone / Warnings — independent toggles) ---------- */
