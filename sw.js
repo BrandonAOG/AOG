@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.1.3';
+var CACHE_NAME = 'aog-forms-v2.1.4';
 var DEV_MODE   = false;
 
 // Stores last known cache progress so late-loading pages can request it
@@ -20,9 +20,8 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-   '🔧 Extended the maintenance form schema with additional field inputs (contributs from Dustin)',
-   '🗺️ Site Plan annotator: major rendering and workflow improvements — streamlined interaction pipeline for seamless operation. Check it out!',
-   '🎙️ Upcoming release introduces voice recognition for electrical installs. Note: this feature requires a network connection and will not support offline mode.',
+  '⭐ New Favorites tab — pin your most-used forms and tools for quick access. Opens here by default.',
+  '🎙️ Voice recognition for Electrical Installs is coming soon. Note: this feature requires an internet connection and won\'t work offline.',
 ];
 // ============================================================
 
