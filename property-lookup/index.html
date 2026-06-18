@@ -3595,7 +3595,8 @@ function scheduleWarnLegend(){ if(!warnOn) return; clearTimeout(warnMoveTimer); 
 const btnWarn=document.getElementById('btnWarn');
 if(btnWarn) btnWarn.onclick=function(){
   warnOn=!warnOn; this.classList.toggle('active',warnOn);
-  if(warnOn){ applyWarnFilter(); warnLayer.addTo(map); mapToast('Live NWS watches & warnings', 2400); buildWarnLegend(); setupWarnHover();
+  if(warnOn){ if(zoningOn && btnZoning) btnZoning.click();   // warnings & zoning share the lower-left panel — turn zoning off
+    applyWarnFilter(); warnLayer.addTo(map); mapToast('Live NWS watches & warnings', 2400); buildWarnLegend(); setupWarnHover();
     map.on('moveend', scheduleWarnLegend);
     clearInterval(warnRefresh); warnRefresh=setInterval(()=>{ if(warnOn){ warnLayer.redraw(); buildWarnLegend(); } }, 5*60*1000); }
   else { map.removeLayer(warnLayer); wxSetWarn(''); clearWarnHover(); map.off('moveend', scheduleWarnLegend); clearInterval(warnRefresh); warnRefresh=null; }
