@@ -370,6 +370,9 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .wx-cone-float .ct-row span{font-family:var(--mono);color:var(--dim);white-space:nowrap}
   .wx-cone-float .ct-desc{font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:normal;line-height:1.4;margin-top:1px}
   .wx-cone-float .ct-when{color:var(--faint);font-size:9.5px;font-family:var(--mono);margin-top:5px}
+  /* Combined storm card: divider between folded sections (cone / wind / surge) */
+  .wx-cone-float .ct-merge-div{height:1px;background:var(--signal2);opacity:.28;margin:7px 0}
+  .wx-cone-float .ct-merge-sec{display:block}
   /* Floating tip listing every NWS warning under the cursor */
   .wx-warn-float{position:absolute;z-index:1200;pointer-events:none;display:none;
     transform:translate(-50%,calc(-100% - 16px));
@@ -3352,6 +3355,19 @@ function clearConeHover(){
   _coneMoveH=_coneOutH=null; _conePolys=[]; _conePoints=[];
   const el=document.getElementById('coneFloat'); if(el) el.classList.remove('show');
 }
+/* Returns the cone hover-tip HTML for a given latlng, or '' if the cursor is
+   outside the forecast cone. Shared by the standalone cone float and the merged
+   storm card so both report identical forecast-point info. */
+function _coneTipFor(ll){
+  if(!_conePolys.length) return '';
+  let inside=false;
+  for(const poly of _conePolys){ if(_pointInPoly(ll.lng,ll.lat,poly)){ inside=true; break; } }
+  if(!inside) return '';
+  let best=null,bd=Infinity;
+  for(const p of _conePoints){ const d=map.distance(ll,p.ll); if(d<bd){ bd=d; best=p; } }
+  if(!best) return '';
+  return pointTipHTML(best.props, bd);
+}
 function setupConeHover(data){
   clearConeHover();
   _conePolys=_conePolysFrom(data.cone && data.cone.features);
@@ -3368,13 +3384,13 @@ function setupConeHover(data){
   if(!_conePolys.length) return;
   const el=_coneFloatEl();
   _coneMoveH=function(e){
-    const ll=e.latlng; let inside=false;
-    for(const poly of _conePolys){ if(_pointInPoly(ll.lng,ll.lat,poly)){ inside=true; break; } }
-    if(!inside){ el.classList.remove('show'); return; }
-    let best=null,bd=Infinity;
-    for(const p of _conePoints){ const d=map.distance(ll,p.ll); if(d<bd){ bd=d; best=p; } }
-    if(!best){ el.classList.remove('show'); return; }
-    el.innerHTML=pointTipHTML(best.props, bd);
+    // When storm sub-layer tips (wind field / surge) are active, the cone info is
+    // folded into that single combined card instead — so the standalone cone float
+    // stays hidden and we let _renderStormFloat() draw everything together.
+    if(nhcSub.wind.on || nhcSub.surge.on){ el.classList.remove('show'); return; }
+    const html=_coneTipFor(e.latlng);
+    if(!html){ el.classList.remove('show'); return; }
+    el.innerHTML=html;
     el.classList.add('show'); placeFloat(el, e.containerPoint);
   };
   _coneOutH=function(){ el.classList.remove('show'); };
@@ -3644,10 +3660,15 @@ function _surgeIdentify(latlng){
 function _renderStormFloat(){
   const el=document.getElementById('stormFloat'); if(!el||!_lastStormLL) return;
   const lng=_lastStormLL.lng, lat=_lastStormLL.lat; let html='';
+  // Fold the forecast-cone tip into this single combined card (when the cursor is
+  // inside the cone) so it never stacks as a second floating box.
+  const coneHtml=_coneTipFor(_lastStormLL);
+  if(coneHtml) html+='<div class="ct-merge-sec">'+coneHtml+'</div>';
   if(nhcSub.wind.on && windGeoms.length){
     let best=null; for(const w of windGeoms){ if(_pointInPoly(lng,lat,w.poly) && (best==null||w.t>best)) best=w.t; }
     if(best!=null){
       const lbl=best===64?'Hurricane-force (64+ kt · 74+ mph)':best===50?'Damaging winds (50+ kt · 58+ mph)':'Tropical-storm-force (34+ kt · 39+ mph)';
+      if(html) html+='<div class="ct-merge-div"></div>';
       html+=`<div class="ct-name" style="color:${_windColor(best)}">${best}-kt wind field</div><div class="ct-desc">${lbl}</div>`;
     }
   }
@@ -3657,11 +3678,13 @@ function _renderStormFloat(){
     if(inunGeoms.length){ let d=null; for(const g of inunGeoms){ if(_pointInPoly(lng,lat,g.poly)){ if(!d||g.rank>d.rank) d=g; } } if(d) lines.push('Inundation: '+esc(d.label)); }
     if(_surgeIdInfo){ if(_surgeIdInfo.wwType && !lines.includes(_surgeIdInfo.wwType)) lines.unshift(esc(_surgeIdInfo.wwType));
       if(_surgeIdInfo.depth && !lines.some(l=>/Inundation/.test(l))) lines.push('Inundation: '+esc(_surgeIdInfo.depth)); }
-    if(lines.length){ if(html) html+='<div class="ct-when"></div>';
+    if(lines.length){ if(html) html+='<div class="ct-merge-div"></div>';
       html+='<div class="ct-name" style="color:#b524f7">Storm surge</div>'+lines.map(t=>`<div class="ct-desc">${t}</div>`).join(''); }
   }
   if(!html){ el.classList.remove('show'); return; }
   el.innerHTML=html; el.classList.add('show'); if(_lastStormCp) placeFloat(el,_lastStormCp);
+  // Combined card owns the cone info now — keep the standalone cone float hidden.
+  const cf=document.getElementById('coneFloat'); if(cf) cf.classList.remove('show');
 }
 function _syncStormSubHover(){
   const want = nhcSub.wind.on || nhcSub.surge.on;
