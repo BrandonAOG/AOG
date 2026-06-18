@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.1.4';
+var CACHE_NAME = 'aog-forms-v2.1.5';
 var DEV_MODE   = false;
 
 // Stores last known cache progress so late-loading pages can request it
@@ -20,7 +20,9 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '⭐ New Favorites tab — pin your most-used forms and tools for quick access. Opens here by default.',
+  '🔀 Backgrounds stay random but no longer repeat — won\'t show the same scene again until 10 others have played',
+  '🪟 Cards now use a frosted-glass look — background animation shows through while text stays readable over any scene',
+  '⭐ New Favorites tab(Dustin's idea) — pin your most-used forms and tools for quick access. Opens here by default.',
   '🎙️ Voice recognition for Electrical Installs is coming soon. Note: this feature requires an internet connection and won\'t work offline.',
 ];
 // ============================================================
