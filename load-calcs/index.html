@@ -154,7 +154,7 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 
 /* ── APPLIANCE TABLE ── */
 .appl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-.appl-tbl{width:100%;border-collapse:collapse;min-width:480px;}
+.appl-tbl{width:100%;border-collapse:collapse;min-width:500px;}
 .appl-tbl th{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:7px 8px;border-bottom:2px solid var(--border);background:var(--surface2);text-align:left;white-space:nowrap;}
 .appl-tbl td{padding:5px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 .appl-tbl tr:hover td{background:var(--surface2);}
@@ -164,7 +164,43 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .appl-tbl .tot-cell{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;text-align:right;white-space:nowrap;}
 .appl-tbl .gas-cell label{display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;justify-content:center;}
 .appl-tbl .gas-cell input{width:13px;height:13px;accent-color:var(--amber);}
-.appl-tbl .volt-cell select{font-size:10px;padding:4px 3px;}
+.appl-tbl .volt-cell select{font-size:10px;}
+.appl-tbl td.volt-cell{min-width:58px;white-space:nowrap;}
+/* Replace native select up/down toggle with a single clean chevron + reserve space so text never overlaps */
+.appl-tbl select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  background-image:url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 7px center;background-size:9px;
+  padding-right:22px;
+}
+.appl-tbl select::-ms-expand{display:none;}
+.appl-tbl .volt-cell select{padding:4px 15px 4px 6px;background-position:right 4px center;background-size:8px;text-align:left;min-width:52px;width:auto;}
+
+/* Remove native up/down toggle on EVERY voltage select (pool + appliance), single clean chevron */
+select[id^="pvolt_"],
+select[id^="ppvolt_"],
+select[id^="pncvolt_"],
+select[id^="pexvolt_"]{
+  -webkit-appearance:none!important;-moz-appearance:none!important;appearance:none!important;
+  background-image:url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")!important;
+  background-repeat:no-repeat!important;background-position:right 5px center!important;background-size:8px!important;
+  padding-right:18px!important;
+}
+select[id^="pvolt_"]::-ms-expand,
+select[id^="ppvolt_"]::-ms-expand,
+select[id^="pncvolt_"]::-ms-expand,
+select[id^="pexvolt_"]::-ms-expand{display:none;}
+
+/* Remove native up/down number spinners on the typeable VA inputs */
+input[type=number][id^="va_"],
+input[type=number][id^="xva_"],
+input[type=number][id^="pexva_"]{-moz-appearance:textfield;appearance:textfield;}
+input[type=number][id^="va_"]::-webkit-outer-spin-button,
+input[type=number][id^="va_"]::-webkit-inner-spin-button,
+input[type=number][id^="xva_"]::-webkit-outer-spin-button,
+input[type=number][id^="xva_"]::-webkit-inner-spin-button,
+input[type=number][id^="pexva_"]::-webkit-outer-spin-button,
+input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 
 /* ── COOKING SECTION ── */
 .cook-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:10px;}
@@ -284,7 +320,8 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
   <a class="ab-btn" href="../">🏠 HOME</a>
   <button class="ab-btn" onclick="printReport()">⎙ REPORT</button>
   <a class="ab-btn" onclick="window.print()" style="cursor:pointer;">⎙ FULL</a>
-  <a class="ab-btn" onclick="if(confirm('Reset all fields?'))location.reload()" style="cursor:pointer;">↺ RESET</a>
+  <a class="ab-btn" onclick="if(confirm('Start a new job? This clears all saved entries on this device.')){aogClearSaved();location.reload();}" style="cursor:pointer;">↺ NEW JOB</a>
+  <span id="aog-save-status" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:rgba(255,255,255,0.45);letter-spacing:.5px;align-self:center;white-space:nowrap;padding:0 4px;"></span>
 </div>
 
 <div class="topbar" style="padding:10px 16px;display:flex;align-items:center;gap:10px;background:#1C2333;border-bottom:1px solid rgba(217,119,6,0.2);">
@@ -479,13 +516,12 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
             <th style="width:38px;text-align:center">GAS</th>
             <th style="width:42px;text-align:center">Qty</th>
             <th style="min-width:140px">VA</th>
-            <th style="width:48px;text-align:center">Volt</th>
+            <th style="width:64px;text-align:center">Volt</th>
             <th style="width:68px;text-align:right">Total VA</th>
           </tr></thead>
           <tbody id="appl_rows"></tbody>
         </table>
       </div>
-      <div style="padding:8px 14px;border-top:1px solid var(--border);"><button class="btn btn-add btn-sm" onclick="addExtraAppl()">+ Add Load</button></div>
       <div style="display:flex;justify-content:flex-end;gap:16px;padding:10px 14px;background:var(--surface2);border-top:1px solid var(--border);flex-wrap:wrap;">
         <span style="font-size:12px;color:var(--text3);">Connected Total: <strong id="r3_tot">—</strong> VA</span>
         <span style="font-size:12px;color:var(--blue);">Total = <strong id="r3_dem">—</strong> VA</span>
@@ -541,6 +577,10 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
     <div class="card-head">
       <div class="card-title">Pool Panel Feeder Calculation</div>
       <div class="card-sub">NEC 680 · Largest continuous motor @ 125% (NEC 430.24) · Phase A &amp; B split · Pool VA included in Step 3</div>
+      <label class="chk-row" style="width:100%;margin-bottom:0;margin-top:4px;">
+        <input type="checkbox" id="has_pool" checked onchange="calc()">
+        <span>This home has a pool / pool sub-panel</span>
+      </label>
     </div>
 
     <!-- Inner sub-tabs -->
@@ -912,7 +952,7 @@ function buildAppl(){
     var gasCell=a.canGas
       ?'<label class="gas-cell" style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;"><input type="checkbox" id="gas_'+a.id+'" onchange="calc()" style="accent-color:var(--amber);width:13px;height:13px;">GAS</label>'
       :'<span style="color:var(--border2);">—</span>';
-    var voltCell='<select class="volt-cell" id="volt_'+a.id+'" onchange="calc()" style="font-size:10px;padding:4px 3px;">'
+    var voltCell='<select class="volt-cell" id="volt_'+a.id+'" onchange="calc()" style="font-size:10px;">'
       +'<option value="120"'+(a.volt==="120"?" selected":"")+'>120V</option>'
       +'<option value="240"'+(a.volt==="240"?" selected":"")+'>240V</option>'
       +'</select>';
@@ -926,7 +966,10 @@ function buildAppl(){
       +"<td class='tot-cell' id='tot_"+a.id+"'>—</td>"
       +"</tr>";
   }
-  // Pool panel — read-only, auto-filled from Pool tab
+  // Add Load button row — sits directly above the Pool Equip. Panel row
+  h+='<tr id="addload_row"><td colspan="7" style="padding:8px 14px;border-top:1px solid var(--border);">'
+    +'<button class="btn btn-add btn-sm" onclick="addExtraAppl()">+ Add Load</button></td></tr>';
+  // Pool panel — read-only, auto-filled from Pool tab (kept last in the list)
   h+='<tr id="row_pool_panel" style="background:var(--blue-lt);">'
     +'<td><span style="font-size:12px;font-weight:600;color:var(--blue);">Pool Equip. Panel</span><br><span style="font-size:10px;color:var(--text3);">← from Pool tab</span></td>'
     +'<td style="text-align:center;">—</td>'
@@ -947,10 +990,11 @@ function addExtraAppl(){
     +"<td style='text-align:center;'><label style='display:flex;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;'><input type='checkbox' id='xgas_"+n+"' onchange='calc()' style='accent-color:var(--amber);width:13px;height:13px;'>GAS</label></td>"
     +"<td><input type='number' id='xqty_"+n+"' value='1' min='0' oninput='calc()' style='text-align:center;width:45px;'></td>"
     +"<td><input type='number' id='xva_"+n+"' value='0' min='0' oninput='calc()' style='width:100%;border:1px solid var(--border);border-radius:4px;padding:5px 7px;font-family:JetBrains Mono,monospace;font-size:12px;text-align:right;'></td>"
-    +"<td><select id='xvolt_"+n+"' onchange='calc()' style='font-size:10px;padding:4px 3px;border:1px solid var(--border);border-radius:4px;width:100%;'><option value='120'>120V</option><option value='240' selected>240V</option></select></td>"
+    +"<td class='volt-cell'><select id='xvolt_"+n+"' onchange='calc()' style='font-size:10px;'><option value='120'>120V</option><option value='240' selected>240V</option></select></td>"
     +"<td class='tot-cell' id='xtot_"+n+"'>0</td>"
     +"<td><button class='btn btn-remove' onclick='removeExtraAppl("+n+")' style='padding:2px 6px;font-size:11px;'>✕</button></td>";
-  tbody.appendChild(tr);
+  var anchor=document.getElementById("addload_row");
+  if(anchor) tbody.insertBefore(tr, anchor); else tbody.appendChild(tr);
   calc();
 }
 function removeExtraAppl(n){var r=document.getElementById("xrow_"+n);if(r)r.remove();calc();}
@@ -1336,6 +1380,14 @@ function calc(){
     if(pexV_===120) pexVA120_+=gv('pexva_'+n);
     else            pexVA240_+=gv('pexva_'+n);
   }
+  // ── No-pool toggle: zero out every pool source load so nothing flows
+  //    into the feeder calc or Step 3 service demand ──
+  if(!gc('has_pool')){
+    spaVA_=0; h35VA_=0; h5VA_=0; heaterVA_=0; blowerVA_=0; lightVA_=0;
+    pmVA240_=0; pmVA120_=0; pmVA_=0;
+    pncVA240_=0; pncVA120_=0; pncVA_=0;
+    pexVA240_=0; pexVA120_=0;
+  }
   // Total pool sub-panel feeder VA = sum of all pool loads
   // Per NEC, the feeder must carry the total demand of the sub-panel
   // Pool phase currents (raw VA/120, NO 125% multiplier — that's for conductor sizing)
@@ -1634,6 +1686,9 @@ function calc(){
     +'<div class="calc-line"><span>Min. panel breaker</span><span class="cv">'+poolSvc+' A</span></div>'
     +'<div class="calc-line"><span>Pool EGC (NEC 250.122)</span><span class="cv">'+egcWire(poolSvc,isAl)+'</span></div>'
     +'<div class="calc-line"><span>Pool feeder VA → Step 3</span><span class="cv">'+fmt(Math.round(poolFdrVA))+' VA</span></div>';
+
+  if(typeof aogBlankZeros==='function') aogBlankZeros();
+  if(typeof aogScheduleSave==='function') aogScheduleSave();
 }
 
 // ══ TABS ══
@@ -1646,6 +1701,128 @@ document.querySelectorAll('.tab').forEach(function(t){
     if(panel) panel.classList.add('active');
   });
 });
+
+// ══ BROWSER AUTOSAVE (localStorage, per-device) ══
+var AOG_SAVE_KEY='aog_loadcalc_autosave_v1';
+var _aogRestoring=false, _aogSaveTimer=null;
+
+function aogUpdateSaveStatus(txt){
+  var el=document.getElementById('aog-save-status');
+  if(!el) return;
+  el.textContent=txt||('✓ Saved '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
+}
+
+function aogRowIndices(containerId, itemSelector){
+  var c=document.getElementById(containerId);
+  if(!c) return [];
+  var out=[];
+  c.querySelectorAll(itemSelector).forEach(function(el){
+    var m=(el.id||'').match(/(\d+)$/);
+    if(m) out.push(parseInt(m[1],10));
+  });
+  return out;
+}
+
+function aogSnapshot(){
+  var fields={};
+  document.querySelectorAll('input,select,textarea').forEach(function(el){
+    if(!el.id) return;
+    if(el.type==='checkbox') fields[el.id]={c:el.checked};
+    else if(el.type==='radio'){ if(el.checked) fields[el.id]={v:el.value}; }
+    else fields[el.id]={v:el.value};
+  });
+  return {
+    fields:fields,
+    rows:{
+      xappl:   aogRowIndices('appl_rows','tr[id^="xrow_"]'),
+      dryer:   aogRowIndices('dryer_list','.dryer-item'),
+      cooktop: aogRowIndices('cook_cooktops','.cook-item'),
+      oven:    aogRowIndices('cook_ovens','.cook-item'),
+      ppump:   aogRowIndices('pool_pumps_section','.pool-row'),
+      pnc:     aogRowIndices('pool_nc_section','.pool-row'),
+      pex:     aogRowIndices('pool_extra_loads','tr')
+    },
+    ts:Date.now()
+  };
+}
+
+function aogScheduleSave(){
+  if(_aogRestoring) return;
+  if(_aogSaveTimer) clearTimeout(_aogSaveTimer);
+  _aogSaveTimer=setTimeout(function(){
+    try{ localStorage.setItem(AOG_SAVE_KEY, JSON.stringify(aogSnapshot())); aogUpdateSaveStatus(); }
+    catch(e){ aogUpdateSaveStatus('⚠ Save off'); }
+  },400);
+}
+
+function aogSetEl(id, rec){
+  var el=document.getElementById(id);
+  if(!el) return;
+  if(el.type==='checkbox'){ el.checked=!!rec.c; return; }
+  if('v' in rec){
+    if(el.tagName==='SELECT'){
+      var has=Array.prototype.some.call(el.options,function(o){return o.value===rec.v;});
+      if(!has){ var o=document.createElement('option'); o.value=rec.v; o.textContent=rec.v; el.appendChild(o); }
+    }
+    el.value=rec.v;
+  }
+}
+
+function aogClearDyn(){
+  var ar=document.getElementById('appl_rows');
+  if(ar) ar.querySelectorAll('tr[id^="xrow_"]').forEach(function(x){x.remove();});
+  var c=document.getElementById('dryer_list'); if(c) c.innerHTML='';
+  ['cook_cooktops','cook_ovens'].forEach(function(id){
+    var k=document.getElementById(id);
+    if(k) k.querySelectorAll('.cook-item').forEach(function(x){x.remove();});
+  });
+  c=document.getElementById('pool_pumps_section'); if(c) c.innerHTML='';
+  c=document.getElementById('pool_nc_section'); if(c) c.innerHTML='';
+  c=document.getElementById('pool_extra_loads'); if(c) c.innerHTML='';
+  dryerCount=0; ctCount=0; ovCount=0;
+  poolPumpCount=0; poolNcCount=0; poolExtraCount=0;
+  extraApplCount=0;
+}
+
+function aogRebuildRows(rows){
+  if(!rows) return;
+  (rows.xappl||[]).forEach(function(n){ extraApplCount=n-1; addExtraAppl(); });
+  (rows.dryer||[]).forEach(function(n){ dryerCount=n-1; addDryer(); });
+  (rows.cooktop||[]).forEach(function(n){ ctCount=n-1; addCookItem('cooktop'); });
+  (rows.oven||[]).forEach(function(n){ ovCount=n-1; addCookItem('oven'); });
+  (rows.ppump||[]).forEach(function(n){ poolPumpCount=n-1; addPoolPump(); });
+  (rows.pnc||[]).forEach(function(n){ poolNcCount=n-1; addPoolNC(); });
+  (rows.pex||[]).forEach(function(n){ poolExtraCount=n-1; addPoolExtra(); });
+}
+
+function aogRestore(){
+  var raw;
+  try{ raw=localStorage.getItem(AOG_SAVE_KEY); }catch(e){ return false; }
+  if(!raw) return false;
+  var data;
+  try{ data=JSON.parse(raw); }catch(e){ return false; }
+  if(!data||!data.fields) return false;
+  _aogRestoring=true;
+  try{
+    aogClearDyn();
+    aogRebuildRows(data.rows);
+    Object.keys(data.fields).forEach(function(id){ aogSetEl(id,data.fields[id]); });
+  }catch(e){ console.warn('AOG restore error',e); }
+  _aogRestoring=false;
+  return true;
+}
+
+function aogClearSaved(){
+  try{ localStorage.removeItem(AOG_SAVE_KEY); }catch(e){}
+}
+
+// Show blank instead of 0 in the typeable VA boxes (skips the field being edited)
+function aogBlankZeros(){
+  document.querySelectorAll('input[type=number][id^="va_"],input[type=number][id^="xva_"],input[type=number][id^="pexva_"]').forEach(function(el){
+    if(el===document.activeElement) return;
+    if(el.value!=='' && parseFloat(el.value)===0) el.value='';
+  });
+}
 
 // ══ INIT ══
 window.addEventListener('load',function(){
@@ -1664,8 +1841,16 @@ window.addEventListener('load',function(){
   }
   addDryer(false,5000,1);
   addCookItem('cooktop',false,0);
-  addCookItem('oven',false,0);
+  addCookItem('oven',false,8000);
+
+  // Restore any autosaved job from this device, then begin autosaving
+  aogRestore();
+  document.addEventListener('input', aogScheduleSave, true);
+  document.addEventListener('change', aogScheduleSave, true);
+  document.addEventListener('focusout', aogBlankZeros, true);
+
   calc();
+  aogBlankZeros();
 });
 </script>
 
@@ -1694,6 +1879,7 @@ function printReport(){
   var addr  = iv('j_addr');
   var city  = iv('j_city');
   var phone = iv('j_phone');
+  var sqftVal = iv('sqft');
 
   // ── Collect managed loads list ──
   var managedLines = [];
@@ -1847,7 +2033,8 @@ function printReport(){
   <!-- Left: load inputs -->
   <div>
     <div class="sh">Step 1 — Lighting &amp; Circuits</div>
-    <table class="dt"><tr><td>General Lighting (3VA/ft²)</td><td class="r">${tv('r1_gl')} VA</td></tr>
+    <table class="dt"><tr><td>Floor Area Entered</td><td class="r">${sqftVal||'—'} sq ft</td></tr>
+    <tr><td>General Lighting (3VA/ft²)</td><td class="r">${tv('r1_gl')} VA</td></tr>
     <tr><td>Small Appliance Circuits</td><td class="r">${tv('r1_sa')} VA</td></tr>
     <tr><td>Laundry Circuits</td><td class="r">${tv('r1_lc')} VA</td></tr>
     <tr class="tot"><td>Step 1 Total</td><td class="r">${s1} VA</td></tr></table>
