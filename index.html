@@ -361,7 +361,7 @@ body { font-family: var(--font-body); background: var(--bg-dark); color: var(--t
 
   <div class="footer">
     <div class="footer-text">Always On Generators &middot; Field Operations Portal</div>
-    <div class="footer-version">SYSTEM <span>v2.1.5</span> &middot; OFFLINE READY &middot; GITHUB PAGES</div>
+    <div class="footer-version">SYSTEM <span id="footer-version">v1.0</span> &middot; OFFLINE READY &middot; GITHUB PAGES</div>
   </div>
 </div>
 
@@ -3761,6 +3761,20 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
     navigator.serviceWorker.register('./sw.js',{scope:'./'}).then(function(reg){
       if(reg.active){swDot.classList.add('blue');swLabel.textContent=navigator.onLine?'Sync Enabled':'Offline Mode';}
+      // Pull the live version from the controlling SW into the footer
+      function updateFooterVersion(worker){
+        if(!worker) return;
+        var ch=new MessageChannel();
+        ch.port1.onmessage=function(e){
+          if(!e.data || !e.data.version) return;
+          // CACHE_NAME is 'aog-forms-v2.1.5' → footer wants 'v2.1.5'
+          var v=String(e.data.version).replace(/^aog-forms-/,'');
+          var el=document.getElementById('footer-version');
+          if(el) el.textContent=v;
+        };
+        worker.postMessage({action:'GET_CHANGELOG'},[ch.port2]);
+      }
+      updateFooterVersion(navigator.serviceWorker.controller || reg.active);
       function askAndShowToast(worker){
         waitingWorker=worker;
         var ch=new MessageChannel();
