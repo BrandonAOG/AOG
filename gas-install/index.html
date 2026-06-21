@@ -666,6 +666,7 @@ body.dark-mode .miscues-textarea {
   body.dark-mode .reg-field input {
     background: transparent !important;
     color: #1F2937 !important;
+    -webkit-text-fill-color: #1F2937 !important;
     border-color: #999 !important;
   }
   body.dark-mode table.mat-table td {
@@ -2639,7 +2640,7 @@ function setStatus(msg) {
     document.querySelectorAll('.reg-title').forEach(el =>
       save(el, 'display:block!important;width:100%!important;font-size:9.5pt!important;font-weight:bold!important;margin-bottom:1pt!important;'));
     document.querySelectorAll('.reg-field input[type="text"]').forEach(el =>
-      save(el, 'font-size:9pt!important;width:22pt!important;border:none!important;border-bottom:0.5pt solid #999!important;padding:0 2pt!important;background:transparent!important;clip-path:none!important;'));
+      save(el, 'font-size:9pt!important;width:22pt!important;border:none!important;border-bottom:0.5pt solid #999!important;padding:0 2pt!important;background:transparent!important;color:#1F2937!important;-webkit-text-fill-color:#1F2937!important;clip-path:none!important;'));
 
     // ── page 1 textareas — hide and show proxy divs ──
     document.querySelectorAll('#page1 textarea.multiline, .miscues-textarea').forEach(el => {
