@@ -1358,7 +1358,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
   background: var(--panel);
   padding: 4px 8px;
   padding-top: max(4px, env(safe-area-inset-top, 4px));
-  display: flex; gap: 4px; flex-wrap: nowrap; align-items: center;
+  display: flex; gap: 4px; flex-wrap: nowrap; align-items: center; justify-content: safe center;
   overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   box-shadow: 0 4px 18px rgba(0,0,0,0.3);
   border-bottom: 1px solid var(--border-bright);
@@ -2049,8 +2049,7 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
 <div class="action-bar" id="action-bar">
   <a class="ab-btn" href="../">🏠 HOME</a>
   <a class="ab-btn" onclick="printForm()" style="cursor:pointer;">📄 PDF</a>
-  <a class="ab-btn" id="btn-iphone" onclick="saveForIPhone()" style="cursor:pointer;">📱 iPHONE</a>
-  <a class="ab-btn" id="btn-android" onclick="saveForAndroid()" style="cursor:pointer;">🤖 ANDROID</a>
+  <a class="ab-btn" id="btn-capture" onclick="saveSmart()" style="cursor:pointer;">📸 CAPTURE</a>
   <a class="ab-btn" onclick="sendEmail()" style="cursor:pointer;">✉ EMAIL</a>
   <a class="ab-btn" onclick="confirmClear()" style="cursor:pointer;">🗑 CLEAR</a>
   <a class="ab-btn" onclick="saveAsExcel()" style="cursor:pointer;">📊 EXCEL</a>
@@ -3140,8 +3139,18 @@ function cropCanvasToContent(canvas) {
   }
 }
 
-function capturePageToCanvas() {
+function capturePageToCanvas(_fontsReady) {
   return new Promise(function(resolve, reject) {
+    // Wait for web fonts to finish loading before rendering. Without this, a
+    // capture fired before 'Share Tech Mono' loads falls back to the heavier
+    // system monospace — which is why the footer "© 2026…" line came out bold.
+    if (!_fontsReady && document.fonts && document.fonts.ready) {
+      var fontPromises = [document.fonts.ready];
+      try { fontPromises.push(document.fonts.load("12px 'Share Tech Mono'")); } catch (e) {}
+      var rerun = function () { capturePageToCanvas(true).then(resolve, reject); };
+      Promise.all(fontPromises).then(rerun, rerun);
+      return;
+    }
     if (typeof html2canvas === 'undefined') {
       reject(new Error('html2canvas not loaded'));
       return;
@@ -3571,7 +3580,7 @@ function capturePageToCanvas() {
           }
         }).then(function(canvas) {
           restore();
-          resolve(addCaptureMargin(cropCanvasToContent(canvas)));
+          resolve(padCanvasToLetter(addCaptureMargin(cropCanvasToContent(canvas))));
         }).catch(function(err) {
           restore();
           reject(err);
@@ -3583,6 +3592,31 @@ function capturePageToCanvas() {
     }); });
     });
   });
+}
+
+// Pad a captured canvas with white to exact US-Letter proportions (8.5:11) so
+// that printing/placing the image on a Letter page fills it without cropping the
+// top/bottom. The form is taller than Letter, so this pads the WIDTH (white side
+// bars) until height/width matches 11/8.5; content stays centered.
+function padCanvasToLetter(canvas) {
+  try {
+    var targetRatio = 11 / 8.5;            // height / width for US Letter (portrait)
+    var w = canvas.width, h = canvas.height;
+    var nw = w, nh = h;
+    if (h / w > targetRatio) {             // too tall → add width (side margins)
+      nw = Math.round(h / targetRatio);
+    } else {                               // too wide → add height (top/bottom margins)
+      nh = Math.round(w * targetRatio);
+    }
+    if (nw === w && nh === h) return canvas;
+    var out = document.createElement('canvas');
+    out.width = nw; out.height = nh;
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, nw, nh);
+    ctx.drawImage(canvas, Math.round((nw - w) / 2), Math.round((nh - h) / 2));
+    return out;
+  } catch (e) { return canvas; }
 }
 
 // Wrap a captured canvas in a uniform 0.15in white margin on all sides.
@@ -3602,6 +3636,81 @@ function addCaptureMargin(canvas) {
 }
 
 // ── iPHONE SAVE ──
+// ── SMART CAPTURE — one button, auto-detects device (iPhone + Android) ──
+// Works like the Permitting Info form: renders the page once, then uses the
+// native Share sheet when available, falling back to a long-press overlay on
+// iOS or a direct download on Android/desktop.
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function canShareFiles() {
+  try {
+    var probe = new File([new Blob(['x'], { type: 'text/plain' })], 'x.txt', { type: 'text/plain' });
+    return !!(navigator.canShare && navigator.canShare({ files: [probe] }));
+  } catch (e) { return false; }
+}
+function dataURLtoFile(dataURL, filename) {
+  var arr = dataURL.split(','), mime = (arr[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  var bstr = atob(arr[1]), n = bstr.length, u8 = new Uint8Array(n);
+  while (n--) u8[n] = bstr.charCodeAt(n);
+  return new File([u8], filename, { type: mime });
+}
+function smartDirectDownload(dataURL, filename) {
+  var link = document.createElement('a');
+  link.download = filename; link.href = dataURL;
+  document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  setStatus('Saved: ' + filename);
+  setTimeout(function () { setStatus(''); }, 4000);
+}
+function showSmartOverlay(dataURL, filename) {
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:999999;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;';
+  var closeBtn = document.createElement('button');
+  closeBtn.style.cssText = 'position:sticky;top:60px;background:#DC2626;color:#fff;border:none;border-radius:6px;padding:12px 28px;font-size:15px;cursor:pointer;font-weight:bold;z-index:1000000;align-self:center;margin-top:60px;margin-bottom:12px;';
+  closeBtn.textContent = 'X Close';
+  var lbl = document.createElement('div');
+  lbl.style.cssText = 'color:#4ade80;font-size:13px;margin:8px 0;text-align:center;line-height:1.6;padding:0 12px;flex-shrink:0;';
+  lbl.innerHTML = '<b>' + filename + '</b><br>Long-press the image below, then tap "Add to Photos"';
+  var img = document.createElement('img');
+  img.style.cssText = 'width:100%;display:block;border:none;';
+  img.src = dataURL; img.alt = filename.replace(/\.jpg$/, '');
+  overlay.appendChild(closeBtn); overlay.appendChild(lbl); overlay.appendChild(img);
+  document.body.appendChild(overlay);
+  closeBtn.onclick = function () { document.body.removeChild(overlay); setStatus(''); };
+  setStatus('Ready — long-press image to save.');
+}
+function saveSmart() {
+  // Older Android / desktop without file sharing → direct download path.
+  if (!canShareFiles() && !isIOSDevice()) { saveForAndroid(); return; }
+  setStatus('Rendering… please wait');
+  var filename = getEstimateFilename('jpg');
+  setTimeout(function () {
+    capturePageToCanvas().then(function (canvas) {
+      var dataURL = canvas.toDataURL('image/jpeg', 0.92);
+      if (canShareFiles()) {
+        var file = dataURLtoFile(dataURL, filename);
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file] }).then(function () {
+            setStatus('');
+          }).catch(function (err) {
+            if (err && err.name === 'AbortError') { setStatus(''); }       // user cancelled
+            else if (isIOSDevice()) { showSmartOverlay(dataURL, filename); }
+            else { smartDirectDownload(dataURL, filename); }
+          });
+          return;
+        }
+      }
+      if (isIOSDevice()) { showSmartOverlay(dataURL, filename); }
+      else { smartDirectDownload(dataURL, filename); }
+    }).catch(function (err) {
+      setStatus(typeof html2canvas === 'undefined'
+        ? 'Image library failed to load. Try the PDF button instead.'
+        : 'Render failed. Try the PDF button instead.');
+    });
+  }, 250);
+}
+
 function saveForIPhone() {
   setStatus('Rendering… please wait');
 
@@ -4122,28 +4231,101 @@ function createSeasonalCanvas(theme) {
       }
     },
     summer: {
-      count: 20,
-      make: function() {
+      count: 34,
+      make: function(i) {
+        // i 0: anchored corner sun.  i 1-4: drifting clouds.  rest: rising beach items.
+        if (i === 0) {
+          return { type:'sun', size:46, ray:0, raySpeed:0.004, pulse:Math.random()*Math.PI*2, pulseSpeed:0.03, life:1, decay:0 };
+        }
+        if (i !== undefined && i <= 4) {
+          return {
+            type:'cloud',
+            x: Math.random()*W, y: 30+Math.random()*(H*0.35),
+            vx: 0.15+Math.random()*0.25,
+            size: 26+Math.random()*26,
+            life:1, decay:0
+          };
+        }
+        var kinds=['shades','palm','ball','icecream','watermelon','shades','ball'];
         return {
-          x: Math.random()*W, y: Math.random()*H,
-          vx: (Math.random()-0.5)*0.3, vy: (Math.random()-0.5)*0.3,
-          life: 0.3+Math.random()*0.5, decay: 0.001,
-          size: 40+Math.random()*60,
-          pulse: Math.random()*Math.PI*2, pulseSpeed: 0.02+Math.random()*0.02
+          type: kinds[Math.floor(Math.random()*kinds.length)],
+          x: Math.random()*W, y: H+30+Math.random()*H,
+          vx: (Math.random()-0.5)*0.5, vy: -(0.35+Math.random()*0.7),
+          size: 14+Math.random()*16,
+          rot: (Math.random()-0.5)*0.6, rotSpeed:(Math.random()-0.5)*0.012,
+          bob: Math.random()*Math.PI*2, bobSpeed:0.02+Math.random()*0.03,
+          life:1, decay:0
         };
       },
       draw: function(p) {
-        ctx.save(); ctx.globalAlpha=p.life*0.15;
-        var grad=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size*(1+0.1*Math.sin(p.pulse)));
-        grad.addColorStop(0,'#FFF176'); grad.addColorStop(0.5,'#FFD54F'); grad.addColorStop(1,'rgba(255,213,79,0)');
-        ctx.fillStyle=grad;
-        ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+        ctx.save();
+        if (p.type==='sun') {
+          var cx=W-58, cy=58, s=p.size*(1+0.04*Math.sin(p.pulse));
+          var glow=ctx.createRadialGradient(cx,cy,0,cx,cy,s*2.4);
+          glow.addColorStop(0,'rgba(255,213,79,0.5)');
+          glow.addColorStop(1,'rgba(255,213,79,0)');
+          ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(cx,cy,s*2.4,0,Math.PI*2); ctx.fill();
+          ctx.translate(cx,cy); ctx.rotate(p.ray);
+          ctx.strokeStyle='rgba(255,179,0,0.85)'; ctx.lineWidth=4; ctx.lineCap='round';
+          for (var i=0;i<12;i++){ ctx.save(); ctx.rotate(i*Math.PI/6);
+            ctx.beginPath(); ctx.moveTo(0,s*1.25); ctx.lineTo(0,s*1.7); ctx.stroke(); ctx.restore(); }
+          var sd=ctx.createRadialGradient(0,0,s*0.2,0,0,s);
+          sd.addColorStop(0,'#FFF59D'); sd.addColorStop(1,'#FFB300');
+          ctx.fillStyle=sd; ctx.beginPath(); ctx.arc(0,0,s,0,Math.PI*2); ctx.fill();
+          ctx.restore(); return;
+        }
+        if (p.type==='cloud') {
+          ctx.globalAlpha=0.7; ctx.translate(p.x,p.y); var s=p.size; ctx.fillStyle='#ffffff';
+          [[0,0,1],[-s*0.55,s*0.18,0.7],[s*0.55,s*0.18,0.7],[-s*0.25,-s*0.18,0.75],[s*0.3,-s*0.12,0.7]].forEach(function(c){
+            ctx.beginPath(); ctx.arc(c[0],c[1],s*0.55*c[2],0,Math.PI*2); ctx.fill(); });
+          ctx.beginPath(); ctx.ellipse(0,s*0.32,s*0.95,s*0.32,0,0,Math.PI*2); ctx.fill();
+          ctx.restore(); return;
+        }
+        ctx.globalAlpha=0.92; ctx.translate(p.x,p.y); ctx.rotate(p.rot+Math.sin(p.bob)*0.12);
+        var s=p.size;
+        if (p.type==='shades') {
+          ctx.fillStyle='#1f2937'; ctx.strokeStyle='#1f2937'; ctx.lineWidth=s*0.16;
+          ctx.beginPath(); ctx.arc(-s*0.5,0,s*0.42,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.5,0,s*0.42,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(-s*0.12,-s*0.05); ctx.lineTo(s*0.12,-s*0.05); ctx.stroke();
+          ctx.fillStyle='rgba(120,200,255,0.55)';
+          ctx.beginPath(); ctx.arc(-s*0.5,0,s*0.30,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(s*0.5,0,s*0.30,0,Math.PI*2); ctx.fill();
+        } else if (p.type==='palm') {
+          ctx.strokeStyle='#8d6e63'; ctx.lineWidth=s*0.14; ctx.lineCap='round';
+          ctx.beginPath(); ctx.moveTo(0,s*0.7); ctx.quadraticCurveTo(s*0.1,0,-s*0.05,-s*0.5); ctx.stroke();
+          ctx.fillStyle='#2e9e5b';
+          for (var k=0;k<5;k++){ ctx.save(); ctx.translate(-s*0.05,-s*0.5); ctx.rotate((k-2)*0.55);
+            ctx.beginPath(); ctx.ellipse(0,-s*0.45,s*0.16,s*0.5,0,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+        } else if (p.type==='ball') {
+          ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,0,s*0.55,0,Math.PI*2); ctx.fill();
+          var cols=['#ef4444','#f59e0b','#3b82f6','#10b981']; 
+          for (var w=0;w<4;w++){ ctx.fillStyle=cols[w];
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,s*0.55,w*Math.PI/2,w*Math.PI/2+Math.PI/2); ctx.closePath();
+            ctx.globalAlpha=0.85; ctx.fill(); ctx.globalAlpha=0.92; }
+          ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(0,0,s*0.55,0,Math.PI*2); ctx.stroke();
+        } else if (p.type==='icecream') {
+          ctx.fillStyle='#e3b07a'; ctx.beginPath();
+          ctx.moveTo(-s*0.32,-s*0.05); ctx.lineTo(s*0.32,-s*0.05); ctx.lineTo(0,s*0.7); ctx.closePath(); ctx.fill();
+          ctx.fillStyle='#ffd1dc'; ctx.beginPath(); ctx.arc(-s*0.14,-s*0.18,s*0.27,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#fff1ba'; ctx.beginPath(); ctx.arc(s*0.16,-s*0.2,s*0.27,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#bff0d4'; ctx.beginPath(); ctx.arc(0,-s*0.42,s*0.27,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#ef4444'; ctx.beginPath(); ctx.arc(0,-s*0.64,s*0.09,0,Math.PI*2); ctx.fill();
+        } else { // watermelon slice
+          ctx.fillStyle='#2e9e5b'; ctx.beginPath(); ctx.arc(0,0,s*0.55,Math.PI,0); ctx.closePath(); ctx.fill();
+          ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,0,s*0.47,Math.PI,0); ctx.closePath(); ctx.fill();
+          ctx.fillStyle='#ff5e7e'; ctx.beginPath(); ctx.arc(0,0,s*0.4,Math.PI,0); ctx.closePath(); ctx.fill();
+          ctx.fillStyle='#1f2937';
+          [-0.22,0,0.22].forEach(function(dx){ ctx.beginPath(); ctx.arc(s*dx,-s*0.16,s*0.045,0,Math.PI*2); ctx.fill(); });
+        }
         ctx.restore();
       },
       tick: function(p) {
-        p.pulse+=p.pulseSpeed; p.x+=p.vx; p.y+=p.vy;
-        if (p.x<-100||p.x>W+100) p.vx*=-1;
-        if (p.y<-100||p.y>H+100) p.vy*=-1;
+        if (p.type==='sun') { p.ray+=p.raySpeed; p.pulse+=p.pulseSpeed; return; }
+        if (p.type==='cloud') { p.x+=p.vx; if (p.x>W+p.size*1.5) { p.x=-p.size*1.5; p.y=30+Math.random()*(H*0.35); } return; }
+        p.bob+=p.bobSpeed; p.rot+=p.rotSpeed;
+        p.x+=p.vx+Math.sin(p.bob)*0.4; p.y+=p.vy;
+        if (p.y<-40) { p.y=H+30+Math.random()*60; p.x=Math.random()*W; }
       }
     },
     fourthofjuly: {
@@ -4468,21 +4650,77 @@ function createSeasonalCanvas(theme) {
       }
     },
     hotsummer: {
-      count: 60,
-      make: function() {
-        var types=['flame','flame','flame','sun','heat'];
+      count: 78,
+      make: function(i) {
+        // First 48 particles = 12 flame tongues anchored in each of the 4 corners.
+        // Remaining particles = rising embers/heat drifting up the page.
+        if (i !== undefined && i < 48) {
+          var corner = Math.floor(i/12);            // 0=TL,1=TR,2=BL,3=BR
+          return {
+            type:'corner', corner:corner,
+            jx: (Math.random()-0.5)*46,             // jitter within the corner cluster
+            jy: (Math.random()-0.5)*46,
+            size: 16+Math.random()*22,
+            life: 1, decay: 0,
+            phase: Math.random()*Math.PI*2,
+            flick: 0.12+Math.random()*0.18,        // flicker speed
+            sway: Math.random()*Math.PI*2,
+            swaySpeed: 0.03+Math.random()*0.05
+          };
+        }
+        var types=['flame','flame','sun','heat'];
         return {
           x: Math.random()*W, y: H+20,
           vx: (Math.random()-0.5)*1.5, vy: -(0.8+Math.random()*2.0),
           life: 0.8+Math.random()*0.2, decay: 0.008+Math.random()*0.008,
-          size: 8+Math.random()*20,
+          size: 8+Math.random()*16,
           type: types[Math.floor(Math.random()*types.length)],
           wobble: Math.random()*Math.PI*2, wobbleSpeed: 0.04+Math.random()*0.06,
           hue: 10+Math.random()*40
         };
       },
+      drawFlame: function(s, alpha, squish) {
+        // a single upward-pointing flame tongue, origin at its base (0,0)
+        ctx.globalAlpha = alpha;
+        var grad=ctx.createRadialGradient(0,-s*0.2,0,0,-s*0.3,s);
+        grad.addColorStop(0,'#FFFFFF');
+        grad.addColorStop(0.25,'#FFD700');
+        grad.addColorStop(0.6,'#FF6600');
+        grad.addColorStop(1,'rgba(220,0,0,0)');
+        ctx.fillStyle=grad;
+        var w = s*0.6*squish;
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.bezierCurveTo(-w,-s*0.4,-w*0.9,-s*1.0,-s*0.12,-s*1.5);
+        ctx.bezierCurveTo(0,-s*1.1,0,-s*1.1,s*0.12,-s*1.5);
+        ctx.bezierCurveTo(w*0.9,-s*1.0,w,-s*0.4,0,0);
+        ctx.fill();
+      },
       draw: function(p) {
-        ctx.save(); ctx.globalAlpha=p.life*0.7;
+        ctx.save();
+        if(p.type==='corner'){
+          var margin = 26;
+          var cx = (p.corner===1||p.corner===3) ? W-margin : margin;
+          var cy = (p.corner>=2)                ? H-margin : margin;
+          ctx.translate(cx + p.jx, cy + p.jy);
+          // flames always point "up" toward page interior-ish; tongues lean with sway
+          var lean = Math.sin(p.sway)*0.25;
+          ctx.rotate(lean);
+          // flicker: size + brightness pulse
+          var fl = 0.78 + Math.sin(p.phase)*0.22;
+          var glow = ctx.createRadialGradient(0,-p.size*0.4,0,0,-p.size*0.4,p.size*1.4);
+          glow.addColorStop(0,'rgba(255,120,0,0.18)');
+          glow.addColorStop(1,'rgba(255,120,0,0)');
+          ctx.fillStyle=glow;
+          ctx.beginPath(); ctx.arc(0,-p.size*0.4,p.size*1.4,0,Math.PI*2); ctx.fill();
+          this.drawFlame(p.size*fl, 0.78, 1+Math.sin(p.phase*1.7)*0.12);
+          // inner brighter core
+          ctx.fillStyle='rgba(255,235,150,0.85)';
+          this.drawFlame(p.size*fl*0.5, 0.6, 1);
+          ctx.restore();
+          return;
+        }
+        ctx.globalAlpha=p.life*0.7;
         ctx.translate(p.x,p.y);
         var s=p.size;
         if(p.type==='flame'){
@@ -4522,11 +4760,16 @@ function createSeasonalCanvas(theme) {
         ctx.restore();
       },
       tick: function(p) {
+        if(p.type==='corner'){
+          p.phase += p.flick;
+          p.sway  += p.swaySpeed;
+          return;                         // anchored — never recycled
+        }
         p.wobble+=p.wobbleSpeed;
         p.x+=p.vx+Math.sin(p.wobble)*0.8;
         p.y+=p.vy;
         p.life-=p.decay;
-        if(p.life<=0||p.y<-s){
+        if(p.life<=0||p.y<-p.size){
           p.y=H+20; p.x=Math.random()*W;
           p.life=0.8+Math.random()*0.2;
           p.vy=-(0.8+Math.random()*2.0);
@@ -4728,7 +4971,7 @@ function createSeasonalCanvas(theme) {
   var cfg = configs[theme];
   if (!cfg) return;
 
-  for (var i=0;i<cfg.count;i++) particles.push(cfg.make());
+  for (var i=0;i<cfg.count;i++) particles.push(cfg.make(i));
 
   function loop() {
     if (isDead()) { cancelAnimationFrame(animId); document.removeEventListener('visibilitychange', onVis); return; }
@@ -4781,19 +5024,20 @@ function injectSeasonalStyles() {
     'body.seasonal-summer:not(.dark-mode) { --panel:#fffbeb; --bg:#fffbeb; --bg3:#fef3c7; }',
     'body.seasonal-summer .page { border-color:#F59E0B !important; box-shadow:0 0 50px rgba(245,158,11,0.18),0 0 100px rgba(245,158,11,0.07) !important; }',
     'body.seasonal-summer .header { background:linear-gradient(90deg,rgba(245,158,11,0.07),rgba(251,191,36,0.1),rgba(245,158,11,0.07)) !important; }',
-    'body.seasonal-summer .section-header { background:linear-gradient(90deg,#fef3c7,#fffbeb) !important; }',
+    'body.seasonal-summer:not(.dark-mode) .section-header { background:linear-gradient(90deg,#fef3c7,#fffbeb) !important; }',
     'body.seasonal-summer .doc-title::after { content:" ☀"; color:#F59E0B; }',
     '@media screen { body.seasonal-fourthofjuly { --cyan:#2563EB; --cyan-dim:#1D4ED8; --amber:#DC2626; --border:rgba(37,99,235,0.25); --border-bright:rgba(37,99,235,0.5); } }',
     'body.seasonal-fourthofjuly:not(.dark-mode) { --panel:#f8f9ff; --bg:#f8f9ff; --bg3:#eff2ff; }',
     'body.seasonal-fourthofjuly .page { border-color:#DC2626 !important; box-shadow:0 0 0 3px #2563EB,0 0 0 5px #DC2626,0 0 30px rgba(37,99,235,0.15) !important; }',
     'body.seasonal-fourthofjuly .header { background:linear-gradient(90deg,rgba(220,38,38,0.06),rgba(255,255,255,0.1),rgba(37,99,235,0.06)) !important; border-bottom-color:rgba(37,99,235,0.4) !important; }',
-    'body.seasonal-fourthofjuly .section-header { background:linear-gradient(90deg,rgba(37,99,235,0.06),transparent) !important; }',
+    'body.seasonal-fourthofjuly:not(.dark-mode) .section-header { background:linear-gradient(90deg,rgba(37,99,235,0.06),transparent) !important; }',
     'body.seasonal-fourthofjuly .doc-title::after { content:" 🎇"; }',
     '@media screen { body.seasonal-halloween { --cyan:#F97316; --cyan-dim:#EA580C; --amber:#A855F7; --border:rgba(249,115,22,0.25); --border-bright:rgba(249,115,22,0.5); } }',
     'body.seasonal-halloween:not(.dark-mode) { --panel:#1c0a00; --bg:#1c0a00; --bg3:#2d1200; --text:#FFD0A0; --text-muted:#C97B3A; --text-dim:#7A4A20; }',
     'body.seasonal-halloween .page { border-color:#F97316 !important; box-shadow:0 0 40px rgba(249,115,22,0.2),0 0 80px rgba(168,85,247,0.1) !important; }',
     'body.seasonal-halloween .header { background:linear-gradient(90deg,rgba(249,115,22,0.1),rgba(168,85,247,0.08),rgba(249,115,22,0.1)) !important; }',
-    'body.seasonal-halloween .section-header { background:linear-gradient(90deg,rgba(249,115,22,0.15),rgba(28,10,0,0.9)) !important; letter-spacing:5px !important; }',
+    'body.seasonal-halloween:not(.dark-mode) .section-header { background:linear-gradient(90deg,rgba(249,115,22,0.15),rgba(28,10,0,0.9)) !important; }',
+    'body.seasonal-halloween .section-header { letter-spacing:5px !important; }',
     '@media screen { body.seasonal-halloween:not(.dark-mode) .section-header::before { background:#F97316 !important; box-shadow:0 0 10px #F97316,0 0 20px rgba(249,115,22,0.5) !important; } }',
     '@media screen { body.seasonal-halloween:not(.dark-mode) .col-label::before { background:#F97316 !important; box-shadow:0 0 10px #F97316,0 0 20px rgba(249,115,22,0.5) !important; } }',
     'body.seasonal-halloween input, body.seasonal-halloween textarea { background:rgba(45,18,0,0.8) !important; border-bottom-color:rgba(249,115,22,0.35) !important; color:#FFD0A0 !important; }',
@@ -4805,7 +5049,7 @@ function injectSeasonalStyles() {
     'body.seasonal-thanksgiving:not(.dark-mode) { --panel:#fffbf5; --bg:#fffbf5; --bg3:#fef3e2; }',
     'body.seasonal-thanksgiving .page { border-color:#B45309 !important; box-shadow:0 0 40px rgba(180,83,9,0.1) !important; }',
     'body.seasonal-thanksgiving .header { background:linear-gradient(90deg,rgba(180,83,9,0.06),rgba(220,38,38,0.05),rgba(180,83,9,0.06)) !important; }',
-    'body.seasonal-thanksgiving .section-header { background:linear-gradient(90deg,rgba(180,83,9,0.08),transparent) !important; }',
+    'body.seasonal-thanksgiving:not(.dark-mode) .section-header { background:linear-gradient(90deg,rgba(180,83,9,0.08),transparent) !important; }',
     'body.seasonal-thanksgiving .doc-title::after { content:" 🍂"; }',
     'body.seasonal-easter { --cyan:#DA70D6; --cyan-dim:#BA55D3; --amber:#FFD700; --border:rgba(218,112,214,0.2); --border-bright:rgba(218,112,214,0.45); }',
     'body.seasonal-easter:not(.dark-mode) { --panel:#fdf6ff; --bg:#fdf6ff; --bg3:#f5e6ff; }',
@@ -4854,7 +5098,8 @@ function injectSeasonalStyles() {
     'body.seasonal-hotsummer:not(.dark-mode) { --panel:#fff8f0; --bg:#fff5e6; --bg3:#ffe8cc; --text:#1a0a00; }',
     'body.seasonal-hotsummer .page { border-color:#FF4500 !important; box-shadow:0 0 60px rgba(255,69,0,0.25),0 0 120px rgba(255,150,0,0.1) !important; }',
     'body.seasonal-hotsummer .header { background:linear-gradient(90deg,rgba(255,69,0,0.12),rgba(255,200,0,0.1),rgba(255,69,0,0.12)) !important; }',
-    'body.seasonal-hotsummer .section-header { background:linear-gradient(90deg,rgba(255,69,0,0.1),transparent) !important; letter-spacing:5px !important; }',
+    'body.seasonal-hotsummer:not(.dark-mode) .section-header { background:linear-gradient(90deg,rgba(255,69,0,0.1),transparent) !important; }',
+    'body.seasonal-hotsummer .section-header { letter-spacing:5px !important; }',
     'body.seasonal-hotsummer:not(.dark-mode) .section-header::before { background:#FF4500 !important; box-shadow:0 0 10px #FF4500,0 0 20px rgba(255,69,0,0.6) !important; animation:hotsummer-pulse 1s ease-in-out infinite !important; }',
     'body.seasonal-hotsummer:not(.dark-mode) .col-label::before { background:#FF4500 !important; box-shadow:0 0 10px #FF4500,0 0 20px rgba(255,69,0,0.6) !important; animation:hotsummer-pulse 1s ease-in-out infinite !important; }',
     '@keyframes hotsummer-pulse { 0%,100%{background:#FF4500;box-shadow:0 0 10px #FF4500;} 50%{background:#FFD700;box-shadow:0 0 14px #FFD700;} }',
@@ -4870,21 +5115,21 @@ function injectSeasonalStyles() {
     'body.seasonal-fall .header { background:linear-gradient(90deg,rgba(210,105,30,0.07),rgba(218,165,32,0.06),rgba(210,105,30,0.07)) !important; }',
     '@media screen { body.seasonal-fall:not(.dark-mode) .section-header::before { background:#D2691E !important; } }',
     '@media screen { body.seasonal-fall:not(.dark-mode) .col-label::before { background:#D2691E !important; } }',
-    'body.seasonal-fall .section-header { background:linear-gradient(90deg,rgba(210,105,30,0.08),transparent) !important; }',
+    'body.seasonal-fall:not(.dark-mode) .section-header { background:linear-gradient(90deg,rgba(210,105,30,0.08),transparent) !important; }',
     'body.seasonal-fall .doc-title::after { content:" 🍁"; }',
     '@media screen { body.seasonal-fall { --cyan:#D2691E; --cyan-dim:#A0522D; --amber:#DAA520; --border:rgba(210,105,30,0.25); --border-bright:rgba(210,105,30,0.5); } }',
     'body.seasonal-veteransday { --cyan:#B22234; --cyan-dim:#8B0000; --amber:#DAA520; --border:rgba(178,34,52,0.25); --border-bright:rgba(178,34,52,0.5); }',
     'body.seasonal-veteransday:not(.dark-mode) { --panel:#fff8f8; --bg:#fff8f8; --bg3:#ffe4e4; }',
     'body.seasonal-veteransday .page { border-color:#B22234 !important; box-shadow:0 0 0 3px #3C3B6E,0 0 0 5px #B22234,0 0 30px rgba(178,34,52,0.15) !important; }',
     'body.seasonal-veteransday .header { background:linear-gradient(90deg,rgba(178,34,52,0.08),rgba(255,255,255,0.1),rgba(60,59,110,0.08)) !important; }',
-    'body.seasonal-veteransday .section-header { background:linear-gradient(90deg,rgba(60,59,110,0.08),transparent) !important; }',
+    'body.seasonal-veteransday:not(.dark-mode) .section-header { background:linear-gradient(90deg,rgba(60,59,110,0.08),transparent) !important; }',
     'body.seasonal-veteransday .doc-title::after { content:" 🎖️"; }',
     '@media screen { body.seasonal-veteransday { --cyan:#B22234; --cyan-dim:#8B0000; --amber:#DAA520; --border:rgba(178,34,52,0.25); --border-bright:rgba(178,34,52,0.5); } }',
     '@media screen { body.seasonal-christmas { --cyan:#16A34A; --cyan-dim:#15803D; --amber:#DC2626; --border:rgba(22,163,74,0.25); --border-bright:rgba(220,38,38,0.5); } }',
     'body.seasonal-christmas:not(.dark-mode) { --panel:#f6fff8; --bg:#f6fff8; --bg3:#dcfce7; }',
     'body.seasonal-christmas .page { border-color:#DC2626 !important; box-shadow:0 0 0 2px #16A34A,0 0 0 4px #DC2626,0 0 40px rgba(22,163,74,0.15),0 0 80px rgba(220,38,38,0.08) !important; }',
     'body.seasonal-christmas .header { background:linear-gradient(90deg,rgba(22,163,74,0.07),rgba(220,38,38,0.05),rgba(22,163,74,0.07)) !important; border-bottom-color:rgba(220,38,38,0.4) !important; }',
-    'body.seasonal-christmas .section-header { background:linear-gradient(90deg,rgba(22,163,74,0.08),transparent) !important; }',
+    'body.seasonal-christmas:not(.dark-mode) .section-header { background:linear-gradient(90deg,rgba(22,163,74,0.08),transparent) !important; }',
     '@media screen { body.seasonal-christmas:not(.dark-mode) .section-header::before { animation:christmas-pulse 1.5s ease-in-out infinite !important; } }',
     '@media screen { body.seasonal-christmas:not(.dark-mode) .col-label::before { animation:christmas-pulse 1.5s ease-in-out infinite !important; } }',
     '@keyframes christmas-pulse { 0%,100%{background:#DC2626;box-shadow:0 0 8px #DC2626;} 50%{background:#16A34A;box-shadow:0 0 8px #16A34A;} }',
@@ -4921,7 +5166,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (!navigator.onLine) { document.body.classList.add('offline'); }
   injectSeasonalStyles();
-  applySeasonalTheme(getCurrentSeasonalTheme());
+  // Optional manual override for previewing themes, e.g. ?season=hotsummer (?season=off disables)
+  var _seasonParam = (new URLSearchParams(location.search)).get('season');
+  if (_seasonParam === 'off') { applySeasonalTheme('default'); }
+  else if (_seasonParam && SEASONAL_THEMES[_seasonParam]) { applySeasonalTheme(_seasonParam); }
+  else { applySeasonalTheme(getCurrentSeasonalTheme()); }
   applyTheme(getInitialTheme());
   setupThemeToggle();
   setupAddressAutocomplete();
@@ -4962,17 +5211,51 @@ setTimeout(adjustTopPadding, 100);
 
 // ── PRINT: strip inline padding-top so Safari iPad doesn't generate a blank page 2 ──
 var _savedPagePaddingTop = '';
+var _savedNativePrintState = null;
 window.addEventListener('beforeprint', function() {
   var page = document.getElementById('page');
   if (page) {
     _savedPagePaddingTop = page.style.paddingTop;
     page.style.paddingTop = '';
   }
+  // Native browser print (Cmd/Ctrl+P or "Save as PDF") does NOT run printForm(), so the
+  // JS dark-mode/seasonal strip never fires. Some print paths (notably when a real printer
+  // is enumerated and a live preview is rendered) capture a mid-transition or color-scheme:dark
+  // state, letting dark mode bleed into the output. If printForm() already handled this pass
+  // (dark class is gone), skip. Otherwise strip here and restore on afterprint.
+  if (_savedNativePrintState) return;                       // re-entrant guard
+  if (document.documentElement.classList.contains('desktop-print') ||
+      document.documentElement.classList.contains('ipad-print')) return;  // printForm path
+  var wasDark = document.body.classList.contains('dark-mode');
+  var seasonal = [];
+  document.body.classList.forEach(function(c){ if (c.indexOf('seasonal-') === 0) seasonal.push(c); });
+  if (!wasDark && seasonal.length === 0) return;            // nothing to strip
+  _savedNativePrintState = { wasDark: wasDark, seasonal: seasonal, colorScheme: document.documentElement.style.colorScheme };
+  // Kill transitions so the dark->light flip is instant (a 0.3s background fade can otherwise
+  // be snapshotted mid-transition, which is exactly how dark bleeds into the printed page).
+  var instant = document.getElementById('native-print-instant');
+  if (!instant) {
+    instant = document.createElement('style');
+    instant.id = 'native-print-instant';
+    instant.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; }';
+    document.head.appendChild(instant);
+  }
+  document.body.classList.remove('dark-mode');
+  seasonal.forEach(function(c){ document.body.classList.remove(c); });
+  document.documentElement.style.colorScheme = 'light';
 });
 window.addEventListener('afterprint', function() {
   var page = document.getElementById('page');
   if (page) {
     page.style.paddingTop = _savedPagePaddingTop;
+  }
+  if (_savedNativePrintState) {
+    if (_savedNativePrintState.wasDark) document.body.classList.add('dark-mode');
+    _savedNativePrintState.seasonal.forEach(function(c){ document.body.classList.add(c); });
+    document.documentElement.style.colorScheme = _savedNativePrintState.colorScheme || '';
+    _savedNativePrintState = null;
+    var instant = document.getElementById('native-print-instant');
+    if (instant) instant.parentNode.removeChild(instant);
   }
 });
 </script>
