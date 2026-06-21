@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.1.5';
+var CACHE_NAME = 'aog-forms-v2.1.6';
 var DEV_MODE   = false;
 
 // Stores last known cache progress so late-loading pages can request it
@@ -20,10 +20,11 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '🔀 Backgrounds stay random but no longer repeat — won\'t show the same scene again until 10 others have played',
-  '🪟 Cards now use a frosted-glass look — background animation shows through while text stays readable over any scene',
-  "⭐ New Favorites tab (Dustin's idea) — pin your most-used forms and tools for quick access. Opens here by default.",
-  '🎙️ Voice recognition for Electrical Installs is coming soon. Note: this feature requires an internet connection and won\'t work offline.',
+  '🎙️ Voice control is live for Electrical Installs — hands-free field entry with ~90% recognition accuracy.',
+  '🌐 Voice requires an active connection. To protect offline mode, the mic auto-disables when no data signal is detected — no freezes, no broken pages.',
+  '🔋 Battery saver: the mic powers down after 60 seconds of no input, so an open form won\'t quietly drain your device.',
+  '📸 Unified capture — separate iPhone and Android image buttons are gone. One smart CAPTURE button now handles Site Visit, Electrical Install, and Estimate forms on every device.',
+  '📤 Capture opens the native share sheet — save to Photos, save to Files, or send straight to a printer in one tap.',
 ];
 // ============================================================
 
