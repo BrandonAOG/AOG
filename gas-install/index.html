@@ -2010,6 +2010,15 @@ function injectCaptureStyles() {
     /* Alternating orange tint on page2 label cells too (not just inputs) */
     #page2 table.mat-table tbody tr:nth-child(even) td.row-label { background:rgba(211,94,19,0.4)!important; }
     #page2 table.mat-table tbody tr:nth-child(even) td.row-label.section-header { background:#D35E13!important; }
+    /* ── Mobile image-capture fix: the screen rule @media(max-width:768px)
+       shrinks table number inputs to 10px, and html2canvas still honors it
+       on phones — making typed numbers (nipples + all tables) smaller than
+       the headers. Re-assert the desktop capture size inside the same media
+       context so mobile captures match desktop. ── */
+    @media (max-width:768px) {
+      #page2 table.mat-table td input[type="number"] { font-size:12.5pt!important; }
+      table.mat-table td input[type="number"] { font-size:12.5pt!important; }
+    }
   `;
   document.head.appendChild(el);
   populateCaptureProxies();
