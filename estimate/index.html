@@ -2907,7 +2907,7 @@ function printForm() {
   }
 
   // ── Shared restore trigger setup ──
-  function armRestoreAndPrint(isMobile, deferPrint) {
+  function armRestoreAndPrint(isMobile, deferPrint, printDelayMs) {
     var _triggered = false;
     function triggerRestore(delay) {
       if (_triggered) return;
@@ -2952,8 +2952,26 @@ function printForm() {
           setTimeout(function() { window.print(); }, 120);
         });
       });
+    } else if (printDelayMs) {
+      // iPad path: this device reports as desktop-class Safari (Macintosh UA), so it tolerates
+      // a deferred print() outside the strict tap-gesture window. Waiting ~300ms after the
+      // .ipad-print class + span-replace lets the main thread fully commit the DOM mutations and
+      // paint before iOS starts building the print preview — which is when the wrong-scale
+      // snapshot was being captured. Two rAFs ensure a paint happened, then the timeout holds.
+      if (window.__plog) window.__plog('  deferring print() by ' + printDelayMs + 'ms');
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          setTimeout(function() {
+            if (window.__plog) { window.__plog('  calling window.print() (deferred)'); window.__pageMetrics('  at-print:'); }
+            window.print();
+            if (window.__plog) window.__plog('  window.print() returned');
+          }, printDelayMs);
+        });
+      });
     } else {
+      if (window.__plog) { window.__plog('  calling window.print() (sync, in-gesture)'); window.__pageMetrics('  at-print:'); }
       window.print();
+      if (window.__plog) window.__plog('  window.print() returned');
     }
   }
 
@@ -2982,6 +3000,29 @@ function printForm() {
     });
   }
 
+  // ── Synchronous print-layout flush ──
+  // A single `void offsetHeight` is NOT enough to settle layout before iOS takes its
+  // print-preview snapshot. Two things in the mobile/iPad path mutate layout right before
+  // print(): (a) doSpanReplace() inserts ~50 checkbox-box spans, and (b) the iPad path adds
+  // the .ipad-print class which re-keys font-size + sizing rules — several of which are
+  // :has() selectors (html.ipad-print .section:has(...)). Inserted nodes + a new class +
+  // :has() invalidation need TWO style/layout passes to fully settle. If we print after only
+  // one pass, iOS derives its Fit-to-Page scale from a stale (taller) layout and the form
+  // overflows onto a 2nd page — until the user toggles the Scale control, which forces iOS to
+  // re-measure. Reading geometry on <html>, <body> and #page across two passes forces those
+  // recalcs to complete synchronously, while still staying inside the tap gesture (so iOS lets
+  // window.print() run). This is the fix for the "wrong scale until I tap Scale" race.
+  function flushPrintLayout() {
+    var pg = document.getElementById('page');
+    // Pass 1
+    void document.documentElement.offsetHeight;
+    if (pg) pg.getBoundingClientRect();
+    // Pass 2 (settles :has() + newly inserted span geometry)
+    void document.body.offsetWidth;
+    if (pg) { void pg.offsetHeight; pg.getBoundingClientRect(); }
+    if (window.__pageMetrics) window.__pageMetrics('  post-flush:');
+  }
+
   // ══════════════════════════════════════════
   // ── iPHONE SAFARI — print path ──
   // Runs BEFORE iPad detection. No class is added, so the static phone-print
@@ -2990,18 +3031,26 @@ function printForm() {
   // ══════════════════════════════════════════
   if (isMobileSafari && !isIpadSafari) {
     doSpanReplace();
-    void document.body.offsetHeight;
+    flushPrintLayout();
     armRestoreAndPrint(true);
     return;
   }
 
   // ══════════════════════════════════════════
   // ── iPAD SAFARI — print path ──
+  // The iPad's old .ipad-print layout rendered ~1326px tall — right at the one-page limit, so
+  // after iOS's automatic fit-to-page-WIDTH scale (0.777) the content was ~1030px tall and
+  // tipped onto a 2nd page. That's the "wrong scale until I tap Scale" symptom: tapping Scale
+  // let the user manually shrink it back onto one page. The iPhone path renders the same form
+  // ~1266px tall, which fits cleanly after the same width-fit — and it's confirmed to print
+  // correctly. So the iPad now uses the SAME phone-print path: no .ipad-print class, plain
+  // synchronous in-gesture print. (If the iPad PDF text ends up too small for your taste, we can
+  // re-introduce slightly larger iPad sizing — but it must keep the page under ~1266px tall to
+  // stay on one page.)
   // ══════════════════════════════════════════
   if (isMobileSafari && isIpadSafari) {
-    document.documentElement.classList.add('ipad-print');
     doSpanReplace();
-    void document.body.offsetHeight;
+    flushPrintLayout();
     armRestoreAndPrint(true);
     return;
   }
@@ -5224,8 +5273,21 @@ window.addEventListener('beforeprint', function() {
   // state, letting dark mode bleed into the output. If printForm() already handled this pass
   // (dark class is gone), skip. Otherwise strip here and restore on afterprint.
   if (_savedNativePrintState) return;                       // re-entrant guard
+  // printForm() path (ipad-print / desktop-print). beforeprint fires synchronously the moment
+  // WebKit enters print context and re-derives the Fit-to-Page scale — the SAME moment that
+  // tapping "Scale" in the iOS print sheet triggers. Forcing a final synchronous layout flush
+  // here guarantees the very first print snapshot is measured against a fully-settled layout,
+  // so the scale is correct on the first try (no manual Scale toggle needed). Two passes settle
+  // the :has() rules + the inserted checkbox spans from doSpanReplace().
   if (document.documentElement.classList.contains('desktop-print') ||
-      document.documentElement.classList.contains('ipad-print')) return;  // printForm path
+      document.documentElement.classList.contains('ipad-print')) {
+    var _pg = document.getElementById('page');
+    void document.documentElement.offsetHeight;
+    if (_pg) _pg.getBoundingClientRect();
+    void document.body.offsetWidth;
+    if (_pg) { void _pg.offsetHeight; _pg.getBoundingClientRect(); }
+    return;                                                 // printForm path
+  }
   var wasDark = document.body.classList.contains('dark-mode');
   var seasonal = [];
   document.body.classList.forEach(function(c){ if (c.indexOf('seasonal-') === 0) seasonal.push(c); });
@@ -5258,6 +5320,150 @@ window.addEventListener('afterprint', function() {
     if (instant) instant.parentNode.removeChild(instant);
   }
 });
+
+/* ════════════════════════════════════════════════════════════════════════
+   PRINT DEBUG OVERLAY  —  enable by adding #debug (or ?debug) to the URL,
+   e.g.  https://brandonaog.github.io/AOG/estimate/#debug
+   Once enabled it persists (localStorage). To turn off: tap "OFF" in the panel
+   or load the page with #nodebug. Renders only on screen, never in the PDF.
+   It records what actually happens at print time so we can see WHY the iPad
+   picks the wrong scale: which print path runs, the real #page size at each
+   stage, the implied Fit-to-Page scale, and whether beforeprint/afterprint/
+   matchMedia('print') actually fire on this device.
+   ════════════════════════════════════════════════════════════════════════ */
+(function () {
+  try {
+    var hash = (location.hash || '') + ' ' + (location.search || '');
+    if (/nodebug/i.test(hash)) { try { localStorage.removeItem('aogDebug'); } catch (e) {} return; }
+    if (/debug/i.test(hash)) { try { localStorage.setItem('aogDebug', '1'); } catch (e) {} }
+    var on = false;
+    try { on = localStorage.getItem('aogDebug') === '1'; } catch (e) {}
+    if (!on) return;
+
+    // Hide overlay in the actual print output.
+    var st = document.createElement('style');
+    st.textContent = '@media print { #aog-debug { display:none !important; } }';
+    document.head.appendChild(st);
+
+    var box = document.createElement('div');
+    box.id = 'aog-debug';
+    box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:46vh;overflow:auto;z-index:2147483647;' +
+      'background:rgba(10,12,16,0.95);color:#0f0;font:11px/1.35 ui-monospace,Menlo,monospace;' +
+      'padding:6px 8px 8px;border-top:2px solid #FA6700;-webkit-text-size-adjust:100%;white-space:pre-wrap;word-break:break-word;';
+    var bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;gap:6px;margin-bottom:4px;position:sticky;top:0;background:rgba(10,12,16,0.98);padding-bottom:4px;';
+    function mkbtn(label, fn) {
+      var b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = 'font:11px monospace;background:#FA6700;color:#000;border:0;border-radius:3px;padding:4px 8px;font-weight:700;';
+      b.addEventListener('click', fn);
+      return b;
+    }
+    var log = document.createElement('div');
+    bar.appendChild(mkbtn('COPY', function () {
+      var t = log.textContent;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(function(){ flash('copied ✓'); }, function(){ selectLog(); });
+      } else { selectLog(); }
+    }));
+    bar.appendChild(mkbtn('CLEAR', function () { log.textContent = ''; plog('cleared'); }));
+    bar.appendChild(mkbtn('OFF', function () { try { localStorage.removeItem('aogDebug'); } catch (e) {} box.remove(); }));
+    var flashEl = document.createElement('span');
+    flashEl.style.cssText = 'color:#0f0;align-self:center;margin-left:4px;';
+    bar.appendChild(flashEl);
+    function flash(m) { flashEl.textContent = m; setTimeout(function(){ flashEl.textContent = ''; }, 1500); }
+    function selectLog() {
+      try {
+        var r = document.createRange(); r.selectNodeContents(log);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        flash('selected — long-press → Copy');
+      } catch (e) {}
+    }
+    box.appendChild(bar); box.appendChild(log);
+
+    var t0 = Date.now();
+    function plog(msg) {
+      var line = ('+' + String(Date.now() - t0).padStart(5, ' ') + 'ms  ' + msg);
+      log.textContent += line + '\n';
+      box.scrollTop = box.scrollHeight;
+    }
+    window.__plog = plog;
+
+    function pageMetrics(tag) {
+      var pg = document.getElementById('page');
+      if (!pg) { plog(tag + ' #page=NULL'); return; }
+      var r = pg.getBoundingClientRect();
+      var w = Math.round(r.width), h = Math.round(r.height);
+      var PW = window.PAPER_W_PX || 816, PH = window.PAPER_H_PX || 1056;
+      var fit = PW / r.width;                 // iOS Fit-to-Page scales width to paper
+      var scaledH = r.height * fit;           // resulting height in paper px
+      var pages = scaledH / PH;
+      plog(tag + ' #page ' + w + 'x' + h +
+           ' | fit=' + fit.toFixed(3) +
+           ' | scaledH=' + Math.round(scaledH) + 'px of ' + PH +
+           ' | pages=' + pages.toFixed(2) + (pages > 1.001 ? '  ⚠ OVERFLOWS' : '  ✓ fits'));
+    }
+    window.__pageMetrics = pageMetrics;
+
+    function init() {
+      document.body.appendChild(box);
+      var ua = navigator.userAgent;
+      plog('=== DEBUG ON ===');
+      plog('UA: ' + ua);
+      plog('maxTouchPoints=' + navigator.maxTouchPoints +
+           ' | screen=' + screen.width + 'x' + screen.height +
+           ' | inner=' + window.innerWidth + 'x' + window.innerHeight +
+           ' | dpr=' + window.devicePixelRatio);
+      plog('IS_IOS_SAFARI=' + window.IS_IOS_SAFARI +
+           ' | body.mobile-safari=' + document.body.classList.contains('mobile-safari'));
+      // Replicate printForm's own device branch logic so we see which path WILL run.
+      var isMobileSafari = document.body.classList.contains('mobile-safari');
+      var isIpadSafari = isMobileSafari && Math.min(screen.width, screen.height) >= 768;
+      var isMacSafari = /Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome|Chromium|Firefox|Edge/.test(ua);
+      var path = isMobileSafari && !isIpadSafari ? 'iPHONE'
+               : isMobileSafari && isIpadSafari ? 'iPAD'
+               : isMacSafari ? 'DESKTOP(MacSafari,deferred print)'
+               : 'DESKTOP(other,deferred print)';
+      plog('PREDICTED print path => ' + path);
+      plog('fonts.status=' + (document.fonts ? document.fonts.status : 'n/a'));
+      pageMetrics('load:');
+
+      // Wrap printForm to time the sequence.
+      if (typeof window.printForm === 'function') {
+        var orig = window.printForm;
+        window.printForm = function () {
+          plog('--- printForm() CALLED ---');
+          pageMetrics('  pre :');
+          var ret = orig.apply(this, arguments);
+          // Sample again after WebKit has had a frame to apply class + spans.
+          requestAnimationFrame(function () {
+            pageMetrics('  +1rAF:');
+            requestAnimationFrame(function () { pageMetrics('  +2rAF:'); });
+          });
+          return ret;
+        };
+        plog('printForm wrapped ✓');
+      } else {
+        plog('⚠ window.printForm not a function — cannot wrap (check invocation)');
+      }
+
+      // Did these events actually fire? (iOS Safari is unreliable here.)
+      window.addEventListener('beforeprint', function () { plog('EVENT beforeprint FIRED'); pageMetrics('  beforeprint:'); });
+      window.addEventListener('afterprint',  function () { plog('EVENT afterprint FIRED');  pageMetrics('  afterprint:'); });
+      if (window.matchMedia) {
+        var mm = window.matchMedia('print');
+        var mmh = function (e) { plog('EVENT matchMedia(print) => ' + (e.matches ? 'ENTER print' : 'EXIT print')); pageMetrics('  mm:'); };
+        if (mm.addEventListener) mm.addEventListener('change', mmh);
+        else if (mm.addListener) mm.addListener(mmh);
+      }
+      document.addEventListener('visibilitychange', function () { plog('EVENT visibilitychange => ' + document.visibilityState); });
+    }
+    if (document.body) init();
+    else document.addEventListener('DOMContentLoaded', init);
+  } catch (err) {
+    try { alert('debug overlay error: ' + err.message); } catch (e) {}
+  }
+})();
 </script>
 </body>
 </html>
