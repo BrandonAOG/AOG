@@ -702,6 +702,14 @@ body.dark-mode .check-item:has(input:checked) span { color: #D97706; font-weight
 .test-item .yn-group .yn-label { padding: 0 8px !important; min-width: 0 !important; width: auto !important; flex: 0 0 auto !important; }
 @media (max-width: 768px) { .test-grid { grid-template-columns: 1fr; gap: 10px; } }
 
+/* Mobile screen only: match check-item chip height to yn-group (26px) */
+@media screen and (max-width: 768px) {
+  .check-item {
+    height: 26px;
+    min-height: 26px;
+  }
+}
+
 /* ── Y/N TOGGLE ── */
 .yn-group {
   display: inline-flex;
@@ -1045,8 +1053,9 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   body.mobile-safari .field-row-nowrap { flex-wrap: nowrap !important; }
   body.mobile-safari #name { flex: 0 1 50% !important; min-width: 0 !important; }
   body.mobile-safari #date, body.mobile-safari #number { min-width: 120px !important; flex-shrink: 0 !important; width: auto !important; }
-  body.mobile-safari #batnotes, body.mobile-safari #gennotes { height: 60px !important; min-height: 60px !important; max-height: 60px !important; overflow: hidden !important; }
-  body.mobile-safari #oilnotes, body.mobile-safari #gasnotes, body.mobile-safari #tsnotes { height: 40px !important; min-height: 40px !important; max-height: 40px !important; overflow: hidden !important; }
+  /* Tightened from 60/40px to recover the ~25px lost to the new 0.25in @page bottom margin */
+  body.mobile-safari #batnotes, body.mobile-safari #gennotes { height: 54px !important; min-height: 54px !important; max-height: 54px !important; overflow: hidden !important; }
+  body.mobile-safari #oilnotes, body.mobile-safari #gasnotes, body.mobile-safari #tsnotes { height: 34px !important; min-height: 34px !important; max-height: 34px !important; overflow: hidden !important; }
   /* Mobile prints the 820px layout scaled down to fit, shrinking controls.
      Bump them back up so they read the same size as desktop print. */
   body.mobile-safari .check-item input[type="checkbox"], body.mobile-safari .check-item input[type="radio"] { width: 12px !important; height: 12px !important; min-width: 12px !important; min-height: 12px !important; }
@@ -1055,13 +1064,18 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   body.mobile-safari .check-item span, body.mobile-safari .opt span { font-size: calc(0.66rem + 0.3px) !important; }
   body.mobile-safari label { font-size: calc(0.66rem + 0.3px) !important; }
   /* Trim vertical spacing on mobile so everything + footer fits one page */
-  body.mobile-safari .section { margin-bottom: 1px !important; }
+  body.mobile-safari .section { margin-bottom: 0 !important; }
   body.mobile-safari .two-column { margin-bottom: 0 !important; gap: 2px !important; }
   body.mobile-safari .two-column + .section { margin-top: 0 !important; }
   body.mobile-safari .field-row { margin-bottom: 0.5px !important; }
   body.mobile-safari .section-body { padding: 1.5px 6px !important; }
   body.mobile-safari .leak-loc .check-group { flex-wrap: nowrap !important; white-space: nowrap !important; gap: 3px !important; }
   body.mobile-safari #gas-top-row, body.mobile-safari #oil-top-row { gap: 16px !important; }
+  /* Transfer Switch: prevent Condition group from wrapping to a second line */
+  body.mobile-safari .ts-row { flex-wrap: nowrap !important; align-items: flex-start !important; gap: 6px !important; }
+  body.mobile-safari .ts-row > div { flex-shrink: 1 !important; min-width: 0 !important; }
+  body.mobile-safari .ts-row .check-group { flex-wrap: nowrap !important; gap: 2px !important; }
+  body.mobile-safari .ts-row input[id^="tsserial"] { width: 110px !important; min-width: 0 !important; flex-shrink: 0 !important; }
 }
 
 /* ── Mobile Chrome print fix (Android Chrome + Chrome on iOS) ── */
@@ -1089,6 +1103,38 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   html { font-size: 18.3px !important; }
   html, body { width: auto !important; max-width: 100% !important; }
   .form-page, .page { width: 100% !important; max-width: 100% !important; margin: 0 auto !important; padding: 3px !important; box-sizing: border-box !important; }
+}
+
+/* ── Screen only, all devices: make all option chips (checkbox + radio) match
+   the Y/N toggle's height and label text. Print/capture rules above are
+   untouched. ── */
+@media screen {
+  .check-item {
+    height: 26px !important;
+    min-height: 26px !important;
+  }
+  .check-item span {
+    font-size: 0.63rem !important;
+    letter-spacing: 1.2px !important;
+    font-weight: 500 !important;
+  }
+  /* Selected chips: bold */
+  .check-item:has(input:checked) span {
+    font-weight: 700 !important;
+  }
+  /* macOS screen: its Y/N toggle is 21px tall with smaller label text */
+  html.macos .check-item {
+    height: 21px !important;
+    min-height: 21px !important;
+  }
+  html.macos .check-item span {
+    font-size: calc(0.72rem - 0.95px) !important;
+    letter-spacing: 1.2px !important;
+    font-weight: 500 !important;
+  }
+  html.macos .check-item:has(input:checked) span {
+    font-weight: 700 !important;
+  }
 }
 
 /* ── ACTION BAR ── */
@@ -1705,15 +1751,308 @@ function openPrintPreview() {
   var _darkStyleEl = document.getElementById('dark-mode-style');
   if (_darkStyleEl) _darkStyleEl.disabled = true;
 
-  // ── Inline-style key elements ──
-  var compName  = document.querySelector('.company-name');
-  var docTitle  = document.querySelector('.doc-title');
-  var footerEls = document.querySelectorAll('.footer-text, .footer span');
-  if (compName) compName.setAttribute('style', 'color:#D97706!important;text-shadow:none!important;');
-  if (docTitle) docTitle.setAttribute('style', 'color:#D97706!important;text-shadow:none!important;');
-  footerEls.forEach(function(el){ el.setAttribute('style','color:#9CA3AF!important;text-shadow:none!important;'); });
+  var vp = document.querySelector('meta[name="viewport"]');
+  var origVP = vp ? vp.getAttribute('content') : null;
 
-  // ── Inject force-print-light (only needed in dark mode) ──
+  // ── Snapshot store — every element we touch gets its original style saved ──
+  var _snapshots = [];
+  function _snap(el, prop, val) {
+    _snapshots.push({ el: el, prop: prop, was: el.style[prop] });
+    el.style[prop] = val;
+  }
+  function _snapAttr(el, attr, val) {
+    _snapshots.push({ el: el, attr: attr, was: el.getAttribute(attr) });
+    el.setAttribute(attr, val);
+  }
+
+  // ── RESTORE function ──
+  function restore() {
+    document.title = prevTitle;
+    if (vp && origVP != null) vp.setAttribute('content', origVP);
+    var f  = document.getElementById('safari-print-fix');  if(f)  f.remove();
+    var pl = document.getElementById('force-print-light'); if(pl) pl.remove();
+    document.documentElement.style.colorScheme = '';
+    document.body.style.colorScheme = '';
+    if (_darkStyleEl) _darkStyleEl.disabled = false;
+    // Restore all snapshotted styles/attrs in reverse order
+    for (var i = _snapshots.length - 1; i >= 0; i--) {
+      var s = _snapshots[i];
+      if (s.attr) {
+        if (s.was === null) s.el.removeAttribute(s.attr);
+        else s.el.setAttribute(s.attr, s.was);
+      } else {
+        s.el.style[s.prop] = s.was;
+      }
+    }
+    _snapshots = [];
+    if (wasDark) {
+      document.body.classList.add('dark-mode');
+      document.documentElement.setAttribute('data-theme', 'dark');
+      if (isMobileSafari) {
+        if (typeof saveDraft === 'function') saveDraft();
+        window.location.reload();
+        return;
+      }
+    } else {
+      document.body.classList.remove('dark-mode');
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // STAMP ALL MOBILE PRINT RULES AS INLINE STYLES — unconditionally.
+  // This makes printer-detected vs. no-printer identical because the
+  // layout is locked in the DOM before window.print() is ever called.
+  // @media print CSS is kept as a fallback but is no longer the source
+  // of truth for layout on mobile.
+  // ══════════════════════════════════════════════════════════════════
+  if (isNarrowMobile) {
+    var html = document.documentElement;
+    var body = document.body;
+    var page = document.getElementById('page');
+
+    // html / body sizing — matches safari-print-fix @media print rules
+    _snap(html, 'fontSize',  (isMobileSafari ? '18.5' : '18.3') + 'px');
+    _snap(html, 'width',     '820px');
+    _snap(body, 'width',     '820px');
+    _snap(body, 'maxWidth',  '820px');
+    _snap(body, 'minWidth',  '0');
+    _snap(body, 'height',    'auto');
+    _snap(body, 'minHeight', '0');
+    _snap(body, 'margin',    '0');
+    _snap(body, 'padding',   '0');
+
+    // .page
+    if (page) {
+      _snap(page, 'display',   'block');
+      _snap(page, 'width',     '100%');
+      _snap(page, 'maxWidth',  '100%');
+      _snap(page, 'padding',   '4px 3px 2px 3px');
+      _snap(page, 'margin',    '0 auto');
+      _snap(page, 'height',    'auto');
+      _snap(page, 'minHeight', '0');
+      _snap(page, 'maxHeight', 'none');
+      _snap(page, 'position',  'static');
+      _snap(page, 'overflow',  'visible');
+      _snap(page, 'boxSizing', 'border-box');
+      _snap(page, 'border',    '1.5px solid #D97706');
+      _snap(page, 'boxShadow', 'none');
+      _snap(page, 'marginTop', '0');
+    }
+
+    // .header
+    var header = document.querySelector('.header');
+    if (header) {
+      _snap(header, 'display',         'flex');
+      _snap(header, 'marginBottom',    '4px');
+      _snap(header, 'padding',         '0 10px 5px 10px');
+      _snap(header, 'background',      'white');
+      _snap(header, 'minHeight',       'auto');
+      _snap(header, 'boxShadow',       'none');
+    }
+
+    // .content
+    var content = document.querySelector('.content');
+    if (content) {
+      _snap(content, 'display',   'block');
+      _snap(content, 'overflow',  'visible');
+      _snap(content, 'padding',   '3px 0 0 0');
+      _snap(content, 'margin',    '0');
+    }
+
+    // .section — spacing
+    document.querySelectorAll('.section').forEach(function(el) {
+      _snap(el, 'marginBottom', '0');
+      _snap(el, 'background',  'white');
+      _snap(el, 'boxShadow',   'none');
+      _snap(el, 'display',     'block');
+      _snap(el, 'border',      '0.5px solid #D97706');
+      _snap(el, 'padding',     '0');
+    });
+
+    // .section-body
+    document.querySelectorAll('.section-body').forEach(function(el) {
+      _snap(el, 'padding',    '1.5px 6px');
+      _snap(el, 'background', 'white');
+      _snap(el, 'display',    'block');
+    });
+
+    // .section-header
+    document.querySelectorAll('.section-header').forEach(function(el) {
+      _snap(el, 'background',   '#f5f5f5');
+      _snap(el, 'color',        '#D97706');
+      _snap(el, 'borderBottom', '0.5px solid #D97706');
+      _snap(el, 'textShadow',   'none');
+      _snap(el, 'padding',      '3px 7px');
+      _snap(el, 'display',      'flex');
+      _snap(el, 'minHeight',    'auto');
+    });
+
+    // .two-column
+    document.querySelectorAll('.two-column').forEach(function(el) {
+      _snap(el, 'display',       'grid');
+      _snap(el, 'gridTemplateColumns', '1fr 1fr');
+      _snap(el, 'gap',           '2px');
+      _snap(el, 'marginBottom',  '0');
+    });
+
+    // .field-row
+    document.querySelectorAll('.field-row').forEach(function(el) {
+      _snap(el, 'display',       'flex');
+      _snap(el, 'marginBottom',  '0.5px');
+      _snap(el, 'gap',           '3px');
+    });
+
+    // textareas — match mobile-safari print heights
+    var taNotes = {
+      'batnotes': '54px', 'gennotes': '54px',
+      'oilnotes': '34px', 'gasnotes': '34px', 'tsnotes': '34px'
+    };
+    Object.keys(taNotes).forEach(function(id) {
+      var ta = document.getElementById(id);
+      if (ta) {
+        _snap(ta, 'height',    taNotes[id]);
+        _snap(ta, 'minHeight', taNotes[id]);
+        _snap(ta, 'maxHeight', taNotes[id]);
+        _snap(ta, 'overflow',  'hidden');
+      }
+    });
+
+    // inputs / textareas / selects — general
+    document.querySelectorAll('input[type="text"], input[type="date"], input[type="number"], textarea, select').forEach(function(el) {
+      _snap(el, 'background',  'white');
+      _snap(el, 'color',       '#1F2937');
+      _snap(el, 'minHeight',   '16px');
+      _snap(el, 'fontSize',    'calc(0.756rem + 0.3px)');
+      _snap(el, 'boxShadow',   'none');
+      _snap(el, 'borderTop',   'none');
+      _snap(el, 'borderLeft',  'none');
+      _snap(el, 'borderRight', 'none');
+      _snap(el, 'borderBottom','0.5px solid #D97706');
+      _snap(el, 'padding',     '0 2px');
+    });
+
+    // .check-item controls sizing
+    document.querySelectorAll('.check-item input[type="checkbox"], .check-item input[type="radio"]').forEach(function(el) {
+      _snap(el, 'width',     '12px');
+      _snap(el, 'height',    '12px');
+      _snap(el, 'minWidth',  '12px');
+      _snap(el, 'minHeight', '12px');
+    });
+    document.querySelectorAll('.check-item span, .opt span').forEach(function(el) {
+      _snap(el, 'fontSize', 'calc(0.66rem + 0.3px)');
+    });
+
+    // .yn-group sizing
+    document.querySelectorAll('.yn-group').forEach(function(el) {
+      _snap(el, 'height',     '21px');
+      _snap(el, 'background', 'white');
+      _snap(el, 'border',     '0.5px solid #D97706');
+      _snap(el, 'display',    'inline-flex');
+    });
+    document.querySelectorAll('.yn-group .yn-label').forEach(function(el) {
+      _snap(el, 'minHeight', '21px');
+      _snap(el, 'fontSize',  'calc(0.72rem + 0.3px)');
+      _snap(el, 'padding',   '0 7px');
+      _snap(el, 'background','white');
+      _snap(el, 'color',     '#6B7280');
+      _snap(el, 'display',   'flex');
+      _snap(el, 'alignItems','center');
+    });
+
+    // labels
+    document.querySelectorAll('label').forEach(function(el) {
+      _snap(el, 'color',    '#6B7280');
+      _snap(el, 'fontSize', 'calc(0.66rem + 0.3px)');
+    });
+
+    // company name / doc title
+    var compName = document.querySelector('.company-name');
+    var docTitle = document.querySelector('.doc-title');
+    if (compName) { _snap(compName, 'color', '#D97706'); _snap(compName, 'textShadow', 'none'); }
+    if (docTitle)  { _snap(docTitle,  'color', '#D97706'); _snap(docTitle,  'textShadow', 'none'); }
+
+    // footer
+    var footer = document.querySelector('.footer');
+    if (footer) {
+      _snap(footer, 'display',      'flex');
+      _snap(footer, 'marginTop',    '0');
+      _snap(footer, 'marginBottom', '0');
+      _snap(footer, 'paddingBottom','0');
+    }
+    document.querySelectorAll('.footer-text, .footer span').forEach(function(el) {
+      _snap(el, 'color',      '#9CA3AF');
+      _snap(el, 'textShadow', 'none');
+      _snap(el, 'whiteSpace', 'nowrap');
+    });
+
+    // gas / oil top rows
+    var gasRow = document.getElementById('gas-top-row');
+    var oilRow = document.getElementById('oil-top-row');
+    if (gasRow) { _snap(gasRow, 'gap', '16px'); _snap(gasRow, 'flexWrap', 'nowrap'); }
+    if (oilRow) { _snap(oilRow, 'gap', '16px'); _snap(oilRow, 'flexWrap', 'nowrap'); }
+
+    // leak-loc check-group
+    document.querySelectorAll('.leak-loc .check-group').forEach(function(el) {
+      _snap(el, 'flexWrap',  'nowrap');
+      _snap(el, 'whiteSpace','nowrap');
+      _snap(el, 'gap',       '3px');
+    });
+
+    // ── Transfer Switch rows — the key fix ──
+    document.querySelectorAll('.ts-row').forEach(function(row) {
+      _snap(row, 'flexWrap',   'nowrap');
+      _snap(row, 'gap',        '6px');
+      _snap(row, 'alignItems', 'flex-start');
+      row.querySelectorAll('div').forEach(function(d) {
+        _snap(d, 'flexShrink', '1');
+        _snap(d, 'minWidth',   '0');
+      });
+      row.querySelectorAll('.check-group').forEach(function(cg) {
+        _snap(cg, 'flexWrap', 'nowrap');
+        _snap(cg, 'gap',      '2px');
+      });
+      var serial = row.querySelector('input[id^="tsserial"]');
+      if (serial) { _snap(serial, 'width', '110px'); _snap(serial, 'minWidth', '0'); }
+    });
+
+    // name-job-date row
+    var njd = document.getElementById('name-job-date-row');
+    if (njd) {
+      _snap(njd, 'flexWrap', 'nowrap');
+      var nameEl = document.getElementById('name');
+      var numEl  = document.getElementById('number');
+      var dateEl = document.getElementById('date');
+      if (nameEl) { _snap(nameEl, 'flex', '1 1 0'); _snap(nameEl, 'width', 'auto'); _snap(nameEl, 'minWidth', '0'); }
+      if (numEl)  { _snap(numEl,  'flex', '1 1 0'); _snap(numEl,  'width', 'auto'); _snap(numEl,  'minWidth', '0'); }
+      if (dateEl) { _snap(dateEl, 'flex', '0 0 100px'); _snap(dateEl, 'width', '100px'); _snap(dateEl, 'minWidth', '100px'); }
+    }
+
+    // action-bar / save-status hidden
+    var ab = document.getElementById('action-bar');
+    var ss = document.getElementById('save-status');
+    if (ab) _snap(ab, 'display', 'none');
+    if (ss) _snap(ss, 'display', 'none');
+
+    // Force layout reflow before print
+    void document.getElementById('page').getBoundingClientRect();
+
+    // Mobile Chrome: also override viewport so it lays out at 820px for real
+    if (isMobileChrome && vp) {
+      vp.setAttribute('content', 'width=820, initial-scale=1');
+    }
+  } else {
+    // Desktop — just stamp compName/docTitle colors as before
+    var compName = document.querySelector('.company-name');
+    var docTitle = document.querySelector('.doc-title');
+    if (compName) _snapAttr(compName, 'style', 'color:#D97706!important;text-shadow:none!important;');
+    if (docTitle)  _snapAttr(docTitle,  'style', 'color:#D97706!important;text-shadow:none!important;');
+    document.querySelectorAll('.footer-text, .footer span').forEach(function(el) {
+      _snapAttr(el, 'style', 'color:#9CA3AF!important;text-shadow:none!important;');
+    });
+  }
+
+  // ── Inject force-print-light (dark mode only, colors only — layout already stamped) ──
   if (wasDark) {
     var printStyle = document.createElement('style');
     printStyle.id  = 'force-print-light';
@@ -1738,81 +2077,23 @@ function openPrintPreview() {
     document.head.appendChild(printStyle);
   }
 
-  var vp = document.querySelector('meta[name="viewport"]');
-  var origVP = vp ? vp.getAttribute('content') : null;
-
-  // ── RESTORE function (defined before use) ──
-  function restore() {
-    document.title = prevTitle;
-    if (vp && origVP != null) vp.setAttribute('content', origVP);
-    var f  = document.getElementById('safari-print-fix');  if(f)  f.remove();
-    var pl = document.getElementById('force-print-light'); if(pl) pl.remove();
-    document.documentElement.style.colorScheme = '';
-    document.body.style.colorScheme = '';
-    if (_darkStyleEl) _darkStyleEl.disabled = false;
-    if (wasDark) {
-      document.body.classList.add('dark-mode'); document.documentElement.setAttribute('data-theme','dark');
-      // iOS Safari sometimes won't repaint dark mode after the print sheet
-      // closes. Draft auto-saves, so a reload is safe. Chrome repaints fine.
-      if (isMobileSafari) {
-        if (typeof saveDraft === 'function') saveDraft();
-        window.location.reload();
-        return;
-      }
-    }
-    else { document.body.classList.remove('dark-mode'); document.documentElement.setAttribute('data-theme','light'); }
-    if (compName) compName.removeAttribute('style');
-    if (docTitle) docTitle.removeAttribute('style');
-    footerEls.forEach(function(el){ el.removeAttribute('style'); });
+  // Blur focused field — prevents iOS Safari print sheet from immediately closing
+  if (document.activeElement && document.activeElement.blur) {
+    document.activeElement.blur();
   }
 
-  if (isNarrowMobile && vp) {
-    // Build safari-print-fix: force desktop-width layout + apply mobile print sizing.
-    var fix = document.createElement('style');
-    fix.id = 'safari-print-fix';
-    fix.textContent = [
-      (isMobileSafari ? '@page { size: 8.5in 11in; margin: 0 !important; }' : ''),
-      '@media print {',
-      '  * { animation:none!important; transition:none!important; }',
-      '  html, body { height:auto!important; }',
-      '  html { width:820px!important; font-size:' + (isMobileSafari ? '18.5' : '18.3') + 'px!important; }',
-      '  body { width:820px!important; max-width:820px!important; min-width:0!important; transform-origin:top left!important; }',
-      '  .page, #page { display:block!important; width:100%!important; max-width:100%!important;',
-      '    padding:4px 3px 2px 3px!important; margin:0 auto!important; box-sizing:border-box!important;',
-      '    page-break-inside:avoid!important; break-inside:avoid!important;',
-      '    position:static!important; overflow:visible!important;',
-      '    min-height:0!important; height:auto!important; max-height:none!important; }',
-      '  .section { page-break-inside:avoid!important; break-inside:avoid!important; }',
-      '  .footer { page-break-inside:avoid!important; break-inside:avoid!important; margin-top:0!important; }',
-      '}'
-    ].join('\n');
-
-    void document.getElementById('page').getBoundingClientRect();
-
-    document.head.appendChild(fix);
-
-    // Mobile Chrome scales a forced-width layout DOWN to fit the paper, so
-    // html{width:820px} alone doesn't give a true desktop layout. Overriding
-    // the viewport meta to a fixed 820px makes Chrome lay the page out at
-    // desktop width for real. (Safari honors the width without this and is
-    // left alone to avoid disturbing its print-sheet behavior.)
-    if (isMobileChrome && vp) {
-      vp.setAttribute('content', 'width=820, initial-scale=1');
-    }
-
-    // Blur any focused field and dismiss the keyboard before printing — on iOS
-    // Safari, calling window.print() while a textarea is focused can cause the
-    // print sheet to immediately close.
-    if (document.activeElement && document.activeElement.blur) {
-      document.activeElement.blur();
-    }
-
+  if (isNarrowMobile) {
+    // Double-rAF + timeout: lets the stamped styles reflow fully at 820px
+    // before the print dialog captures the layout.
     requestAnimationFrame(function() {
-      window.print();
+      requestAnimationFrame(function() {
+        setTimeout(function() {
+          window.print();
+        }, isMobileSafari ? 350 : 0);
+      });
     });
 
-    // ── Restore strategy (matches QC) ──
-    var isMobile = isNarrowMobile;
+    // ── Restore strategy ──
     var _restored = false;
     var _printMql = window.matchMedia ? window.matchMedia('print') : null;
 
@@ -1828,23 +2109,20 @@ function openPrintPreview() {
       setTimeout(restore, delay || 0);
     }
 
-    // On mobile Safari in dark mode, defer the reload until the user interacts
-    // with the page. A real tap/touch is the ONLY signal that cannot fire while
-    // the print sheet covers the screen.
     function _armDeferredRestore() {
       if (isMobileSafari && wasDark) {
         clearTimeout(_safety);
         function _onInteract() {
           window.removeEventListener('pointerdown', _onInteract, true);
-          window.removeEventListener('touchstart', _onInteract, true);
-          window.removeEventListener('click', _onInteract, true);
+          window.removeEventListener('touchstart',  _onInteract, true);
+          window.removeEventListener('click',       _onInteract, true);
           _tryRestore(0);
         }
         window.addEventListener('pointerdown', _onInteract, true);
-        window.addEventListener('touchstart', _onInteract, true);
-        window.addEventListener('click', _onInteract, true);
+        window.addEventListener('touchstart',  _onInteract, true);
+        window.addEventListener('click',       _onInteract, true);
       } else {
-        _tryRestore(isMobile ? 300 : 0);
+        _tryRestore(300);
       }
     }
 
@@ -1858,7 +2136,7 @@ function openPrintPreview() {
       else if (_printMql.addListener) _printMql.addListener(_mqlHandler);
     }
 
-    function _apHandler() { if (!isMobile && !_sawPrint) _tryRestore(0); }
+    function _apHandler() { if (!_sawPrint) _tryRestore(0); }
     window.addEventListener('afterprint', _apHandler);
 
     var _safety = (isMobileSafari && wasDark)
@@ -1866,7 +2144,7 @@ function openPrintPreview() {
       : setTimeout(function() { _tryRestore(0); }, 30000);
 
   } else {
-    // Desktop print.
+    // Desktop print
     window.addEventListener('afterprint', restore);
     window.print();
   }
