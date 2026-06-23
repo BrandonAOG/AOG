@@ -2397,7 +2397,13 @@ function capturePageToCanvas() {
             // view never looks vertically warped.
             const drawW = availW;
             const propH = Math.round(srcCanvas.height * (availW / srcCanvas.width)); // proportional height at full width
-            const drawH = Math.min(availH, Math.round(propH * 1.06));                // fill, but no more than +6% stretch
+            // On mobile, fill the sheet vertically edge-to-edge (use the full
+            // available height) so the captured image isn't short with trailing
+            // white space. Desktop keeps the gentle +6% cap to avoid warping the
+            // short collapsed view.
+            const drawH = _isMobileCap
+              ? availH
+              : Math.min(availH, Math.round(propH * 1.06));
             const letterCanvas = document.createElement('canvas');
             letterCanvas.width  = LETTER_W;
             letterCanvas.height = LETTER_H;
