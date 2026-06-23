@@ -1145,6 +1145,7 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   width: 100%;
   background: var(--panel);
   padding: 4px 8px;
+  padding-top: calc(4px + env(safe-area-inset-top, 0px));
   display: flex; justify-content: center; gap: 4px; flex-wrap: nowrap; align-items: center;
   box-shadow: 0 4px 18px rgba(0,0,0,0.3);
   border-bottom: 1px solid var(--border);
