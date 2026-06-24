@@ -87,7 +87,9 @@ body {
   width: 100%;
   margin: 0 auto;
   padding: 0;
+  padding-top: calc(44px + env(safe-area-inset-top, 0px));
   padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+  scroll-padding-top: calc(48px + env(safe-area-inset-top, 0px));
   -webkit-text-size-adjust: 100%;
   overflow-x: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
@@ -155,7 +157,7 @@ body.dark-mode .page {
 .page-corner-br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
 
 @media (max-width: 768px) {
-  body { padding: 0; }
+  body { padding: 0; padding-top: calc(44px + env(safe-area-inset-top, 0px)); }
   .page { box-shadow: none; border: none; max-width: 100%; }
   .page::before, .page::after, .page-corner-bl, .page-corner-br { display: none; }
   .header { flex-wrap: nowrap; gap: 6px; padding: 6px 8px; min-height: auto; justify-content: space-between; }
@@ -834,6 +836,14 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
     background: #ffffff !important; color: #1F2937 !important;
     color-scheme: light !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
+  /* The dark theme paints a fixed full-viewport gradient via body.dark-mode::before.
+     A pseudo-element is NOT matched by the `body.dark-mode *` rule below, so without
+     this it survives into print and bleeds a dark background behind the page
+     (most visible on iPad). Neutralize it explicitly. */
+  body.dark-mode::before, body.dark-mode::after,
+  html.dark-mode-pending body::before, html.dark-mode-pending body::after {
+    display: none !important; background: #ffffff !important; content: none !important;
+  }
   body.dark-mode *, html.dark-mode-pending body * {
     background: #ffffff !important; background-color: #ffffff !important;
     color: #1F2937 !important; -webkit-text-fill-color: #1F2937 !important;
@@ -913,8 +923,8 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   html.macos .check-item span, html.macos .opt span { font-size: calc(0.66rem - 0.95px) !important; }
   html.macos .check-item input[type="checkbox"],
   html.macos .check-item input[type="radio"] { width: 12px !important; height: 12px !important; min-width: 12px !important; min-height: 12px !important; }
-  html.macos .yn-group      { height: 21px !important; }
-  html.macos .yn-group .yn-label { min-height: 21px !important; font-size: calc(0.72rem - 0.95px) !important; padding: 0 7px !important; }
+  html.macos .yn-group      { height: 19px !important; }
+  html.macos .yn-group .yn-label { min-height: 19px !important; font-size: calc(0.72rem - 1.95px) !important; padding: 0 7px !important; }
   html.macos #other-section label { font-size: calc(0.66rem - 1.45px) !important; }
   html.macos .footer        { margin-top: 0 !important; padding: 2px 26px 1px 26px !important; }
   html.macos .footer-text,
@@ -1008,7 +1018,8 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   #tsnotes  { height: 40px !important; min-height: 40px !important; max-height: 40px !important; overflow: hidden !important; }
   /* Sim "Explain why" box: was missing a fixed height, so Safari printed it
      short and clipped the top line. Give it a real height + top alignment. */
-  #simperfnotes { height: 40px !important; min-height: 40px !important; max-height: 40px !important; overflow: hidden !important; vertical-align: top !important; }
+  #simperfnotes { height: 40px !important; min-height: 40px !important; max-height: 40px !important; overflow: hidden !important; vertical-align: top !important; padding-top: 3px !important; line-height: 1.15 !important; box-sizing: border-box !important; }
+  body.mobile-safari #simperfnotes { height: 34px !important; min-height: 34px !important; max-height: 34px !important; }
   #sim-body-collapsed .test-item { align-items: flex-start !important; }
 
   .check-group { display: flex !important; flex-wrap: wrap !important; gap: 2px !important; }
@@ -1020,15 +1031,37 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   .test-item { display: flex !important; align-items: center !important; gap: 4px !important; }
   .test-item label { min-width: 52px !important; font-size: calc(0.606rem + 0.3px) !important; }
 
-  .yn-group { border: 0.5px solid #D97706 !important; background: white !important; height: 18px !important; display: inline-flex !important; }
-  .yn-group .yn-label { min-height: 18px !important; padding: 0 5px !important; color: #6B7280 !important; border-right: 0.5px solid #D97706 !important; font-size: calc(0.606rem + 0.3px) !important; background: white !important; display: flex !important; align-items: center !important; }
+  .yn-group { border: 0.5px solid #D97706 !important; background: white !important; height: 17px !important; display: inline-flex !important; }
+  .yn-group .yn-label { min-height: 17px !important; padding: 0 5px !important; color: #6B7280 !important; border-right: 0.5px solid #D97706 !important; font-size: calc(0.606rem - 0.7px) !important; background: white !important; display: flex !important; align-items: center !important; }
   .yn-group .yn-label:last-child { border-right: none !important; }
-  .yn-group .yn-y:checked + .yn-label-y { background: #059669 !important; color: #fff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  .yn-group .yn-n:checked + .yn-label-n { background: #DC2626 !important; color: #fff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .yn-group .yn-y:checked + .yn-label-y { background: #059669 !important; color: #fff !important; -webkit-text-fill-color: #fff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .yn-group .yn-n:checked + .yn-label-n { background: #DC2626 !important; color: #fff !important; -webkit-text-fill-color: #fff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body.dark-mode .yn-group .yn-y:checked + .yn-label-y, html.dark-mode-pending .yn-group .yn-y:checked + .yn-label-y { background: #059669 !important; color: #fff !important; -webkit-text-fill-color: #fff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body.dark-mode .yn-group .yn-n:checked + .yn-label-n, html.dark-mode-pending .yn-group .yn-n:checked + .yn-label-n { background: #DC2626 !important; color: #fff !important; -webkit-text-fill-color: #fff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   .check-item:has(input:checked) { background: transparent !important; border-color: #047857 !important; outline: 1.5px solid #D97706 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  .check-item:has(input:checked) span { color: #D97706 !important; font-weight: bold !important; }
+  .check-item:has(input:checked) span { color: #D97706 !important; -webkit-text-fill-color: #D97706 !important; font-weight: bold !important; }
   .check-item:has(input:checked) input[type="radio"],
   .check-item:has(input:checked) input[type="checkbox"] { accent-color: #D97706 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  /* When printing FROM dark mode, the blanket `body.dark-mode *` rule above
+     forces every element to gray via color AND -webkit-text-fill-color, which
+     flattens the selected-item amber emphasis. Re-assert it, scoped to dark
+     mode and with text-fill-color, so selections stay bold amber (this is what
+     made iPhone prints show emphasis and iPad prints not). */
+  body.dark-mode .check-item:has(input:checked), html.dark-mode-pending .check-item:has(input:checked) {
+    background: transparent !important; border-color: #D97706 !important;
+    outline: 1.5px solid #D97706 !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+  }
+  body.dark-mode .check-item:has(input:checked) span, html.dark-mode-pending .check-item:has(input:checked) span {
+    color: #D97706 !important; -webkit-text-fill-color: #D97706 !important; font-weight: bold !important;
+  }
+  body.dark-mode .check-item:has(input:checked) input[type="radio"],
+  body.dark-mode .check-item:has(input:checked) input[type="checkbox"],
+  html.dark-mode-pending .check-item:has(input:checked) input[type="radio"],
+  html.dark-mode-pending .check-item:has(input:checked) input[type="checkbox"] {
+    accent-color: #D97706 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+  }
 
   /* Dark mode nuclear override for print */
   body.dark-mode, body.dark-mode .page, body.dark-mode .header, body.dark-mode .section,
@@ -1069,8 +1102,8 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   /* Mobile prints the 820px layout scaled down to fit, shrinking controls.
      Bump them back up so they read the same size as desktop print. */
   body.mobile-safari .check-item input[type="checkbox"], body.mobile-safari .check-item input[type="radio"] { width: 12px !important; height: 12px !important; min-width: 12px !important; min-height: 12px !important; }
-  body.mobile-safari .yn-group { height: 21px !important; }
-  body.mobile-safari .yn-group .yn-label { min-height: 21px !important; font-size: calc(0.72rem + 0.3px) !important; padding: 0 7px !important; }
+  body.mobile-safari .yn-group { height: 19px !important; }
+  body.mobile-safari .yn-group .yn-label { min-height: 19px !important; font-size: calc(0.72rem - 0.7px) !important; padding: 0 7px !important; }
   body.mobile-safari .check-item span, body.mobile-safari .opt span { font-size: calc(0.66rem + 0.3px) !important; }
   body.mobile-safari label { font-size: calc(0.66rem + 0.3px) !important; }
   /* Trim vertical spacing on mobile so everything + footer fits one page */
@@ -1099,8 +1132,8 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   body.mobile-chrome #oilnotes, body.mobile-chrome #gasnotes, body.mobile-chrome #tsnotes { height: 40px !important; min-height: 40px !important; max-height: 40px !important; overflow: hidden !important; }
   /* Match desktop apparent control size on mobile Chrome too */
   body.mobile-chrome .check-item input[type="checkbox"], body.mobile-chrome .check-item input[type="radio"] { width: 12px !important; height: 12px !important; min-width: 12px !important; min-height: 12px !important; }
-  body.mobile-chrome .yn-group { height: 21px !important; }
-  body.mobile-chrome .yn-group .yn-label { min-height: 21px !important; font-size: calc(0.72rem + 0.3px) !important; padding: 0 7px !important; }
+  body.mobile-chrome .yn-group { height: 19px !important; }
+  body.mobile-chrome .yn-group .yn-label { min-height: 19px !important; font-size: calc(0.72rem - 0.7px) !important; padding: 0 7px !important; }
   body.mobile-chrome .check-item span, body.mobile-chrome .opt span { font-size: calc(0.66rem + 0.3px) !important; }
   body.mobile-chrome label { font-size: calc(0.66rem + 0.3px) !important; }
   /* Trim vertical spacing on mobile so everything + footer fits one page */
@@ -1153,8 +1186,8 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
 
   /* Keep control + label sizes readable (match desktop apparent size) */
   html.ipad .check-item input[type="checkbox"], html.ipad .check-item input[type="radio"] { width: 12px !important; height: 12px !important; min-width: 12px !important; min-height: 12px !important; }
-  html.ipad .yn-group { height: 21px !important; min-height: 21px !important; max-height: 21px !important; }
-  html.ipad .yn-group .yn-label { height: 21px !important; min-height: 0 !important; max-height: 21px !important; line-height: 1 !important; font-size: calc(0.72rem + 0.3px) !important; padding: 0 7px !important; }
+  html.ipad .yn-group { height: 19px !important; min-height: 19px !important; max-height: 19px !important; }
+  html.ipad .yn-group .yn-label { height: 19px !important; min-height: 0 !important; max-height: 19px !important; line-height: 1 !important; font-size: calc(0.72rem - 0.7px) !important; padding: 0 7px !important; }
   html.ipad .check-item span, html.ipad .opt span { font-size: calc(0.66rem + 0.3px) !important; }
   html.ipad label { font-size: calc(0.66rem + 0.3px) !important; }
 
@@ -1824,6 +1857,7 @@ function clearForm() {
 function openPrintPreview() {
   var isMobileSafari = document.body.classList.contains('mobile-safari');
   var isMobileChrome = document.body.classList.contains('mobile-chrome');
+  var isIPad         = document.body.classList.contains('ipad');
   var isNarrowMobile = isMobileSafari || isMobileChrome;
   var wasDark        = document.body.classList.contains('dark-mode');
 
@@ -1839,8 +1873,6 @@ function openPrintPreview() {
   document.documentElement.classList.remove('dark-mode-pending');
   document.documentElement.style.colorScheme = 'light';
   document.body.style.colorScheme = 'light';
-  var _darkStyleEl = document.getElementById('dark-mode-style');
-  if (_darkStyleEl) _darkStyleEl.disabled = true;
 
   var vp = document.querySelector('meta[name="viewport"]');
   var origVP = vp ? vp.getAttribute('content') : null;
@@ -1860,11 +1892,9 @@ function openPrintPreview() {
   function restore() {
     document.title = prevTitle;
     if (vp && origVP != null) vp.setAttribute('content', origVP);
-    var f  = document.getElementById('safari-print-fix');  if(f)  f.remove();
     var pl = document.getElementById('force-print-light'); if(pl) pl.remove();
     document.documentElement.style.colorScheme = '';
     document.body.style.colorScheme = '';
-    if (_darkStyleEl) _darkStyleEl.disabled = false;
     // Restore all snapshotted styles/attrs in reverse order
     for (var i = _snapshots.length - 1; i >= 0; i--) {
       var s = _snapshots[i];
@@ -1879,7 +1909,7 @@ function openPrintPreview() {
     if (wasDark) {
       document.body.classList.add('dark-mode');
       document.documentElement.setAttribute('data-theme', 'dark');
-      if (isMobileSafari) {
+      if (isMobileSafari || isIPad) {
         if (typeof saveDraft === 'function') saveDraft();
         window.location.reload();
         return;
@@ -1902,7 +1932,7 @@ function openPrintPreview() {
     var body = document.body;
     var page = document.getElementById('page');
 
-    // html / body sizing — matches safari-print-fix @media print rules
+    // html / body sizing — locks the 820px print layout inline
     _snap(html, 'fontSize',  (isMobileSafari ? '18.5' : '18.3') + 'px');
     _snap(html, 'width',     '820px');
     _snap(body, 'width',     '820px');
@@ -2023,41 +2053,103 @@ function openPrintPreview() {
       _snap(el, 'padding',     '0 2px');
     });
 
+    // Power test notes: applied AFTER the general loop so these win.
+    // Top-anchor the text and reserve top padding so the first line isn't
+    // clipped, while matching the gas notes box height (34px) on iPhone print.
+    (function() {
+      var sp = document.getElementById('simperfnotes');
+      if (sp) {
+        _snap(sp, 'height',     '34px');
+        _snap(sp, 'minHeight',  '34px');
+        _snap(sp, 'maxHeight',  '34px');
+        _snap(sp, 'overflow',   'hidden');
+        _snap(sp, 'padding',    '3px 2px 0 2px');
+        _snap(sp, 'lineHeight', '1.15');
+        _snap(sp, 'boxSizing',  'border-box');
+        _snap(sp, 'verticalAlign', 'top');
+        // WebKit prints an overflowing textarea scrolled to its last lines,
+        // pushing the first line out of view. Force scroll to the top so the
+        // first line always shows.
+        try { sp.scrollTop = 0; } catch (e) {}
+      }
+    })();
+
     // .check-item controls sizing
     document.querySelectorAll('.check-item input[type="checkbox"], .check-item input[type="radio"]').forEach(function(el) {
       _snap(el, 'width',     '12px');
       _snap(el, 'height',    '12px');
       _snap(el, 'minWidth',  '12px');
       _snap(el, 'minHeight', '12px');
+      if (el.checked) _snap(el, 'accentColor', '#D97706');
     });
     document.querySelectorAll('.check-item span, .opt span').forEach(function(el) {
       _snap(el, 'fontSize', 'calc(0.66rem + 0.3px)');
+      // If this span's check-item is selected, stamp the amber/bold emphasis
+      // inline so it survives the reflow (matches the @media print :checked rule).
+      var ci = el.closest && el.closest('.check-item');
+      if (ci && ci.querySelector('input:checked')) {
+        _snap(el, 'color', '#D97706');
+        _snap(el, 'webkitTextFillColor', '#D97706');
+        _snap(el, 'fontWeight', 'bold');
+      }
+    });
+    // Stamp the selected outline on checked check-items themselves.
+    document.querySelectorAll('.check-item').forEach(function(el) {
+      if (el.querySelector('input:checked')) {
+        _snap(el, 'outline',     '1.5px solid #D97706');
+        _snap(el, 'borderColor',  '#D97706');
+        _snap(el, 'background',    'transparent');
+      }
     });
 
-    // .yn-group sizing
+    // .yn-group sizing — must match the per-device @media print CSS
+    // (mobile-safari / mobile-chrome both 19px). Inline stamps win over the
+    // stylesheet, so these values are the real source of truth on phones.
     document.querySelectorAll('.yn-group').forEach(function(el) {
-      _snap(el, 'height',     '21px');
-      _snap(el, 'minHeight',  '21px');
-      _snap(el, 'maxHeight',  '21px');
+      _snap(el, 'height',     '19px');
+      _snap(el, 'minHeight',  '19px');
+      _snap(el, 'maxHeight',  '19px');
       _snap(el, 'background', 'white');
       _snap(el, 'border',     '0.5px solid #D97706');
       _snap(el, 'display',    'inline-flex');
     });
     document.querySelectorAll('.yn-group .yn-label').forEach(function(el) {
-      _snap(el, 'height',    '21px');
+      _snap(el, 'height',    '19px');
       _snap(el, 'minHeight', '0');
-      _snap(el, 'maxHeight', '21px');
+      _snap(el, 'maxHeight', '19px');
       _snap(el, 'lineHeight','1');
-      _snap(el, 'fontSize',  'calc(0.72rem + 0.3px)');
+      _snap(el, 'fontSize',  'calc(0.72rem - 0.7px)');
       _snap(el, 'padding',   '0 7px');
-      _snap(el, 'background','white');
-      _snap(el, 'color',     '#6B7280');
       _snap(el, 'display',   'flex');
       _snap(el, 'alignItems','center');
+      // The radio that controls this label sits immediately before it.
+      // Stamp the SELECTED colors inline so the green/red fill survives the
+      // reflow — otherwise the flat white/gray below would override the
+      // @media print :checked rule (inline always wins).
+      var radio = el.previousElementSibling;
+      var on = radio && radio.tagName === 'INPUT' && radio.checked;
+      if (on && el.classList.contains('yn-label-y')) {
+        _snap(el, 'background', '#059669');
+        _snap(el, 'color', '#fff');
+        _snap(el, 'webkitTextFillColor', '#fff');
+      } else if (on && el.classList.contains('yn-label-n')) {
+        _snap(el, 'background', '#DC2626');
+        _snap(el, 'color', '#fff');
+        _snap(el, 'webkitTextFillColor', '#fff');
+      } else {
+        _snap(el, 'background', 'white');
+        _snap(el, 'color',      '#6B7280');
+      }
     });
 
     // labels
     document.querySelectorAll('label').forEach(function(el) {
+      // Skip Y/N pill labels (their selected colors were stamped above) and any
+      // label belonging to a checked .check-item — graying these would wipe the
+      // selected-state emphasis after the reflow.
+      if (el.classList.contains('yn-label')) return;
+      var ci = el.closest && el.closest('.check-item');
+      if (ci && ci.querySelector('input:checked')) return;
       _snap(el, 'color',    '#6B7280');
       _snap(el, 'fontSize', 'calc(0.66rem + 0.3px)');
     });
@@ -2138,7 +2230,7 @@ function openPrintPreview() {
       vp.setAttribute('content', 'width=820, initial-scale=1');
     }
   } else {
-    // Desktop — just stamp compName/docTitle colors as before
+    // Desktop / iPad — stamp accent colors as before
     var compName = document.querySelector('.company-name');
     var docTitle = document.querySelector('.doc-title');
     if (compName) _snapAttr(compName, 'style', 'color:#D97706!important;text-shadow:none!important;');
@@ -2146,6 +2238,18 @@ function openPrintPreview() {
     document.querySelectorAll('.footer-text, .footer span').forEach(function(el) {
       _snapAttr(el, 'style', 'color:#9CA3AF!important;text-shadow:none!important;');
     });
+
+    // iPad: the dark theme's fixed full-viewport gradient (body.dark-mode::before)
+    // is painted by a pseudo-element the @media print `*` rules can't reach, so it
+    // bleeds a dark background behind the page and the late layout switch shows as
+    // a reflow. Stamp the body white inline and force a reflow so the print layout
+    // is locked before the dialog opens.
+    if (isIPad) {
+      _snap(document.body, 'background', '#ffffff');
+      _snap(document.documentElement, 'background', '#ffffff');
+      var _pg = document.getElementById('page');
+      if (_pg) void _pg.getBoundingClientRect();
+    }
   }
 
   // ── Inject force-print-light (dark mode only, colors only — layout already stamped) ──
@@ -2162,12 +2266,13 @@ function openPrintPreview() {
       '  .section-header, .section-header * { color:#D97706!important; background:#f5f5f5!important; }',
       '  .section-header::before { background:#D97706!important; }',
       '  html,body { background:white!important; }',
+      '  body.dark-mode::before, body.dark-mode::after { display:none!important; content:none!important; background:white!important; }',
       '  .page { border:1.5pt solid #D97706!important;background:white!important; }',
       '  .company-name { color:#D97706!important; }',
       '  .doc-title { color:#D97706!important; }',
       '  input, textarea, select { background:white!important;color:#1F2937!important; }',
       '  .footer-text, .footer span { color:#9CA3AF!important; }',
-      '  .action-bar, #save-status, #offline-banner { display:none!important; }',
+      '  .action-bar, #save-status { display:none!important; }',
       '}'
     ].join('\n');
     document.head.appendChild(printStyle);
@@ -2178,16 +2283,31 @@ function openPrintPreview() {
     document.activeElement.blur();
   }
 
-  if (isNarrowMobile) {
-    // Double-rAF + timeout: lets the stamped styles reflow fully at 820px
-    // before the print dialog captures the layout.
-    requestAnimationFrame(function() {
+  if (isNarrowMobile || isIPad) {
+    // Fire the print after layout settles. iPhone/Android stamp an 820px layout
+    // and need a short settle; iPad locks its own layout via double-rAF.
+    if (isNarrowMobile) {
+      // Double-rAF + timeout: lets the stamped styles reflow fully at 820px
+      // before the print dialog captures the layout.
       requestAnimationFrame(function() {
-        setTimeout(function() {
-          window.print();
-        }, isMobileSafari ? 350 : 0);
+        requestAnimationFrame(function() {
+          setTimeout(function() {
+            window.print();
+          }, isMobileSafari ? 350 : 0);
+        });
       });
-    });
+    } else {
+      // iPad: let the inline white-stamp + dark-class removal paint before the
+      // print dialog samples the layout, otherwise it captures mid-reflow.
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() { window.print(); });
+      });
+    }
+
+    // Devices that should hold the light/print layout until the user dismisses
+    // the print sheet AND touches the screen (prevents dark mode flashing back
+    // under the still-open preview). iPhone Safari and iPad both qualify.
+    var _deferRestore = (isMobileSafari || isIPad) && wasDark;
 
     // ── Restore strategy ──
     var _restored = false;
@@ -2206,7 +2326,7 @@ function openPrintPreview() {
     }
 
     function _armDeferredRestore() {
-      if (isMobileSafari && wasDark) {
+      if (_deferRestore) {
         clearTimeout(_safety);
         function _onInteract() {
           window.removeEventListener('pointerdown', _onInteract, true);
@@ -2217,6 +2337,10 @@ function openPrintPreview() {
         window.addEventListener('pointerdown', _onInteract, true);
         window.addEventListener('touchstart',  _onInteract, true);
         window.addEventListener('click',       _onInteract, true);
+        // Fallback so the form can never get stuck in the print/light state if
+        // no touch ever arrives. Touch still restores instantly if it comes
+        // first; otherwise this 60s timer restores for both iPhone and iPad.
+        _safety = setTimeout(function() { _tryRestore(0); }, 60000);
       } else {
         _tryRestore(300);
       }
@@ -2235,7 +2359,9 @@ function openPrintPreview() {
     function _apHandler() { if (!_sawPrint) _tryRestore(0); }
     window.addEventListener('afterprint', _apHandler);
 
-    var _safety = (isMobileSafari && wasDark)
+    // Safety net before the print dialog is ever seen. Devices that defer the
+    // restore start with no pre-print timer (the deferred path arms its own).
+    var _safety = _deferRestore
       ? null
       : setTimeout(function() { _tryRestore(0); }, 30000);
 
