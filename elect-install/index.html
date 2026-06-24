@@ -973,7 +973,7 @@ body.dark-mode .notice { color: #7DD3FC; }
 
   #page2 .footer-other-row { display: flex !important; align-items: flex-end !important; gap: 4px !important; width: 100% !important; margin-top: 3px !important; }
   #page2 .footer-other-label { font-size: 11.5px !important; font-weight: bold !important; white-space: nowrap !important; flex-shrink: 0 !important; color: #1F2937 !important; }
-  #page2 .footer-other-input { flex: 1 !important; width: 100% !important; border: none !important; border-bottom: 1px solid #333 !important; background: transparent !important; font-size: 11.5px !important; color: #1F2937 !important; padding: 0 !important; }
+  #page2 .footer-other-input { flex: 1 !important; width: 100% !important; border: none !important; border-radius: 0 !important; border-bottom: 1px solid #333 !important; background: transparent !important; font-size: 11.5px !important; color: #1F2937 !important; padding: 0 0 1px !important; height: 15px !important; min-height: 15px !important; line-height: 13px !important; white-space: nowrap !important; overflow: hidden !important; resize: none !important; vertical-align: bottom !important; }
   #page2 .footer-fields { margin-top: 5px !important; padding-top: 0 !important; border-top: none !important; font-size: 10px !important; }
   #page2 .footer-row { display: flex !important; flex-wrap: wrap !important; gap: 2px 12px !important; margin-bottom: 3px !important; align-items: flex-end !important; padding: 1px 0 !important; }
   #page2 .footer-field { display: inline-flex !important; align-items: flex-end !important; gap: 3px !important; white-space: nowrap !important; }
@@ -1436,6 +1436,237 @@ body.dark-mode .ft-label { color: #7DD3FC; }
   #page2 .footer-other-input              { font-size: 10px !important; }
   #page2 .grid-section-title              { font-size: 8.5px !important; }
 }
+
+/* ===== MOBILE PAGE-1 — CARD + STACKED ROWS (screen only) =====
+   On phones the inline label+control rows wrap unpredictably (e.g. a third
+   checkbox like "NOT SET" or "Existing" orphans onto its own line). Here each
+   section becomes a card and every row stacks: label on its own line, then
+   its checkboxes/inputs below. Desktop & print are untouched. */
+@media screen and (max-width: 767px) {
+  /* Drop the section dividers — cards provide separation. */
+  #page1 .section-hr { display: none !important; }
+
+  /* Each section = a card. */
+  #page1 .section {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  body.dark-mode #page1 .section { border-color: var(--border-bright); }
+
+  /* Section title becomes the card header. */
+  #page1 .section-title {
+    margin: 0 0 10px !important;
+    font-size: 13px !important;
+    padding-bottom: 6px !important;
+  }
+
+  /* Stack each row: label first (full-width line), controls wrap below it. */
+  #page1 .section-row {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 8px 8px !important;
+    margin-bottom: 14px !important;
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+  }
+  #page1 .section-row:last-child { margin-bottom: 0 !important; }
+
+  /* Labels take a full-width line so controls wrap beneath. */
+  #page1 .section-row > label {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+    white-space: normal !important;
+    font-size: 14px !important;
+    line-height: 1.35 !important;
+    font-weight: 600 !important;
+  }
+
+  /* Free-text inline inputs go full width (Generator Size, etc.). */
+  #page1 .section-row .inline-input {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    border: 1px solid var(--border-bright) !important;
+    border-radius: 6px !important;
+    padding: 2px 10px !important;
+    background: var(--bg) !important;
+    font-size: 16px !important;
+  }
+
+  /* Team Member / Double Checked By: stack each label+input as its own line. */
+  #page1 .tm-dc-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+  #page1 .tm-dc-row::before { display: none !important; }
+  #page1 .tm-dc-row > label { flex: 0 0 100% !important; margin-bottom: 0 !important; }
+  #page1 .tm-dc-row > .inline-input,
+  #page1 .tm-dc-row > .inline-input.xshort-plus {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Bigger checkbox pills, easy to tap; they flow on the line below the label. */
+  #page1 .section-row .yn-checkbox-wrap {
+    font-size: 13px !important;
+    padding: 6px 12px 6px 8px !important;
+    border-radius: 6px !important;
+  }
+  #page1 .section-row .yn-checkbox-wrap input[type="checkbox"] {
+    width: 18px !important;
+    height: 18px !important;
+    margin: 0 5px 0 0 !important;
+  }
+  /* Bare (non-wrapped) checkboxes get sized up too. */
+  #page1 .section-row > input[type="checkbox"] {
+    width: 22px !important;
+    height: 22px !important;
+    margin: 0 4px 0 0 !important;
+  }
+
+  /* Needs Completed textarea full width on its own line. */
+  #page1 .needs-completed-row { flex-direction: column !important; align-items: stretch !important; }
+  #page1 .needs-completed {
+    width: 100% !important;
+    border: 1px solid var(--border-bright) !important;
+    border-radius: 6px !important;
+    padding: 8px 10px !important;
+    min-height: 60px !important;
+    font-size: 16px !important;
+  }
+
+  /* Transfer-switch blocks: their inner rows inherit the stacked layout above;
+     keep the block readable inside the card scheme. */
+  #page1 .ts-block { margin-bottom: 12px !important; }
+  #page1 .ts-body .section-row { margin-bottom: 14px !important; }
+
+  /* Top-fields (Customer Name block) = card, matching the sections. */
+  #page1 .top-fields {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    gap: 14px 12px !important;
+  }
+  body.dark-mode #page1 .top-fields { border-color: var(--border-bright); }
+
+  /* Stack each field as label-over-input. */
+  #page1 .top-fields .field-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+  }
+  #page1 .top-fields .field-row label {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    white-space: normal !important;
+  }
+  #page1 .top-fields .field-row input[type="text"],
+  #page1 .top-fields .field-row input[type="date"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    border: 1px solid var(--border-bright) !important;
+    border-radius: 6px !important;
+    padding: 2px 10px !important;
+    background: var(--bg) !important;
+    color: var(--text) !important;
+    font-size: 16px !important;
+  }
+
+  /* Footer + Other notes (page 2) = one card, matching the sections. */
+  #page2 .footer-fields {
+    border: 1px solid var(--border) !important;
+    border-top: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    background: var(--panel) !important;
+    padding: 12px 14px !important;
+    margin-top: 12px !important;
+    margin-bottom: 12px !important;
+  }
+  body.dark-mode #page2 .footer-fields { border-color: var(--border-bright) !important; }
+
+  /* Each quantity row: fields stack into their own full-width lines. */
+  #page2 .footer-fields .footer-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 14px 12px !important;
+    margin-bottom: 14px !important;
+    align-items: stretch !important;
+  }
+  #page2 .footer-fields .footer-field {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+    min-width: 0 !important;
+    white-space: normal !important;
+  }
+  #page2 .footer-fields .footer-field label {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    white-space: normal !important;
+    line-height: 1.3 !important;
+  }
+  #page2 .footer-fields .footer-field input[type="text"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    height: 40px !important;
+    line-height: normal !important;
+    border: 1px solid var(--border-bright) !important;
+    border-radius: 6px !important;
+    padding: 2px 10px !important;
+    background: var(--bg) !important;
+    color: var(--text) !important;
+    font-size: 16px !important;
+  }
+
+  /* "Other" notes row spans the full width of the card. */
+  #page2 .footer-fields .footer-other-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+    margin-bottom: 0 !important;
+  }
+  #page2 .footer-fields .footer-other-label {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    white-space: normal !important;
+  }
+  #page2 .footer-fields .footer-other-input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    height: 72px !important;
+    min-height: 72px !important;
+    border: 1px solid var(--border-bright) !important;
+    border-radius: 6px !important;
+    padding: 8px 10px !important;
+    background: var(--bg) !important;
+    color: var(--text) !important;
+    font-size: 16px !important;
+    line-height: 1.4 !important;
+    font-family: Arial, sans-serif !important;
+    resize: vertical !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -1676,7 +1907,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
       </div>
       <div class="footer-other-row">
         <label class="footer-other-label">Other:</label>
-        <input type="text" class="footer-other-input">
+        <textarea class="footer-other-input" rows="2"></textarea>
       </div>
     </div>
 
@@ -2142,6 +2373,25 @@ function forceDesktopLayout() {
     mirrors.push({ ta, div });
   });
   // (textarea-field mirror end)
+  // Footer "Other" is a 2-row textarea on screen; for capture render it as a
+  // flat underlined field that sits on the baseline like the other footer
+  // fields (text starts at top-left and wraps down to the underline).
+  document.querySelectorAll('textarea.footer-other-input').forEach(ta => {
+    const div = document.createElement('div');
+    div.className = 'footer-other-mirror';
+    div.style.cssText = [
+      'flex:1', 'width:100%', 'box-sizing:border-box',
+      'border:none', 'border-bottom:1px solid #1F2937',
+      'font-family:Arial, sans-serif', 'font-size:15.5px', 'line-height:1.4',
+      'padding:0 4px 3px', 'min-height:22px', 'white-space:pre-wrap',
+      'word-break:break-word', 'overflow-wrap:anywhere',
+      'background:transparent', 'color:#111111'
+    ].join(';');
+    div.textContent = ta.value;
+    ta.style.setProperty('display', 'none', 'important');
+    ta.parentNode.insertBefore(div, ta.nextSibling);
+    mirrors.push({ ta, div });
+  });
   // Native <input type="date"> stores YYYY-MM-DD and html2canvas renders that raw
   // ISO value (year first). Swap it for a text mirror showing MM/DD/YYYY for capture.
   document.querySelectorAll('input[type="date"]').forEach(function (di) {
@@ -3521,7 +3771,7 @@ if (document.readyState === 'loading') {
       children.forEach(node => {
         if (node.nodeType === 1 && (node.tagName === 'LABEL' || node.tagName === 'B')) {
           currentLabel = node.textContent.trim().replace(/:$/,'');
-        } else if (node.nodeType === 1 && node.tagName === 'INPUT' && (node.type === 'text' || node.type === 'date')) {
+        } else if (node.nodeType === 1 && ((node.tagName === 'INPUT' && (node.type === 'text' || node.type === 'date')) || node.tagName === 'TEXTAREA')) {
           if (currentLabel) {
             const base = labelPhrase(currentLabel);
             const phrases = [base].concat(ALIASES[base] || []);
