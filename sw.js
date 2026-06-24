@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.1.6';
+var CACHE_NAME = 'aog-forms-v2.1.';
 var DEV_MODE   = false;
 
 // Stores last known cache progress so late-loading pages can request it
@@ -20,6 +20,7 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
+  '🔧 Fixed capture on Maintenance form and added card style phone view for Electrical Install',
   '🎙️ Voice control is live for Electrical Installs — hands-free field entry with ~90% recognition accuracy.',
   '🌐 Voice requires an active connection. To protect offline mode, the mic auto-disables when no data signal is detected — no freezes, no broken pages.',
   '🔋 Battery saver: the mic powers down after 60 seconds of no input, so an open form won\'t quietly drain your device.',
