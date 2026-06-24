@@ -25,17 +25,11 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   color-scheme: light;
   --cyan: #D97706;
   --cyan-dim: #B45309;
-  --cyan-dark: #92400E;
   --amber: #D97706;
-  --amber-dim: #B45309;
-  --green: #059669;
-  --red: #DC2626;
   --bg: #FFFFFF;
-  --bg2: #FFFFFF;
   --bg3: #F8F8F8;
   --bg4: #F0F0F0;
   --panel: #FFFFFF;
-  --panel2: #FAFAFA;
   --border: rgba(217,119,6,0.25);
   --border-bright: rgba(217,119,6,0.5);
   --text: #1F2937;
@@ -46,17 +40,14 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   --font-mono: 'Share Tech Mono', monospace;
   --font-body: 'Exo 2', sans-serif;
   --icon-color-primary: #D97706;
-  --icon-color-section: #D97706;
 }
 
 body.dark-mode {
   color-scheme: dark;
   --bg: #0A0E27;
-  --bg2: #0F1535;
   --bg3: #1A2847;
   --bg4: #243458;
   --panel: #0F1535;
-  --panel2: #1A2847;
   --border: rgba(0,255,200,0.08);
   --border-bright: rgba(0,255,200,0.25);
   --text: #E0F7FF;
@@ -64,13 +55,8 @@ body.dark-mode {
   --text-dim: #38BDF8;
   --cyan: #00FFC8;
   --cyan-dim: #06B6D4;
-  --cyan-dark: #0891B2;
   --amber: #D97706;
-  --amber-dim: #B45309;
-  --green: #10B981;
-  --red: #F43F5E;
   --icon-color-primary: #00FFC8;
-  --icon-color-section: #00FFC8;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -87,7 +73,6 @@ body {
   width: 100%;
   margin: 0 auto;
   padding: 0;
-  padding-top: calc(44px + env(safe-area-inset-top, 0px));
   padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
   scroll-padding-top: calc(48px + env(safe-area-inset-top, 0px));
   -webkit-text-size-adjust: 100%;
@@ -95,6 +80,36 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
   min-height: -webkit-fill-available;
   min-height: 100vh;
+}
+
+/* iPadOS Safari scroll fix (screen only): the body's -webkit-fill-available
+   min-height pins the body to the viewport, so with the fixed action bar the
+   page can't grow past the screen and won't scroll (it just rubber-bands).
+   Let the body take its natural content height so normal document scrolling
+   works. Scoped to screen via :not within @media print elsewhere — these are
+   base (non-print) rules, and the print block re-sets height anyway. */
+html.ipad, html.ipad body {
+  min-height: 0;
+  height: auto;
+  -webkit-overflow-scrolling: touch;
+}
+html.ipad .page {
+  min-height: 0;
+  height: auto;
+}
+/* iPadOS compositor stability: fast scrolling desyncs the fixed dark gradient
+   layer from the scrolling page, making borders appear to "stick" while the
+   page rubber-bands. Pin the gradient to its own GPU layer and keep the action
+   bar on one too so they don't fight the scroll layer. */
+/* iPadOS fix for "sticking" borders: a position:fixed full-viewport layer
+   (body.dark-mode::before) desyncs from the scrolling page during fast scroll,
+   so the page border appears to stick while content rubber-bands. On iPad,
+   kill that fixed layer and paint the gradient directly on the (scrolling)
+   body instead — one layer, nothing to desync. */
+html.ipad body.dark-mode::before { display: none !important; content: none !important; }
+html.ipad body.dark-mode {
+  background: linear-gradient(135deg,#0A0E27 0%,#0F1535 25%,#0A1628 50%,#0F1535 75%,#0A0E27 100%) !important;
+  background-attachment: scroll !important;
 }
 
 body.dark-mode {
@@ -157,7 +172,7 @@ body.dark-mode .page {
 .page-corner-br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
 
 @media (max-width: 768px) {
-  body { padding: 0; padding-top: calc(44px + env(safe-area-inset-top, 0px)); }
+  body { padding: 0; }
   .page { box-shadow: none; border: none; max-width: 100%; }
   .page::before, .page::after, .page-corner-bl, .page-corner-br { display: none; }
   .header { flex-wrap: nowrap; gap: 6px; padding: 6px 8px; min-height: auto; justify-content: space-between; }
@@ -500,6 +515,9 @@ body.dark-mode .section-toggle-hint { color: #7DD3FC; border-color: rgba(0,255,2
 .two-column .section { margin-bottom: 0; }
 @media (max-width: 820px) {
   .two-column { grid-template-columns: 1fr; gap: 4px; margin-bottom: 4px; }
+  /* iPad (incl. 768px portrait) is wide enough for the two-up split — keep
+     Battery/Generator side-by-side instead of collapsing like a phone. */
+  html.ipad .two-column { grid-template-columns: 1fr 1fr !important; }
 }
 
 /* ── FIELD ROWS ── */
@@ -708,7 +726,7 @@ body.dark-mode .check-item:has(input:checked) span { color: #D97706; font-weight
 .test-item .yn-group { flex: 0 0 auto; width: auto; margin-right: auto; }
 /* Force the Y/N buttons here to the same compact size as other sections */
 .test-item .yn-group .yn-label { padding: 0 8px !important; min-width: 0 !important; width: auto !important; flex: 0 0 auto !important; }
-@media (max-width: 768px) { .test-grid { grid-template-columns: 1fr; gap: 10px; } }
+@media (max-width: 768px) { .test-grid { grid-template-columns: 1fr; gap: 10px; } html.ipad #sim-body-full .test-grid { grid-template-columns: 1fr 1fr !important; } }
 
 /* Mobile screen only: match check-item chip height to yn-group (26px) */
 @media screen and (max-width: 768px) {
@@ -1019,7 +1037,7 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   /* Sim "Explain why" box: was missing a fixed height, so Safari printed it
      short and clipped the top line. Give it a real height + top alignment. */
   #simperfnotes { height: 46px !important; min-height: 46px !important; max-height: 46px !important; overflow: hidden !important; vertical-align: top !important; padding-top: 6px !important; line-height: 1.15 !important; box-sizing: border-box !important; }
-  body.mobile-safari #simperfnotes { height: 46px !important; min-height: 46px !important; max-height: 46px !important; }
+  body.mobile-safari #simperfnotes { height: 34px !important; min-height: 34px !important; max-height: 34px !important; }
   #sim-body-collapsed .test-item { align-items: flex-start !important; }
 
   .check-group { display: flex !important; flex-wrap: wrap !important; gap: 2px !important; }
@@ -1189,8 +1207,8 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
 
   /* Keep control + label sizes readable (match desktop apparent size) */
   html.ipad .check-item input[type="checkbox"], html.ipad .check-item input[type="radio"] { width: 12px !important; height: 12px !important; min-width: 12px !important; min-height: 12px !important; }
-  html.ipad .yn-group { height: 19px !important; min-height: 19px !important; max-height: 19px !important; }
-  html.ipad .yn-group .yn-label { height: 19px !important; min-height: 0 !important; max-height: 19px !important; line-height: 1 !important; font-size: calc(0.72rem - 0.7px) !important; padding: 0 7px !important; }
+  html.ipad .yn-group { height: 19px !important; min-height: 19px !important; max-height: 19px !important; align-items: center !important; box-sizing: border-box !important; }
+  html.ipad .yn-group .yn-label { height: 17px !important; min-height: 0 !important; max-height: 17px !important; line-height: 1 !important; font-size: calc(0.72rem - 0.7px) !important; padding: 0 7px !important; }
   html.ipad .check-item span, html.ipad .opt span { font-size: calc(0.66rem + 0.3px) !important; }
   html.ipad label { font-size: calc(0.66rem + 0.3px) !important; }
 
@@ -1325,6 +1343,11 @@ body.dark-mode .action-bar {
   if (isIPad) {
     html.classList.add('ipad');
     html.classList.remove('macos');   // iPad is NOT a desktop Mac for print
+    // A classic-UA iPad also matched isIOS above and got 'mobile-safari'/'ios',
+    // which made it inherit the iPHONE layout, scroll, and print rules — the
+    // cause of the iPad "displaying what the iPhone sees" + sticking. Strip
+    // them so the iPad is treated purely as an iPad.
+    html.classList.remove('mobile-safari', 'ios');
   }
 
   function applyToBody() {
@@ -1336,6 +1359,7 @@ body.dark-mode .action-bar {
     if (isIPad) {
       document.body.classList.add('ipad');
       document.body.classList.remove('macos');
+      document.body.classList.remove('mobile-safari', 'ios');
     }
   }
   if (document.body) applyToBody();
@@ -2063,9 +2087,9 @@ function openPrintPreview() {
     (function() {
       var sp = document.getElementById('simperfnotes');
       if (sp) {
-        _snap(sp, 'height',     '46px');
-        _snap(sp, 'minHeight',  '46px');
-        _snap(sp, 'maxHeight',  '46px');
+        _snap(sp, 'height',     '34px');
+        _snap(sp, 'minHeight',  '34px');
+        _snap(sp, 'maxHeight',  '34px');
         _snap(sp, 'overflow',   'hidden');
         _snap(sp, 'padding',    '6px 2px 0 2px');
         _snap(sp, 'lineHeight', '1.15');
@@ -2415,6 +2439,7 @@ function capturePageToCanvas() {
       const prevHeight    = page.style.height;
       const prevMinHeight = page.style.minHeight;
       const prevMarginTop = page.style.marginTop;
+      const prevPaddingTop = page.style.paddingTop;
       const prevBodyPad   = document.body.style.padding;
 
       page.style.width     = CAPTURE_WIDTH + 'px';
@@ -2424,6 +2449,7 @@ function capturePageToCanvas() {
       page.style.height    = 'auto';
       page.style.minHeight = '0';
       page.style.marginTop = '0';
+      page.style.paddingTop = '0';
       document.body.style.padding = '0';
 
       const forceStyle = document.createElement('style');
@@ -2570,6 +2596,7 @@ function capturePageToCanvas() {
         page.style.height    = prevHeight;
         page.style.minHeight = prevMinHeight;
         page.style.marginTop = prevMarginTop;
+        page.style.paddingTop = prevPaddingTop;
         document.body.style.padding = prevBodyPad;
         const fs = document.getElementById('capture-force-style');
         if (fs) fs.remove();
@@ -3038,12 +3065,18 @@ function adjustTopPadding() {
   const bar    = document.getElementById('action-bar');
   const page   = document.getElementById('page');
   const status = document.getElementById('save-status');
-  if (bar && page)   page.style.marginTop = bar.offsetHeight + 'px';
-  if (bar && status) status.style.top     = bar.offsetHeight + 'px';
+  if (bar && page)   page.style.paddingTop = bar.offsetHeight + 'px';
+  if (bar && status) status.style.top      = bar.offsetHeight + 'px';
 }
 window.addEventListener('resize', adjustTopPadding);
+window.addEventListener('orientationchange', adjustTopPadding);
 window.addEventListener('load',   adjustTopPadding);
+// Re-measure after first paint and after fonts settle so the bar's final
+// height is captured (otherwise the page can sit a few px under/over the bar).
+document.addEventListener('DOMContentLoaded', adjustTopPadding);
 setTimeout(adjustTopPadding, 100);
+setTimeout(adjustTopPadding, 500);
+if (document.fonts && document.fonts.ready) { document.fonts.ready.then(adjustTopPadding); }
 </script>
 
 </body>
