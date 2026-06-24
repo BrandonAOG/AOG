@@ -1006,6 +1006,10 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   #oilnotes { height: 40px !important; min-height: 40px !important; max-height: 40px !important; overflow: hidden !important; }
   #gasnotes { height: 40px !important; min-height: 40px !important; max-height: 40px !important; overflow: hidden !important; }
   #tsnotes  { height: 40px !important; min-height: 40px !important; max-height: 40px !important; overflow: hidden !important; }
+  /* Sim "Explain why" box: was missing a fixed height, so Safari printed it
+     short and clipped the top line. Give it a real height + top alignment. */
+  #simperfnotes { height: 40px !important; min-height: 40px !important; max-height: 40px !important; overflow: hidden !important; vertical-align: top !important; }
+  #sim-body-collapsed .test-item { align-items: flex-start !important; }
 
   .check-group { display: flex !important; flex-wrap: wrap !important; gap: 2px !important; }
   .check-item { display: flex !important; min-height: auto !important; padding: 1px 5px 1px 3px !important; }
@@ -1111,6 +1115,67 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   .form-page, .page { width: 100% !important; max-width: 100% !important; margin: 0 auto !important; padding: 3px !important; box-sizing: border-box !important; }
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   iPad print tuning
+   Modern iPadOS Safari masquerades as desktop Safari, so without the .ipad
+   class it would print with the desktop-Mac rules. This block is scoped to
+   html.ipad and is placed AFTER every other print block so it wins the
+   cascade at equal specificity. It starts from the iPhone (mobile-safari)
+   1-page tuning — iPad is WebKit too.
+   ════════════════════════════════════════════════════════════════════════ */
+@media print {
+  html.ipad { font-size: 18.3px !important; }
+  html.ipad, html.ipad body { width: auto !important; max-width: 100% !important; display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
+
+  html.ipad .page {
+    width: 100% !important; max-width: 100% !important;
+    /* ~8px each side (was ~0.13in/12.5px): nudges the content ~8px wider still,
+       even padding, to wrap long rows even less. */
+    padding: 4px 8px 0 8px !important;
+    margin: 0 auto !important;
+    min-height: 0 !important; height: auto !important;
+    border: 1.5px solid #D97706 !important;
+  }
+  html.ipad .footer { margin-top: 4px !important; margin-bottom: 0 !important; padding-bottom: 1px !important; }
+
+  /* Two-column layout + non-wrapping field rows (same intent as iPhone) */
+  html.ipad .two-column { grid-template-columns: 1fr 1fr !important; margin-bottom: 1px !important; gap: 2px !important; }
+  html.ipad .field-row-nowrap { flex-wrap: nowrap !important; }
+  html.ipad #name { flex: 0 1 50% !important; min-width: 0 !important; }
+  html.ipad #date, html.ipad #number { min-width: 120px !important; flex-shrink: 0 !important; width: auto !important; }
+  /* DATE fixed at 120px (two-ID selector to beat the shared 100px rule) so the
+     date value fits and the row stops stacking on smaller iPads. */
+  html.ipad #name-job-date-row #date { flex: 0 0 120px !important; width: 120px !important; min-width: 120px !important; }
+
+  /* Notes boxes — kept at the same heights as iPhone (54 / 34). */
+  html.ipad #batnotes, html.ipad #gennotes { height: 54px !important; min-height: 54px !important; max-height: 54px !important; overflow: hidden !important; }
+  html.ipad #oilnotes, html.ipad #gasnotes, html.ipad #tsnotes { height: 34px !important; min-height: 34px !important; max-height: 34px !important; overflow: hidden !important; }
+
+  /* Keep control + label sizes readable (match desktop apparent size) */
+  html.ipad .check-item input[type="checkbox"], html.ipad .check-item input[type="radio"] { width: 12px !important; height: 12px !important; min-width: 12px !important; min-height: 12px !important; }
+  html.ipad .yn-group { height: 21px !important; min-height: 21px !important; max-height: 21px !important; }
+  html.ipad .yn-group .yn-label { height: 21px !important; min-height: 0 !important; max-height: 21px !important; line-height: 1 !important; font-size: calc(0.72rem + 0.3px) !important; padding: 0 7px !important; }
+  html.ipad .check-item span, html.ipad .opt span { font-size: calc(0.66rem + 0.3px) !important; }
+  html.ipad label { font-size: calc(0.66rem + 0.3px) !important; }
+
+  /* Vertical spacing — recover ~0.3in here (not from the notes) so the footer
+     clears Safari's larger bottom print margin and stays on page 1. Notes,
+     text, inputs, radios and Y/N sizes are all left at iPhone sizes. */
+  html.ipad .section { margin-bottom: 0 !important; }
+  html.ipad .two-column + .section { margin-top: 0 !important; }
+  html.ipad .field-row { margin-bottom: 0.5px !important; }
+  html.ipad .section-header { padding: 2px 7px !important; }
+  html.ipad .section-body { padding: 1px 6px !important; }
+
+  /* Keep tight groups on one line, like the iPhone build */
+  html.ipad .leak-loc .check-group { flex-wrap: nowrap !important; white-space: nowrap !important; gap: 3px !important; }
+  html.ipad #gas-top-row, html.ipad #oil-top-row { gap: 16px !important; }
+  html.ipad .ts-row { flex-wrap: nowrap !important; align-items: flex-start !important; gap: 6px !important; }
+  html.ipad .ts-row > div { flex-shrink: 1 !important; min-width: 0 !important; }
+  html.ipad .ts-row .check-group { flex-wrap: nowrap !important; gap: 2px !important; }
+  html.ipad .ts-row input[id^="tsserial"] { width: 110px !important; min-width: 0 !important; flex-shrink: 0 !important; }
+}
+
 /* ── Screen only, all devices: make all option chips (checkbox + radio) match
    the Y/N toggle's height and label text. Print/capture rules above are
    untouched. ── */
@@ -1205,11 +1270,26 @@ body.dark-mode .action-bar {
   var isAndroidChrome = isAndroid && /Chrome/.test(ua) && !/Edg/.test(ua);
   var isMobileChrome = isAndroidChrome;
 
+  // ── iPad detection ──────────────────────────────────────────────────────
+  // Modern iPadOS Safari lies and reports a desktop "Macintosh" UA, so it would
+  // otherwise be mis-tagged as macOS and inherit the desktop-Mac print rules.
+  // We catch it three ways: (1) classic "iPad" UA, (2) the MacIntel + touch
+  // tell of iPadOS in desktop mode, (3) any Macintosh UA that also reports
+  // touch points (real Macs report 0).
+  var mtp = navigator.maxTouchPoints || 0;
+  var isIPad = /iPad/.test(ua)
+    || (navigator.platform === 'MacIntel' && mtp > 1)
+    || (/Macintosh/.test(ua) && mtp > 1);
+
   if (isIOS)          html.classList.add('ios', 'mobile-safari');
   if (isMacOS)        html.classList.add('macos');
   if (isWindows)      html.classList.add('windows');
   if (isAndroid)      html.classList.add('android');
   if (isMobileChrome) html.classList.add('mobile-chrome');
+  if (isIPad) {
+    html.classList.add('ipad');
+    html.classList.remove('macos');   // iPad is NOT a desktop Mac for print
+  }
 
   function applyToBody() {
     if (isIOS)          document.body.classList.add('ios', 'mobile-safari');
@@ -1217,6 +1297,10 @@ body.dark-mode .action-bar {
     if (isWindows)      document.body.classList.add('windows');
     if (isAndroid)      document.body.classList.add('android');
     if (isMobileChrome) document.body.classList.add('mobile-chrome');
+    if (isIPad) {
+      document.body.classList.add('ipad');
+      document.body.classList.remove('macos');
+    }
   }
   if (document.body) applyToBody();
   else document.addEventListener('DOMContentLoaded', applyToBody);
@@ -1953,12 +2037,17 @@ function openPrintPreview() {
     // .yn-group sizing
     document.querySelectorAll('.yn-group').forEach(function(el) {
       _snap(el, 'height',     '21px');
+      _snap(el, 'minHeight',  '21px');
+      _snap(el, 'maxHeight',  '21px');
       _snap(el, 'background', 'white');
       _snap(el, 'border',     '0.5px solid #D97706');
       _snap(el, 'display',    'inline-flex');
     });
     document.querySelectorAll('.yn-group .yn-label').forEach(function(el) {
-      _snap(el, 'minHeight', '21px');
+      _snap(el, 'height',    '21px');
+      _snap(el, 'minHeight', '0');
+      _snap(el, 'maxHeight', '21px');
+      _snap(el, 'lineHeight','1');
       _snap(el, 'fontSize',  'calc(0.72rem + 0.3px)');
       _snap(el, 'padding',   '0 7px');
       _snap(el, 'background','white');
@@ -2167,6 +2256,19 @@ function capturePageToCanvas() {
     const page        = document.getElementById('page');
     const logoImg     = page.querySelector('.logo-img');
     const logoOrigSrc = logoImg ? logoImg.getAttribute('src') : null;
+
+    // Format an ISO date value (YYYY-MM-DD) the same way Safari shows it
+    // natively ("Jun 21, 2026"). Parsed manually (not via new Date) so the
+    // day never shifts due to UTC/timezone. Used by html2canvas onclone below,
+    // because html2canvas paints date-input segments year-first on Safari.
+    function _fmtCaptureDate(v) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+      if (!m) return v || '';
+      var mons = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var mi = parseInt(m[2], 10) - 1, d = parseInt(m[3], 10), y = m[1];
+      if (mi < 0 || mi > 11 || !d) return v;
+      return mons[mi] + ' ' + d + ', ' + y;
+    }
 
     // Desktop captures at the original 820px layout width. Mobile stretches a
     // bit wider so the layout has room, and bumps the root font (below, in the
@@ -2398,7 +2500,32 @@ function capturePageToCanvas() {
               el.classList.contains('section-toggle-hint') ||
               el.id === 'action-bar'                   ||
               el.id === 'save-status'                  ||
-              el.classList.contains('theme-toggle-btn')
+              el.classList.contains('theme-toggle-btn'),
+            onclone: function (clonedDoc) {
+              // html2canvas paints <input type="date"> segments year-first on
+              // Safari ("2026 06 21"). Replace it in the CLONE only with a span
+              // showing the nicely formatted value, styled to match the input.
+              try {
+                var _live = document.getElementById('date');
+                var _cd   = clonedDoc.getElementById('date');
+                if (_live && _cd && _live.value) {
+                  var _cs = window.getComputedStyle(_live);
+                  var _sp = clonedDoc.createElement('span');
+                  _sp.textContent = _fmtCaptureDate(_live.value);
+                  ['fontFamily','fontSize','fontWeight','fontStyle','letterSpacing',
+                   'color','lineHeight','textAlign','paddingTop','paddingRight',
+                   'paddingBottom','paddingLeft','borderBottomStyle','borderBottomWidth',
+                   'borderBottomColor','height','minHeight','width','minWidth',
+                   'boxSizing','flexGrow','flexShrink','flexBasis'
+                  ].forEach(function (p) { try { _sp.style[p] = _cs[p]; } catch (e) {} });
+                  _sp.style.display    = 'inline-flex';
+                  _sp.style.alignItems = 'center';
+                  _sp.style.whiteSpace = 'nowrap';
+                  _sp.style.overflow   = 'hidden';
+                  if (_cd.parentNode) _cd.parentNode.replaceChild(_sp, _cd);
+                }
+              } catch (e) {}
+            }
           }).then(srcCanvas => {
             restoreCapture();
 
@@ -2744,10 +2871,35 @@ function setupSimToggle() {
 }
 
 if ('serviceWorker' in navigator) {
+  // Auto-reload once when a newly activated service worker takes control, so a
+  // freshly deployed version replaces a stale cached one without manual cache
+  // clearing. Guarded so it can only fire a single reload (no loops).
+  var _swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (_swRefreshing) return;
+    _swRefreshing = true;
+    window.location.reload();
+  });
+
   window.addEventListener('load', function () {
     navigator.serviceWorker.register('../sw.js', { scope: '../' })
-      .then(reg => console.log('[SW] Registered, scope:', reg.scope))
-      .catch(err => console.warn('[SW] Registration failed:', err));
+      .then(function (reg) {
+        console.log('[SW] Registered, scope:', reg.scope);
+        // Check for a newer service worker on every load.
+        reg.update();
+        // If one is already waiting, ask it to activate immediately (works if
+        // sw.js calls self.skipWaiting() on the SKIP_WAITING message).
+        function _nudge(sw) { if (sw) { try { sw.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {} } }
+        if (reg.waiting) _nudge(reg.waiting);
+        reg.addEventListener('updatefound', function () {
+          var nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', function () {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) _nudge(reg.waiting);
+          });
+        });
+      })
+      .catch(function (err) { console.warn('[SW] Registration failed:', err); });
   });
 }
 </script>
