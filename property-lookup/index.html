@@ -4418,7 +4418,20 @@ function pickFilePointForParcel(pts, parcelFeature, lat, lng){
   if(!pts || !pts.length) return null;
   const rings = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
   if(rings && rings.length){
+    // Prefer the point that falls INSIDE the displayed parcel.
     for(const f of pts){ const g=f&&f.geometry; if(g && pointInPolygon(g.x, g.y, rings)) return f; }
+    // Nothing landed inside. Address points sit at a building centroid/driveway and the parcel
+    // polygon may be slightly simplified, so a point can fall a couple of metres OUTSIDE its own
+    // lot. Accept the nearest point within a small edge buffer (~8 m); the building's own point is
+    // still far closer to the boundary than a neighbour's. Beyond the buffer, refuse: returning the
+    // nearest point there is the off-by-one bug (neighbour's address AND sqft).
+    // ~8 m in degrees ≈ 0.0000725; squared for the no-sqrt compare.
+    const BUF2 = 0.0000725 * 0.0000725;
+    let bf=null, bfd=Infinity;
+    for(const f of pts){ const g=f&&f.geometry; if(!g) continue;
+      const d=_distToEdges(g.x, g.y, rings); if(d<bfd){ bfd=d; bf=f; } }
+    if(bf && bfd<=BUF2) return bf;
+    return null;
   }
   let ax=lng, ay=lat;
   const c = parcelFeature ? featCentroid(parcelFeature) : null;
@@ -7585,7 +7598,11 @@ async function reverseAddrPoint(countyName, lat, lng, wantHN, wantStreetRaw){
     // find the chosen feature's coords (so the caller can snap the marker/parcel if the geocoder drifted)
     let cLat=null, cLng=null;
     for(const f of j.features){ if(f.attributes===chosen && f.geometry){ const g=f.geometry; cLng=(g.x!=null?g.x:g.X); cLat=(g.y!=null?g.y:g.Y); break; } }
-    return { addr:txt, lat:cLat, lng:cLng, matchedHN: !!hnBest };
+    // If the user typed a specific house number but NOTHING on the street carried it (hnBest null),
+    // this `txt` is just the nearest neighbour — e.g. searching 652 Bougainvillea returns 669 because
+    // 652 isn't in the data. Flag it as approximate so the caller warns instead of showing it as fact.
+    const approxNum = !!(hnStr && !hnBest);
+    return { addr:txt, lat:cLat, lng:cLng, matchedHN: !!hnBest, approxNum, wantHN:hnStr };
   }catch(e){ clearTimeout(t); return null; }
 }
 /* FORWARD address-point lookup: query the county's address-point layer DIRECTLY by house number
@@ -8826,6 +8843,18 @@ async function runLookup(lat,lng,searchCtx){
               try{ if(!parcelAddrText(pointFeat.attributes||{})) pointFeat.attributes.SITEADDR=fwdHit.addr; }catch(e){} }
             // Tag NG911-point-driven matches so the UI can show the authoritative-address badge.
             if(ngHit && ngHit.pointOnly){ al.__ng911=true; al.__ngLat=ngHit.lat; al.__ngLng=ngHit.lng; matchedAddr=ngHit.addr||null; }
+            // HOUSE-NUMBER GUARD: the point landed on the right STREET, but the geocoder may have
+            // resolved a number that isn't its own parcel (e.g. 652 Bougainvillea isn't a county
+            // parcel, so the point falls on 642's lot). The street test above passes either way.
+            // If the resolved parcel's house number differs from what the user typed, this is NOT an
+            // exact match — flag it approximate so the UI warns instead of showing 642 as "652".
+            if(!al.__ng911 && searchCtx && searchCtx.hn){
+              const _phn = houseNum(parcelAddrText(pointFeat.attributes||{}));
+              if(_phn && String(_phn)!==String(searchCtx.hn)){
+                al.__approx=true;
+                al.__note=`No parcel is recorded at "${String(searchCtx.hn)+(searchCtx.raw?' '+streetCore(searchCtx.raw).join(' '):'')}" in the county data. Showing the nearest parcel (${parcelAddrText(pointFeat.attributes||{})||('#'+_phn)}) — it may not be the property you searched. Verify on the county property appraiser.`;
+              }
+            }
           }
           // 2) Address query: use it to (a) correct an exact house-number match, OR (b) recover when the
           //    point landed on the wrong street. The address query is street/number anchored + geo-bounded.
@@ -8876,8 +8905,16 @@ async function runLookup(lat,lng,searchCtx){
                       _spliced=true;
                     }
                   }
-                  if(!_spliced){ _aAttr.SITEADDR=_ap.addr; }
-                  al.__matchedAddr=_ap.addr;
+                  if(_ap.approxNum){
+                    // The typed house number isn't in the county data — `_ap.addr` is only the NEAREST
+                    // address, not a real match (e.g. 652 Bougainvillea → 669). Do NOT present it as the
+                    // site address. Leave the parcel as-is and flag the whole result approximate so the
+                    // user sees a warning rather than a confident wrong answer.
+                    al.__approx=true;
+                    const _wantTxt = String(_ap.wantHN||'') + (_sraw ? ' '+streetCore(_sraw).join(' ') : '');
+                    al.__note=`No exact match for "${_wantTxt}" in the county address data. Showing the nearest parcel (${_ap.addr}) — it may not be the property you searched. Verify on the county property appraiser.`;
+                  } else if(!_spliced){ _aAttr.SITEADDR=_ap.addr; al.__matchedAddr=_ap.addr; }
+                  else { al.__matchedAddr=_ap.addr; }
                 }
               }
             }catch(e){}
@@ -8982,8 +9019,14 @@ async function runLookup(lat,lng,searchCtx){
             const _eps=0.0008, _bb=L.latLngBounds([lat-_eps,lng-_eps],[lat+_eps,lng+_eps]);
             const _fr=await queryHostedFile(_fileUrl,_bb);
             if(_fr && _fr.length){
-              // anchor to the selected parcel polygon, not the (possibly drifted) geocoded click
-              const _bx=pickFilePointForParcel(_fr, (parcel&&parcel.features&&parcel.features[0])||null, lat, lng);
+              // anchor to the selected parcel polygon, not the (possibly drifted) geocoded click.
+              // Prefer the DISPLAYED parcel (liveRes) — it carries full ring geometry — so the inside
+              // test actually runs; the statewide `parcel` may be a centroid-only fetch with no rings.
+              const _anchorFeat = (liveRes && liveRes.features && liveRes.features[0]
+                                    && liveRes.features[0].geometry && liveRes.features[0].geometry.rings)
+                                  ? liveRes.features[0]
+                                  : ((parcel&&parcel.features&&parcel.features[0])||null);
+              const _bx=pickFilePointForParcel(_fr, _anchorFeat, lat, lng);
               if(_bx && _bx.attributes && Number(_bx.attributes.TOT_LVG_AR)>0) _fileSqft=_bx.attributes.TOT_LVG_AR;
             }
           }
