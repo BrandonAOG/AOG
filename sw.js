@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.1.';
+var CACHE_NAME = 'aog-forms-v2.1.1';
 var DEV_MODE   = false;
 
 // Stores last known cache progress so late-loading pages can request it
@@ -20,13 +20,8 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '🔧 Fixed capture on Maintenance form and added card style phone view for Electrical Install',
-  '🎙️ Voice control is live for Electrical Installs — hands-free field entry with ~90% recognition accuracy.',
-  '🌐 Voice requires an active connection. To protect offline mode, the mic auto-disables when no data signal is detected — no freezes, no broken pages.',
-  '🔋 Battery saver: the mic powers down after 60 seconds of no input, so an open form won\'t quietly drain your device.',
-  '📸 Unified capture — separate iPhone and Android image buttons are gone. One smart CAPTURE button now handles Site Visit, Gas Install, Electrical Install, Estimate, Maintenance and QC Checklist forms on every device.',
-  '📤 Capture opens the native share sheet — save to Photos, save to Files, or send straight to a printer in one tap.',
-  '🔧 Electrical Install & Site Visit forms — the Fittings table now defaults to 2-1/2" through 1/2" sizes for cleaner viewing on smaller screens. Need the bigger sizes? Tap the TOP fitting cell to expand and reveal 5", 4", 3" and all remaining sizes.',
+  '🔧 Rework on Maintenance form, added service work and recommendation notes',
+
 ];
 // ============================================================
 
