@@ -1548,16 +1548,6 @@ const DOCS_COUNTY = {
     ecNote:  "Lee searches ECs by permit record # (RES/COM/MRV). Find the permit # for an address/STRAP in eConnect first. Email FIRMinfo@leegov.com if not found.",
     permit:  "https://accelaaca.leegov.com/aca/",   // eConnect / ACA portal
     permitBy:"address"
-  },
-  CHARLOTTE: {
-    // Charlotte County uses Accela Citizen Access (the /bocc/ instance). ACA's permit search is a
-    // JavaScript postback (no public deep-link URL that pre-fills an address), so we link to the
-    // portal entry page; the user clicks "Search Permits" and searches by address or parcel.
-    ecLayer: null,
-    ecMap:   "https://aca-prod.accela.com/bocc/default.aspx",
-    ecNote:  "Charlotte County permits & records are in Accela Citizen Access. From the portal, choose Building → Search Permits, then search by address or parcel number. Lien/records research: Community Development, CCTechSupport@charlottecountyfl.gov.",
-    permit:  "https://aca-prod.accela.com/bocc/default.aspx",
-    permitBy:"address"
   }
 };
 /* Resolve documents config: city first (by municipality), else county. */
@@ -1574,7 +1564,7 @@ function resolveDocs(cityName, countyName){
 const ZONING_COUNTY = {
   COLLIER:{code:"https://library.municode.com/fl/collier_county/codes/land_development_code", permit:"https://cvportal.collier.gov/cityviewweb/"},
   LEE:{code:"https://library.municode.com/fl/lee_county/codes/land_development_code", permit:"https://aca-prod.accela.com/leeco/default.aspx"},
-  CHARLOTTE:{code:"https://library.municode.com/fl/charlotte_county/codes/code_of_ordinances", permit:"https://aca-prod.accela.com/bocc/default.aspx"},
+  CHARLOTTE:{code:"https://library.municode.com/fl/charlotte_county/codes/code_of_ordinances", permit:"https://www.charlottecountyfl.gov/services/buildingconstruction/"},
   SARASOTA:{code:"https://library.municode.com/fl/sarasota_county/codes/code_of_ordinances", permit:"https://www.scgov.net/government/planning-and-development-services"},
   MANATEE:{code:"https://library.municode.com/fl/manatee_county/codes/code_of_ordinances", permit:"https://www.mymanatee.org/departments/building___development_services"},
   GLADES:{code:"https://library.municode.com/fl/glades_county/codes/code_of_ordinances", permit:"https://gladescounty.portal.iworq.net/portalhome/gladescounty"},
@@ -4428,20 +4418,7 @@ function pickFilePointForParcel(pts, parcelFeature, lat, lng){
   if(!pts || !pts.length) return null;
   const rings = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
   if(rings && rings.length){
-    // Prefer the point that falls INSIDE the displayed parcel.
     for(const f of pts){ const g=f&&f.geometry; if(g && pointInPolygon(g.x, g.y, rings)) return f; }
-    // Nothing landed inside. Address points sit at a building centroid/driveway and the parcel
-    // polygon may be slightly simplified, so a point can fall a couple of metres OUTSIDE its own
-    // lot. Accept the nearest point within a small edge buffer (~8 m); the building's own point is
-    // still far closer to the boundary than a neighbour's. Beyond the buffer, refuse: returning the
-    // nearest point there is the off-by-one bug (neighbour's address AND sqft).
-    // ~8 m in degrees ≈ 0.0000725; squared for the no-sqrt compare.
-    const BUF2 = 0.0000725 * 0.0000725;
-    let bf=null, bfd=Infinity;
-    for(const f of pts){ const g=f&&f.geometry; if(!g) continue;
-      const d=_distToEdges(g.x, g.y, rings); if(d<bfd){ bfd=d; bf=f; } }
-    if(bf && bfd<=BUF2) return bf;
-    return null;
   }
   let ax=lng, ay=lat;
   const c = parcelFeature ? featCentroid(parcelFeature) : null;
@@ -7608,11 +7585,7 @@ async function reverseAddrPoint(countyName, lat, lng, wantHN, wantStreetRaw){
     // find the chosen feature's coords (so the caller can snap the marker/parcel if the geocoder drifted)
     let cLat=null, cLng=null;
     for(const f of j.features){ if(f.attributes===chosen && f.geometry){ const g=f.geometry; cLng=(g.x!=null?g.x:g.X); cLat=(g.y!=null?g.y:g.Y); break; } }
-    // If the user typed a specific house number but NOTHING on the street carried it (hnBest null),
-    // this `txt` is just the nearest neighbour — e.g. searching 652 Bougainvillea returns 669 because
-    // 652 isn't in the data. Flag it as approximate so the caller warns instead of showing it as fact.
-    const approxNum = !!(hnStr && !hnBest);
-    return { addr:txt, lat:cLat, lng:cLng, matchedHN: !!hnBest, approxNum, wantHN:hnStr };
+    return { addr:txt, lat:cLat, lng:cLng, matchedHN: !!hnBest };
   }catch(e){ clearTimeout(t); return null; }
 }
 /* FORWARD address-point lookup: query the county's address-point layer DIRECTLY by house number
@@ -7721,23 +7694,15 @@ async function _queryParcelsByHouse(hn, lat, lng, d){
 async function snapToParcelByAddress(q, lat, lng){
   const hn=houseNum(q); if(!hn) return null;
   const want=new Set(streetTokens(q));            // e.g. "64th street west" -> {64TH, ST, W}
-  const wantCore=streetCore(q);                   // distinctive NAME tokens only, e.g. ["BOUGAINVILLEA"]
   // Widen the search box in steps. Lehigh Acres etc. have big lots / long blocks, so the
   // interpolated geocode can sit a long way from the real parcel. Stop at the first ring that
-  // yields a confident match (exact house number + a street-NAME match).
+  // yields a confident match (exact house number + a street-token overlap).
   for(const d of [0.004, 0.012, 0.03]){           // ~440 m, ~1.3 km, ~3.3 km
     const feats=await _queryParcelsByHouse(hn,lat,lng,d);
     let best=null,bestScore=-1;
     for(const f of feats){
       const a=f.attributes||{};
       if(houseNum(a.PHY_ADDR1)!==hn) continue;     // exact house number required
-      // STREET-NAME GUARD: the box around an interpolated point catches the SAME house number on
-      // OTHER streets (652 Palm Cir, 652 3rd St N, …). Distance alone would then snap to whichever
-      // "652" is nearest the geocoder's drifted point — a random wrong lot. Require the distinctive
-      // street NAME to actually match what was typed; reject every off-street candidate outright.
-      if(wantCore.length){
-        if(!sameStreet(q, a.PHY_ADDR1)) continue;
-      }
       const c=featCentroid(f); if(!c) continue;
       const toks=new Set(streetTokens(a.PHY_ADDR1));
       let overlap=0; want.forEach(t=>{ if(toks.has(t)) overlap++; });
@@ -7746,13 +7711,12 @@ async function snapToParcelByAddress(q, lat, lng){
       if(score>bestScore){ bestScore=score; best={lat:c[1],lng:c[0],overlap,
         matched:[a.PHY_ADDR1,a.PHY_CITY,a.PHY_ZIPCD].filter(Boolean).join(' ')}; }
     }
-    // With the street-name guard above, any surviving `best` is on the right street — accept it.
-    // (When the user typed no distinctive street name, fall back to the old tight-box single-match rule.)
-    if(best && (wantCore.length || best.overlap>0 ||
-        (d<=0.012 && feats.filter(f=>houseNum((f.attributes||{}).PHY_ADDR1)===hn).length===1))){
+    // Accept only if the street actually matches (overlap>0) OR there was just one candidate and
+    // the box is tight (so it's almost certainly the right lot). Otherwise widen and retry.
+    if(best && (best.overlap>0 || (d<=0.012 && feats.filter(f=>houseNum((f.attributes||{}).PHY_ADDR1)===hn).length===1))){
       return best;
     }
-    if(best && d>=0.03 && !wantCore.length) return best;   // last resort only when no street name to verify
+    if(best && d>=0.03) return best;                // last resort: best nearest exact-number match
   }
   return null;
 }
@@ -8821,9 +8785,6 @@ async function runLookup(lat,lng,searchCtx){
         let fwdHit=null;
         if(searchCtx && searchCtx.hn && ADDRPOINT_FEEDS[norm(countyName)]){
           fwdHit = await forwardAddrPoint(countyName, searchCtx, lat, lng).catch(()=>null);
-          // Remember the clean county address for the card label (covers the FIND button + any direct
-          // runLookup call, not just the autofill path which sets this in chooseSuggestion).
-          if(fwdHit && fwdHit.addr && !searchCtx.authAddr) searchCtx.authAddr=fwdHit.addr;
         }
         // For a point-only NG911 county (e.g. Collier — authoritative point, no STRAP), run the
         // parcel point-in-polygon from the NG911 point instead of the geocoded point.
@@ -8852,16 +8813,7 @@ async function runLookup(lat,lng,searchCtx){
           const pr = (al) ? null : await arcQueryRetry(cu, qLat, qLng, '*', true, ENRICH_TIMEOUT).catch(e=>({__err:e.message}));
           let pointFeat=null;
           if(pr && !pr.__err && pr.features && pr.features[0]){
-            // When we know the house number, prefer the intersecting parcel whose SITE ADDRESS
-            // actually matches it — not merely the first/most-specific polygon. 652's address point
-            // can fall inside a neighbour's recorded polygon (e.g. a recent split still drawn as part
-            // of 669), so a blind point-in-polygon pick returns 669's owner/sqft for a 652 search.
-            let _byAddr=null;
-            if(searchCtx && searchCtx.hn && pr.features.length){
-              try{ _byAddr=pickParcelByAddress(pr.features, searchCtx); }catch(e){}
-            }
-            if(_byAddr && _byAddr.feature){ pointFeat=_byAddr.feature; multi=_byAddr.count; }
-            else { const sel=pickSpecificParcel(pr.features); pointFeat=sel.feature; multi=sel.count; }
+            const sel=pickSpecificParcel(pr.features); pointFeat=sel.feature; multi=sel.count;
           } else if(pr && pr.__err){ err=pr.__err; }
           // STREET CHECK: if the user searched a street and the point landed on a DIFFERENT street
           //   (geocoder error — e.g. searched Coronado, got Del Prado), don't trust the point.
@@ -8874,21 +8826,6 @@ async function runLookup(lat,lng,searchCtx){
               try{ if(!parcelAddrText(pointFeat.attributes||{})) pointFeat.attributes.SITEADDR=fwdHit.addr; }catch(e){} }
             // Tag NG911-point-driven matches so the UI can show the authoritative-address badge.
             if(ngHit && ngHit.pointOnly){ al.__ng911=true; al.__ngLat=ngHit.lat; al.__ngLng=ngHit.lng; matchedAddr=ngHit.addr||null; }
-            // HOUSE-NUMBER GUARD: the point landed on the right STREET, but the geocoder may have
-            // resolved a number that isn't its own parcel (e.g. 652 Bougainvillea isn't a county
-            // parcel, so the point falls on 642's lot). The street test above passes either way.
-            // If the resolved address's house number differs from what the user typed, this is NOT an
-            // exact match — flag it approximate so the UI warns instead of showing 642 as "652".
-            // Check BOTH the parcel's own address (full feeds) AND any address spliced from fwdHit
-            // (lean Collier-style feeds), so the guard works regardless of where the address came from.
-            if(!al.__ng911 && searchCtx && searchCtx.hn){
-              const _resolvedAddr = parcelAddrText(pointFeat.attributes||{}) || (fwdHit && fwdHit.addr) || '';
-              const _phn = houseNum(_resolvedAddr);
-              if(_phn && String(_phn)!==String(searchCtx.hn)){
-                al.__approx=true;
-                al.__note=`No parcel is recorded at "${String(searchCtx.hn)+(searchCtx.raw?' '+streetCore(searchCtx.raw).join(' '):'')}" in the county data. Showing the nearest parcel (${_resolvedAddr||('#'+_phn)}) — it may not be the property you searched. Verify on the county property appraiser.`;
-              }
-            }
           }
           // 2) Address query: use it to (a) correct an exact house-number match, OR (b) recover when the
           //    point landed on the wrong street. The address query is street/number anchored + geo-bounded.
@@ -8939,16 +8876,8 @@ async function runLookup(lat,lng,searchCtx){
                       _spliced=true;
                     }
                   }
-                  if(_ap.approxNum){
-                    // The typed house number isn't in the county data — `_ap.addr` is only the NEAREST
-                    // address, not a real match (e.g. 652 Bougainvillea → 669). Do NOT present it as the
-                    // site address. Leave the parcel as-is and flag the whole result approximate so the
-                    // user sees a warning rather than a confident wrong answer.
-                    al.__approx=true;
-                    const _wantTxt = String(_ap.wantHN||'') + (_sraw ? ' '+streetCore(_sraw).join(' ') : '');
-                    al.__note=`No exact match for "${_wantTxt}" in the county address data. Showing the nearest parcel (${_ap.addr}) — it may not be the property you searched. Verify on the county property appraiser.`;
-                  } else if(!_spliced){ _aAttr.SITEADDR=_ap.addr; al.__matchedAddr=_ap.addr; }
-                  else { al.__matchedAddr=_ap.addr; }
+                  if(!_spliced){ _aAttr.SITEADDR=_ap.addr; }
+                  al.__matchedAddr=_ap.addr;
                 }
               }
             }catch(e){}
@@ -9053,14 +8982,8 @@ async function runLookup(lat,lng,searchCtx){
             const _eps=0.0008, _bb=L.latLngBounds([lat-_eps,lng-_eps],[lat+_eps,lng+_eps]);
             const _fr=await queryHostedFile(_fileUrl,_bb);
             if(_fr && _fr.length){
-              // anchor to the selected parcel polygon, not the (possibly drifted) geocoded click.
-              // Prefer the DISPLAYED parcel (liveRes) — it carries full ring geometry — so the inside
-              // test actually runs; the statewide `parcel` may be a centroid-only fetch with no rings.
-              const _anchorFeat = (liveRes && liveRes.features && liveRes.features[0]
-                                    && liveRes.features[0].geometry && liveRes.features[0].geometry.rings)
-                                  ? liveRes.features[0]
-                                  : ((parcel&&parcel.features&&parcel.features[0])||null);
-              const _bx=pickFilePointForParcel(_fr, _anchorFeat, lat, lng);
+              // anchor to the selected parcel polygon, not the (possibly drifted) geocoded click
+              const _bx=pickFilePointForParcel(_fr, (parcel&&parcel.features&&parcel.features[0])||null, lat, lng);
               if(_bx && _bx.attributes && Number(_bx.attributes.TOT_LVG_AR)>0) _fileSqft=_bx.attributes.TOT_LVG_AR;
             }
           }
@@ -9134,34 +9057,10 @@ async function runLookup(lat,lng,searchCtx){
       }
     }
     if(det.yr){ const _y=pick(liveRes.features[0].attributes,det.yr); if(_y) parcelYearBuilt=_y; }
-    // SITE-ADDRESS LABEL CORRECTION: Collier's parcel feed has NO native address — the SITEADDR shown
-    // is spliced from the county's separate address-point layer by PROXIMITY, which can grab the
-    // nearest neighbour's number (e.g. 669, 14 m away) instead of the address actually searched (652).
-    // When the snap captured the authoritative county address for the searched lot, use IT for the
-    // label. We only overwrite a SPLICED value (lean/no-address feed, flagged by ADDRPOINT_FEEDS),
-    // never a real county field, and only on a confident (non-approximate) match.
-    try{
-      if(det.site && searchCtx && searchCtx.authAddr && ADDRPOINT_FEEDS[norm(countyName)]
-         && !liveRes.__approx){
-        const _a0=liveRes.features[0].attributes;
-        const _cur=pick(_a0,det.site);
-        const _curHN=houseNum(_cur||'');
-        const _wantHN=houseNum(searchCtx.authAddr);
-        // Only correct when the spliced label disagrees with the authoritative searched address.
-        if(_wantHN && String(_curHN)!==String(_wantHN)){ _a0[det.site]=searchCtx.authAddr; }
-      }
-    }catch(e){}
     const le=liveMeta&&liveMeta.lastEdit;
     html += `<div class="freshline"><span class="badge live">● LIVE</span> ${esc((liveMeta&&liveMeta.name)||'county parcel service')}${le?' · updated '+esc(le.toLocaleDateString()):' · real-time query'}</div>`;
     html += renderParcelGeneric(liveRes.features[0].attributes, det);
     if(liveRes.__ngLat && marker){ try{ marker.setLatLng([liveRes.__ngLat, liveRes.__ngLng]); saveLoc(liveRes.__ngLat, liveRes.__ngLng); }catch(e){} }
-    else if(marker){
-      // No authoritative address point, but we DID resolve a parcel. Put the marker on that parcel's
-      // centroid rather than leaving it at the (possibly geocoder-drifted) input coordinate — otherwise
-      // the panel can say "652 Bougainvillea" while the yellow dot sits on a lot two streets away.
-      try{ const _c=featCentroid(liveRes.features[0]);
-        if(_c && isFinite(_c[0]) && isFinite(_c[1])){ marker.setLatLng([_c[1],_c[0]]); saveLoc(_c[1],_c[0]); } }catch(e){}
-    }
     { const _a=liveRes.features[0].attributes;
       drawParcel(liveRes.features[0].geometry, {
         owner: det.owner?pick(_a,det.owner):null,
@@ -10111,47 +10010,11 @@ async function chooseSuggestion(it){
   // is comma-mangled and loses the unit. This drives the same address/unit matching as the search button.
   const basis = houseNum(typed) ? typed : it.label;
   const searchCtx = { raw:basis, hn:houseNum(basis), toks:new Set(streetTokens(basis)), unit:searchUnit(basis) };
-  // COORDINATE CORRECTION: some geocoders (notably OSM/Nominatim) interpolate the position from a
-  // house-number RANGE along the street, so the point can land a lot or two off — on a NEIGHBOUR's
-  // parcel (e.g. picking the OSM suggestion for "652 Bougainvillea" drops the pin on 642's lot).
-  // Two suggestions for the same address can therefore resolve to different parcels purely by which
-  // geocoder's coordinate is used. Before trusting the suggestion's coordinate, snap it to the parcel
-  // whose SITE ADDRESS actually carries the typed house number + street. This is deterministic (a
-  // parcel-roll query, not a geocoder) so it corrects the bad pick to match the good one.
-  let lat0=it.lat, lng0=it.lng;
-  if(searchCtx.hn){
-    try{
-      let snapped=false;
-      // PRIMARY: resolve county from the suggestion point, then snap via that county's address-point
-      // feed (e.g. Collier's Site_Address_Points_b). This feed carries the real ADDRNUM for every
-      // parcel — unlike the statewide roll, whose PHY_ADDR1 is blank for Collier, which is why an
-      // OSM-interpolated "652 Bougainvillea" was landing on the road instead of the lot.
-      try{
-        const _cy = await arcQuery(EP.county, it.lat, it.lng, 'NAME', false).catch(()=>null);
-        const _cn = (_cy && _cy.features && _cy.features[0]) ? _cy.features[0].attributes.NAME : null;
-        if(_cn && ADDRPOINT_FEEDS[norm(_cn)]){
-          const _fwd = await forwardAddrPoint(_cn, searchCtx, it.lat, it.lng).catch(()=>null);
-          if(_fwd && isFinite(_fwd.lat) && isFinite(_fwd.lng)){
-            lat0=_fwd.lat; lng0=_fwd.lng; snapped=true;
-            // Keep the clean county address (e.g. "652 Bougainvillea RD") so the card labels the lot
-            // with the searched address, not a nearest-neighbour splice.
-            if(_fwd.addr) searchCtx.authAddr=_fwd.addr;
-          }
-        }
-      }catch(e){}
-      // FALLBACK: counties without an address-point feed — snap via the statewide parcel roll, but
-      // only when it's a CONFIDENT street-name match that moves the pin meaningfully (>~15 m).
-      if(!snapped){
-        const _snap = await snapToParcelByAddress(basis, it.lat, it.lng);
-        if(_snap && isFinite(_snap.lat) && isFinite(_snap.lng) && _snap.overlap>0){
-          const _moved=(_snap.lat-it.lat)*(_snap.lat-it.lat)+(_snap.lng-it.lng)*(_snap.lng-it.lng);
-          if(_moved > 1.8e-8){ lat0=_snap.lat; lng0=_snap.lng; }
-        }
-      }
-    }catch(e){}
-  }
-  map.setView([lat0,lng0], 18);
-  await runLookup(lat0,lng0, searchCtx);
+  // Use the suggestion's own coordinate directly. We no longer re-geocode (slow) or pre-snap (slow)
+  // here — runLookup resolves the exact parcel via the county NG911 address layer and recenters the
+  // marker authoritatively. This removes two network round-trips from the search.
+  map.setView([it.lat,it.lng], 18);
+  await runLookup(it.lat,it.lng, searchCtx);
   const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched: <b style="color:var(--ink)">${esc(it.label)}</b> — parcel resolved below; confirm the marker is on the right lot.</div>`;
   results.insertAdjacentHTML('afterbegin',conf);
 }
