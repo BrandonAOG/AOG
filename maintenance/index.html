@@ -1658,7 +1658,7 @@ body.dark-mode .action-bar {
       </div>
 
       <!-- Collapsed view: was the test performed? -->
-      <div class="section-body sim-hidden" id="sim-body-collapsed">
+      <div class="section-body" id="sim-body-collapsed">
         <div class="test-grid" style="grid-template-columns:1fr;">
           <div class="test-item">
             <label>Was simulation power test performed?</label>
@@ -1677,7 +1677,7 @@ body.dark-mode .action-bar {
       </div>
 
       <!-- Full view: detailed test grid -->
-      <div class="section-body" id="sim-body-full">
+      <div class="section-body sim-hidden" id="sim-body-full">
         <div class="test-grid">
           <div class="test-item">
             <label>Generator Started Up?</label>
@@ -1966,6 +1966,14 @@ function clearForm() {
     else el.value = '';
   });
   localStorage.removeItem(DRAFT_KEY);
+  // Reset the Simulated Power Test section back to the notes (collapsed) view
+  try { localStorage.removeItem('aog_sim_view'); } catch (e) {}
+  var simFull = document.getElementById('sim-body-full');
+  var simCollapsed = document.getElementById('sim-body-collapsed');
+  if (simFull && simCollapsed) {
+    simFull.classList.add('sim-hidden');
+    simCollapsed.classList.remove('sim-hidden');
+  }
 }
 
 function openPrintPreview() {
@@ -3285,8 +3293,8 @@ function setupSimToggle() {
     try { localStorage.setItem(KEY, view); } catch (e) {}
   }
 
-  var saved = 'full';
-  try { saved = localStorage.getItem(KEY) || 'full'; } catch (e) {}
+  var saved = 'collapsed';
+  try { saved = localStorage.getItem(KEY) || 'collapsed'; } catch (e) {}
   apply(saved);
 
   function toggle() {
