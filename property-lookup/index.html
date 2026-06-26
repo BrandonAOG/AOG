@@ -1548,6 +1548,16 @@ const DOCS_COUNTY = {
     ecNote:  "Lee searches ECs by permit record # (RES/COM/MRV). Find the permit # for an address/STRAP in eConnect first. Email FIRMinfo@leegov.com if not found.",
     permit:  "https://accelaaca.leegov.com/aca/",   // eConnect / ACA portal
     permitBy:"address"
+  },
+  CHARLOTTE: {
+    // Charlotte County uses Accela Citizen Access (the /bocc/ instance). ACA's permit search is a
+    // JavaScript postback (no public deep-link URL that pre-fills an address), so we link to the
+    // portal entry page; the user clicks "Search Permits" and searches by address or parcel.
+    ecLayer: null,
+    ecMap:   "https://aca-prod.accela.com/bocc/default.aspx",
+    ecNote:  "Charlotte County permits & records are in Accela Citizen Access. From the portal, choose Building → Search Permits, then search by address or parcel number. Lien/records research: Community Development, CCTechSupport@charlottecountyfl.gov.",
+    permit:  "https://aca-prod.accela.com/bocc/default.aspx",
+    permitBy:"address"
   }
 };
 /* Resolve documents config: city first (by municipality), else county. */
@@ -1564,7 +1574,7 @@ function resolveDocs(cityName, countyName){
 const ZONING_COUNTY = {
   COLLIER:{code:"https://library.municode.com/fl/collier_county/codes/land_development_code", permit:"https://cvportal.collier.gov/cityviewweb/"},
   LEE:{code:"https://library.municode.com/fl/lee_county/codes/land_development_code", permit:"https://aca-prod.accela.com/leeco/default.aspx"},
-  CHARLOTTE:{code:"https://library.municode.com/fl/charlotte_county/codes/code_of_ordinances", permit:"https://www.charlottecountyfl.gov/services/buildingconstruction/"},
+  CHARLOTTE:{code:"https://library.municode.com/fl/charlotte_county/codes/code_of_ordinances", permit:"https://aca-prod.accela.com/bocc/default.aspx"},
   SARASOTA:{code:"https://library.municode.com/fl/sarasota_county/codes/code_of_ordinances", permit:"https://www.scgov.net/government/planning-and-development-services"},
   MANATEE:{code:"https://library.municode.com/fl/manatee_county/codes/code_of_ordinances", permit:"https://www.mymanatee.org/departments/building___development_services"},
   GLADES:{code:"https://library.municode.com/fl/glades_county/codes/code_of_ordinances", permit:"https://gladescounty.portal.iworq.net/portalhome/gladescounty"},
@@ -8846,13 +8856,16 @@ async function runLookup(lat,lng,searchCtx){
             // HOUSE-NUMBER GUARD: the point landed on the right STREET, but the geocoder may have
             // resolved a number that isn't its own parcel (e.g. 652 Bougainvillea isn't a county
             // parcel, so the point falls on 642's lot). The street test above passes either way.
-            // If the resolved parcel's house number differs from what the user typed, this is NOT an
+            // If the resolved address's house number differs from what the user typed, this is NOT an
             // exact match — flag it approximate so the UI warns instead of showing 642 as "652".
+            // Check BOTH the parcel's own address (full feeds) AND any address spliced from fwdHit
+            // (lean Collier-style feeds), so the guard works regardless of where the address came from.
             if(!al.__ng911 && searchCtx && searchCtx.hn){
-              const _phn = houseNum(parcelAddrText(pointFeat.attributes||{}));
+              const _resolvedAddr = parcelAddrText(pointFeat.attributes||{}) || (fwdHit && fwdHit.addr) || '';
+              const _phn = houseNum(_resolvedAddr);
               if(_phn && String(_phn)!==String(searchCtx.hn)){
                 al.__approx=true;
-                al.__note=`No parcel is recorded at "${String(searchCtx.hn)+(searchCtx.raw?' '+streetCore(searchCtx.raw).join(' '):'')}" in the county data. Showing the nearest parcel (${parcelAddrText(pointFeat.attributes||{})||('#'+_phn)}) — it may not be the property you searched. Verify on the county property appraiser.`;
+                al.__note=`No parcel is recorded at "${String(searchCtx.hn)+(searchCtx.raw?' '+streetCore(searchCtx.raw).join(' '):'')}" in the county data. Showing the nearest parcel (${_resolvedAddr||('#'+_phn)}) — it may not be the property you searched. Verify on the county property appraiser.`;
               }
             }
           }
