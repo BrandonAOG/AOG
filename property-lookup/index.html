@@ -1396,12 +1396,13 @@ function saveLoc(lat,lng){ lastLoc={lat,lng}; STORE.set('fl_loc', JSON.stringify
    from this build environment; confirm in a browser. Layer must allow public CORS. */
 const COUNTY_LIVE = {
   COLLIER : { label:"Collier County (Property Appraiser, nightly)", urls:[
-    // ✅ confirmed: Collier's parcels layer on ArcGIS Online (CORS-friendly, same org as zoning).
-    // Fields: NAME1 (owner, NAME2-5 additional), FOLIO (parcel), LOTUNIT, TOTALACRES. Lean layer —
-    // value/site/sales come from the statewide roll fallback; "Verify on appraiser" covers deep detail.
-    "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Parcels/FeatureServer/42/query",
-    // Secondary: Collier enterprise GIS (Property Appraiser source). CORS not guaranteed from county server.
-    "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Parcel/FeatureServer/2/query"
+    // ✅ PRIMARY: the parcel layer that carries the correct SiteStreetAddress, SiteCity, SiteZipCode,
+    // Folio and OwnerLine1 in one place. Using this first means the live-feed card reads the right
+    // address directly (no poisoned address-point reverse-lookup that mislabeled this block as "669"
+    // / "8th St N"), and it matches what resolveCountyParcel() anchors to.
+    "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Parcel/FeatureServer/2/query",
+    // Secondary: the lean parcels layer (owner/folio/acres only, no address) as a fallback.
+    "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Parcels/FeatureServer/42/query"
   ]},
   LEE     : { label:"Lee County (Property Appraiser, nightly)", urls:[
     // ✅ confirmed: Lee's hosted parcels layer on ArcGIS Online (CORS-friendly), updated nightly.
@@ -8998,6 +8999,29 @@ async function runLookup(lat,lng,searchCtx){
     <div class="src">${srcLabel}</div></div><div class="cb">`;
 
   if(liveHit){
+    // SELECT THE RIGHT FEATURE: a live parcel query can return several parcels (the query covers an
+    // area, not a single lot). Blindly using features[0] can draw a NEIGHBOUR's polygon while showing
+    // the subject's attributes — they come unstuck (e.g. card says 652 but map highlights 669). When
+    // the user searched a house number, promote the feature whose site address matches that number
+    // (street-aware) to features[0], so the card, the drawn polygon and the label all agree.
+    if(liveRes.features && liveRes.features.length>1 && searchCtx && searchCtx.hn){
+      const _wantHN=String(searchCtx.hn);
+      const _wantToks=new Set(streetTokens(searchCtx.raw||''));
+      const _scoreFeat=(f)=>{
+        const a=f.attributes||{};
+        const addr=a.SiteStreetAddress||a.SITEADDR||a.PHY_ADDR1||a.SITUS||a.FULLADDR||'';
+        if(!addr) return -1;
+        if(houseNum(addr)!==_wantHN) return -1;
+        if(_wantToks.size){
+          const t=new Set(streetTokens(addr)); let ov=0; _wantToks.forEach(x=>{ if(t.has(x)) ov++; });
+          return ov;            // higher street-token overlap = better
+        }
+        return 0;
+      };
+      let _bi=-1, _bs=-1;
+      for(let i=0;i<liveRes.features.length;i++){ const s=_scoreFeat(liveRes.features[i]); if(s>_bs){ _bs=s; _bi=i; } }
+      if(_bi>0 && _bs>=0){ const _f=liveRes.features.splice(_bi,1)[0]; liveRes.features.unshift(_f); }
+    }
     const det=detectFields(Object.keys(liveRes.features[0].attributes));
     // Some live county feeds are "lean" — they carry owner/value/zoning but NO living-area or
     // year-built (Charlotte's layer 17, Collier's similar layer). The dated statewide FDOR roll
