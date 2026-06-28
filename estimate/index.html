@@ -2386,7 +2386,8 @@ async function saveFillablePdf() {
     // sheet (Save to Files, Messages, Mail…) — same behavior as CAPTURE.
     // Everywhere else, fall back to a direct download.
     var didShare = false;
-    if (typeof canShareFiles === 'function' && canShareFiles()) {
+    var _isMobileOS = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (_isMobileOS && typeof canShareFiles === 'function' && canShareFiles()) {
       try {
         var pdfFile = new File([blob], fname, { type: 'application/pdf' });
         if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
