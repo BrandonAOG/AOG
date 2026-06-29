@@ -4843,6 +4843,47 @@ var layerTmps=layers.map(function(l){
   }); }catch(ex){ console.warn('[Rotate] textObjs transform failed:',ex); }
   renderTextObjs();
 
+  // ── Re-sync any ACTIVE selection to its object's NEW rotated coords ──
+  // The object arrays above were all rotated, but the selection wrappers
+  // (selectedShape/selImg/etc.) still hold the PRE-rotation cx/cy/angle. Leaving
+  // them stale meant the next click on a selected note wrote the old position
+  // back onto the note, making it jump. Rebuild the wrapper from the (already
+  // rotated) underlying object so handles + edit + move all use fresh values.
+  try{
+    if(typeof selectedShape!=='undefined' && selectedShape){
+      if(selectedShape.type==='comment' && selectedShape._commentObj){
+        var _sc=selectedShape._commentObj;
+        selectedShape.cx=_sc.cx; selectedShape.cy=_sc.cy;
+        selectedShape.w=_sc.w;   selectedShape.h=_sc.h;
+        selectedShape.angle=_sc.angle||0;
+      } else if(selectedShape.type==='text' && selectedShape._textObj){
+        var _st=selectedShape._textObj;
+        selectedShape.cx=_st.x; selectedShape.cy=_st.y;
+        selectedShape.angle=(_st.angle||0);
+      } else {
+        // rect/ellipse/cloud: the live object is editShapeObj (selectedShape is
+        // a copy). It was rotated in the shapeObjs pass above, so mirror it back.
+        if(typeof editShapeObj!=='undefined' && editShapeObj){
+          selectedShape.cx=editShapeObj.cx; selectedShape.cy=editShapeObj.cy;
+          selectedShape.w=editShapeObj.w;   selectedShape.h=editShapeObj.h;
+          selectedShape.angle=editShapeObj.angle||0;
+        } else {
+          var _rp=rotPt(selectedShape.cx,selectedShape.cy);
+          selectedShape.cx=_rp.x; selectedShape.cy=_rp.y;
+          selectedShape.angle=(selectedShape.angle||0)+dRad;
+        }
+      }
+      selHandle=-1; selDragStart=null;
+      if(_editingComment && selectedShape._commentObj===_editingComment){
+        repositionCommentEditor(_editingComment);
+      }
+      if(typeof renderSelection==='function') renderSelection();
+    }
+    if(typeof selectedPolyline!=='undefined' && selectedPolyline && typeof renderPolylineSelection==='function'){
+      renderPolylineSelection();
+    }
+  }catch(ex){ console.warn('[Rotate] selection resync failed:',ex); }
+
   composite(); drawGrid(); fitToVP();
 }
 
