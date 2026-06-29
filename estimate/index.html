@@ -1402,13 +1402,9 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
   border-bottom: 1px solid var(--border-bright);
   transition: background-color 0.3s ease; box-sizing: border-box;
 }
-/* Installed PWA (home-screen) on iOS: env(safe-area-inset-top) is unreliable in
-   standalone mode (reports 0 on iOS 14 under the notch), so use a hardcoded
-   status-bar clearance, taking the larger of the inset or 47px on newer devices.
-   The page's top padding is then measured to match the bar by adjustTopPadding(). */
-body.pwa-standalone .action-bar {
-  padding-top: max(47px, env(safe-area-inset-top, 47px)) !important;
-}
+/* Action-bar top padding is uniform across all devices: the base .action-bar
+   rule uses max(4px, env(safe-area-inset-top)), which is ~0 on desktop and the
+   real notch/status-bar height on modern iOS — no per-platform override needed. */
 body.dark-mode .action-bar {
   background: linear-gradient(90deg, rgba(15,21,53,0.9) 0%, rgba(26,40,71,0.8) 50%, rgba(15,21,53,0.9) 100%);
   border-bottom-color: rgba(0,255,200,0.25);
