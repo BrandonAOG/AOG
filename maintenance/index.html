@@ -2069,7 +2069,14 @@ async function saveFillablePdf() {
     try { await pdfDoc.attach(new TextEncoder().encode(jsonStr), 'maintenance-data.json', {
       mimeType: 'application/json', description: 'Always On Generators - form data (do not delete)' }); } catch(e) {}
     try { pdfDoc.setKeywords([ 'AOGDATA:' + btoa(unescape(encodeURIComponent(jsonStr))) ]); } catch(e) {}
-    try { pdfDoc.setTitle('Always On Generators - Generator Maintenance Report'); } catch(e) {}
+    // iOS "Save to Files" uses the PDF's internal Title as the filename, ignoring the
+    // File object's name. So set the title to match: Name + Address + Maintenance Report.
+    try {
+      var _tnm = (document.getElementById('name')    && document.getElementById('name').value    || '').trim();
+      var _tad = (document.getElementById('address') && document.getElementById('address').value || '').trim();
+      var _ptitle = [_tnm, _tad, 'Maintenance Report'].filter(Boolean).join(' ') || 'Always On Generators - Generator Maintenance Report';
+      pdfDoc.setTitle(_ptitle);
+    } catch(e) {}
 
     const bytes = await pdfDoc.save();
     if (wasDark) document.body.classList.add('dark-mode');
