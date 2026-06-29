@@ -2912,7 +2912,7 @@ function openPrintPreview() {
 
 function setStatus(msg) {
   const el = document.getElementById('save-status');
-  if (el) el.textContent = msg;
+  if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
 }
 
 function capturePageToCanvas() {
@@ -3190,7 +3190,7 @@ function capturePageToCanvas() {
           html2canvas(page, {
             scale: 2,
             useCORS: true,
-            allowTaint: true,   // render even if a resource is cross-origin
+            allowTaint: false,  // MUST stay false: allowTaint+toDataURL = tainted-canvas SecurityError on desktop
             backgroundColor: '#ffffff',
             logging: false,
             width:       CAPTURE_WIDTH,
@@ -3418,9 +3418,10 @@ function buildReportFilename() {
   return (base || 'AOG_Maintenance_Report') + '.jpg';
 }
 function saveSmart() {
-  if (canShareFiles())      captureAndShare();   // native Share Sheet (iOS + modern Android)
-  else if (isIOSDevice())   saveForIPhone();     // older iOS → long-press overlay
-  else                      saveForAndroid();    // Android/desktop → download
+  var isMobile = isIOSDevice() || /Android/i.test(navigator.userAgent || '');
+  if (isMobile && canShareFiles()) captureAndShare();  // native Share Sheet (mobile only)
+  else if (isIOSDevice())          saveForIPhone();     // older iOS → long-press overlay
+  else                             saveForAndroid();    // Android-without-share / desktop → download
 }
 
 function captureAndShare() {
@@ -3530,13 +3531,21 @@ function saveForAndroid() {
         const _base = [_nm, _ad, 'Maintenance Report'].filter(Boolean).join(' ')
                         .replace(/[\/\\:*?"<>|]+/g, '').replace(/\s+/g, '_').slice(0, 120);
         const link = document.createElement('a');
-        link.download = (_base || 'AOG_Maintenance_Report') + '.jpg';
-        link.href = canvas.toDataURL('image/jpeg', 0.92);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setStatus('Saved to Downloads folder.');
-        setTimeout(() => setStatus(''), 4000);
+        const _dlname = (_base || 'AOG_Maintenance_Report') + '.jpg';
+        link.download = _dlname;
+        canvas.toBlob(function (blob) {
+          if (!blob) { setStatus('Could not create image. Try the EDIT PDF button.'); if (wasDark) document.body.classList.add('dark-mode'); return; }
+          const url = URL.createObjectURL(blob);
+          link.href = url;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+          setStatus('Saved to Downloads folder.');
+          setTimeout(function () { setStatus(''); }, 4000);
+          if (wasDark) document.body.classList.add('dark-mode');
+        }, 'image/jpeg', 0.92);
+        return;
       } catch (e) {
         setStatus('Security error. Try PDF instead.');
       }
