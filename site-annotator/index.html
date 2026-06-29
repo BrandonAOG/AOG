@@ -2261,6 +2261,72 @@ function startCommentTextEdit(c){
   if(document.activeElement !== textOv) textOv.focus();
 }
 
+// Grow a note box in BOTH dimensions to fit `text`, choosing a width that
+// keeps a natural shape instead of a tall narrow column. Used on PASTE so a
+// big block of pasted text spreads horizontally as well as vertically.
+// Width only grows (never shrinks below the user's current width); the top-left
+// corner is pinned so growth goes right + down, like a normal text box.
+function growCommentBothWays(c){
+  if(!c) return;
+  var fs    = Math.max(8, Math.round(cmtEffFontSize(c)));
+  var lineH = fs*CMT_LINE_H;
+  var pad   = cmtInnerPad(c, 'grow');
+  var text  = (c.text!==undefined && c.text!==null) ? c.text : (textOv ? textOv.value : '');
+
+  tCtx.save();
+  tCtx.font = cmtCtxFont(c, fs);
+
+  // Longest single word — hard minimum interior width (long tokens like URLs).
+  var longestWord = 0;
+  // Widest single PARAGRAPH (text between newlines) measured on ONE line — this
+  // is what really wants horizontal room. Sizing to it lets most bullets sit on
+  // a single line instead of wrapping into a tall sliver.
+  var widestPara  = 0;
+  (text||'').split('\n').forEach(function(para){
+    var pw = tCtx.measureText(para).width;
+    if(pw>widestPara) widestPara = pw;
+    para.split(/\s+/).forEach(function(w){
+      if(!w) return;
+      var ww = tCtx.measureText(w).width;
+      if(ww>longestWord) longestWord = ww;
+    });
+  });
+  tCtx.restore();
+
+  // Cap width relative to the visible canvas so a big paste can get genuinely
+  // wide on screen but never overflow the viewport. ~70% of the visible width,
+  // converted from screen px back into canvas px (the box is stored in canvas px).
+  var z = (typeof zoom==='number' && zoom>0) ? zoom : 1;
+  var viewW = (drawCv && drawCv.clientWidth) ? drawCv.clientWidth : 900;
+  var screenCapInner = Math.max(420, (viewW*0.7)/z - 2*pad);
+
+  // Target interior width: enough to fit the widest paragraph on one line, but
+  // never beyond the screen cap. Falls back to the longest word as the floor.
+  var curInner = c.w - 2*pad;
+  var minInner = Math.max(longestWord, 80);
+  var targetInner = Math.min(widestPara, screenCapInner);
+  var newInner = Math.max(minInner, targetInner, curInner); // grow only, never shrink
+
+  var leftEdge = c.cx - c.w/2;
+  var topEdge  = c.cy - c.h/2;
+
+  var newW = Math.ceil(newInner + 2*pad);
+  if(newW !== c.w){
+    c.w  = newW;
+    c.cx = leftEdge + c.w/2;
+    if(selectedShape && selectedShape._commentObj===c){ selectedShape.w=c.w; selectedShape.cx=c.cx; }
+  }
+
+  // Now fit the height to the (possibly wider) box, pinning the top edge.
+  fitCommentToText(c, text, true, 'grow');
+  c.cy = topEdge + c.h/2;
+  if(selectedShape && selectedShape._commentObj===c){ selectedShape.cy=c.cy; selectedShape.h=c.h; }
+
+  renderShapeAndMeasure(); composite();
+  if(_editingComment===c) repositionCommentEditor(c);
+  if(selectedShape) renderSelection();
+}
+
 // ── Auto-grow box to fit textOv content while typing ──
 // Grows the box only when the text would overflow; never shrinks a box the
 // user sized by hand. (Double-click snaps to a tight fit — see snapCommentToFit.)
@@ -5293,10 +5359,16 @@ function onDown(e){
 
   // ── Polyline object: re-select for recolor/restyle ──
   if(tool==='polyline' && !plActive){
-    // If a polyline is already selected and we click off it, commit it first
+    // If a polyline is already selected and we press on it (body or vertex),
+    // start dragging it (move whole shape, or move a single vertex).
     if(selectedPolyline){
       var stillOn=findPolylineObjAt(sp.x,sp.y,_isTouchEvt);
-      if(stillOn===selectedPolyline){ e.preventDefault(); return; } // keep selected
+      var onVtx=findPolylineVertexAt(selectedPolyline,sp.x,sp.y,_isTouchEvt)!==-1;
+      if(stillOn===selectedPolyline || onVtx){
+        e.preventDefault();
+        beginPolylineDrag(sp.x,sp.y,_isTouchEvt);
+        return;
+      }
       commitPolylineSelection();
     }
     var plSel=findPolylineObjAt(sp.x,sp.y,_isTouchEvt);
@@ -5309,6 +5381,8 @@ function onDown(e){
       if(plSel.strokeW){ strokeW=plSel.strokeW; swSl.value=strokeW; swVal.textContent=strokeW+'px'; }
       syncLineStyleButtons(plSel.lineStyle);
       renderPolylineSelection();
+      // Immediately begin dragging so a press-drag moves it in one gesture.
+      beginPolylineDrag(sp.x,sp.y,_isTouchEvt);
       return;
     }
     // Otherwise fall through to normal draw (new polyline)
@@ -5377,6 +5451,13 @@ function onDown(e){
 }
 
 function onMove(e){
+  // ── Dragging the selected polyline (whole shape or one vertex) ──
+  if(plDrag && selectedPolyline){
+    if(e.cancelable) e.preventDefault();
+    var _pdp=getPos(e);
+    updatePolylineDrag(_pdp.x,_pdp.y);
+    return;
+  }
   // ── Moving a text by its dashed border ──
   if(_txtMoving && _txtMoveObj){
     if(e.cancelable) e.preventDefault();
@@ -5674,6 +5755,12 @@ function onMove(e){
 }
 
 function onUp(e){
+  // ── Polyline drag release: persist moved positions ──
+  if(plDrag){
+    if(e.cancelable) e.preventDefault();
+    endPolylineDrag();
+    return;
+  }
   // ── Text move release: persist new position, show the moved text ──
   if(_txtMoving){
     if(e.cancelable) e.preventDefault();
@@ -6730,6 +6817,8 @@ var pmActive   = false;    // true while placing points
 var polylineObjs = [];     // committed polyline paths (open, no labels)
 var plPoints     = [];     // in-progress polyline waypoints
 var plActive     = false;  // true while placing polyline points
+// ── Polyline move/edit drag state ──
+var plDrag       = null;   // {mode:'move'|'vertex', vIdx, startX, startY, orig:[{x,y}], moved}
 // ── Live (non-burned) object arrays for formerly-burned tools ──
 var penObjs      = [];     // [{id,pts:[{x,y}],color,strokeW,opacity,lineStyle,layerIdx}]
 var polygonObjs  = [];     // [{id,pts,color,strokeW,opacity,fill,fillColor,fillOpacity,lineStyle,layerIdx}]
@@ -8313,7 +8402,19 @@ textOv.addEventListener('input', function(){
 // by the fixed box height until the overlay got re-fit to its content).
 textOv.addEventListener('paste', function(){
   setTimeout(function(){
-    if(_editingComment) _cmtAutoGrow(_editingComment);
+    if(_editingComment){
+      // Pull the freshly-pasted value into the note, then grow BOTH width and
+      // height so a big paste spreads into a natural block instead of a tall
+      // narrow column.
+      _editingComment.text = textOv.value;
+      growCommentBothWays(_editingComment);
+      // Resync the editor overlay to the new box (width changed, so the
+      // height-only resync isn't enough — reposition fully then refit height).
+      repositionCommentEditor(_editingComment);
+      textOv.style.height = 'auto';
+      textOv.style.height = Math.max(textOv.scrollHeight || 20, 20) + 'px';
+      repositionCommentEditorHeight(_editingComment);
+    }
     else _fitTextOv();
   }, 0);
 });
@@ -8986,10 +9087,11 @@ drawCv.addEventListener('mousemove',function(e){
     if(selectedMeasure&&measureDragHandle===-1){ /* handled above */ }
     else { var ah2=findMeasureObjAt(p.x,p.y,false); drawCv.style.cursor=(ah2&&ah2.isArrow)?'move':'crosshair'; }
   }
-  // Polyline tool: pointer when hovering an existing polyline
+  // Polyline tool: pointer when hovering an existing polyline / its vertices
   if(tool==='polyline'&&!plActive&&baseLoaded){
     var ph2=findPolylineObjAt(p.x,p.y,false);
-    drawCv.style.cursor=(ph2||selectedPolyline)?'move':'crosshair';
+    var pv2=selectedPolyline&&findPolylineVertexAt(selectedPolyline,p.x,p.y,false)!==-1;
+    drawCv.style.cursor=pv2?'grab':((ph2||selectedPolyline)?'move':'crosshair');
   }
   // Leader tool: show grab cursor over the selected leader's handles/body,
   // pointer over any re-selectable leader, crosshair otherwise.
@@ -9050,10 +9152,14 @@ drawCv.addEventListener('touchstart',function(e){
     var t=e.touches[0];
     var pos=getPos({clientX:t.clientX,clientY:t.clientY,touches:[t]});
     var sp=snapPt(pos.x,pos.y);
-    // Tap on an existing polyline → select it for recolor/restyle
+    // Tap on an existing polyline → select it; press-drag to move it.
     if(selectedPolyline){
       var stillOnT=findPolylineObjAt(sp.x,sp.y,true);
-      if(stillOnT===selectedPolyline) return;
+      var onVtxT=findPolylineVertexAt(selectedPolyline,sp.x,sp.y,true)!==-1;
+      if(stillOnT===selectedPolyline || onVtxT){
+        beginPolylineDrag(sp.x,sp.y,true);
+        return;
+      }
       commitPolylineSelection();
     }
     var plSelT=findPolylineObjAt(sp.x,sp.y,true);
@@ -9064,6 +9170,7 @@ drawCv.addEventListener('touchstart',function(e){
       if(plSelT.strokeW){ strokeW=plSelT.strokeW; swSl.value=strokeW; swVal.textContent=strokeW+'px'; }
       syncLineStyleButtons(plSelT.lineStyle);
       renderPolylineSelection();
+      beginPolylineDrag(sp.x,sp.y,true);
       return;
     }
     plPoints.push(sp); plActive=true;
@@ -9076,6 +9183,14 @@ drawCv.addEventListener('touchstart',function(e){
 },{passive:false});
 
 drawCv.addEventListener('touchmove',function(e){
+  // ── Polyline: dragging the selected polyline (move / vertex) ──
+  if(tool==='polyline' && !plActive && plDrag){
+    e.preventDefault();
+    var td=e.touches[0];
+    var pd=getPos({clientX:td.clientX,clientY:td.clientY,touches:[td]});
+    updatePolylineDrag(pd.x,pd.y);
+    return;
+  }
   // ── Polyline: first finger drag updates the rubber-band preview ──
   if(tool==='polyline' && plActive){
     e.preventDefault();
@@ -9088,6 +9203,13 @@ drawCv.addEventListener('touchmove',function(e){
   if(e.touches.length>=2||pinching){ return; } holdCancel(); onMove(e); },{passive:false});
 
 drawCv.addEventListener('touchend',function(e){
+  // ── Polyline drag release: persist moved positions, keep selection ──
+  if(tool==='polyline' && !plActive && plDrag){
+    e.preventDefault();
+    endPolylineDrag();
+    renderPolylineSelection();
+    return;
+  }
   // ── Polyline: lift all fingers = commit if only 1 point left, else ignore ──
   if(tool==='polyline' && plActive){
     e.preventDefault();
@@ -9359,7 +9481,60 @@ function findPolylineObjAt(x,y,isTouch){
   return null;
 }
 
-// ── POLYLINE SELECTION (recolor / restyle) ──────────────────────
+// Return the index of a vertex of `pl` near (x,y), or -1.
+function findPolylineVertexAt(pl,x,y,isTouch){
+  if(!pl||!pl.pts) return -1;
+  var r=(isTouch?20:11)/zoom;
+  for(var i=0;i<pl.pts.length;i++){
+    if(Math.hypot(pl.pts[i].x-x,pl.pts[i].y-y)<=r) return i;
+  }
+  return -1;
+}
+
+// Begin a drag on the selected polyline. Decides vertex-move vs whole-move.
+function beginPolylineDrag(x,y,isTouch){
+  if(!selectedPolyline) return false;
+  var pl=selectedPolyline;
+  var vIdx=findPolylineVertexAt(pl,x,y,isTouch);
+  var onLine = vIdx!==-1 || findPolylineObjAt(x,y,isTouch)===pl;
+  if(!onLine) return false;
+  plDrag={
+    mode: vIdx!==-1 ? 'vertex' : 'move',
+    vIdx: vIdx,
+    startX: x, startY: y,
+    orig: pl.pts.map(function(p){ return {x:p.x,y:p.y}; }),
+    moved:false
+  };
+  return true;
+}
+
+// Update an in-progress polyline drag to pointer (x,y).
+function updatePolylineDrag(x,y){
+  if(!plDrag||!selectedPolyline) return;
+  var pl=selectedPolyline;
+  var dx=x-plDrag.startX, dy=y-plDrag.startY;
+  if(Math.abs(dx)>0.5||Math.abs(dy)>0.5) plDrag.moved=true;
+  if(plDrag.mode==='vertex'){
+    pl.pts[plDrag.vIdx].x=plDrag.orig[plDrag.vIdx].x+dx;
+    pl.pts[plDrag.vIdx].y=plDrag.orig[plDrag.vIdx].y+dy;
+  } else {
+    for(var i=0;i<pl.pts.length;i++){
+      pl.pts[i].x=plDrag.orig[i].x+dx;
+      pl.pts[i].y=plDrag.orig[i].y+dy;
+    }
+  }
+  renderShapeAndMeasure();
+  renderPolylineSelection();
+  composite();
+}
+
+// Finish an in-progress polyline drag.
+function endPolylineDrag(){
+  if(!plDrag) return;
+  var moved=plDrag.moved;
+  plDrag=null;
+  if(moved){ renderShapeAndMeasure(); composite(); pushUndo(); }
+}
 // Draw a selection highlight + vertex dots for the selected polyline.
 function renderPolylineSelection(){
   if(!selectedPolyline){ return; }
