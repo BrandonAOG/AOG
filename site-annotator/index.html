@@ -6261,6 +6261,17 @@ function renderMeasureObjs(){
 }
 
 function renderShapeAndMeasure(){
+  // Guarantee the shapes/notes canvas backing store AND its draw transform match
+  // the current zoom resolution before we draw. This renderer works in plan
+  // coords and relies on shCtx carrying the eff scale; if a prior preview/commit
+  // left the context transform reset (which happens at certain zoom levels),
+  // shapes/leaders would rasterize at the wrong scale+offset and appear "placed
+  // in the wrong spot" until a re-zoom re-synced the canvas. Setting it here
+  // makes placement correct immediately, every time.
+  var _eff = _annoEff || (typeof _computeAnnoEff==='function' ? _computeAnnoEff() : 1);
+  var _wantW = Math.max(1, Math.round(baseCv.width*_eff));
+  if(shCv.width !== _wantW){ _sizeAnnoCanvas(shCv, shCtx, _eff); }
+  else { shCtx.setTransform(_eff,0,0,_eff,0,0); }
   shCtx.clearRect(0,0,shCv.width,shCv.height);
   // Shape objects
   shapeObjs.forEach(function(s){
@@ -7227,6 +7238,13 @@ var editingObj = null;     // text object currently being edited
 
 // ── Render all text objects onto txt-cv ──────────────────────
 function renderTextObjs(){
+  // Same self-sync as renderShapeAndMeasure: ensure the text canvas backing +
+  // transform match the current zoom before drawing, so committed text doesn't
+  // land at the wrong scale/offset at certain zoom levels.
+  var _eff = _annoEff || (typeof _computeAnnoEff==='function' ? _computeAnnoEff() : 1);
+  var _wantW = Math.max(1, Math.round(baseCv.width*_eff));
+  if(tCv.width !== _wantW){ _sizeAnnoCanvas(tCv, tCtx, _eff); }
+  else { tCtx.setTransform(_eff,0,0,_eff,0,0); }
   tCtx.clearRect(0,0,tCv.width,tCv.height);
   // Identify the text object currently being transformed so we can hide its
   // STATIC copy while the live preview is drawn on selCv. We match by several
@@ -10531,6 +10549,15 @@ function compositeExport(maxPx){
     if(!l.visible) return;
     try{ ctx.drawImage(l.canvas,0,0,w,h); }catch(e){ console.warn('[Export] layer:',e); }
   });
+  // Inserted images (img-cv sits above the layers, below shapes/text on screen).
+  // These were missing from export — the cause of "the site plan / my images are
+  // gone, only my drawings remain." Drawn in plan coords scaled to the export size.
+  try{
+    if(typeof imgOverlays!=='undefined') imgOverlays.forEach(function(ov){
+      var L=layers[ov.layerIdx]; if(L&&!L.visible) return;
+      ctx.save(); ctx.scale(scale,scale); _drawImgOv(ctx, ov); ctx.restore();
+    });
+  }catch(ex){ console.warn('[Export] imgOverlays:',ex); }
   // Shape objects (rect/ellipse/cloud — live objects not on layer canvases)
   try{
     shapeObjs.forEach(function(s){
@@ -12825,11 +12852,19 @@ function _pendingImgCanvasSize(img){
 }
 
 function _drawImgGhost(cx, cy){
-  // Ensure selCv is canvas-sized
+  // Ensure selCv is canvas-sized AND in plain plan-coordinate space. The
+  // selection canvas may have been left at a zoomed-up backing resolution with
+  // an eff transform by renderImgSelection/renderSelection; if we don't reset
+  // both the backing size AND the transform here, the ghost draws offset from
+  // where the image will actually be committed (the "placed thing lands in the
+  // wrong spot until I zoom out/in" bug).
   if(selCv.width !== drawCv.width || selCv.height !== drawCv.height){
     selCv.width  = drawCv.width;
     selCv.height = drawCv.height;
   }
+  selCv.style.width  = drawCv.width  + 'px';
+  selCv.style.height = drawCv.height + 'px';
+  selCtx.setTransform(1,0,0,1,0,0);
   selCtx.clearRect(0, 0, selCv.width, selCv.height);
   if(!_pendingImg) return;
 
