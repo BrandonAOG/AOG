@@ -3561,7 +3561,13 @@ function capturePageToCanvas(_fontsReady, _rectSink) {
       'body.dark-mode .top-col { background: #ffffff !important; }',
       '* { animation: none !important; transition: none !important; }',
       '.header::after { display: none !important; }',
-      '.section::before { background: none !important; }',
+      // Kill ALL decorative gradient/image pseudo-lines during capture. These
+      // 1px-tall gradients (.section::before, .top-grid::before,
+      // .gas-appliances-box::before, etc.) crash html2canvas with
+      // "createPattern ... width or height of 0" the moment their box collapses
+      // to 0 width. Removing only background-image leaves solid-color pseudos
+      // (e.g. the section-header dot) untouched. Mirrors the print stylesheet.
+      '*::before, *::after { background-image: none !important; }',
       '.section-header::before { box-shadow: none !important; animation: none !important; }',
       'body { max-width: ' + CAPTURE_W + 'px !important; }',
       '#page { width: ' + CAPTURE_W + 'px !important; max-width: ' + CAPTURE_W + 'px !important; height: auto !important; min-height: ' + PAPER_H + 'px !important; overflow: visible !important; display: flex !important; flex-direction: column !important; }',
