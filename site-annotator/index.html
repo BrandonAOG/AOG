@@ -2282,15 +2282,23 @@ function growCommentBothWays(c){
   // is what really wants horizontal room. Sizing to it lets most bullets sit on
   // a single line instead of wrapping into a tall sliver.
   var widestPara  = 0;
-  (text||'').split('\n').forEach(function(para){
+  // For pathological pastes (someone drops thousands of lines into a note), cap
+  // how many paragraphs we measure so width-fitting stays O(1)-ish and the page
+  // never locks up. The widest of the first ~600 lines is a fine width estimate.
+  var paras = (text||'').split('\n');
+  var scanN = Math.min(paras.length, 600);
+  for(var pi=0; pi<scanN; pi++){
+    var para = paras[pi];
     var pw = tCtx.measureText(para).width;
     if(pw>widestPara) widestPara = pw;
-    para.split(/\s+/).forEach(function(w){
-      if(!w) return;
+    var pwords = para.split(/\s+/);
+    for(var wi=0; wi<pwords.length; wi++){
+      var w = pwords[wi];
+      if(!w) continue;
       var ww = tCtx.measureText(w).width;
       if(ww>longestWord) longestWord = ww;
-    });
-  });
+    }
+  }
   tCtx.restore();
 
   // Cap width relative to the visible canvas so a big paste can get genuinely
@@ -2306,6 +2314,9 @@ function growCommentBothWays(c){
   var minInner = Math.max(longestWord, 80);
   var targetInner = Math.min(widestPara, screenCapInner);
   var newInner = Math.max(minInner, targetInner, curInner); // grow only, never shrink
+  // Safety: never let a measurement glitch produce NaN/Infinity/absurd width.
+  if(!isFinite(newInner) || newInner<=0) newInner = curInner;
+  newInner = Math.min(newInner, 5000);
 
   var leftEdge = c.cx - c.w/2;
   var topEdge  = c.cy - c.h/2;
@@ -5653,6 +5664,10 @@ function onMove(e){
         clx= hw-nw/2; cly=-hh+nh/2;
       }
       selectedShape.w=nw; selectedShape.h=nh;
+      // Note: comment CORNER handles (0,2,4,6) keep the default diagonal math
+      // above (width + height together). After the drag the comment sync block
+      // re-fits height to the wrapped text, so the final height hugs the content
+      // while the drag still feels like a normal diagonal corner resize.
       // Rotate local center offset back to world space and shift shape center
       var wcos=Math.cos(orig.angle), wsin=Math.sin(orig.angle);
       selectedShape.cx=orig.cx+clx*wcos-cly*wsin;
@@ -5684,7 +5699,16 @@ function onMove(e){
       }
       _cobj.cx=selectedShape.cx; _cobj.cy=selectedShape.cy;
       _cobj.w=Math.max(selectedShape.w,40); _cobj.h=Math.max(selectedShape.h,24);
-      selectedShape.w=_cobj.w; selectedShape.h=_cobj.h;
+      // After a WIDTH change (corners 0/2/4/6 or side handles 3/7), re-wrap the
+      // text and grow height to fit, pinning the top edge so the box expands
+      // downward as the text reflows narrower/wider. Vertical-only handles (1/5)
+      // skip this so a manual height drag isn't overridden.
+      if(selHandle===0||selHandle===2||selHandle===4||selHandle===6||selHandle===3||selHandle===7){
+        var _topE=_cobj.cy-_cobj.h/2;
+        fitCommentToText(_cobj, _cobj.text, true, 'grow');
+        _cobj.cy=_topE+_cobj.h/2;
+      }
+      selectedShape.w=_cobj.w; selectedShape.h=_cobj.h; selectedShape.cx=_cobj.cx; selectedShape.cy=_cobj.cy;
       _dragComment=_cobj;          // draw live on the lightweight selCv
       scheduleSelRender();         // ≤1 redraw per painted frame
       repositionCommentEditor(_cobj);
@@ -8391,6 +8415,10 @@ textOv.addEventListener('keydown',function(e){
 
 // ── Auto-grow box when user types or pastes (notes AND text objects) ───────
 textOv.addEventListener('input', function(){
+  // During a paste, the dedicated paste handler does the (wider) grow. Letting
+  // the input handler ALSO grow caused a double layout/render pass that thrashed
+  // the page. Skip here; the paste handler runs on the same tick.
+  if(_pastingIntoNote){ return; }
   if(_editingComment){ _cmtAutoGrow(_editingComment); return; }
   _fitTextOv();
   if(typeof _txtBgLive==='function') _txtBgLive(); // toggle/track the live highlight as text changes
@@ -8400,22 +8428,25 @@ textOv.addEventListener('input', function(){
 // Paste updates .value AFTER the event fires, so re-fit on the next tick. This
 // fixes pasted text appearing to vanish in a text object (it was just clipped
 // by the fixed box height until the overlay got re-fit to its content).
+var _pastingIntoNote = false;   // true between a note paste and its deferred grow
 textOv.addEventListener('paste', function(){
+  // The pasted text isn't in textOv.value until after this event, so defer.
+  // The `input` event ALSO fires on paste and already runs _cmtAutoGrow, so we
+  // must NOT duplicate the height/render work here (doing both caused a layout
+  // thrash + oversized editor). We only add the one thing input can't do for a
+  // note: widen the box. growCommentBothWays handles width + height + editor
+  // resync in one pass; we let the normal input handler do nothing extra.
+  if(!_editingComment){ setTimeout(_fitTextOv, 0); return; }
+  var c = _editingComment;
+  _pastingIntoNote = true;       // suppress the input handler's duplicate grow
   setTimeout(function(){
-    if(_editingComment){
-      // Pull the freshly-pasted value into the note, then grow BOTH width and
-      // height so a big paste spreads into a natural block instead of a tall
-      // narrow column.
-      _editingComment.text = textOv.value;
-      growCommentBothWays(_editingComment);
-      // Resync the editor overlay to the new box (width changed, so the
-      // height-only resync isn't enough — reposition fully then refit height).
-      repositionCommentEditor(_editingComment);
-      textOv.style.height = 'auto';
-      textOv.style.height = Math.max(textOv.scrollHeight || 20, 20) + 'px';
-      repositionCommentEditorHeight(_editingComment);
+    try{
+      if(_editingComment !== c) return;     // user moved on — bail
+      c.text = textOv.value;
+      growCommentBothWays(c);               // sizes box (W+H) and resyncs editor
+    } finally {
+      _pastingIntoNote = false;
     }
-    else _fitTextOv();
   }, 0);
 });
 // While editing a note, the textarea must never scroll its own content
@@ -8554,7 +8585,12 @@ var ROT_COLOR     = '#db2777'; // deep pink — visible on white backgrounds
 // 0=TL 1=TC 2=TR 3=MR 4=BR 5=BC 6=BL 7=ML (resize)
 // 8=TL-rot 9=TR-rot 10=BR-rot 11=BL-rot  (rotate, outside corners)
 function getHandlePositions(s){
-  var hw=s.w/2, hh=s.h/2;
+  // Place handles ON the dashed selection outline, which is drawn `selPad`
+  // outside the box edge (see renderSelection's strokeRect). Previously handles
+  // sat on the true box edge while the outline sat 6px further out, so they
+  // looked "a little off" the box. Match the same pad here.
+  var selPad = 6/zoom;
+  var hw=s.w/2+selPad, hh=s.h/2+selPad;
   var ro=ROT_OFFSET/zoom;
   var local=[
     {x:-hw, y:-hh}, {x:0, y:-hh}, {x:hw, y:-hh},   // 0 1 2
@@ -9033,7 +9069,18 @@ var HANDLE_CURSORS=['nw-resize','n-resize','ne-resize','e-resize',
 function updateSelCursor(x,y){
   if(!selectedShape){ drawCv.style.cursor='crosshair'; return; }
   var h=getHandleAt(x,y,false);
-  if(h>=0){ drawCv.style.cursor=HANDLE_CURSORS[h]; return; }
+  if(h>=0){
+    // Comments: side-center handles are axis-locked (top/bottom = vertical,
+    // left/right = horizontal); corners resize diagonally like a normal box.
+    if(selectedShape.type==='comment' && h>=0 && h<=7){
+      var cmtCur;
+      if(h===1||h===5) cmtCur='ns-resize';        // top/bottom center → vertical
+      else if(h===3||h===7) cmtCur='ew-resize';   // left/right center → horizontal
+      else cmtCur=HANDLE_CURSORS[h];              // corners → diagonal (nw/ne/se/sw)
+      drawCv.style.cursor=cmtCur; return;
+    }
+    drawCv.style.cursor=HANDLE_CURSORS[h]; return;
+  }
   if(isInsideShape(selectedShape,x,y,false)){
     // Comment: border strip = move cursor, interior = text cursor (Acrobat style)
     if(selectedShape.type==='comment'){
