@@ -2164,7 +2164,7 @@ function enterCommentSelectMode(c){
   }
   selectedShape={
     type:'comment', _commentObj:c,
-    cx:c.cx, cy:c.cy, w:c.w, h:c.h, angle:0,
+    cx:c.cx, cy:c.cy, w:c.w, h:c.h, angle:c.angle||0,
     color:c.borderColor||'#4B5563', strokeW:c.borderStrokeW||2,
     opacity:1, fill:false, lineStyle:'solid'
   };
@@ -2236,6 +2236,17 @@ function startCommentTextEdit(c){
   textOv.style.borderBottom = 'none';
   textOv.style.whiteSpace   = 'pre-wrap';
   textOv.style.overflow     = 'hidden';
+  // Rotate the editor to match a sideways note. The textarea is sized to the box
+  // INTERIOR, so its own centre coincides with the note centre (which is the
+  // pivot drawCommentBox rotates about) — rotating about 'center' stays aligned
+  // even as the box auto-grows (top edge pinned in the unrotated frame).
+  if(c.angle){
+    textOv.style.transformOrigin = 'center center';
+    textOv.style.transform = 'rotate(' + c.angle + 'rad)';
+  } else {
+    textOv.style.transformOrigin = 'top left';
+    textOv.style.transform = 'none';
+  }
   textOv.value = c.text || '';
 
   // Measure existing content height and trigger auto-grow
@@ -2442,8 +2453,12 @@ function repositionCommentEditor(c){
   if(textOv.style.boxSizing !== 'border-box') textOv.style.boxSizing = 'border-box';
   // Own these outright — if any other styler (text tool, picker handlers) left a
   // scale transform or its 1.2 line-height behind, the note text rendered shrunken
-  // and wrapped wrong until commit.
-  if(textOv.style.transform !== 'none') textOv.style.transform = 'none';
+  // and wrapped wrong until commit. For a sideways note, keep the rotation about
+  // the textarea centre (= note centre) instead of clearing it.
+  var _wantT = c.angle ? ('rotate('+c.angle+'rad)') : 'none';
+  var _wantO = c.angle ? 'center center' : 'top left';
+  if(textOv.style.transform !== _wantT) textOv.style.transform = _wantT;
+  if(textOv.style.transformOrigin !== _wantO) textOv.style.transformOrigin = _wantO;
   if(textOv.style.lineHeight !== String(CMT_LINE_H)) textOv.style.lineHeight = String(CMT_LINE_H);
   // Font family + style so what you type LOOKS like what the canvas will draw.
   var _ff = cmtFontStack(c.fontFamily);
@@ -7994,6 +8009,8 @@ function showTextOverlay(cx,cy){
   textOv._canvasCx = cx; textOv._canvasCy = cy;
   // Must set display=block BEFORE repositionTextOverlay (it returns early if none)
   textOv.style.display = 'block';
+  // Safety: ensure no leftover note rotation from a prior comment edit.
+  textOv.style.transform = 'none'; textOv.style.transformOrigin = '';
   repositionTextOverlay();
   // iOS: focus already called in onDown. Desktop + double-tap edit path: focus here.
   if(document.activeElement!==textOv){
@@ -8601,6 +8618,7 @@ function renderSelection(){
     var _cc=selectedShape._commentObj;
     selectedShape.cx=_cc.cx; selectedShape.cy=_cc.cy;
     selectedShape.w =_cc.w;  selectedShape.h =_cc.h;
+    selectedShape.angle=_cc.angle||0;
   }
   var s=selectedShape, lw=1.5/zoom;
 
