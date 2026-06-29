@@ -4874,6 +4874,20 @@ var layerTmps=layers.map(function(l){
         }
       }
       selHandle=-1; selDragStart=null;
+    }
+  }catch(ex){ console.warn('[Rotate] selection resync failed:',ex); }
+
+  composite(); drawGrid(); fitToVP();
+
+  // Render the selection chrome AFTER fitToVP — it changes zoom/pan and may
+  // resize selCv, which would invalidate (or leave a ghost of) any selection
+  // drawn before it. Force a full clear so the pre-rotation outline can't
+  // linger at the note's old position, then redraw at the new geometry.
+  try{
+    if(typeof selCv!=='undefined' && selCv && selCv.width>1){
+      selCtx.clearRect(0,0,selCv.width,selCv.height);
+    }
+    if(typeof selectedShape!=='undefined' && selectedShape){
       if(_editingComment && selectedShape._commentObj===_editingComment){
         repositionCommentEditor(_editingComment);
       }
@@ -4882,9 +4896,7 @@ var layerTmps=layers.map(function(l){
     if(typeof selectedPolyline!=='undefined' && selectedPolyline && typeof renderPolylineSelection==='function'){
       renderPolylineSelection();
     }
-  }catch(ex){ console.warn('[Rotate] selection resync failed:',ex); }
-
-  composite(); drawGrid(); fitToVP();
+  }catch(ex){ console.warn('[Rotate] selection redraw failed:',ex); }
 }
 
 // ── GRID ──
