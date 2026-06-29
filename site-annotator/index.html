@@ -2258,6 +2258,12 @@ function startCommentTextEdit(c){
     textOv.style.transform = 'none';
   }
   textOv.value = c.text || '';
+  // Belt-and-suspenders: the shared textarea is also used by leader labels that
+  // set textAlign:'right'/dir. Re-assert left alignment for notes here (after the
+  // value is set) and clear any RTL direction so notes ALWAYS type left-aligned.
+  textOv.style.textAlign = 'left';
+  textOv.style.direction = 'ltr';
+  textOv.removeAttribute('dir');
 
   // Measure existing content height and trigger auto-grow
   setTimeout(function(){
@@ -8421,8 +8427,31 @@ function _fitTextOv(){
   // Height: hug the actual content — one line by default, grows with added lines.
   textOv.style.height = 'auto';
   textOv.style.height = Math.max(renderSz, textOv.scrollHeight) + 'px';
-  // Right-anchored leader labels keep their alignment-critical computed width.
-  if(_textAnchorRight) return;
+  // Right-anchored leader labels (left-hanging): the highlight background is the
+  // textarea's own box, so it must hug the text too — otherwise an empty/short
+  // label shows a long bar stretching left from the leader. Keep the RIGHT edge
+  // pinned at the anchor and grow the box LEFTWARD as characters are added, so it
+  // starts ~one letter wide and grows one character at a time.
+  if(_textAnchorRight){
+    // The box may carry a scale() transform when zoomed out; the VISUAL right
+    // edge is left + width*scale. Pin that visual edge and grow leftward.
+    var _trS = textOv.style.transform || '', _siS = _trS.indexOf('scale(');
+    var _scaleR = (_siS>=0) ? (parseFloat(_trS.slice(_siS+6))||1) : 1;
+    var _curLeft  = parseFloat(textOv.style.left) || 0;
+    var _curW     = parseFloat(textOv.style.width) || (oneCh + pad);
+    var _rightEdge= _curLeft + _curW*_scaleR;    // pinned visual anchor (screen-x)
+    // Measure true content width with the box collapsed.
+    textOv.style.width = '0px';
+    var _contentW = textOv.scrollWidth + 4;
+    var _newW = Math.max(oneCh + pad, _contentW);
+    var _newLeft = _rightEdge - _newW*_scaleR;
+    if(_newLeft < 0){ _newW = _rightEdge/_scaleR; _newLeft = 0; }
+    textOv.style.width    = _newW + 'px';
+    textOv.style.minWidth = _newW + 'px';
+    textOv.style.maxWidth = _newW + 'px';
+    textOv.style.left     = _newLeft + 'px';
+    return;
+  }
   // Width: a textarea's scrollWidth is floored at its current VISIBLE width, so
   // reading it while the box is still wide reports the box width (not the text)
   // — which kept the editor/highlight full-line on an empty or short line.
