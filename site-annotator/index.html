@@ -893,8 +893,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       </div>
     </div>
     <div class="sl-wrap" style="min-width:44px">
-      <input type="range" id="cmt-bd-w-sl" min="1" max="12" value="2">
-      <span id="cmt-bd-w-val" style="font-size:8px">2px</span>
+      <input type="range" id="cmt-bd-w-sl" min="1" max="20" value="10">
+      <span id="cmt-bd-w-val" style="font-size:8px">10px</span>
     </div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
       <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">TEXT</span>
@@ -980,8 +980,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   <div class="sep"></div>
   <!-- STROKE WIDTH -->
   <div id="tb-sw-grp" class="sl-wrap">
-    <input type="range" id="sw-sl" min="1" max="30" value="2">
-    <span id="sw-val">2px</span>
+    <input type="range" id="sw-sl" min="1" max="30" value="5">
+    <span id="sw-val">5px</span>
   </div>
   <div class="sep" id="tb-sw-sep"></div>
   <!-- OPACITY -->
@@ -1887,7 +1887,7 @@ var commentObjs     = [];
 var _cBgColor       = '#FBBF24';
 var _cBgOpacity     = 0.9;
 var _cBorderColor   = '#4B5563';
-var _cBorderW       = 2;          // border stroke width in canvas px
+var _cBorderW       = 10;         // note border stroke width — notes start at 10pt
 var _cTxtColor      = '#1a1a2e';
 var _cFontSize      = 10;
 var _cFontFamily    = 'Arial';
@@ -2229,6 +2229,10 @@ function startCommentTextEdit(c){
   textOv.style.padding      = Math.max(0, Math.round(cmtInnerPad(c,'grow')*zoom)) + 'px';
   textOv.style.boxSizing    = 'border-box';
   textOv.style.lineHeight   = String(CMT_LINE_H);
+  // Notes are always left-aligned. The shared textarea may carry textAlign:'right'
+  // left over from a leader label's right-anchored overlay; force it back here so
+  // a right-aligned leader doesn't bleed into the note editor.
+  textOv.style.textAlign    = 'left';
   textOv.style.transform    = 'none';
   textOv.style.transformOrigin = 'top left';
   textOv.style.color        = _cTxtColor;
@@ -2696,7 +2700,15 @@ document.addEventListener('touchmove', function(e){
 })();
 
 // ── APP STATE ──
-var tool='pan', color='#ef4444', strokeW=2, opacity=1, lineStyle='solid', fillShape=false;
+var tool='pan', color='#ef4444', strokeW=5, opacity=1, lineStyle='solid', fillShape=false;
+// ── Per-tool stroke width memory ──
+// Each tool keeps its OWN thickness. Changing it for one tool never affects
+// another, and switching tools restores that tool's last value (or its default).
+// Notes (comment border) default to 10pt; every other tool defaults to 5pt.
+var STROKE_DEFAULT = 5;
+var STROKE_DEFAULT_NOTE = 10;
+function _toolStrokeDefault(t){ return (t==='comment') ? STROKE_DEFAULT_NOTE : STROKE_DEFAULT; }
+var _toolStroke = {};   // { toolName: lastWidth }
 var fillColor='#ef4444', fillOpacity=0.4; // separate fill (inner) color and opacity
 var stampType='north';
 var layers=[], activeLayerIdx=0, _soloIdx=-1;
@@ -5763,15 +5775,10 @@ function onMove(e){
       }
       _cobj.cx=selectedShape.cx; _cobj.cy=selectedShape.cy;
       _cobj.w=Math.max(selectedShape.w,40); _cobj.h=Math.max(selectedShape.h,24);
-      // After a WIDTH change (corners 0/2/4/6 or side handles 3/7), re-wrap the
-      // text and grow height to fit, pinning the top edge so the box expands
-      // downward as the text reflows narrower/wider. Vertical-only handles (1/5)
-      // skip this so a manual height drag isn't overridden.
-      if(selHandle===0||selHandle===2||selHandle===4||selHandle===6||selHandle===3||selHandle===7){
-        var _topE=_cobj.cy-_cobj.h/2;
-        fitCommentToText(_cobj, _cobj.text, true, 'grow');
-        _cobj.cy=_topE+_cobj.h/2;
-      }
+      // During the drag we let the handle math stand as-is so corners feel like a
+      // normal DIAGONAL resize (width + height move together) and side handles
+      // move their single axis. Height is auto-fitted to the text on RELEASE
+      // (see onUp), not here — re-fitting per move made corners feel width-only.
       selectedShape.w=_cobj.w; selectedShape.h=_cobj.h; selectedShape.cx=_cobj.cx; selectedShape.cy=_cobj.cy;
       _dragComment=_cobj;          // draw live on the lightweight selCv
       scheduleSelRender();         // ≤1 redraw per painted frame
@@ -5882,27 +5889,32 @@ function onUp(e){
       // edge of the screen is still left of page-center, using baseCv.width/2
       // wrongly pointed the shoulder right and detached the label. Convert the
       // elbow to screen space and compare against the viewport's middle.
-      var _elbowScreenX = panX + _pL.x*zoom;
-      var _vpMidX = viewport.clientWidth/2;
-      var _shD=(_elbowScreenX > _vpMidX) ? -1 : 1;
+      // Place the shoulder + text on the side the user DRAGGED toward (tip→elbow):
+      // drag right→right, left→left, down→below, up→above. Dominant axis wins.
+      var _ld=leaderDirFromDrag(leaderP1x, leaderP1y, _pL.x, _pL.y);
+      var _shD=_ld.shoulderDir;
       var _shL=60;
-      leaderObjs.push({
+      var _leaderObj={
         id:Date.now(),
         x1:leaderP1x, y1:leaderP1y, x2:_pL.x, y2:_pL.y,
-        shoulderDir:_shD, shoulderLen:_shL,
+        shoulderDir:_shD, sdx:_ld.sdx, sdy:_ld.sdy, shoulderLen:_shL,
         color:color, strokeW:strokeW, opacity:opacity, layerIdx:activeLayerIdx
-      });
+      };
+      leaderObjs.push(_leaderObj);
       renderShapeAndMeasure();
       composite();
-      textX=_pL.x+(_shL+2)*_shD; textY=_pL.y;
       textOv.value='';   // label must NEVER inherit text left over from a previous box
-      // Leader on the right side (shoulder points left) → anchor text right edge
-      // here and grow leftward so the label hangs to the left of the line. A
-      // left-side leader hangs right (normal left alignment). This is driven
-      // ENTIRELY by _textAnchorRight; we must NOT touch the global textAlign,
-      // or every later text/note would inherit the leader's alignment.
-      _textAnchorRight = (_shD === -1);
-      showTextOverlay(textX, _pL.y);
+      // Text anchor: horizontal drags place text just past the shoulder end on
+      // that side; vertical drags place it just past the shoulder end above/below.
+      var _se=leaderShoulderEnd(_leaderObj);
+      if(_ld.vertical){
+        textX=_se.x; textY=_se.y + (_ld.sign>0 ? 2 : -2);
+        _textAnchorRight=false;
+      } else {
+        textX=_se.x + (_ld.sign>0 ? 2 : -2); textY=_se.y;
+        _textAnchorRight=(_ld.anchorRight===true);
+      }
+      showTextOverlay(textX, textY);
       pushUndo();
     } else {
       composite();       // a mere tap: cancel placement, wipe the dashed preview
@@ -6567,6 +6579,40 @@ function leaderShoulderEnd(o){
   var sdx=(o.sdx!==undefined?o.sdx:(o.shoulderDir||1));
   var sdy=(o.sdy!==undefined?o.sdy:0);
   return {x:o.x2+len*sdx, y:o.y2+len*sdy};
+}
+
+// Decide the leader's shoulder direction + text placement from the DRAG the user
+// made (arrow tip → elbow point). The dominant axis wins, giving four cardinal
+// outcomes: drag right→text right, left→left, down→below, up→above.
+// Returns {sdx,sdy, shoulderDir, anchorRight, vertical, sign} where:
+//   sdx,sdy      = unit shoulder direction stored on the leader object
+//   shoulderDir  = legacy ±1 (for old code paths / save compat)
+//   anchorRight  = true when text should hang to the LEFT (right-edge anchored)
+//   vertical     = true when text goes above/below instead of left/right
+//   sign         = +1 down/right, -1 up/left (the dragged direction)
+function leaderDirFromDrag(tipX, tipY, elbowX, elbowY){
+  var dx = elbowX - tipX, dy = elbowY - tipY;
+  if(Math.abs(dx) >= Math.abs(dy)){
+    // Horizontal dominant
+    var rightward = dx >= 0;
+    return {
+      sdx: rightward ? 1 : -1, sdy: 0,
+      shoulderDir: rightward ? 1 : -1,
+      anchorRight: !rightward,   // dragged left → text hangs left (right-anchored)
+      vertical: false,
+      sign: rightward ? 1 : -1
+    };
+  } else {
+    // Vertical dominant
+    var downward = dy >= 0;
+    return {
+      sdx: 0, sdy: downward ? 1 : -1,
+      shoulderDir: 1,            // legacy field unused for vertical; keep sane
+      anchorRight: false,
+      vertical: true,
+      sign: downward ? 1 : -1
+    };
+  }
 }
 function drawLeaderOnCtx(ctx,o,sc){
   sc=sc||1;
@@ -7331,21 +7377,28 @@ function handleLeaderClick(x,y,e){
   } else if(leaderStep===1){
     // Commit a LIVE leader object (never burned to the layer canvas)
     captureState(false);
-    var shoulderDir = (x > baseCv.width/2) ? -1 : 1;
+    // Shoulder + text go on the side the user DRAGGED toward (tip→elbow).
+    var _ld=leaderDirFromDrag(leaderP1x, leaderP1y, x, y);
+    var shoulderDir = _ld.shoulderDir;
     var shoulderLen = 60;
-    leaderObjs.push({
+    var _lobj={
       id:Date.now(),
       x1:leaderP1x, y1:leaderP1y, x2:x, y2:y,
-      shoulderDir:shoulderDir, shoulderLen:shoulderLen,
+      shoulderDir:shoulderDir, sdx:_ld.sdx, sdy:_ld.sdy, shoulderLen:shoulderLen,
       color:color, strokeW:strokeW, opacity:opacity, layerIdx:activeLayerIdx
-    });
+    };
+    leaderObjs.push(_lobj);
     renderShapeAndMeasure();
     composite();
-    textX=x+(shoulderLen+2)*shoulderDir; textY=y;
-    // Right-side leader hangs left of the line (right-anchored). Driven by
-    // _textAnchorRight only — never mutate global textAlign.
-    _textAnchorRight = (shoulderDir === -1);
-    showTextOverlay(textX, y);
+    var _se=leaderShoulderEnd(_lobj);
+    if(_ld.vertical){
+      textX=_se.x; textY=_se.y + (_ld.sign>0 ? 2 : -2);
+      _textAnchorRight=false;
+    } else {
+      textX=_se.x + (_ld.sign>0 ? 2 : -2); textY=_se.y;
+      _textAnchorRight=(_ld.anchorRight===true);
+    }
+    showTextOverlay(textX, textY);
     leaderStep=0;
     pushUndo();
   }
@@ -9861,7 +9914,22 @@ document.querySelectorAll('.tb-btn[data-tool]').forEach(function(btn){
     // Cancel an in-progress (not-yet-placed) image ghost so it doesn't linger.
     if(typeof _pendingImg!=='undefined'&&_pendingImg&&typeof _cancelImgPlacement==='function'){ _cancelImgPlacement(); }
     stopTextCursor(); clearTextHover();
+    // ── Per-tool stroke width: save the OUTGOING tool's value, load the new one ──
+    // The note tool steers _cBorderW; every other tool steers the global strokeW.
+    var _prevTool = tool;
+    var _prevW = (_prevTool==='comment') ? _cBorderW : strokeW;
+    _toolStroke[_prevTool] = _prevW;
     tool=btn.dataset.tool;
+    var _newW = (_toolStroke[tool] !== undefined) ? _toolStroke[tool] : _toolStrokeDefault(tool);
+    if(tool==='comment'){
+      _cBorderW = _newW;
+      var _bdSl=document.getElementById('cmt-bd-w-sl'); if(_bdSl) _bdSl.value=_cBorderW;
+      var _bdVal=document.getElementById('cmt-bd-w-val'); if(_bdVal) _bdVal.textContent=_cBorderW+'px';
+    } else {
+      strokeW = _newW;
+      if(typeof swSl!=='undefined' && swSl) swSl.value=strokeW;
+      if(typeof swVal!=='undefined' && swVal) swVal.textContent=strokeW+'px';
+    }
     document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
     btn.classList.add('active');
     updateToolbarForTool(tool);
@@ -10383,6 +10451,8 @@ clrInput.addEventListener('change', function(e){ applyStrokeColor(e.target.value
 // width didn't — exactly the reported symptom.
 function applyStrokeW(v){
   strokeW=Math.round(v); swVal.textContent=strokeW+'px';
+  // Remember this width for the CURRENT tool only (note tool uses _cBorderW path).
+  if(tool && tool!=='comment') _toolStroke[tool]=strokeW;
   if(selectedShape){ selectedShape.strokeW=strokeW; renderSelection(); }
   if(selectedMeasure){ selectedMeasure.strokeW=strokeW; renderMeasureSelection(); renderShapeAndMeasure(); }
   if(selectedPolyline){ selectedPolyline.strokeW=strokeW; renderShapeAndMeasure(); renderPolylineSelection(); }
