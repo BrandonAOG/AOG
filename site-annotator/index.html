@@ -2236,12 +2236,18 @@ function startCommentTextEdit(c){
   textOv.style.borderBottom = 'none';
   textOv.style.whiteSpace   = 'pre-wrap';
   textOv.style.overflow     = 'hidden';
-  // Rotate the editor to match a sideways note. The textarea is sized to the box
-  // INTERIOR, so its own centre coincides with the note centre (which is the
-  // pivot drawCommentBox rotates about) — rotating about 'center' stays aligned
-  // even as the box auto-grows (top edge pinned in the unrotated frame).
+  // Rotate the editor to match a sideways note. The note (drawCommentBox) pivots
+  // about its CENTRE (c.cx,c.cy). The textarea's top-left is pinned at the box
+  // interior corner, so its own centre does NOT coincide with the note centre —
+  // especially right now while height is still 'auto' (~1 line). Rotating about
+  // the textarea's centre therefore flung the editor to the wrong place after a
+  // 90/180° page rotation. Pivot about an EXPLICIT point: the note centre,
+  // expressed in px relative to the textarea's top-left, which stays correct no
+  // matter the textarea's current height.
   if(c.angle){
-    textOv.style.transformOrigin = 'center center';
+    var _ox = (c.w/2 - pad) * zoom;   // note-centre X relative to textarea TL
+    var _oy = (c.h/2 - pad) * zoom;   // note-centre Y relative to textarea TL
+    textOv.style.transformOrigin = _ox + 'px ' + _oy + 'px';
     textOv.style.transform = 'rotate(' + c.angle + 'rad)';
   } else {
     textOv.style.transformOrigin = 'top left';
@@ -2532,8 +2538,13 @@ function repositionCommentEditor(c){
   // scale transform or its 1.2 line-height behind, the note text rendered shrunken
   // and wrapped wrong until commit. For a sideways note, keep the rotation about
   // the textarea centre (= note centre) instead of clearing it.
+  // Pivot the rotation about the NOTE CENTRE, given as an explicit px offset from
+  // the textarea's top-left (see startCommentTextEdit for why 'center center' was
+  // wrong). pad/cw2 already computed above.
   var _wantT = c.angle ? ('rotate('+c.angle+'rad)') : 'none';
-  var _wantO = c.angle ? 'center center' : 'top left';
+  var _wantO = c.angle
+      ? (((c.w/2 - pad)*zoom) + 'px ' + ((c.h/2 - pad)*zoom) + 'px')
+      : 'top left';
   if(textOv.style.transform !== _wantT) textOv.style.transform = _wantT;
   if(textOv.style.transformOrigin !== _wantO) textOv.style.transformOrigin = _wantO;
   if(textOv.style.lineHeight !== String(CMT_LINE_H)) textOv.style.lineHeight = String(CMT_LINE_H);
