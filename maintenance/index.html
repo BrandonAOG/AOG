@@ -3212,6 +3212,23 @@ function capturePageToCanvas() {
               el.id === 'save-status'                  ||
               el.classList.contains('theme-toggle-btn'),
             onclone: function (clonedDoc) {
+              // Guard: any image that failed to load (e.g. logo.png at a wrong
+              // relative path) has naturalWidth/Height 0. html2canvas then calls
+              // createPattern() on a 0x0 image and throws, killing the whole
+              // export. Drop broken images from the clone so capture survives.
+              try {
+                var _liveImgs  = document.images;
+                var _cloneImgs = clonedDoc.images;
+                for (var _i = 0; _i < _cloneImgs.length; _i++) {
+                  var _li = _liveImgs[_i];
+                  var _broken = !_li || !_li.complete ||
+                                _li.naturalWidth === 0 || _li.naturalHeight === 0;
+                  if (_broken && _cloneImgs[_i] && _cloneImgs[_i].parentNode) {
+                    _cloneImgs[_i].parentNode.removeChild(_cloneImgs[_i]);
+                  }
+                }
+              } catch (e) {}
+
               // html2canvas paints <input type="date"> segments year-first on
               // Safari ("2026 06 21"). Replace it in the CLONE only with a span
               // showing the nicely formatted value, styled to match the input.
