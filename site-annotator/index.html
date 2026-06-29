@@ -1988,6 +1988,13 @@ function cmtWrapLines(ctx, text, maxW){
 function drawCommentBox(ctx, c, sc, skipText, onScreen){
   sc=sc||1;
   ctx.save();
+  // Rotate the entire note (box + text) as a rigid unit about its centre so it
+  // turns with the page. All the math below stays axis-aligned in this frame.
+  if(c.angle){
+    ctx.translate(c.cx*sc, c.cy*sc);
+    ctx.rotate(c.angle);
+    ctx.translate(-c.cx*sc, -c.cy*sc);
+  }
   var x=(c.cx-c.w/2)*sc, y=(c.cy-c.h/2)*sc, w=c.w*sc, h=c.h*sc;
   var r=Math.min(7*sc, w/5, h/5);
   var bgCol=c.bgColor||'#FBBF24';
@@ -2086,8 +2093,15 @@ function findCommentObjAt(x,y,isTouch){
   for(var i=commentObjs.length-1;i>=0;i--){
     var c=commentObjs[i];
     var layer=layers[c.layerIdx]; if(layer&&!layer.visible) continue;
-    if(x>=c.cx-c.w/2-pad&&x<=c.cx+c.w/2+pad&&
-       y>=c.cy-c.h/2-pad&&y<=c.cy+c.h/2+pad) return c;
+    // If the note is rotated, un-rotate the click point into the box's local
+    // (axis-aligned) frame about its centre before the bounds test.
+    var px=x, py=y;
+    if(c.angle){
+      var dx=x-c.cx, dy=y-c.cy, ca=Math.cos(-c.angle), sa=Math.sin(-c.angle);
+      px=c.cx+dx*ca-dy*sa; py=c.cy+dx*sa+dy*ca;
+    }
+    if(px>=c.cx-c.w/2-pad&&px<=c.cx+c.w/2+pad&&
+       py>=c.cy-c.h/2-pad&&py<=c.cy+c.h/2+pad) return c;
   }
   if(typeof AOG_DEBUG!=='undefined' && AOG_DEBUG && commentObjs.length){
     try{ console.log('[AOG:noteclick] findCommentObjAt MISS at ('+Math.round(x)+','+Math.round(y)+'); notes:', commentObjs.map(function(c){return '['+Math.round(c.cx-c.w/2)+','+Math.round(c.cy-c.h/2)+' to '+Math.round(c.cx+c.w/2)+','+Math.round(c.cy+c.h/2)+']';}).join(' ')); }catch(e){}
@@ -4629,29 +4643,103 @@ var layerTmps=layers.map(function(l){
   layers.forEach(function(l,i){ l.canvas.width=h; l.canvas.height=w; l.ctx.drawImage(layerTmps[i],0,0); });
   // Release old layer canvases on iOS
   if(IS_IOS){ oldLayerCanvases.forEach(function(c){ releaseCanvas(c); }); layerTmps.forEach(function(c){ releaseCanvas(c); }); }
-  // Rotate text object positions to match new canvas orientation
-  var rw=baseCv.width, rh=baseCv.height; // after resize these are swapped
-  // deg is -90 or 90; transform each text object position
+  // ── Rotate every VECTOR object so it matches the rotated bitmap layers ──
+  // After resize(h,w) the canvas dims are swapped: rw = NEW width (= original
+  // height), rh = NEW height (= original width). The bitmap layers above were
+  // rotated with translate(h/2,w/2)·rotate(θ)·drawImage(-w/2,-h/2). Inverting
+  // that exact transform, a point (x,y) on the OLD canvas maps to:
+  //    deg= 90 (CW):  (rw - y,  x)
+  //    deg=-90 (CCW): (y,  rh - x)
+  // Every object below must use THIS same mapping, or it desyncs from the
+  // pixels — which is what made drawings "not rotate" and export "way off".
+  var rw=baseCv.width, rh=baseCv.height;
+  var dRad=deg*Math.PI/180;
+  function rotPt(x,y){
+    return (deg===90) ? {x:rw-y, y:x} : {x:y, y:rh-x};
+  }
+
+  // Shapes (rect/ellipse/etc): move centre + spin local frame.
   shapeObjs.forEach(function(s){
-    var ox=s.cx, oy=s.cy;
-    if(deg===90){ s.cx=rh-oy; s.cy=ox; }
-    else         { s.cx=oy;   s.cy=rw-ox; }
-    s.angle+=deg*Math.PI/180;
+    var p=rotPt(s.cx,s.cy); s.cx=p.x; s.cy=p.y;
+    s.angle=(s.angle||0)+dRad;
   });
   renderShapeObjs();
-  try{ textObjs.forEach(function(obj){
-    if(deg===90){
-      var nx=rw-obj.y; var ny=obj.x;  // wrong without orig dims
-      // use original w/h (before resize — which swapped them)
-      // orig w=rh, orig h=rw after swap
+
+  // Measure lines / arrows: rotate BOTH endpoints (and the saved originals so
+  // the export's "was this moved?" check still matches).
+  try{ measureObjs.forEach(function(m){
+    var a=rotPt(m.x1,m.y1), b=rotPt(m.x2,m.y2);
+    m.x1=a.x; m.y1=a.y; m.x2=b.x; m.y2=b.y;
+    if(m._oX1!==undefined){
+      var oa=rotPt(m._oX1,m._oY1), ob=rotPt(m._oX2,m._oY2);
+      m._oX1=oa.x; m._oY1=oa.y; m._oX2=ob.x; m._oY2=ob.y;
     }
-    // Simple approach: approximate re-center
-    var cx=obj.x, cy=obj.y;
-    if(deg===90){  obj.x=rh-cy; obj.y=cx; }
-    else          { obj.x=cy;   obj.y=rw-cx; }
-  });
-  }catch(ex){ console.warn('[Rotate] textObjs transform failed:',ex); }
+  }); }catch(ex){ console.warn('[Rotate] measureObjs transform failed:',ex); }
+  if(typeof renderMeasureObjs==='function') renderMeasureObjs();
+
+  // Notes / comment boxes: rotate the box as a rigid unit — move the centre and
+  // add to its angle so the box AND its text turn with the page (drawCommentBox
+  // honours c.angle). Do NOT swap w/h, or the text would rewrap.
+  try{ if(typeof commentObjs!=='undefined') commentObjs.forEach(function(c){
+    var p=rotPt(c.cx,c.cy); c.cx=p.x; c.cy=p.y;
+    c.angle=(c.angle||0)+dRad;
+  }); }catch(ex){ console.warn('[Rotate] commentObjs transform failed:',ex); }
+  if(typeof renderCommentObjs==='function') renderCommentObjs(shCtx);
+
+  // Text markup (highlight / underline / strikethrough): rotate both corners.
+  try{ if(typeof markupObjs!=='undefined') markupObjs.forEach(function(m){
+    var a=rotPt(m.x1,m.y1), b=rotPt(m.x2,m.y2);
+    m.x1=a.x; m.y1=a.y; m.x2=b.x; m.y2=b.y;
+  }); }catch(ex){ console.warn('[Rotate] markupObjs transform failed:',ex); }
+  if(typeof renderMarkupObjs==='function') renderMarkupObjs();
+
+  // Leaders: rotate both endpoints AND the shoulder direction vector so the
+  // elbow shoulder turns with the page (it's no longer hardcoded horizontal).
+  try{ if(typeof leaderObjs!=='undefined') leaderObjs.forEach(function(o){
+    var a=rotPt(o.x1,o.y1), b=rotPt(o.x2,o.y2);
+    o.x1=a.x; o.y1=a.y; o.x2=b.x; o.y2=b.y;
+    var sdx=(o.sdx!==undefined?o.sdx:(o.shoulderDir||1));
+    var sdy=(o.sdy!==undefined?o.sdy:0);
+    var c=Math.cos(dRad), s=Math.sin(dRad);   // rotate the unit direction
+    o.sdx=sdx*c - sdy*s; o.sdy=sdx*s + sdy*c;
+    o.shoulderDir=(o.sdx<0?-1:1);
+  }); }catch(ex){ console.warn('[Rotate] leaderObjs transform failed:',ex); }
+
+  // Point-array tools (pen, polyline, polygon, path-measure): rotate every pt.
+  function _rotPtsArr(arr){
+    if(typeof arr==='undefined') return;
+    arr.forEach(function(o){ if(o.pts) o.pts=o.pts.map(function(p){ return rotPt(p.x,p.y); }); });
+  }
+  try{ _rotPtsArr(penObjs); _rotPtsArr(polylineObjs); _rotPtsArr(polygonObjs); _rotPtsArr(pathMeasureObjs); }
+  catch(ex){ console.warn('[Rotate] point-array transform failed:',ex); }
+
+  // Stamps: rotate the placement point (the symbol itself stays upright).
+  try{ if(typeof stampObjs!=='undefined') stampObjs.forEach(function(o){
+    var p=rotPt(o.x,o.y); o.x=p.x; o.y=p.y;
+  }); }catch(ex){ console.warn('[Rotate] stampObjs transform failed:',ex); }
+
+  // One redraw covers shapes, measures, leaders, pen/poly/path, stamps, notes.
+  if(typeof renderShapeAndMeasure==='function') renderShapeAndMeasure();
+
+  // Inserted images: rotate centre + spin the image, keep w/h (the angle
+  // carries the orientation). Keep the _orig* copies in sync too.
+  try{ if(typeof imgOverlays!=='undefined') imgOverlays.forEach(function(ov){
+    var p=rotPt(ov.cx,ov.cy); ov.cx=p.x; ov.cy=p.y;
+    ov.angle=(ov.angle||0)+dRad;
+    if(ov._origCx!==undefined){
+      var o=rotPt(ov._origCx,ov._origCy); ov._origCx=o.x; ov._origCy=o.y;
+    }
+  }); }catch(ex){ console.warn('[Rotate] imgOverlays transform failed:',ex); }
+  if(typeof renderImgOverlays==='function') renderImgOverlays();
+
+  // Text labels: rotate anchor + add to the label's own angle so the glyphs
+  // turn with the page.
+  try{ textObjs.forEach(function(obj){
+    var p=rotPt(obj.x,obj.y); obj.x=p.x; obj.y=p.y;
+    obj.angle=(obj.angle||0)+dRad;
+  }); }catch(ex){ console.warn('[Rotate] textObjs transform failed:',ex); }
   renderTextObjs();
+
   composite(); drawGrid(); fitToVP();
 }
 
@@ -5389,9 +5477,11 @@ function onMove(e){
     } else if(leaderDragHandle===1){     // elbow (P2)
       var sp3=snapPt(lp.x,lp.y); o.x2=sp3.x; o.y2=sp3.y;
     } else if(leaderDragHandle===2){     // shoulder end → adjust length + direction
-      var ddx=lp.x-o.x2;
-      o.shoulderDir = ddx<0 ? -1 : 1;
-      o.shoulderLen = Math.max(12, Math.abs(ddx));
+      var ddx=lp.x-o.x2, ddy=lp.y-o.y2;
+      var _slen=Math.max(12, Math.hypot(ddx,ddy));
+      o.shoulderLen=_slen;
+      o.sdx=ddx/_slen; o.sdy=ddy/_slen;       // free direction (supports rotation)
+      o.shoulderDir=(o.sdx<0?-1:1);            // keep legacy field roughly valid
     } else if(leaderDragHandle===-2){    // move whole leader
       var mdx=lp.x-leaderDragStart.x, mdy=lp.y-leaderDragStart.y;
       o.x1=lo.x1+mdx; o.y1=lo.y1+mdy;
@@ -6268,6 +6358,15 @@ function drawPolygonOnCtx(ctx,o,sc){
   ctx.restore();
 }
 
+// Shoulder end point. Legacy leaders only stored a horizontal dir (±1); newer
+// ones may carry a unit direction vector (sdx,sdy) so the shoulder can rotate
+// with the page. Falls back to (dir,0) = horizontal.
+function leaderShoulderEnd(o){
+  var len=(o.shoulderLen||60);
+  var sdx=(o.sdx!==undefined?o.sdx:(o.shoulderDir||1));
+  var sdy=(o.sdy!==undefined?o.sdy:0);
+  return {x:o.x2+len*sdx, y:o.y2+len*sdy};
+}
 function drawLeaderOnCtx(ctx,o,sc){
   sc=sc||1;
   ctx.save();
@@ -6285,9 +6384,9 @@ function drawLeaderOnCtx(ctx,o,sc){
   ctx.moveTo(o.x1*sc,o.y1*sc);
   ctx.lineTo(o.x1*sc-hw*Math.cos(ang+Math.PI/6),o.y1*sc-hw*Math.sin(ang+Math.PI/6));
   ctx.stroke();
-  // horizontal shoulder at P2
-  var dir=o.shoulderDir||1, len=(o.shoulderLen||60);
-  ctx.beginPath(); ctx.moveTo(o.x2*sc,o.y2*sc); ctx.lineTo((o.x2+len*dir)*sc,o.y2*sc); ctx.stroke();
+  // shoulder at P2 (direction may be rotated, not just horizontal)
+  var _se=leaderShoulderEnd(o);
+  ctx.beginPath(); ctx.moveTo(o.x2*sc,o.y2*sc); ctx.lineTo(_se.x*sc,_se.y*sc); ctx.stroke();
   ctx.restore();
 }
 
@@ -6343,7 +6442,8 @@ function findLeaderObjAt(x,y,isTouch){
   var thresh=(isTouch?14:7)/Math.max(zoom,0.0001);
   for(var i=leaderObjs.length-1;i>=0;i--){
     var o=leaderObjs[i]; var L=layers[o.layerIdx]; if(L&&!L.visible) continue;
-    var segs=[[o.x1,o.y1,o.x2,o.y2],[o.x2,o.y2,o.x2+(o.shoulderLen||60)*(o.shoulderDir||1),o.y2]];
+    var _se=leaderShoulderEnd(o);
+    var segs=[[o.x1,o.y1,o.x2,o.y2],[o.x2,o.y2,_se.x,_se.y]];
     for(var s=0;s<segs.length;s++){
       var sx=segs[s][0],sy=segs[s][1],ex=segs[s][2],ey=segs[s][3];
       var dx=ex-sx,dy=ey-sy,len2=dx*dx+dy*dy; if(len2<1) continue;
@@ -6478,12 +6578,13 @@ function cancelMeasureSelection(){
 // 2=shoulder end, -2=on a segment (move whole), -1=none.
 function getLeaderHandleAt(o, x, y, isTouch){
   var slop=isTouch?Math.max(14,20/zoom):Math.max(8,10/zoom);
-  var sx=o.x2+(o.shoulderLen||60)*(o.shoulderDir||1); // shoulder end x
+  var _se=leaderShoulderEnd(o);
+  var sx=_se.x, sy=_se.y; // shoulder end
   if(Math.hypot(x-o.x1,y-o.y1)<slop) return 0;   // arrow tip
   if(Math.hypot(x-o.x2,y-o.y2)<slop) return 1;   // elbow
-  if(Math.hypot(x-sx,  y-o.y2)<slop) return 2;   // shoulder end
+  if(Math.hypot(x-sx,  y-sy)<slop) return 2;     // shoulder end
   // body: leader line P1->P2 and shoulder P2->shoulderEnd
-  var segs=[[o.x1,o.y1,o.x2,o.y2],[o.x2,o.y2,sx,o.y2]];
+  var segs=[[o.x1,o.y1,o.x2,o.y2],[o.x2,o.y2,sx,sy]];
   for(var s=0;s<segs.length;s++){
     var ax=segs[s][0],ay=segs[s][1],bx=segs[s][2],by=segs[s][3];
     var dx=bx-ax,dy=by-ay,len2=dx*dx+dy*dy; if(len2<1) continue;
@@ -6503,10 +6604,11 @@ function renderLeaderSelection(){
   var o=selectedLeader;
   // Draw the leader itself live here (it's skipped on shCv while selected).
   drawLeaderOnCtx(selCtx, o, 1);
-  var sx=o.x2+(o.shoulderLen||60)*(o.shoulderDir||1);
+  var _se=leaderShoulderEnd(o);
+  var sx=_se.x, sy=_se.y;
   var hs=Math.max(8,10/zoom);
   // Handles: tip (cyan), elbow (amber), shoulder end (purple)
-  [[o.x1,o.y1,'#00D4FF'],[o.x2,o.y2,'#FBBF24'],[sx,o.y2,'#9d97ff']].forEach(function(pt){
+  [[o.x1,o.y1,'#00D4FF'],[o.x2,o.y2,'#FBBF24'],[sx,sy,'#9d97ff']].forEach(function(pt){
     selCtx.save();
     selCtx.fillStyle=pt[2];
     selCtx.strokeStyle='#fff';
