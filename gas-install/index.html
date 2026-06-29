@@ -126,6 +126,13 @@ body.dark-mode {
   border-bottom: 1px solid var(--border-bright);
   transition: background-color 0.3s ease; box-sizing: border-box;
 }
+/* On wide screens the buttons fit without scrolling, so center them
+   over the (max-width:1050px) page content instead of hugging the left
+   edge of the viewport. Below this width the bar scrolls horizontally,
+   where flex-start must stay so no buttons get pushed out of reach. */
+@media (min-width: 768px) {
+  .action-bar { justify-content: center; }
+}
 .action-bar::-webkit-scrollbar { height: 4px; }
 .action-bar::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 4px; }
 .action-bar .btn {
