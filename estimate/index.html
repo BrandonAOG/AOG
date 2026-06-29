@@ -2611,7 +2611,7 @@ function getFormData() {
 }
 
 // ── STATUS ──
-function setStatus(msg) { var el = document.getElementById('save-status'); if (el) el.textContent = msg; }
+function setStatus(msg) { var el = document.getElementById('save-status'); if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; } }
 
 // ── FILENAME HELPER ──
 function getEstimateFilename(ext) {
@@ -3561,6 +3561,8 @@ function capturePageToCanvas(_fontsReady, _rectSink) {
       'body.dark-mode .top-col { background: #ffffff !important; }',
       '* { animation: none !important; transition: none !important; }',
       '.header::after { display: none !important; }',
+      '.section::before { background: none !important; }',
+      '.section-header::before { box-shadow: none !important; animation: none !important; }',
       'body { max-width: ' + CAPTURE_W + 'px !important; }',
       '#page { width: ' + CAPTURE_W + 'px !important; max-width: ' + CAPTURE_W + 'px !important; height: auto !important; min-height: ' + PAPER_H + 'px !important; overflow: visible !important; display: flex !important; flex-direction: column !important; }',
       /* Corner L-brackets match the maintenance capture / PDF orange (teal on screen). */
@@ -3833,9 +3835,32 @@ function capturePageToCanvas(_fontsReady, _rectSink) {
 
       try {
         html2canvas(page, {
-          scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false, imageTimeout: 15000,
+          scale: 2, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false, imageTimeout: 15000,
           width: CAPTURE_W, height: CAPTURE_H, windowWidth: CAPTURE_W, scrollX: 0, scrollY: 0,
           onclone: function(clonedDoc) {
+            // Safety net: broken images (naturalWidth 0) and any element whose
+            // gradient/image background computes to 0 width or height make
+            // html2canvas call createPattern() on a 0-size surface and throw,
+            // killing the export. Drop broken images and strip such backgrounds
+            // from the clone. Both are invisible (0-area paints nothing).
+            try {
+              var _li = document.images, _ci = clonedDoc.images;
+              for (var _i = 0; _i < _ci.length; _i++) {
+                var _im = _li[_i];
+                if ((!_im || !_im.complete || _im.naturalWidth === 0 || _im.naturalHeight === 0)
+                    && _ci[_i] && _ci[_i].parentNode) _ci[_i].parentNode.removeChild(_ci[_i]);
+              }
+            } catch (e) {}
+            try {
+              var _le = document.querySelectorAll('*'), _ce = clonedDoc.querySelectorAll('*');
+              for (var _j = 0; _j < _le.length && _j < _ce.length; _j++) {
+                var _bg = '';
+                try { _bg = window.getComputedStyle(_le[_j]).backgroundImage; } catch (e) {}
+                if (_bg && _bg !== 'none' && (_le[_j].offsetWidth === 0 || _le[_j].offsetHeight === 0)) {
+                  try { _ce[_j].style.setProperty('background-image', 'none', 'important'); } catch (e) {}
+                }
+              }
+            } catch (e) {}
             // Hide placeholder hint text in the captured image (clone only —
             // live DOM untouched). Strip the attribute AND force transparent.
             clonedDoc.querySelectorAll('input[placeholder], textarea[placeholder]').forEach(function(el){
