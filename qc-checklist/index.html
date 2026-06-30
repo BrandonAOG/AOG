@@ -1783,21 +1783,34 @@ function capturePageToCanvas(pageEl) {
       // html2canvas does NOT reliably wrap <textarea> text — it often paints
       // the value on one straight line. So for capture we overlay a <div> with
       // the same text (divs wrap correctly), hide the textarea, then restore.
+      // Covers both the inline .notes-line boxes AND the full-width
+      // .summary-textarea boxes (Items Requiring Follow-Up / Additional Comments).
       var _noteProxies = [];
       var _phSaved = [];
       function buildNoteProxies() {
-        page.querySelectorAll('.notes-line').forEach(function(el){
+        page.querySelectorAll('.notes-line, .summary-textarea').forEach(function(el){
           var cs = getComputedStyle(el);
+          var isSummary = el.classList.contains('summary-textarea');
           var div = document.createElement('div');
           div.className = 'notes-proxy';
           div.textContent = el.value || '';
-          div.style.cssText =
+          var common =
             'font-family:' + cs.fontFamily + ';font-size:' + cs.fontSize + ';' +
             'color:' + cs.color + ';line-height:1.4;' +
             'white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;' +
             'border-bottom:' + cs.borderBottomWidth + ' solid ' + cs.borderBottomColor + ';' +
-            'flex:1 1 0;min-width:0;padding:0;margin:0;box-sizing:border-box;' +
-            'min-height:' + cs.fontSize.replace('px','') * 1.4 + 'px;';
+            'box-sizing:border-box;margin:0;';
+          if (isSummary) {
+            // Full-width block: match the textarea's width and padding, grow to
+            // fit all text (the on-screen box clips with overflow:hidden).
+            div.style.cssText = common +
+              'display:block;width:100%;padding:' + cs.padding + ';' +
+              'min-height:' + (parseFloat(cs.fontSize) * 1.4) + 'px;';
+          } else {
+            div.style.cssText = common +
+              'flex:1 1 0;min-width:0;padding:0;' +
+              'min-height:' + (parseFloat(cs.fontSize) * 1.4) + 'px;';
+          }
           el.style.display = 'none';
           el.parentNode.insertBefore(div, el.nextSibling);
           _noteProxies.push({ ta: el, div: div });
