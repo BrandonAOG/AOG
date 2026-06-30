@@ -1853,12 +1853,18 @@ function capturePageToCanvas(pageEl) {
           if (el.type === 'checkbox' || el.type === 'radio') return;
           var px = parseFloat(getComputedStyle(el).fontSize) || 0;
           if (!px) return;
-          _fsSaved.push([el, el.style.fontSize]);
-          el.style.fontSize = (px + 1) + 'px';
+          // Save the existing inline value + priority so we can restore exactly.
+          _fsSaved.push([el, el.style.getPropertyValue('font-size'), el.style.getPropertyPriority('font-size')]);
+          // !important is required — .info-input (name/date/address) sets
+          // font-size with !important per device, which beats a plain inline value.
+          el.style.setProperty('font-size', (px + 1) + 'px', 'important');
         });
       }
       function restoreInputFonts() {
-        _fsSaved.forEach(function(p){ p[0].style.fontSize = p[1]; });
+        _fsSaved.forEach(function(p){
+          if (p[1]) p[0].style.setProperty('font-size', p[1], p[2] || '');
+          else p[0].style.removeProperty('font-size');
+        });
         _fsSaved = [];
       }
 
