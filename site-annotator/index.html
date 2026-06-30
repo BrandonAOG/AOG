@@ -10136,6 +10136,11 @@ function closeStampPicker(){
         if(_editingComment===t) textOv.style.color=_cTxtColor; // live color while typing
         liveRender();
       }
+      // Also adopt this color as the active draw color so the next shape
+      // (polyline, rect, ellipse, arrow, leader, cloud) is drawn in it.
+      color=_cTxtColor;
+      if(clrSwatch) clrSwatch.style.background=color;
+      if(clrInput)  clrInput.value=color;
     };
     txIn.addEventListener('input',applyTx);
     txIn.addEventListener('change',function(e){ applyTx(e); refocus(); }); // iOS fires change on dismiss
@@ -14759,6 +14764,77 @@ window.addEventListener('orientationchange', function(){
   // Dimensions settle a tick after the event on iOS/Android
   setTimeout(function(){ if(baseLoaded){ clampPan(); applyTransform(); } }, 250);
 });
+
+// ── Draggable scale / reference-line dialog ──────────────────────────────────
+// The dialog has a ⠿ grab handle on its <h3> but no wiring. Let the user drag
+// it (by the heading) out of the way so they can see / fine-tune the reference
+// line underneath. Works for mouse and touch via pointer events.
+(function(){
+  var dlg=document.getElementById('scale-dlg');
+  if(!dlg) return;
+  var handle=dlg.querySelector('h3');
+  if(!handle) return;
+  var dragging=false, sx=0, sy=0, startLeft=0, startTop=0, moved=false;
+
+  function place(){
+    // Convert from the centered transform layout to absolute px so we can move
+    // it freely. Done lazily on first drag of each open.
+    if(dlg.dataset.placed==='1') return;
+    var r=dlg.getBoundingClientRect();
+    dlg.style.transform='none';
+    dlg.style.left=r.left+'px';
+    dlg.style.top=r.top+'px';
+    dlg.style.right='auto';
+    dlg.style.bottom='auto';
+    dlg.dataset.placed='1';
+  }
+  function clamp(v,min,max){ return v<min?min:(v>max?max:v); }
+
+  function down(e){
+    dragging=true; moved=false;
+    place();
+    var r=dlg.getBoundingClientRect();
+    startLeft=r.left; startTop=r.top;
+    sx=e.clientX; sy=e.clientY;
+    handle.style.cursor='grabbing';
+    if(handle.setPointerCapture && e.pointerId!=null){
+      try{ handle.setPointerCapture(e.pointerId); }catch(_){}
+    }
+    e.preventDefault();
+  }
+  function move(e){
+    if(!dragging) return;
+    var dx=e.clientX-sx, dy=e.clientY-sy;
+    if(Math.abs(dx)>2||Math.abs(dy)>2) moved=true;
+    var r=dlg.getBoundingClientRect();
+    var nl=clamp(startLeft+dx, 4, window.innerWidth - r.width - 4);
+    var nt=clamp(startTop+dy, 4, window.innerHeight - r.height - 4);
+    dlg.style.left=nl+'px';
+    dlg.style.top=nt+'px';
+    e.preventDefault();
+  }
+  function up(){ dragging=false; handle.style.cursor='grab'; }
+
+  handle.addEventListener('pointerdown', down);
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', up);
+
+  // Re-center each time the dialog is freshly opened (only on the
+  // closed→open transition, so dragging doesn't snap it back).
+  var wasOpen=(dlg.style.display==='block');
+  var mo=new MutationObserver(function(){
+    var open=(dlg.style.display==='block');
+    if(open && !wasOpen){
+      dlg.dataset.placed='';
+      dlg.style.transform='translate(-50%,-50%)';
+      dlg.style.left='50%'; dlg.style.top='50%';
+      dlg.style.right=''; dlg.style.bottom='';
+    }
+    wasOpen=open;
+  });
+  mo.observe(dlg, {attributes:true, attributeFilter:['style']});
+})();
 
 })();
 </script>
