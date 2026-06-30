@@ -3299,7 +3299,34 @@ function maybeConstrainHV(ax, ay, x, y){
 }
 
 // ── FILE LOADING ──
-openBtn.addEventListener('click',function(){ fileIn.click(); });
+// Remembers the FileSystemFileHandle of the plan opened via the desktop file
+// picker, so the export Save dialog can default to that same folder. Stays null
+// on mobile / Safari / Firefox (no File System Access API) and on drag-drop /
+// camera opens — in those cases exports fall back to the remembered export folder.
+var _lastOpenedFileHandle = null;
+openBtn.addEventListener('click',function(){
+  if(window.showOpenFilePicker){
+    window.showOpenFilePicker({
+      multiple:false,
+      excludeAcceptAllOption:false,   // keep "All files" so HEIC/odd types stay pickable
+      types:[{ description:'Plans & images', accept:{
+        'application/pdf':['.pdf'],
+        'image/png':['.png'], 'image/jpeg':['.jpg','.jpeg'], 'image/gif':['.gif'],
+        'image/webp':['.webp'], 'image/bmp':['.bmp'], 'image/tiff':['.tif','.tiff'],
+        'image/svg+xml':['.svg'], 'image/heic':['.heic'], 'image/heif':['.heif']
+      } }]
+    }).then(function(handles){
+      var handle = handles && handles[0]; if(!handle) return;
+      _lastOpenedFileHandle = handle;   // pin export folder to this file's folder
+      return handle.getFile().then(function(f){ if(f) loadFile(f, IS_IPHONE?3200:IOS_MAX_PX); });
+    }).catch(function(err){
+      if(err && err.name==='AbortError') return;   // user cancelled — do nothing
+      fileIn.click();                              // any other failure → input fallback
+    });
+  } else {
+    fileIn.click();   // Safari / Firefox / mobile — no File System Access API
+  }
+});
 // Camera button — show on mobile/touch devices, wire to capture input
 var camBtn  = document.getElementById('cam-btn');
 var cameraIn= document.getElementById('camera-in');
@@ -11247,10 +11274,15 @@ document.getElementById('btn-shortcuts').addEventListener('click',function(){
 function pickSaveTarget(suggestedName, mimeType, description, exts){
   if(window.showSaveFilePicker){
     var accept={}; accept[mimeType]=exts;
-    return window.showSaveFilePicker({
+    var opts={
       suggestedName: suggestedName,
+      id: 'aog-export',   // Chromium remembers the last folder used under this id
       types: [{ description: description||'File', accept: accept }]
-    }).then(function(handle){ return handle; })
+    };
+    // If the plan was opened via the desktop file picker, start the Save dialog in
+    // that same folder. (A startIn handle overrides the remembered id folder.)
+    if(_lastOpenedFileHandle) opts.startIn = _lastOpenedFileHandle;
+    return window.showSaveFilePicker(opts).then(function(handle){ return handle; })
       .catch(function(err){
         if(err && (err.name==='AbortError' || err.name==='NotAllowedError')) return 'cancelled';
         return null; // unsupported/failed → caller falls back to download
