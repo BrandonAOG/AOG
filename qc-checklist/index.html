@@ -2038,6 +2038,48 @@ function capturePageToCanvas(pageEl) {
         _boxProxies = [];
       }
 
+      // Native date inputs render in the OS locale (often year-first) and the
+      // text rides high in the capture. Swap each for a text span showing
+      // MM/DD/YYYY, baseline-aligned with the rest of the row.
+      var _dateProxies = [];
+      function buildDateProxies() {
+        page.querySelectorAll('input[type="date"]').forEach(function(el){
+          var v = el.value; // always YYYY-MM-DD
+          var text = '';
+          if (v) {
+            var parts = v.split('-');
+            if (parts.length === 3) text = parts[1] + '/' + parts[2] + '/' + parts[0];
+          }
+          var cs = getComputedStyle(el);
+          var span = document.createElement('span');
+          span.className = 'date-proxy';
+          span.textContent = text;
+          // Mirror the input EXACTLY: the input's top padding seats its single
+          // line of text down onto the underline (row is align-items:flex-end).
+          // Reuse that same padding/line-height instead of recomputing.
+          span.style.cssText =
+            'display:block;box-sizing:border-box;' +
+            'width:' + cs.width + ';max-width:' + (el.style.maxWidth || cs.maxWidth) + ';' +
+            'flex:' + cs.flex + ';flex-shrink:0;' +
+            'font:' + cs.font + ';color:' + cs.color + ';' +
+            'letter-spacing:' + cs.letterSpacing + ';' +
+            'text-align:left;line-height:' + cs.lineHeight + ';' +
+            'padding:' + cs.padding + ';margin:' + cs.margin + ';' +
+            'border-bottom:' + cs.borderBottom + ';' +
+            'white-space:nowrap;overflow:hidden;';
+          el.style.display = 'none';
+          el.parentNode.insertBefore(span, el.nextSibling);
+          _dateProxies.push({ input: el, span: span });
+        });
+      }
+      function removeDateProxies() {
+        _dateProxies.forEach(function(p){
+          if (p.span && p.span.parentNode) p.span.parentNode.removeChild(p.span);
+          p.input.style.display = '';
+        });
+        _dateProxies = [];
+      }
+
       function restoreCapture() {
         page.style.width     = prevWidth;
         page.style.maxWidth  = prevMaxWidth;
@@ -2048,6 +2090,7 @@ function capturePageToCanvas(pageEl) {
         if (fs) fs.remove();
         removeNoteProxies();
         removeBoxProxies();
+        removeDateProxies();
         restoreInputFonts();
         _phSaved.forEach(function(p){ if (p[1] != null) p[0].setAttribute('placeholder', p[1]); });
         _phSaved = [];
@@ -2060,6 +2103,7 @@ function capturePageToCanvas(pageEl) {
           buildNoteProxies();
           buildBoxProxies();
           bumpInputFonts();
+          buildDateProxies();
           // Remove placeholder text during capture (html2canvas can paint it
           // even with ::placeholder transparent). Saved and restored after.
           _phSaved = [];
