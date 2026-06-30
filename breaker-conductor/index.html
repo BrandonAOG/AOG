@@ -591,10 +591,11 @@ function calc(){
   var lt1_0=['14 AWG','12 AWG','10 AWG','8 AWG','6 AWG','4 AWG','3 AWG','2 AWG','1 AWG'];
   var parallelViol=sets>1&&!exceeded&&conductor&&lt1_0.indexOf(conductor)!==-1;
 
-  /* 90°C column misuse — 90°C column is only a starting point for correction/
-     adjustment. With a single set AND standard ambient (no temp correction),
-     there is nothing to derate, so it must be applied at the 75°C column. */
-  var ninetyMisuse = tc===90 && sets<=1 && !isTempCorr && !isDwelling && !exceeded;
+  /* 90°C column misuse — the 90°C column is only a starting point for ambient
+     temperature correction and conductor-bundle adjustment. When CCC is 1–3
+     (no derating) AND ambient is standard (no temp correction), there is nothing
+     to apply, so it must be used at the 75°C column. */
+  var ninetyMisuse = tc===90 && df.factor===1.00 && !isTempCorr && !isDwelling && !exceeded;
 
   /* whether any actionable note (warning/violation/derating) will render below */
   var hasNotes = (af<=0) || (df.factor<1.0) || (ambC!==30) ||
@@ -657,8 +658,8 @@ function calc(){
        '<div class="metric-label" style="color:#F87171;">Conductor / Set \u2014 Violation</div>'+
        '<div class="metric-value" style="color:#F87171;font-size:clamp(1rem,3vw,1.5rem);">Not Allowed</div>'+
        '<div class="metric-sub" style="color:#FCA5A5;margin-top:6px;">The 90\u00b0C column is only for corrections and adjustments based on conductors that are rated 90\u00b0C and applied at the 75\u00b0C column.</div>'+
-       '<div class="metric-sub" style="color:#FCA5A5;">With a single set and standard ambient temperature, there is no correction or adjustment to apply \u2014 use the 75\u00b0C column.</div>'+
-       '<span class="tag tag-err" style="margin-top:8px;">NEC 110.14(C) \u2014 add parallel sets / temperature correction or select 75\u00b0C column</span></div>';
+       '<div class="metric-sub" style="color:#FCA5A5;">With 1\u20133 current-carrying conductors (no derating) and standard ambient temperature, there is no correction or adjustment to apply \u2014 use the 75\u00b0C column.</div>'+
+       '<span class="tag tag-err" style="margin-top:8px;">NEC 110.14(C) \u2014 add temperature correction / 4+ CCC derating or select 75\u00b0C column</span></div>';
   }else{
     h+='<div class="metric">'+
        '<div class="metric-label">Conductor / Set</div>'+
