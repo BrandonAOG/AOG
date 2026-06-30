@@ -569,7 +569,10 @@ body.offline { padding-top: 0; }
   flex: 1; border: none; border-bottom: 1.5px solid rgba(217,119,6,0.4);
   font-family: var(--font-mono); font-size: var(--fs-phone-info-input);
   color: var(--text); background: transparent; outline: none;
-  min-height: var(--h-phone-info-input); padding: var(--pd-phone-info-input);
+  min-height: 0; box-sizing: border-box; line-height: 1.2;
+  /* Seat the text on the underline: rebuild the old field height as top
+     padding (height − one line) so the single line sits at the bottom. */
+  padding: calc(var(--h-phone-info-input) - 1.25em) 2px 1px;
 }
 .info-row.full { grid-column: 1 / -1; }
 /* Date inputs center their text by default in WebKit — force left align
@@ -845,7 +848,7 @@ body.dark-mode .summary-sig-line { border-bottom-color: rgba(0,255,200,0.3) !imp
   body.mobile-safari.ipad-safari .company-name   { font-size: var(--fs-ipad-company) !important; }
   body.mobile-safari.ipad-safari .doc-title      { font-size: var(--fs-ipad-title) !important; }
   body.mobile-safari.ipad-safari .info-label     { font-size: var(--fs-ipad-info-label) !important; }
-  body.mobile-safari.ipad-safari .info-input     { font-size: var(--fs-ipad-info-input) !important; min-height: var(--h-ipad-info-input) !important; padding: var(--pd-ipad-info-input) !important; }
+  body.mobile-safari.ipad-safari .info-input     { font-size: var(--fs-ipad-info-input) !important; min-height: 0 !important; padding: calc(var(--h-ipad-info-input) - 1.25em) 2px 1px !important; }
   body.mobile-safari.ipad-safari .section-header { font-size: var(--fs-ipad-section) !important; padding: var(--pd-ipad-section) !important; }
   body.mobile-safari.ipad-safari .item-label     { font-size: var(--fs-ipad-item) !important; }
   body.mobile-safari.ipad-safari .opt            { font-size: var(--fs-ipad-option) !important; padding: var(--pd-ipad-option) !important; }
@@ -868,7 +871,7 @@ body.dark-mode .summary-sig-line { border-bottom-color: rgba(0,255,200,0.3) !imp
   body.mobile-safari:not(.ipad-safari) .company-name   { font-size: var(--fs-iphone-company) !important; }
   body.mobile-safari:not(.ipad-safari) .doc-title      { font-size: var(--fs-iphone-title) !important; }
   body.mobile-safari:not(.ipad-safari) .info-label     { font-size: var(--fs-iphone-info-label) !important; }
-  body.mobile-safari:not(.ipad-safari) .info-input     { font-size: var(--fs-iphone-info-input) !important; min-height: var(--h-iphone-info-input) !important; padding: var(--pd-iphone-info-input) !important; }
+  body.mobile-safari:not(.ipad-safari) .info-input     { font-size: var(--fs-iphone-info-input) !important; min-height: 0 !important; padding: calc(var(--h-iphone-info-input) - 1.25em) 2px 1px !important; }
   body.mobile-safari:not(.ipad-safari) .section-header { font-size: var(--fs-iphone-section) !important; padding: var(--pd-iphone-section) !important; }
   body.mobile-safari:not(.ipad-safari) .item-label     { font-size: var(--fs-iphone-item) !important; }
   body.mobile-safari:not(.ipad-safari) .opt            { font-size: var(--fs-iphone-option) !important; padding: var(--pd-iphone-option) !important; }
@@ -892,7 +895,7 @@ body.dark-mode .summary-sig-line { border-bottom-color: rgba(0,255,200,0.3) !imp
   .company-name   { font-size: var(--fs-ipad-company) !important; }
   .doc-title      { font-size: var(--fs-ipad-title) !important; }
   .info-label     { font-size: var(--fs-ipad-info-label) !important; }
-  .info-input     { font-size: var(--fs-ipad-info-input) !important; min-height: var(--h-ipad-info-input) !important; }
+  .info-input     { font-size: var(--fs-ipad-info-input) !important; min-height: 0 !important; padding: calc(var(--h-ipad-info-input) - 1.25em) 2px 1px !important; }
   .section-header { font-size: var(--fs-ipad-section) !important; padding: var(--pd-ipad-section) !important; }
   .item-label     { font-size: var(--fs-ipad-item) !important; }
   .opt            { font-size: var(--fs-ipad-option) !important; }
@@ -903,7 +906,7 @@ body.dark-mode .summary-sig-line { border-bottom-color: rgba(0,255,200,0.3) !imp
   .section        { margin-bottom: var(--gap-ipad-sections) !important; }
   .page           { padding: var(--pd-ipad-page) !important; }
   .page-header    { padding: var(--pd-ipad-header) !important; }
-  .info-input     { padding: var(--pd-ipad-info-input) !important; }
+  .info-input     { padding: calc(var(--h-ipad-info-input) - 1.25em) 2px 1px !important; }
   .opt            { padding: var(--pd-ipad-option) !important; }
   .page-footer    { padding: var(--pd-ipad-footer) !important; }
   .summary-body   { padding: var(--pd-ipad-summary) !important; }
@@ -919,7 +922,7 @@ body.dark-mode .summary-sig-line { border-bottom-color: rgba(0,255,200,0.3) !imp
   .company-name   { font-size: var(--fs-desktop-company) !important; }
   .doc-title      { font-size: var(--fs-desktop-title) !important; }
   .info-label     { font-size: var(--fs-desktop-info-label) !important; }
-  .info-input     { font-size: var(--fs-desktop-info-input) !important; min-height: var(--h-desktop-info-input) !important; }
+  .info-input     { font-size: var(--fs-desktop-info-input) !important; min-height: 0 !important; padding: calc(var(--h-desktop-info-input) - 1.25em) 2px 2px !important; }
   .section-header { font-size: var(--fs-desktop-section) !important; padding: var(--pd-desktop-section) !important; }
   .item-label     { font-size: var(--fs-desktop-item) !important; }
   .opt            { font-size: var(--fs-desktop-option) !important; }
@@ -1789,11 +1792,13 @@ function capturePageToCanvas(pageEl) {
         '  overflow-wrap: anywhere !important;',
         '  flex: 1 1 0 !important; width: 0 !important; min-width: 0 !important;',
         '}',
-        // html2canvas renders input text high in the box. Push the header
-        // info fields' text DOWN onto their underline.
+        // Base CSS now seats the field text on the underline. In capture we
+        // only need to guarantee descender room and no clipping (html2canvas
+        // can clip a tight line box), so use a roomier line-height + a little
+        // bottom padding rather than forcing the text hard against the border.
         '.info-input {',
-        '  line-height: 1 !important; vertical-align: bottom !important;',
-        '  padding-top: 6px !important; padding-bottom: 0 !important;',
+        '  line-height: 1.3 !important; overflow: visible !important;',
+        '  padding-bottom: 3px !important;',
         '}'
       ].join('\n');
       document.head.appendChild(forceStyle);
