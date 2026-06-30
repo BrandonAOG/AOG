@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.1.2';
+var CACHE_NAME = 'aog-forms-v2.1.3';
 var DEV_MODE   = false;
 
 // Stores last known cache progress so late-loading pages can request it
@@ -20,10 +20,7 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '🛠️ Hid the original PDF button (unstable across devices) on the Maintenance, Gas Installation, and Electrical Installation forms.',
-  '✅ Added a new, more reliable "Edit PDF" export for consistent results.',
-  '💾 Edit PDF embeds your form data (JSON) inside the PDF, so you can reopen it later and restore the form on a different date.',
-  '🏷️ Exports auto-name the file using the homeowner name + address.',
+  '📋 Added Pre-Install Checklist.',
 ];
 // ============================================================
 
@@ -41,6 +38,7 @@ var PRECACHE_URLS = [
   './elect-install/',
   './qc-checklist/',
   './service-work/',
+  './pre-checklist/',
   './site-annotator/',
   './load-calcs/',
   './breaker-conductor/',
