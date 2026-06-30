@@ -662,6 +662,26 @@ input[type="date"].info-input::-webkit-datetime-edit { text-align: left !importa
 .opt input[value="removed"],
 .opt input[value="not_done"]  { accent-color: #DC2626; }
 
+/* ── Selected-label text color: green for good/yes/installed/complete,
+      red for bad/no/removed/not_done. Uses ~ span so it still applies in
+      capture, where a box proxy is inserted between the input and span. ── */
+.opt input[value="good"]:checked ~ span,
+.opt input[value="yes"]:checked ~ span,
+.opt input[value="installed"]:checked ~ span,
+.opt input[value="complete"]:checked ~ span { color: #059669 !important; font-weight: 700; }
+.opt input[value="bad"]:checked ~ span,
+.opt input[value="no"]:checked ~ span,
+.opt input[value="removed"]:checked ~ span,
+.opt input[value="not_done"]:checked ~ span { color: #DC2626 !important; font-weight: 700; }
+body.dark-mode .opt input[value="good"]:checked ~ span,
+body.dark-mode .opt input[value="yes"]:checked ~ span,
+body.dark-mode .opt input[value="installed"]:checked ~ span,
+body.dark-mode .opt input[value="complete"]:checked ~ span { color: #10B981 !important; }
+body.dark-mode .opt input[value="bad"]:checked ~ span,
+body.dark-mode .opt input[value="no"]:checked ~ span,
+body.dark-mode .opt input[value="removed"]:checked ~ span,
+body.dark-mode .opt input[value="not_done"]:checked ~ span { color: #F43F5E !important; }
+
 /* ── X for Bad / No / Not Done (Removed keeps checkmark) ── */
 .opt input[value="bad"],
 .opt input[value="no"],
