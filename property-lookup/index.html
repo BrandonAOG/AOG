@@ -1573,6 +1573,14 @@ const DOCS_CITY = {
     ecNote:  "Town of Fort Myers Beach (not Lee County): the town runs its own Community Development department for permits & Elevation Certificate records. Verify before relying on it.",
     permit:  "https://www.fmbgov.com/government/community-development",
     permitBy:"address"
+  },
+  MARCOISLAND: {
+    // City of Marco Island is its own jurisdiction inside Collier County — it runs its own
+    // building dept and must NOT inherit Collier County's permitting/EC portal.
+    ecLayer: null,
+    ecNote:  "City of Marco Island (not Collier County): Marco Island issues its own permits and keeps its own Elevation Certificate records — request the EC for an address from the city building department. Verify before relying on it.",
+    permit:  "https://www.cityofmarcoisland.com/o/comi/page/permitting-portal-information",
+    permitBy:"address"
   }
 };
 const DOCS_COUNTY = {
@@ -9653,7 +9661,12 @@ async function runLookup(lat,lng,searchCtx){
 
   // --- Survey / Site Plan / permit history: deep link to the permitting portal (no public data feed exists) ---
   // City portal wins when the parcel is in a city; else county; else the zoning-config portal.
-  const portal = (docCfg && docCfg.permit) || (z && z.permit) || null;
+  // Portal precedence: (1) a city-specific DOCS entry wins; (2) else, if the parcel is in a
+  // city, that city's own zoning-config permit wins — never fall through to the county portal
+  // for an in-city parcel; (3) else the county DOCS/zoning portal; (4) else nothing.
+  const portal = (docInCity && docCfg && docCfg.permit) ? docCfg.permit
+               : (zr.inCity && z && z.permit) ? z.permit
+               : ((docCfg && docCfg.permit) || (z && z.permit) || null);
   html += `<div class="note warnbox" style="margin-top:10px"><b>Surveys &amp; site plans aren't a public map layer.</b> They live in <b>${esc(docJur)}</b>'s building-permit file and are retrieved from its permitting portal by ${docCfg&&docCfg.permitBy==='permit'?'permit record number':'address or parcel/STRAP number'}${strap?` (this parcel: <b style="color:var(--ink)">${esc(strap)}</b>)`:''}. Not every record is digitized.</div>`;
   if(portal){
     html += `<a class="palink" href="${esc(portal)}" target="_blank" rel="noopener" style="margin-top:8px">↗ ${esc(docJur)} permitting portal (survey / site plan / permits)</a>`;
