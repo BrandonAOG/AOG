@@ -5196,5 +5196,66 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 
+<style>
+  /* Clear button injected into each table header */
+  .tbl-clear-btn {
+    margin-left: 6px;
+    font-size: 8px;
+    line-height: 1;
+    padding: 2px 5px;
+    border: 1px solid rgba(255,255,255,0.6);
+    border-radius: 4px;
+    background: rgba(0,0,0,0.18);
+    color: #FFFFFF;
+    cursor: pointer;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .tbl-clear-btn:active { background: rgba(0,0,0,0.35); }
+  body.dark-mode .tbl-clear-btn { border-color: rgba(0,255,200,0.5); color: #00FFC8; }
+  @media print { .tbl-clear-btn { display: none !important; } }
+</style>
+<script>
+(function () {
+  function clearTable(table) {
+    var inputs = table.querySelectorAll('input');
+    inputs.forEach(function (inp) {
+      if (inp.type === 'checkbox' || inp.type === 'radio') inp.checked = false;
+      else inp.value = '';
+      inp.dispatchEvent(new Event('input',  { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  function addClearButtons() {
+    var tables = document.querySelectorAll('table.mat-table');
+    tables.forEach(function (table) {
+      var firstTh = table.querySelector('thead th');
+      if (!firstTh || firstTh.querySelector('.tbl-clear-btn')) return;
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tbl-clear-btn no-print';
+      btn.textContent = 'Clear';
+
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var label = (firstTh.textContent || 'this table').trim().replace('Clear', '').trim();
+        var ok = window.confirm('\u26A0\uFE0F Clear ALL entries in "' + label + '"?\n\nThis cannot be undone.');
+        if (ok) clearTable(table);
+      });
+
+      firstTh.appendChild(btn);
+    });
+  }
+
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', addClearButtons);
+  else
+    addClearButtons();
+})();
+</script>
+
 </body>
 </html>
