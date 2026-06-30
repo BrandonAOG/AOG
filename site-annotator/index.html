@@ -862,13 +862,13 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
       <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">TXT BG</span>
       <div class="clr-wrap" style="position:relative;width:30px;height:30px">
-        <div id="txt-bg-swatch" style="background:rgba(255,255,0,0);border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer;background-image:repeating-conic-gradient(#aaa 0% 25%, transparent 0% 50%);background-size:8px 8px;background-position:center"></div>
-        <input type="color" id="txt-bg-input" value="#ffff00" style="position:absolute;inset:0;opacity:0.01;width:100%;height:100%;border:none;padding:0;margin:0;cursor:pointer;-webkit-appearance:none;border-radius:50%;">
+        <div id="txt-bg-swatch" style="background:#00ff11;border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer;background-size:8px 8px;background-position:center"></div>
+        <input type="color" id="txt-bg-input" value="#00ff11" style="position:absolute;inset:0;opacity:0.01;width:100%;height:100%;border:none;padding:0;margin:0;cursor:pointer;-webkit-appearance:none;border-radius:50%;">
       </div>
     </div>
     <div class="sl-wrap" style="min-width:44px">
-      <input type="range" id="txt-bg-op-sl" min="0" max="100" value="0">
-      <span id="txt-bg-op-val" style="font-size:8px">0%</span>
+      <input type="range" id="txt-bg-op-sl" min="0" max="100" value="90">
+      <span id="txt-bg-op-val" style="font-size:8px">90%</span>
     </div>
   </div>
   <!-- /TEXT FORMAT ZONE -->
@@ -877,8 +877,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
       <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">BOX</span>
       <div class="clr-wrap">
-        <div id="cmt-bg-swatch" style="background:#FBBF24;border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer"></div>
-        <input type="color" id="cmt-bg-input" value="#FBBF24">
+        <div id="cmt-bg-swatch" style="background:#00ff11;border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer"></div>
+        <input type="color" id="cmt-bg-input" value="#00ff11">
       </div>
     </div>
     <div class="sl-wrap" style="min-width:44px">
@@ -1884,7 +1884,7 @@ var TEXT_ELLIPSE_K = 1.5;
 // Drag to draw, click to edit text, separate box/text color pickers.
 // ══════════════════════════════════════════════════════════════
 var commentObjs     = [];
-var _cBgColor       = '#FBBF24';
+var _cBgColor       = '#00ff11';
 var _cBgOpacity     = 0.9;
 var _cBorderColor   = '#4B5563';
 var _cBorderW       = 10;         // note border stroke width — notes start at 10pt
@@ -2740,8 +2740,8 @@ var textAlign      = 'left';
 // right-align it. This flag is set only for that case and cleared for all other
 // text entry.
 var _textAnchorRight = false;
-var textBgColor    = '#ffff00';
-var textBgOpacity  = 0;
+var textBgColor    = '#00ff11';
+var textBgOpacity  = 0.9;
 // ── MARKUP OBJECTS (highlight / strikethrough / underline markup) ──
 var markupObjs = []; // [{id,type,x1,y1,x2,y2,color,opacity,layerIdx}]
 var markupColor   = '#ffff00';
