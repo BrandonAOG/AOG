@@ -1795,7 +1795,7 @@ function capturePageToCanvas(pageEl) {
           div.className = 'notes-proxy';
           div.textContent = el.value || '';
           var common =
-            'font-family:' + cs.fontFamily + ';font-size:' + cs.fontSize + ';' +
+            'font-family:' + cs.fontFamily + ';font-size:' + (parseFloat(cs.fontSize) + 1) + 'px;' +
             'color:' + cs.color + ';line-height:1.4;' +
             'white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;' +
             'border-bottom:' + cs.borderBottomWidth + ' solid ' + cs.borderBottomColor + ';' +
@@ -1822,6 +1822,24 @@ function capturePageToCanvas(pageEl) {
           p.ta.style.display = '';
         });
         _noteProxies = [];
+      }
+
+      // Capture-only: nudge typed-in field text 1px larger so it reads a touch
+      // bigger in the image. Each field's own computed size is read and +1px'd,
+      // then restored after capture (see restoreCapture).
+      var _fsSaved = [];
+      function bumpInputFonts() {
+        page.querySelectorAll('input').forEach(function(el){
+          if (el.type === 'checkbox' || el.type === 'radio') return;
+          var px = parseFloat(getComputedStyle(el).fontSize) || 0;
+          if (!px) return;
+          _fsSaved.push([el, el.style.fontSize]);
+          el.style.fontSize = (px + 1) + 'px';
+        });
+      }
+      function restoreInputFonts() {
+        _fsSaved.forEach(function(p){ p[0].style.fontSize = p[1]; });
+        _fsSaved = [];
       }
 
       // html2canvas won't render checkbox accent-color / checked state, so we
@@ -1873,6 +1891,7 @@ function capturePageToCanvas(pageEl) {
         if (fs) fs.remove();
         removeNoteProxies();
         removeBoxProxies();
+        restoreInputFonts();
         _phSaved.forEach(function(p){ if (p[1] != null) p[0].setAttribute('placeholder', p[1]); });
         _phSaved = [];
         if (logoImg && logoOrigSrc) { logoImg.src = logoOrigSrc; logoImg.style.visibility = ''; }
@@ -1883,6 +1902,7 @@ function capturePageToCanvas(pageEl) {
           // Swap textareas for wrapping divs (built after force-style applies).
           buildNoteProxies();
           buildBoxProxies();
+          bumpInputFonts();
           // Remove placeholder text during capture (html2canvas can paint it
           // even with ::placeholder transparent). Saved and restored after.
           _phSaved = [];
