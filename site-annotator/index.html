@@ -10985,7 +10985,21 @@ function compositeExport(maxPx){
       var align_=obj.textAlign||'left';
       ctx.textAlign=align_;
       var maxW_=measureLinesWFull(lines_,Math.round(efpx*scale),fam,obj.bold,obj.italic);
-      var ax_=Math.round(obj.x*scale)+(align_==='center'?maxW_/2:align_==='right'?maxW_:0);
+      var ax_;
+      // Right-anchored leader labels (left-hanging callouts) bake obj.x as
+      // (_anchorX - width), where width was measured at the DPI the label was
+      // typed at. If the export DPI differs, that width no longer matches the
+      // glyphs and the label slides off its arrow. Re-pin the RIGHT edge to the
+      // leader shoulder (_anchorX) and use the export's own measured width so the
+      // label stays glued to its leader at any DPI/scale.
+      if(obj._anchorRight===true && obj._anchorX!=null){
+        var _rightEdge_=Math.round(obj._anchorX*scale);
+        ax_ = align_==='right'  ? _rightEdge_
+            : align_==='center' ? _rightEdge_ - maxW_/2
+            :                     _rightEdge_ - maxW_;
+      } else {
+        ax_=Math.round(obj.x*scale)+(align_==='center'?maxW_/2:align_==='right'?maxW_:0);
+      }
       // Background — tight, per-line, hugs each line's actual glyphs (matches screen).
       if(obj.bgOpacity&&obj.bgOpacity>0){
         ctx.save(); ctx.globalAlpha=obj.opacity*obj.bgOpacity; ctx.fillStyle=obj.bgColor||'#ffff00';
