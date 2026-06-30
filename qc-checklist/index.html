@@ -787,11 +787,11 @@ body.dark-mode .status-pass:has(input:checked)     { border-color: #10B981; colo
 body.dark-mode .status-fail:has(input:checked)     { border-color: #F43F5E; color: #F43F5E; background: rgba(244,63,94,0.2); }
 body.dark-mode .status-followup:has(input:checked) { border-color: #F59E0B; color: #F59E0B; background: rgba(245,158,11,0.2); }
 .summary-textarea {
-  width: 100%; height: 52px; max-height: 52px; resize: none;
+  width: 100%; min-height: 52px; max-height: none; resize: none;
   border: none; border-bottom: 1.5px solid rgba(217,119,6,0.3);
   background: transparent; font-family: var(--font-body);
   font-size: var(--fs-phone-summary); color: var(--text);
-  padding: 6px 4px; outline: none; box-sizing: border-box; overflow: hidden;
+  padding: 6px 4px; outline: none; box-sizing: border-box; overflow-y: hidden;
 }
 .summary-textarea::placeholder { color: var(--text-dim); }
 body.dark-mode .summary-textarea { color: #E0F7FF !important; border-bottom-color: rgba(0,255,200,0.25) !important; background: transparent !important; }
@@ -1710,6 +1710,20 @@ function autoGrowNote(el) {
 }
 function autoGrowAllNotes() {
   document.querySelectorAll('.notes-line').forEach(autoGrowNote);
+  document.querySelectorAll('.summary-textarea').forEach(autoGrowSummary);
+}
+
+// ── AUTO-GROW summary boxes (Follow-Up / Additional Comments) on screen ──
+// Multi-line content allowed; grows with text, caps then scrolls.
+var SUMMARY_MAX_ROWS = 12;
+function autoGrowSummary(el) {
+  el.style.height = 'auto';
+  var line  = parseFloat(getComputedStyle(el).lineHeight) || 18;
+  var floor = line * 2 + 12;                 // ~original 52px two-line minimum
+  var max   = line * SUMMARY_MAX_ROWS + 12;
+  var want  = Math.max(el.scrollHeight, floor);
+  if (want > max) { el.style.height = max + 'px'; el.style.overflowY = 'auto'; }
+  else            { el.style.height = want + 'px'; el.style.overflowY = 'hidden'; }
 }
 // Notes are single-line content: block Enter and strip any pasted newlines.
 document.addEventListener('keydown', function(e) {
@@ -1727,6 +1741,9 @@ document.addEventListener('input', function(e) {
 });
 document.addEventListener('input', function(e) {
   if (e.target && e.target.classList && e.target.classList.contains('notes-line')) autoGrowNote(e.target);
+});
+document.addEventListener('input', function(e) {
+  if (e.target && e.target.classList && e.target.classList.contains('summary-textarea')) autoGrowSummary(e.target);
 });
 window.addEventListener('resize', autoGrowAllNotes);
 // Re-fit when orientation changes too
