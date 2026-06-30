@@ -306,11 +306,18 @@ body.dark-mode input::placeholder, body.dark-mode textarea::placeholder { color:
   .gen-info-row { flex-direction: column; align-items: stretch; }
   .gen-info-row input[type="text"] { width: 100% !important; height: 40px; border: 1px solid var(--border-bright) !important; border-radius: 6px; font-size: 16px; }
   .gen-check-group { gap: 8px 14px; }
-  table.checklist-table { font-size: 12px; }
-  table.checklist-table tbody td.row-label { min-width: 130px; font-size: 12px; }
+  table.checklist-table { font-size: 12px; table-layout: fixed; width: 100%; }
+  table.checklist-table tbody td.row-label { min-width: 0; font-size: 12px; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
   table.checklist-table thead tr th { font-size: 11px; padding: 5px 4px; }
   table.checklist-table tbody td { padding: 6px 4px; }
-  table.checklist-table tbody td input[type="text"] { font-size: 14px; }
+  table.checklist-table tbody td.check-col { width: 44px; }
+  table.checklist-table tbody td input[type="text"] { font-size: 14px; max-width: 100%; }
+}
+
+/* ===== SMALL PHONES ===== */
+@media screen and (max-width: 480px) {
+  table.checklist-table tbody td.check-col { width: 38px; }
+  table.checklist-table tbody td input[type="text"] { width: auto; max-width: 70px; }
 }
 
 /* ===== PRINT STYLES ===== */
@@ -671,7 +678,7 @@ function _allFields() {
 function _collectFieldData() {
   var data = { _type: 'aog-preinstall-checklist', _version: 1, fields: [] };
   _allFields().forEach(function (el) {
-    if (el.type === 'checkbox') data.fields.push(el.checked ? 1 : 0);
+    if (el.type === 'checkbox') data.fields.push(!!el.checked);
     else data.fields.push(el.value || '');
   });
   return data;
@@ -681,8 +688,14 @@ function _applyFieldData(data) {
   var fields = _allFields();
   for (var i = 0; i < fields.length && i < data.fields.length; i++) {
     var el = fields[i], v = data.fields[i];
-    if (el.type === 'checkbox') el.checked = !!v;
-    else el.value = (v == null ? '' : v);
+    if (el.type === 'checkbox') {
+      el.checked = !!v;
+    } else {
+      // Only ever put strings into text fields. This prevents a stray numeric
+      // 0/1 (e.g. from an older save with a different field layout) from
+      // showing up as "0" instead of leaving the placeholder visible.
+      el.value = (typeof v === 'string') ? v : '';
+    }
   }
   return true;
 }
