@@ -18,6 +18,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="manifest" href="../manifest.json">
 <script src="../update-banner.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
 <meta name="theme-color" content="#FBBF24">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1057,10 +1058,17 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
 
 <body>
 
+<style id="pdf-btn-toggle">
+/* === TEMP: hide the regular PDF button. To restore, delete this rule AND remove the 'pdf-btn-hidden' class from the PDF button. === */
+.pdf-btn-hidden { display: none !important; }
+</style>
 <div class="action-bar" id="action-bar">
   <a class="ab-btn" href="../">🏠 HOME</a>
-  <a class="ab-btn" onclick="printForm()" style="cursor:pointer;">📄 PDF</a>
+  <a class="ab-btn pdf-btn-hidden" onclick="printForm()" style="cursor:pointer;">📄 PDF</a>
+  <a class="ab-btn" id="btn-editpdf" onclick="saveFillablePdf()" style="cursor:pointer;">📝 PDF✎</a>
   <a class="ab-btn" id="btn-capture" onclick="saveSmart()" style="cursor:pointer;">📸 CAPTURE</a>
+  <a class="ab-btn" id="btn-load" onclick="document.getElementById('load-draft-input').click()" style="cursor:pointer;">📂 LOAD</a>
+  <input type="file" id="load-draft-input" accept=".json,.pdf" style="display:none;" onchange="loadDraftFile(this)">
   <a class="ab-btn" onclick="clearForm()" style="cursor:pointer;">🗑 CLEAR</a>
   <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle dark mode" aria-label="Toggle dark mode" onclick="toggleTheme()">
     <svg class="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2092,6 +2100,223 @@ function saveForAndroid() {
 }
 
 
+/* ================================================================
+   EDIT PDF — resumable PDF (image capture + embedded JSON)
+   Renders each page via captureAllPages() into a US-Letter PDF, then
+   embeds the full form state TWICE for a lossless reload round-trip:
+     • as a file attachment  (qc-checklist-data.json)
+     • in the PDF Keywords    (AOGDATA:<base64 json>)
+   The 📂 LOAD button reads either channel back and refills the form.
+   State shape matches saveDraft()/restoreDraft() exactly.
+================================================================ */
+
+// Build the same flat state object saveDraft() persists, but return it.
+function collectState() {
+  var data = {};
+  document.querySelectorAll('input').forEach(function(el) {
+    var key = el.id || el.name;
+    if (!key) return;
+    if (el.type === 'checkbox') {
+      if (!Array.isArray(data[key])) data[key] = [];
+      if (el.checked) data[key].push(el.value);
+    } else if (el.type === 'radio') {
+      if (el.checked) data[key] = el.value;
+    } else {
+      if (data[key] === undefined) data[key] = el.value;
+    }
+  });
+  document.querySelectorAll('textarea').forEach(function(el) {
+    var key = el.id || el.name;
+    if (key) data[key] = el.value;
+  });
+  data['__meter_tab'] = _meterTab;
+  return data;
+}
+
+// Apply a flat state object to the form (same logic as restoreDraft()).
+function restoreState(data) {
+  if (!data || typeof data !== 'object') return;
+  document.querySelectorAll('input').forEach(function(el) {
+    var key = el.id || el.name;
+    if (!key || data[key] === undefined) return;
+    if (el.type === 'checkbox') {
+      el.checked = Array.isArray(data[key]) && data[key].indexOf(el.value) !== -1;
+    } else if (el.type === 'radio') {
+      el.checked = data[key] === el.value;
+    } else {
+      el.value = data[key];
+    }
+  });
+  document.querySelectorAll('textarea').forEach(function(el) {
+    var key = el.id || el.name;
+    if (key && data[key] !== undefined) el.value = data[key];
+  });
+  if (data['__meter_tab']) { _meterTab = data['__meter_tab']; applyMeterTab(); }
+  syncPage2();
+  if (typeof autoGrowAllNotes === 'function') autoGrowAllNotes();
+}
+
+function _downloadBlob(blob, filename) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+function _editPdfFilename() {
+  try { return buildQCBaseName() + '_RESUMABLE.pdf'; }
+  catch (e) { return 'AOG_QC_Checklist_RESUMABLE.pdf'; }
+}
+
+async function saveFillablePdf() {
+  if (typeof PDFLib === 'undefined') {
+    setStatus('PDF library not loaded — try refreshing.');
+    setTimeout(function(){ setStatus(''); }, 5000);
+    return;
+  }
+  if (typeof html2canvas === 'undefined') {
+    setStatus('Capture library not loaded — try refreshing.');
+    setTimeout(function(){ setStatus(''); }, 5000);
+    return;
+  }
+  setStatus('Building resumable PDF…');
+
+  var wasDark = document.body.classList.contains('dark-mode');
+  if (wasDark) document.body.classList.remove('dark-mode');
+
+  try {
+    saveDraft();
+    var data = collectState();
+
+    // captureAllPages() returns finished Letter-sized canvases (same look as CAPTURE).
+    var canvases = await captureAllPages();
+
+    var PDFDocument = PDFLib.PDFDocument;
+    var pdfDoc = await PDFDocument.create();
+    var PAGE_W = 612; // US Letter width (pt)
+
+    for (var i = 0; i < canvases.length; i++) {
+      var canvas = canvases[i];
+      var imgData = canvas.toDataURL('image/png');
+      var pngBytes = Uint8Array.from(atob(imgData.split(',')[1]), function(c){ return c.charCodeAt(0); });
+      var png = await pdfDoc.embedPng(pngBytes);
+      var scale = PAGE_W / png.width;
+      var PAGE_H = png.height * scale;
+      var p = pdfDoc.addPage([PAGE_W, PAGE_H]);
+      p.drawImage(png, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
+    }
+
+    // Embed full JSON for a lossless reload round-trip.
+    var jsonStr = JSON.stringify(data);
+    try { await pdfDoc.attach(new TextEncoder().encode(jsonStr), 'qc-checklist-data.json', {
+      mimeType: 'application/json', description: 'Always On Generators — form data (do not delete)' }); } catch(e) {}
+    try { pdfDoc.setKeywords([ 'AOGDATA:' + btoa(unescape(encodeURIComponent(jsonStr))) ]); } catch(e) {}
+    try { pdfDoc.setTitle('Always On Generators — Quality Control Checklist'); } catch(e) {}
+
+    var bytes = await pdfDoc.save();
+    if (wasDark) document.body.classList.add('dark-mode');
+
+    var fname = _editPdfFilename();
+    var blob = new Blob([bytes], { type: 'application/pdf' });
+
+    // Native share sheet on mobile; download elsewhere.
+    var didShare = false;
+    var isMobileOS = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isMobileOS && typeof canShareFiles === 'function' && canShareFiles()) {
+      try {
+        var pdfFile = new File([blob], fname, { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+          didShare = true;
+          setStatus('Opening share sheet…');
+          try {
+            await navigator.share({ files: [pdfFile] });
+            setStatus('');
+          } catch (shErr) {
+            if (shErr && shErr.name === 'AbortError') { setStatus(''); }
+            else { _downloadBlob(blob, fname); setStatus('Resumable PDF saved: ' + fname); setTimeout(function(){ setStatus(''); }, 4000); }
+          }
+        }
+      } catch (e) { didShare = false; }
+    }
+
+    if (!didShare) {
+      _downloadBlob(blob, fname);
+      setStatus('Resumable PDF saved: ' + fname);
+      setTimeout(function(){ setStatus(''); }, 4000);
+    }
+  } catch (err) {
+    if (wasDark) document.body.classList.add('dark-mode');
+    setStatus('Could not build PDF: ' + (err && err.message ? err.message : err));
+    setTimeout(function(){ setStatus(''); }, 6000);
+  }
+}
+
+/* ── LOAD: accepts a .json draft OR a resumable .pdf and refills the form ── */
+function loadDraftFile(input) {
+  var file = input && input.files && input.files[0];
+  if (!file) return;
+  var name = file.name || '';
+  var reset = function(){ try { input.value = ''; } catch(e){} };
+
+  if (/\.pdf$/i.test(name)) {
+    var rp = new FileReader();
+    rp.onload = function(){ loadFromFillablePdf(new Uint8Array(rp.result), name).then(reset, reset); };
+    rp.onerror = function(){ setStatus('Could not read that PDF.'); setTimeout(function(){ setStatus(''); }, 5000); reset(); };
+    rp.readAsArrayBuffer(file);
+    return;
+  }
+
+  var rj = new FileReader();
+  rj.onload = function(){
+    try {
+      restoreState(JSON.parse(rj.result));
+      saveDraft();
+      setStatus('Loaded draft: ' + name);
+      setTimeout(function(){ setStatus(''); }, 4000);
+    } catch (e) {
+      setStatus('That file is not a valid draft.');
+      setTimeout(function(){ setStatus(''); }, 5000);
+    }
+    reset();
+  };
+  rj.onerror = function(){ setStatus('Could not read that file.'); setTimeout(function(){ setStatus(''); }, 5000); reset(); };
+  rj.readAsText(file);
+}
+
+async function loadFromFillablePdf(bytes, fname) {
+  if (typeof PDFLib === 'undefined') {
+    setStatus('PDF library not loaded — try refreshing.');
+    setTimeout(function(){ setStatus(''); }, 5000);
+    return;
+  }
+  setStatus('Reading PDF…');
+  try {
+    var pdfDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    var data = null;
+    try {
+      var kw = pdfDoc.getKeywords();
+      var kwStr = Array.isArray(kw) ? kw.join(' ') : (kw || '');
+      var m = kwStr.match(/AOGDATA:([A-Za-z0-9+/=]+)/);
+      if (m) data = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+    } catch(e) {}
+
+    if (!data) {
+      setStatus('No saved form data found in that PDF.');
+      setTimeout(function(){ setStatus(''); }, 5000);
+      return;
+    }
+
+    restoreState(data);
+    saveDraft();
+    setStatus('Loaded from PDF: ' + fname);
+    setTimeout(function(){ setStatus(''); }, 4000);
+  } catch (err) {
+    setStatus('Error reading PDF — file may be invalid.');
+    setTimeout(function(){ setStatus(''); }, 6000);
+  }
+}
+
 // ── BEFORE/AFTER PRINT (Chrome needs these) ──
 window.addEventListener('beforeprint', function() {
   document.body.classList.remove('dark-mode');
@@ -2482,5 +2707,161 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 </script>
+<!-- ════════ PAGE-NUMBER TRIPLE-TAP DEBUG DUMP ════════
+     Open it: triple-tap (or triple-click) either "Page X of 2" footer number,
+     OR long-press it ~1s, OR load the page with #debug in the URL, OR run
+     __showDebug() in a console. Dumps device + detection signals. Screen-only;
+     never renders in the PDF. Diagnostic only — changes no behavior. -->
+<style>@media print { #dbg-overlay { display: none !important; } }</style>
+<script>
+(function () {
+  function yn(b){ return b ? '\u2713 YES' : '\u2717 no'; }
+  function buildReport() {
+    var ua  = navigator.userAgent;
+    var plat = navigator.platform;
+    var mtp = navigator.maxTouchPoints || 0;
+    var touch = ('ontouchstart' in window);
+    var standaloneMM  = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || false;
+    var standaloneNav = (navigator.standalone === true);
+
+    var isCriOS  = /CriOS/.test(ua);
+    var isIOS    = /iP(hone|od|ad)/.test(ua) && /WebKit/.test(ua);
+    var isMacOS  = /Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome/.test(ua);
+    var isWindows = /Windows/.test(ua);
+    var isAndroid = /Android/.test(ua);
+    var isAndroidChrome = isAndroid && /Chrome/.test(ua) && !/Edg/.test(ua);
+    var isIPad = /iPad/.test(ua)
+      || (plat === 'MacIntel' && (mtp > 1 || touch))
+      || (/Macintosh/.test(ua) && (mtp > 1 || touch));
+
+    var htmlCls = document.documentElement.className || '(none)';
+    var bodyCls = document.body.className || '(none)';
+
+    var isLandscape = (window.matchMedia && window.matchMedia('(orientation: landscape)').matches)
+                      || (window.innerWidth > window.innerHeight);
+
+    var ori = '(?)';
+    try { ori = (window.matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape')
+                 + (screen.orientation ? '  [' + screen.orientation.type + ']' : ''); } catch(e){}
+
+    var theme = '(?)', draft = '(none)';
+    try { theme = localStorage.getItem('aog_theme_preference') || '(unset)'; } catch(e){}
+    try { var d = localStorage.getItem('aog_checklist_qc_draft'); draft = d ? (d.length + ' chars saved') : '(none)'; } catch(e){}
+    var h2c = (typeof html2canvas !== 'undefined') ? 'loaded' : 'NOT loaded';
+    var pl  = (typeof PDFLib !== 'undefined') ? 'loaded' : 'NOT loaded';
+    var mtab = (typeof _meterTab !== 'undefined') ? _meterTab : '(?)';
+
+    return [
+      '\u2550\u2550\u2550 AOG DEBUG DUMP \u2550\u2550\u2550',
+      'Form                  : Quality Control Checklist',
+      'Timestamp             : ' + new Date().toISOString(),
+      '',
+      '\u2500\u2500 USER AGENT \u2500\u2500',
+      ua,
+      '',
+      '\u2500\u2500 NAVIGATOR \u2500\u2500',
+      'platform              : ' + plat,
+      'maxTouchPoints        : ' + mtp,
+      'ontouchstart          : ' + yn(touch),
+      'standalone (mediaq)   : ' + yn(standaloneMM),
+      'navigator.standalone  : ' + yn(standaloneNav),
+      'cookieEnabled         : ' + yn(navigator.cookieEnabled),
+      'language              : ' + (navigator.language || '?'),
+      '',
+      '\u2500\u2500 SCREEN / VIEWPORT \u2500\u2500',
+      'window.inner          : ' + window.innerWidth + ' \u00d7 ' + window.innerHeight + ' px',
+      'visualViewport        : ' + (window.visualViewport ? (Math.round(window.visualViewport.width)+' \u00d7 '+Math.round(window.visualViewport.height)) : 'n/a'),
+      'screen                : ' + screen.width + ' \u00d7 ' + screen.height + ' px',
+      'devicePixelRatio      : ' + window.devicePixelRatio,
+      'orientation           : ' + ori,
+      'viewport meta         : ' + ((document.querySelector('meta[name="viewport"]')||{}).getAttribute ? document.querySelector('meta[name="viewport"]').getAttribute('content') : '?'),
+      '',
+      '\u2500\u2500 DETECTION SIGNALS \u2500\u2500',
+      'isCriOS               : ' + yn(isCriOS),
+      'isIOS                 : ' + yn(isIOS),
+      'isMacOS               : ' + yn(isMacOS),
+      'isWindows             : ' + yn(isWindows),
+      'isAndroid             : ' + yn(isAndroid),
+      'isAndroidChrome       : ' + yn(isAndroidChrome),
+      'isIPad (detect)       : ' + yn(isIPad),
+      'isLandscape           : ' + yn(isLandscape),
+      '',
+      '\u2500\u2500 APPLIED CLASSES \u2500\u2500',
+      'html                  : ' + htmlCls,
+      'body                  : ' + bodyCls,
+      '',
+      '\u2500\u2500 FORM STATE \u2500\u2500',
+      'meter tab             : ' + mtab,
+      '',
+      '\u2500\u2500 STORAGE \u2500\u2500',
+      'theme                 : ' + theme,
+      'draft                 : ' + draft,
+      '',
+      '\u2500\u2500 ASSETS \u2500\u2500',
+      'html2canvas           : ' + h2c,
+      'pdf-lib               : ' + pl
+    ].join('\n');
+  }
+
+  function show() {
+    var old = document.getElementById('dbg-overlay'); if (old) old.remove();
+    var txt = buildReport();
+    var ov = document.createElement('div');
+    ov.id = 'dbg-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.94);color:#0f0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:16px;overflow:auto;-webkit-overflow-scrolling:touch;';
+    var pre = document.createElement('pre');
+    pre.textContent = txt;
+    pre.style.cssText = 'white-space:pre-wrap;word-break:break-word;margin:0 0 14px;';
+    var bar = document.createElement('div');
+    bar.style.cssText = 'position:sticky;bottom:0;display:flex;gap:10px;padding-top:8px;';
+    var copy = document.createElement('button');
+    copy.textContent = 'Copy';
+    copy.style.cssText = 'flex:1;background:#0a0;color:#fff;border:none;border-radius:6px;padding:12px;font-size:15px;';
+    copy.onclick = function () {
+      function done(){ copy.textContent = 'Copied \u2713'; }
+      function fallback(){
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        try { document.execCommand('copy'); done(); } catch(e){ copy.textContent='Select & copy manually'; }
+      }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, fallback);
+        else fallback();
+      } catch (e) { fallback(); }
+    };
+    var close = document.createElement('button');
+    close.textContent = 'Close';
+    close.style.cssText = 'flex:1;background:#c33;color:#fff;border:none;border-radius:6px;padding:12px;font-size:15px;';
+    close.onclick = function () { ov.remove(); };
+    bar.appendChild(copy); bar.appendChild(close);
+    ov.appendChild(pre); ov.appendChild(bar);
+    document.body.appendChild(ov);
+  }
+  window.__showDebug = show;
+
+  function wireTrigger() {
+    var tags = document.querySelectorAll('.page-num');
+    if (!tags.length) return;
+    tags.forEach(function (tag) {
+      tag.style.cursor = 'pointer';
+      var taps = 0, t;
+      tag.addEventListener('click', function () {
+        taps++; clearTimeout(t);
+        t = setTimeout(function(){ taps = 0; }, 700);
+        if (taps >= 3) { taps = 0; show(); }
+      });
+      var lp;
+      tag.addEventListener('touchstart', function () { lp = setTimeout(show, 1000); }, {passive:true});
+      tag.addEventListener('touchend',   function () { clearTimeout(lp); });
+      tag.addEventListener('touchmove',  function () { clearTimeout(lp); });
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireTrigger);
+  else wireTrigger();
+  if (location.hash === '#debug') (document.readyState === 'loading'
+      ? document.addEventListener('DOMContentLoaded', show) : show());
+})();
+</script>
+
 </body>
 </html>
