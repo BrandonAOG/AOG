@@ -2236,6 +2236,7 @@ function startCommentTextEdit(c){
   textOv.style.transform    = 'none';
   textOv.style.transformOrigin = 'top left';
   textOv.style.color        = _cTxtColor;
+  textOv.style.opacity      = 1;   // note text commits at full alpha — match it live
   textOv.style.background   = 'transparent';
   textOv.style.borderBottom = 'none';
   textOv.style.whiteSpace   = 'pre-wrap';
@@ -6270,11 +6271,23 @@ function drawShapeOnCtx(ctx,t,x1,y1,x2,y2,final){
     ctx.moveTo(x2,y2); ctx.lineTo(x2-hw*Math.cos(ang+Math.PI/6),y2-hw*Math.sin(ang+Math.PI/6));
     ctx.stroke();
   } else if(t==='rect'){
-    if(fillShape){ ctx.fillRect(x1,y1,x2-x1,y2-y1); } ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+    if(fillShape){
+      ctx.save();
+      ctx.fillStyle=fillColor; ctx.globalAlpha=fillOpacity;
+      ctx.fillRect(x1,y1,x2-x1,y2-y1);
+      ctx.restore();
+    }
+    ctx.strokeRect(x1,y1,x2-x1,y2-y1);
   } else if(t==='ellipse'){
     var rx=Math.abs(x2-x1)/2,ry=Math.abs(y2-y1)/2;
     ctx.ellipse((x1+x2)/2,(y1+y2)/2,Math.max(rx,1),Math.max(ry,1),0,0,Math.PI*2);
-    if(fillShape) ctx.fill(); ctx.stroke();
+    if(fillShape){
+      ctx.save();
+      ctx.fillStyle=fillColor; ctx.globalAlpha=fillOpacity;
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.stroke();
   } else if(t==='cloud'){
     drawCloud(ctx,x1,y1,x2,y2);
   }
@@ -8383,7 +8396,7 @@ function repositionTextOverlay(){
       (scaleV < 0.99 ? (' scale(' + scaleV.toFixed(3) + ')') : '');
   }
   textOv.style.color   = color;
-  textOv.style.opacity = opacity;
+  textOv.style.opacity = 1;   // text has no opacity control — keep it full, not faint
   // Live Text-BG highlight behind the typed text (rgba from color+opacity).
   // Shown as soon as editing starts; the box hugs the text so it begins at ~1
   // letter and grows as you type.
@@ -8659,7 +8672,7 @@ function commitText(){
       editingObj=null; renderTextObjs(); pushUndo();
     } else {
       editingObj.text=val; editingObj.color=color;
-      editingObj.fontSize=FONT_SIZE; editingObj.opacity=opacity;
+      editingObj.fontSize=FONT_SIZE; editingObj.opacity=1;
       editingObj.fontFamily=textFontFamily; editingObj.bold=textBold;
       editingObj.italic=textItalic; editingObj.underline=textUnderline;
       editingObj.strike=textStrike; editingObj.textAlign=_textAnchorRight?'right':textAlign;
@@ -8689,7 +8702,7 @@ function commitText(){
       _newX = textX - _mw;
     }
     var obj={id:Date.now(),x:_newX,y:textY,text:val,angle:0,
-             color:color,fontSize:FONT_SIZE,opacity:opacity,layerIdx:activeLayerIdx,
+             color:color,fontSize:FONT_SIZE,opacity:1,layerIdx:activeLayerIdx,
              fontFamily:textFontFamily,bold:textBold,italic:textItalic,
              underline:textUnderline,strike:textStrike,textAlign:_newAlign,
              bgColor:textBgColor,bgOpacity:textBgOpacity,
@@ -10486,22 +10499,51 @@ if(markupOpSl){
 }
 // Apply on 'input' AND 'change': iOS color sheets often fire only 'change' on
 // dismiss, so applying on 'input' alone silently dropped mobile color picks.
+//
+// Opening the native color sheet can also blur/deselect the object underneath
+// (especially on iOS), so by the time 'change' fires the live selection may be
+// gone and the colour would land nowhere. Snapshot the selected target(s) when
+// the picker is touched and fall back to that snapshot — same guard the note
+// (comment) colour pickers use.
+var _clrSnap=null, _clrSnapAt=0;
+function _snapStrokeTargets(){
+  _clrSnap={
+    shape   : selectedShape,
+    measure : selectedMeasure,
+    polyline: selectedPolyline,
+    leader  : selectedLeader,
+    editing : (textOv.style.display!=='none' && !_editingComment) ? editingObj : null
+  };
+  _clrSnapAt=Date.now();
+}
 function applyStrokeColor(v){
   color=v; clrSwatch.style.background=color;
+  var snap=(Date.now()-_clrSnapAt<30000) ? _clrSnap : null;
   // Live text-tool typing: recolor the overlay as you pick, before commit.
   if(textOv.style.display!=='none' && !_editingComment){
     textOv.style.color=color;
     if(editingObj){ editingObj.color=color; }
+  } else if(snap && snap.editing){
+    snap.editing.color=color; renderTextObjs();
   }
-  if(selectedShape){
-    selectedShape.color=color;
-    if(selectedShape._textObj) selectedShape._textObj.color=color;
+  var sShape=selectedShape||(snap&&snap.shape);
+  if(sShape){
+    sShape.color=color;
+    if(sShape._textObj) sShape._textObj.color=color;
     renderSelection(); renderTextObjs();
   }
-  if(selectedMeasure){ selectedMeasure.color=color; renderMeasureSelection(); renderShapeAndMeasure(); }
-  if(selectedPolyline){ selectedPolyline.color=color; renderShapeAndMeasure(); renderPolylineSelection(); }
-  if(selectedLeader){ selectedLeader.color=color; renderShapeAndMeasure(); renderLeaderSelection(); }
+  var sMeasure=selectedMeasure||(snap&&snap.measure);
+  if(sMeasure){ sMeasure.color=color; renderMeasureSelection(); renderShapeAndMeasure(); }
+  var sPoly=selectedPolyline||(snap&&snap.polyline);
+  if(sPoly){ sPoly.color=color; renderShapeAndMeasure(); renderPolylineSelection(); }
+  var sLeader=selectedLeader||(snap&&snap.leader);
+  if(sLeader){ sLeader.color=color; renderShapeAndMeasure(); renderLeaderSelection(); }
 }
+[clrInput,clrSwatch].forEach(function(el){
+  if(!el) return;
+  el.addEventListener('mousedown', _snapStrokeTargets);
+  el.addEventListener('touchstart', _snapStrokeTargets, {passive:true});
+});
 clrInput.addEventListener('input', function(e){ applyStrokeColor(e.target.value); });
 clrInput.addEventListener('change', function(e){ applyStrokeColor(e.target.value); });
 // One applier for stroke width, used by BOTH the native 'input' events
