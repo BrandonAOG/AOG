@@ -111,6 +111,8 @@ select:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 2px rgba(2
 .metric-value{font-family:var(--font-display);font-size:clamp(1.3rem,3vw,1.8rem);font-weight:700;color:var(--yellow-bright);line-height:1;}
 [data-theme="light"] .metric-value{color:#92400E;}
 .metric-sub{font-family:var(--font-mono);font-size:.62rem;letter-spacing:1px;color:var(--text-dim);margin-top:4px;}
+.see-notes{display:inline-block;margin-top:8px;font-family:var(--font-mono);font-size:.6rem;letter-spacing:1px;text-transform:uppercase;color:var(--orange);cursor:pointer;border:1px solid rgba(255,159,67,0.4);border-radius:4px;padding:4px 8px;transition:background .2s,border-color .2s;}
+.see-notes:hover{background:rgba(255,159,67,0.12);border-color:var(--orange);}
 .tag{display:inline-block;font-family:var(--font-mono);font-size:.6rem;letter-spacing:1.5px;padding:3px 8px;border-radius:2px;text-transform:uppercase;margin-top:6px;}
 .tag-ok  {background:var(--tag-ok-bg);  color:var(--tag-ok-text);}
 .tag-warn{background:var(--tag-warn-bg);color:var(--tag-warn-text);}
@@ -594,6 +596,11 @@ function calc(){
      there is nothing to derate, so it must be applied at the 75°C column. */
   var ninetyMisuse = tc===90 && sets<=1 && !isTempCorr && !isDwelling && !exceeded;
 
+  /* whether any actionable note (warning/violation/derating) will render below */
+  var hasNotes = (af<=0) || (df.factor<1.0) || (ambC!==30) ||
+                 (sets>1) || dwellingRange || dwellingParallel ||
+                 parallelViol || ninetyMisuse || (tc===90) || exceeded;
+
   var egcSize=pickEGC(breaker,mat);
   var egcCu=pickEGC(breaker,'copper');
   var egcAl=pickEGC(breaker,'aluminum');
@@ -658,7 +665,9 @@ function calc(){
        '<div class="metric-value">'+(exceeded?'\u2014':conductor)+'</div>'+
        '<div class="metric-sub">'+matLabel+'</div>'+
        '<div class="metric-sub">'+tableUsed+'</div>'+
-       '<span class="tag '+(isDwelling?'tag-info':breaker>800?'tag-warn':'tag-ok')+'">'+method+'</span></div>';
+       '<span class="tag '+(isDwelling?'tag-info':breaker>800?'tag-warn':'tag-ok')+'">'+method+'</span>'+
+       (hasNotes?'<div class="see-notes" onclick="document.getElementById(\'noteBlocks\').scrollIntoView({behavior:\'smooth\'});">\u26A0 See notes below \u2193</div>':'')+
+       '</div>';
   }
 
   /* OCPD card */
@@ -698,6 +707,7 @@ function calc(){
   h+='</div><div class="hr"></div>';
 
   /* note blocks */
+  h+='<div id="noteBlocks">';
   if(!dwellingRange&&!dwellingParallel&&!parallelViol){
     h+='<div class="note-block"><strong>Code basis \u2014 conductor sizing</strong>'+ruleNote+'</div>';
   }
@@ -730,6 +740,11 @@ function calc(){
          'Each of the '+sets+' sets must use '+conductor+' conductors. '+
          'All conductors in each parallel set must be the same size, insulation type, and length. '+
          'Minimum parallel size is 1/0 AWG.</div>';
+      h+='<div class="note-block warn"><strong>75\u00b0C Column \u2014 Multiple Sets / Raceways</strong>'+
+         'With more than one set installed in more than one raceway, the conductor ampacity '+
+         'must be taken from the 75\u00b0C column. The 90\u00b0C column may only be used as a starting '+
+         'point for ambient temperature correction and conductor-bundle adjustment; the final '+
+         'usable ampacity is limited to the 75\u00b0C value per NEC 110.14(C).</div>';
     }
   }
   if(dwellingRange){
@@ -748,6 +763,7 @@ function calc(){
        'The required ampacity per set exceeds the largest conductor in NEC 310.16. '+
        'Consider increasing the number of parallel sets.</div>';
   }
+  h+='</div>'; /* end #noteBlocks */
 
   document.getElementById('result').innerHTML=h;
 }
