@@ -1651,9 +1651,9 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
 
 <div class="action-bar" id="action-bar">
   <a class="ab-btn" href="../">🏠 HOME</a>
-  <a class="ab-btn" onclick="printForm()" style="cursor:pointer;">📄 PDF</a>
-  <a class="ab-btn" id="btn-capture" onclick="saveSmart()" style="cursor:pointer;">📸 CAPTURE</a>
+  <a class="ab-btn" onclick="printForm()" style="cursor:pointer; display:none;">📄 PDF</a>
   <a class="ab-btn" onclick="saveFillablePdf()" style="cursor:pointer;">📝 PDF✎</a>
+  <a class="ab-btn" id="btn-capture" onclick="saveSmart()" style="cursor:pointer;">📸 CAPTURE</a>
   <a class="ab-btn" onclick="confirmClear()" style="cursor:pointer;">🗑 CLEAR</a>
   <a class="ab-btn" onclick="document.getElementById('load-draft-input').click()" style="cursor:pointer;">📂 LOAD</a>
   <input type="file" id="load-draft-input" accept=".json,.pdf,.xlsx" style="display:none;" onchange="loadDraftFile(this)">
