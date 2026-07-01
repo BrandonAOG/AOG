@@ -2586,25 +2586,55 @@ function renderCommentObjs(ctx){
 }
 
 // ── MARKUP OBJECTS RENDER (highlight / strikethrough / underline markup) ──
+// Ensure a markup object carries a center + local size + angle. Older objects
+// (and freshly drawn ones) only have the axis-aligned corners x1,y1,x2,y2, so we
+// derive the oriented model from them once. This lets highlights turn WITH the
+// page on rotate instead of collapsing to a new axis-aligned box.
+function _markupInit(m){
+  if(m.angle===undefined || m.cx===undefined){
+    m.cx=(m.x1+m.x2)/2; m.cy=(m.y1+m.y2)/2;
+    m.w=Math.abs(m.x2-m.x1)||20; m.h=Math.abs(m.y2-m.y1)||6;
+    if(m.angle===undefined) m.angle=0;
+  }
+  return m;
+}
+// Recompute the axis-aligned bounding corners (x1..y2) from the oriented rect so
+// hit-testing / selection (which still work in AABB space) stay roughly correct.
+function _markupSyncAABB(m){
+  var hw=m.w/2, hh=m.h/2, c=Math.cos(m.angle||0), s=Math.sin(m.angle||0);
+  var xs=[], ys=[];
+  [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].forEach(function(p){
+    xs.push(m.cx + p[0]*c - p[1]*s);
+    ys.push(m.cy + p[0]*s + p[1]*c);
+  });
+  m.x1=Math.min.apply(null,xs); m.x2=Math.max.apply(null,xs);
+  m.y1=Math.min.apply(null,ys); m.y2=Math.max.apply(null,ys);
+}
+// Shared oriented draw used by both the live screen render and the flat export.
+// sc scales geometry (1 on screen, export scale on export). lwScale keeps line
+// weight sensible at either zoom.
+function drawMarkupOnCtx(ctx,m,sc,lw){
+  _markupInit(m);
+  var w=m.w*sc, h=m.h*sc;
+  ctx.save();
+  ctx.globalAlpha=m.opacity;
+  ctx.translate(m.cx*sc, m.cy*sc);
+  ctx.rotate(m.angle||0);
+  if(m.type==='highlight'){
+    ctx.fillStyle=m.color; ctx.fillRect(-w/2,-h/2,w||20*sc,h||6*sc);
+  } else if(m.type==='strikeout'){
+    ctx.strokeStyle=m.color; ctx.lineWidth=lw;
+    ctx.beginPath(); ctx.moveTo(-w/2,0); ctx.lineTo(w/2,0); ctx.stroke();
+  } else if(m.type==='underlinemark'){
+    ctx.strokeStyle=m.color; ctx.lineWidth=lw;
+    ctx.beginPath(); ctx.moveTo(-w/2,h/2); ctx.lineTo(w/2,h/2); ctx.stroke();
+  }
+  ctx.restore();
+}
 function renderMarkupObjs(){
   markupObjs.forEach(function(m){
     var layer=layers[m.layerIdx]; if(layer&&!layer.visible) return;
-    tCtx.save();
-    tCtx.globalAlpha=m.opacity;
-    var x1=Math.min(m.x1,m.x2), x2=Math.max(m.x1,m.x2);
-    var y1=Math.min(m.y1,m.y2), y2=Math.max(m.y1,m.y2);
-    var h=y2-y1||6, w=x2-x1||20;
-    var midY=(y1+y2)/2;
-    if(m.type==='highlight'){
-      tCtx.fillStyle=m.color; tCtx.fillRect(x1,y1,w,h);
-    } else if(m.type==='strikeout'){
-      tCtx.strokeStyle=m.color; tCtx.lineWidth=Math.max(2,2/zoom);
-      tCtx.beginPath(); tCtx.moveTo(x1,midY); tCtx.lineTo(x2,midY); tCtx.stroke();
-    } else if(m.type==='underlinemark'){
-      tCtx.strokeStyle=m.color; tCtx.lineWidth=Math.max(2,2/zoom);
-      tCtx.beginPath(); tCtx.moveTo(x1,y2); tCtx.lineTo(x2,y2); tCtx.stroke();
-    }
-    tCtx.restore();
+    drawMarkupOnCtx(tCtx, m, 1, Math.max(2,2/zoom));
   });
 }
 // ══════════════════════════════════════════════════════════════
@@ -4835,10 +4865,15 @@ var layerTmps=layers.map(function(l){
   }); }catch(ex){ console.warn('[Rotate] commentObjs transform failed:',ex); }
   if(typeof renderCommentObjs==='function') renderCommentObjs(shCtx);
 
-  // Text markup (highlight / underline / strikethrough): rotate both corners.
+  // Text markup (highlight / underline / strikethrough): turn the mark WITH the
+  // page. Rotate its centre and add to its own angle (like text/notes) so an
+  // oriented rect stays glued over the text, instead of rotating only the two
+  // corners and re-deriving an axis-aligned box (which detaches on 90° turns).
   try{ if(typeof markupObjs!=='undefined') markupObjs.forEach(function(m){
-    var a=rotPt(m.x1,m.y1), b=rotPt(m.x2,m.y2);
-    m.x1=a.x; m.y1=a.y; m.x2=b.x; m.y2=b.y;
+    _markupInit(m);
+    var p=rotPt(m.cx,m.cy); m.cx=p.x; m.cy=p.y;
+    m.angle=(m.angle||0)+dRad;
+    _markupSyncAABB(m);
   }); }catch(ex){ console.warn('[Rotate] markupObjs transform failed:',ex); }
   if(typeof renderMarkupObjs==='function') renderMarkupObjs();
 
@@ -5977,13 +6012,13 @@ function onUp(e){
     var mw=Math.abs(p_.x-startX), mh=Math.abs(p_.y-startY);
     if(mw>4||mh>4){
       captureState(false);   // vector op — no pixel snapshot needed
-      markupObjs.push({
+      markupObjs.push(_markupInit({
         id:Date.now(),
         type:tool==='highlight'?'highlight':tool==='strikeout'?'strikeout':'underlinemark',
         x1:startX,y1:startY,x2:p_.x,y2:p_.y,
         color:markupColor,opacity:markupOpacity,
         layerIdx:activeLayerIdx
-      });
+      }));
       renderTextObjs(); // renderMarkupObjs is called inside renderTextObjs
       pushUndo();
     }
@@ -7590,9 +7625,14 @@ function renderTextObjs(){
       };
       if(obj.angle){
         tCtx.translate(obj.x,obj.y);tCtx.rotate(obj.angle);
+        // Match the glyph anchor used in the rotated text branch below
+        // (fillText at axOff with textAlign=align). The per-line LEFT edge is
+        // axOff minus the alignment offset — WITHOUT the axOff term, right/center
+        // labels' highlight detaches from the text by the block width once rotated.
+        var _axOffBg=(align==='center'?maxW/2:align==='right'?maxW:0);
         lines.forEach(function(line,i){
           var lw=tCtx.measureText(line).width;
-          var lx=(align==='center'?-lw/2:align==='right'?-lw:0);
+          var lx=_axOffBg-(align==='center'?lw/2:align==='right'?lw:0);
           _bgLine(line, lx, i*_lineH);
         });
       } else {
@@ -11104,9 +11144,10 @@ function compositeExport(maxPx){
         };
         if(obj.angle){
           ctx.translate(Math.round(obj.x*scale),Math.round(obj.y*scale));ctx.rotate(obj.angle);
+          var _axOffBg_=(align_==='center'?maxW_/2:align_==='right'?maxW_:0);
           lines_.forEach(function(line,i){
             var lw_=ctx.measureText(line).width;
-            var lx_=(align_==='center'?-lw_/2:align_==='right'?-lw_:0);
+            var lx_=_axOffBg_-(align_==='center'?lw_/2:align_==='right'?lw_:0);
             _bgLine_(line, lx_, Math.round(i*_lineH_));
           });
         } else {
@@ -11223,22 +11264,7 @@ function compositeExport(maxPx){
   try{
     markupObjs.forEach(function(m){
       var layer=layers[m.layerIdx]; if(layer&&!layer.visible) return;
-      ctx.save();
-      ctx.globalAlpha=m.opacity;
-      var x1=Math.min(m.x1,m.x2)*scale, x2=Math.max(m.x1,m.x2)*scale;
-      var y1=Math.min(m.y1,m.y2)*scale, y2=Math.max(m.y1,m.y2)*scale;
-      var h=y2-y1||6*scale, w=x2-x1||20*scale;
-      var midY=(y1+y2)/2;
-      if(m.type==='highlight'){
-        ctx.fillStyle=m.color; ctx.fillRect(x1,y1,w,h);
-      } else if(m.type==='strikeout'){
-        ctx.strokeStyle=m.color; ctx.lineWidth=Math.max(2*scale,2);
-        ctx.beginPath(); ctx.moveTo(x1,midY); ctx.lineTo(x2,midY); ctx.stroke();
-      } else if(m.type==='underlinemark'){
-        ctx.strokeStyle=m.color; ctx.lineWidth=Math.max(2*scale,2);
-        ctx.beginPath(); ctx.moveTo(x1,y2); ctx.lineTo(x2,y2); ctx.stroke();
-      }
-      ctx.restore();
+      drawMarkupOnCtx(ctx, m, scale, Math.max(2*scale,2));
     });
   }catch(ex){ console.warn('[Export] markupObjs:',ex); }
   return out;
@@ -14506,7 +14532,8 @@ function applyWmScale(){
     o._editing = false;
     if(kind==='shape'||kind==='comment'||kind==='stamp'||kind==='imgoverlay'){ o.cx!=null?(o.cx+=dx,o.cy+=dy):(o.x+=dx,o.y+=dy); }
     else if(kind==='text'){ o.x+=dx; o.y+=dy; }
-    else if(kind==='measure'||kind==='markup'){ o.x1+=dx; o.y1+=dy; o.x2+=dx; o.y2+=dy; }
+    else if(kind==='measure'){ o.x1+=dx; o.y1+=dy; o.x2+=dx; o.y2+=dy; }
+    else if(kind==='markup'){ o.x1+=dx; o.y1+=dy; o.x2+=dx; o.y2+=dy; if(o.cx!=null){o.cx+=dx;o.cy+=dy;} }
     else if(kind==='leader'){ o.x1+=dx; o.y1+=dy; o.x2+=dx; o.y2+=dy; }
     else if(kind==='polyline'||kind==='pathmeasure'||kind==='pen'||kind==='polygon'){ if(o.pts) o.pts=o.pts.map(function(p){ return {x:p.x+dx,y:p.y+dy}; }); }
     o.layerIdx = activeLayerIdx;
