@@ -27,10 +27,29 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Property Lookup · Always On Generators</title>
+<!-- SPEED: pre-open connections (DNS + TLS) to every origin the first paint depends on, so the
+     Leaflet CSS/JS, fonts, and the first map tiles don't each pay a fresh ~100-300ms handshake.
+     crossorigin only where the resource is fetched in CORS mode (font files; tiles now that the
+     layers set crossOrigin:true for the MAP PNG capture). -->
+<link rel="preconnect" href="https://cdnjs.cloudflare.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
+<link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
+<link rel="dns-prefetch" href="https://unpkg.com">
+<link rel="dns-prefetch" href="https://tile.openstreetmap.org">
+<link rel="dns-prefetch" href="https://geocode.arcgis.com">
+<link rel="dns-prefetch" href="https://geocoding.geo.census.gov">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- SPEED: load the webfont CSS without blocking first paint. media="print" makes the browser fetch
+     it at low priority off the render path; onload flips it live. display=swap in the URL means text
+     renders immediately in fallback fonts and swaps when ready. <noscript> keeps fonts w/o JS. -->
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
 <meta name="theme-color" content="#0d1117">
-<script src="../update-banner.js"></script>
+<!-- SPEED: defer — this was a synchronous <head> script, which stalls HTML parsing (and therefore
+     first paint) until the file downloads and runs. Deferred, it still runs before DOMContentLoaded. -->
+<script src="../update-banner.js" defer></script>
 <style>
   :root{
     --bg:#0d1117; --panel:#11161d; --panel2:#161c25; --line:#222c38;
@@ -1066,7 +1085,11 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
-<script src="https://unpkg.com/lerc@4.1.1/LercDecode.js"></script>
+<!-- SPEED: defer — the LERC decoder is only needed if/when the user picks the experimental
+     "Collier 2026" basemap. Loading it synchronously here forced the ENTIRE app (map init, search,
+     everything below) to wait on an unpkg round-trip before running. lercEnsureLoaded() now
+     tolerates it arriving late. -->
+<script src="https://unpkg.com/lerc@4.1.1/LercDecode.js" defer></script>
 <script>
 /* ============================================================
    VERIFIED OFFICIAL ENDPOINTS (checked against live REST dirs)
@@ -2064,24 +2087,27 @@ const map = L.map('map',{
 // Bigger canvas padding => the vector canvas is drawn well beyond the viewport, so short pans
 // reuse the already-rendered bitmap instead of triggering a full redraw on every frame.
 const canvasRenderer = L.canvas({ padding:2, tolerance:4 });   // shared canvas for all vector layers
+// crossOrigin:true on every basemap: loads tiles as CORS images (these servers all send
+// Access-Control-Allow-Origin:*), which is what lets the MAP PNG capture (html2canvas useCORS)
+// actually draw the basemap instead of leaving it blank. No effect on normal display speed.
 const sat = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
-  {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
 const labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-  {maxZoom:23,maxNativeZoom:19,opacity:.9,updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:23,maxNativeZoom:19,opacity:.9,updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
 const street = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  {maxZoom:23,maxNativeZoom:19,attribution:"&copy; OpenStreetMap contributors",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:23,maxNativeZoom:19,attribution:"&copy; OpenStreetMap contributors",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
 const satGroup = L.layerGroup([sat,labels]).addTo(map);
 // USGS National Map topographic basemap — keyless XYZ tiles. Gives terrain, contours & elevation
 // context (handy for spotting low ground before siting a pad). Cached only to z16, so upscale above.
 const topo = L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
-  {maxZoom:23,maxNativeZoom:16,attribution:"Topo &copy; USGS The National Map",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:23,maxNativeZoom:16,attribution:"Topo &copy; USGS The National Map",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
 // Clean aerial: the same Esri imagery as Satellite but WITHOUT the place-label overlay, for an
 // unobstructed photo view of roofs / pads / setbacks.
 const aerialClean = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
-  {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
 // Light gray canvas: minimal, low-noise basemap so parcel lines / flood / city overlays read clearly.
 const gray = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-  {maxZoom:23,maxNativeZoom:16,attribution:"&copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:23,maxNativeZoom:16,attribution:"&copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
 
 // =================== COLLIER 2026 (EXPERIMENTAL — LERC2D client-side decode) ===================
 // Collier's ImageryAll2026 service publishes its newest flight ONLY as a LERC2D pre-cached raster
@@ -2123,7 +2149,22 @@ const COLLIER2026_ROW_OFFSET = 0;
 window.__collier2026Debug = [];
 let _lercReady = null;
 function lercEnsureLoaded(){
-  if(!_lercReady) _lercReady = Lerc.load();
+  if(!_lercReady){
+    // LercDecode.js is loaded with `defer` (it's only needed for this experimental basemap), so it
+    // may not have arrived yet when the first tile is requested — wait briefly for the global.
+    // On failure, reset so a later tile request can retry instead of being wedged forever on one
+    // rejected promise (e.g. a flaky connection at first click).
+    _lercReady = (typeof Lerc!=='undefined'
+      ? Lerc.load()
+      : new Promise((res,rej)=>{
+          let n=0;
+          const t=setInterval(()=>{
+            if(typeof Lerc!=='undefined'){ clearInterval(t); Lerc.load().then(res,rej); }
+            else if(++n>100){ clearInterval(t); rej(new Error('LERC decoder failed to load')); }
+          },100);
+        })
+    ).catch(err=>{ _lercReady=null; throw err; });
+  }
   return _lercReady;
 }
 const Collier2026Layer = L.GridLayer.extend({
@@ -2201,7 +2242,7 @@ const Collier2026Layer = L.GridLayer.extend({
 });
 const collier2026 = new Collier2026Layer();
 const collier2026EsriBase = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
-  {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4});
+  {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
 const collier2026Group = L.layerGroup([collier2026EsriBase, collier2026, labels]);
 
 // =================== LOCAL HD AERIAL (one toggle, auto-picks the county) ===================
@@ -2343,7 +2384,7 @@ const localAerial = new LocalAerial("", {
 // Esri imagery sits UNDER the local aerial so any gap (outside a wired county, or a not-yet-loaded
 // tile) still shows photography rather than blank. It caps at native z19 and upsamples to fill.
 const localEsriBase = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
-  {maxZoom:23,maxNativeZoom:19,updateWhenIdle:false,updateWhenZooming:false,keepBuffer:6});
+  {maxZoom:23,maxNativeZoom:19,updateWhenIdle:false,updateWhenZooming:false,keepBuffer:6,crossOrigin:true});
 const sarcoGroup = L.layerGroup([localEsriBase, localAerial, labels]);   // the "Local HD" basemap
 // Switch the local layer to the county under the current map center; returns the active key (or null).
 let _localActiveKey = "__init__";
@@ -10141,7 +10182,7 @@ document.getElementById('go').onclick=doSearch;
 /* ---------- Address autocomplete (suggest as you type) ---------- */
 const addrEl=document.getElementById('addr');
 const sugEl=document.getElementById('suggest');
-let sugItems=[], sugActive=-1, sugSeq=0, sugTimer=null, lastSugQ='';
+let sugItems=[], sugActive=-1, sugSeq=0, sugTimer=null, lastSugQ='', addrSaveTimer=null;
 
 function hideSuggest(){ sugEl.classList.remove('show'); sugEl.innerHTML=''; sugItems=[]; sugActive=-1; }
 function renderSuggest(items){
@@ -10331,7 +10372,10 @@ async function chooseSuggestion(it){
 let sugAbort=null;
 addrEl.addEventListener('input',()=>{
   const q=addrEl.value.trim();
-  STORE.set('fl_addr',addrEl.value||'');
+  // SPEED: localStorage writes are synchronous disk I/O — batching to one write per pause
+  // instead of one per keystroke keeps fast typing smooth on older phones.
+  clearTimeout(addrSaveTimer);
+  addrSaveTimer=setTimeout(()=>STORE.set('fl_addr',addrEl.value||''),400);
   clearTimeout(sugTimer);
   if(q.length<4){ hideSuggest(); return; }
   if(q===lastSugQ) return;
@@ -10500,9 +10544,16 @@ const Sheet=(function(){
   }
   // drag
   let dragging=false,startY=0,startH=0,curY=0,lastY=0,lastT=0,vY=0;
+  // SPEED: the window touchmove listener below must be non-passive (it preventDefaults to claim
+  // the gesture), but a PERMANENT non-passive touchmove on window forces the browser to wait on
+  // JS before every scroll frame — measurable jank when flicking through a long results panel.
+  // So it's attached only for the duration of an actual drag and removed on release.
+  function bindDragMove(){ window.addEventListener('touchmove',move,{passive:false}); window.addEventListener('mousemove',move); }
+  function unbindDragMove(){ window.removeEventListener('touchmove',move); window.removeEventListener('mousemove',move); }
   function down(e){
     if(!isMobile()) return;
     dragging=true; panel.classList.add('dragging');
+    bindDragMove();
     startY=(e.touches?e.touches[0].clientY:e.clientY);
     startH=panel.getBoundingClientRect().height;
     curY=startY; lastY=startY; lastT=Date.now(); vY=0;
@@ -10536,6 +10587,7 @@ const Sheet=(function(){
   function up(){
     if(!dragging) return;
     dragging=false; panel.classList.remove('dragging');
+    unbindDragMove();
     panel.style.transform='';                     // animate back via CSS transition if not hidden
     const frac=panel.getBoundingClientRect().height/vh();
     const flungDown=vY>0.6;                        // fast downward flick
@@ -10586,8 +10638,7 @@ const Sheet=(function(){
     searchEl.addEventListener('touchend',()=>{ pending=false; },{passive:true});
     searchEl.addEventListener('touchcancel',()=>{ pending=false; },{passive:true});
   }
-  window.addEventListener('touchmove',move,{passive:false});
-  window.addEventListener('mousemove',move);
+  // move listeners are bound in down() and removed in up() — see bindDragMove() above.
   window.addEventListener('touchend',up);
   window.addEventListener('mouseup',up);
   // pull-up tab brings the sheet all the way back to FULL height (top of the screen),
@@ -10756,7 +10807,7 @@ window.Sheet=Sheet;
 
   // Tool's print button: prepare, then trigger print (with iOS double-rAF), then restore.
   if(btn){
-    btn.addEventListener('click',()=>{
+    const firePrint=()=>{
       const hasResults = document.querySelector('#results .card');
       if(!hasResults){ alert('Look up a property first — there\u2019s nothing to print yet.'); return; }
       preparePrint();
@@ -10766,7 +10817,11 @@ window.Sheet=Sheet;
       requestAnimationFrame(()=>requestAnimationFrame(()=>{
         setTimeout(()=>{ try{ window.print(); }catch(e){ /* no-op */ } }, 80);
       }));
-    });
+    };
+    btn.addEventListener('click',firePrint);
+    // <a role="button"> doesn't fire click on Enter/Space by itself (no href) — wire the keyboard
+    // path explicitly, same as the MAP PNG and EXCEL buttons already do.
+    btn.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); firePrint(); } });
   }
 })();
 
@@ -10785,7 +10840,7 @@ window.Sheet=Sheet;
   // Selectors for the page's own floating UI that sits over the map — hidden only
   // during capture so they don't clutter the screenshot. The map LAYERS stay visible.
   const UI_OVERLAYS = ['#coordReadout','#radarClock','#zoningLegend','#wxLegend','#coneFloat','#warnFloat','#stormFloat','.layerswitch',
-                       '#sheetTab','#coordReadout','.crosshair','.leaflet-control-container'];
+                       '#sheetTab','.crosshair','.leaflet-control-container'];
 
   function filenameStamp(){
     const m=window.__printMeta||{};
