@@ -21,6 +21,8 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 // ============================================================
 var CHANGELOG = [
   '📋 Added Pre-Install Checklist.',
+  '🎆 Added seasonal themes to the Electrical and Site Visits forms.',
+  '🧹 Added a Clear badge to every table so each table can be cleared separately. (Requested by Jonathan)',
 ];
 // ============================================================
 
