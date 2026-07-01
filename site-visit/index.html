@@ -1858,9 +1858,69 @@ body.dark-mode .tbl-clear-btn:hover { background: rgba(0,255,200,0.14); }
 body.printing .tbl-clear-btn,
 body.mobile-printing .tbl-clear-btn { display: none !important; }
 @media print { .tbl-clear-btn { display: none !important; } }
+
+/* ===== THEMED CONFIRM MODAL ===== */
+#themed-confirm-overlay {
+  position: fixed; inset: 0; z-index: 2000000;
+  display: none; align-items: center; justify-content: center;
+  padding: 20px;
+  background: rgba(10, 14, 39, 0.55);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+#themed-confirm-overlay.open { display: flex; }
+.tc-box {
+  width: 100%; max-width: 380px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border-bright);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35), var(--glow);
+  padding: 18px 18px 16px;
+  font-family: Arial, sans-serif;
+  animation: tc-pop 0.14s ease-out;
+}
+@keyframes tc-pop { from { transform: translateY(6px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
+.tc-title {
+  font-size: 15px; font-weight: 700; margin-bottom: 8px;
+  color: var(--cyan);
+}
+.tc-msg {
+  font-size: 13px; line-height: 1.5; color: var(--text-muted);
+  white-space: pre-line; margin-bottom: 16px;
+}
+.tc-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.tc-btn {
+  padding: 7px 16px; font-size: 13px; font-weight: 600;
+  border-radius: 7px; cursor: pointer; -webkit-appearance: none; appearance: none;
+  border: 1px solid transparent; transition: background 0.12s ease, opacity 0.12s ease;
+}
+.tc-btn-cancel {
+  background: transparent; color: var(--text-muted);
+  border-color: var(--border-bright);
+}
+.tc-btn-cancel:hover { background: var(--panel2); }
+.tc-btn-confirm {
+  background: var(--red); color: #FFFFFF; border-color: var(--red);
+}
+.tc-btn-confirm:hover { opacity: 0.88; }
+body.printing #themed-confirm-overlay,
+body.mobile-printing #themed-confirm-overlay { display: none !important; }
+@media print { #themed-confirm-overlay { display: none !important; } }
 </style>
 </head>
 <body>
+
+<!-- THEMED CONFIRM MODAL -->
+<div id="themed-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="tc-title">
+  <div class="tc-box">
+    <div class="tc-title" id="tc-title">Confirm</div>
+    <div class="tc-msg" id="tc-msg"></div>
+    <div class="tc-actions">
+      <button type="button" class="tc-btn tc-btn-cancel" id="tc-cancel">Cancel</button>
+      <button type="button" class="tc-btn tc-btn-confirm" id="tc-confirm">Clear</button>
+    </div>
+  </div>
+</div>
 
 <!-- ACTION BAR -->
 <div class="action-bar" id="action-bar">
@@ -2455,17 +2515,22 @@ if (document.readyState !== 'loading') setTimeout(() => { applyYNColors(); setup
 
 // ===== CLEAR =====
 function clearForm() {
-  if (!confirm("Clear all fields? This cannot be undone.")) return;
-  try { localStorage.removeItem(SAVE_KEY); } catch(e) {}
-  document.querySelectorAll('input[type="text"], textarea').forEach(el => el.value = "");
-  document.querySelectorAll('input[type="checkbox"]').forEach(el => {
-    el.checked = false;
-    const wrap = el.parentElement;
-    if (wrap && wrap.classList.contains('yn-checkbox-wrap')) wrap.classList.remove('checked');
+  themedConfirm(
+    'This cannot be undone.',
+    { title: 'Clear ALL entries?', confirmText: 'Clear all' }
+  ).then(function (ok) {
+    if (!ok) return;
+    try { localStorage.removeItem(SAVE_KEY); } catch(e) {}
+    document.querySelectorAll('input[type="text"], textarea').forEach(el => el.value = "");
+    document.querySelectorAll('input[type="checkbox"]').forEach(el => {
+      el.checked = false;
+      const wrap = el.parentElement;
+      if (wrap && wrap.classList.contains('yn-checkbox-wrap')) wrap.classList.remove('checked');
+    });
+    // Reset accordion header "has-data" indicators and dots.
+    document.querySelectorAll('.mob-acc-header.has-data').forEach(h => h.classList.remove('has-data'));
+    document.querySelectorAll('.mob-sub-dot').forEach(d => d.style.display = 'none');
   });
-  // Reset accordion header "has-data" indicators and dots.
-  document.querySelectorAll('.mob-acc-header.has-data').forEach(h => h.classList.remove('has-data'));
-  document.querySelectorAll('.mob-sub-dot').forEach(d => d.style.display = 'none');
 }
 
 // ===== PRINT =====
@@ -3814,6 +3879,46 @@ function setupWireCards() {
   });
 }
 
+// Themed confirm modal — returns a Promise<boolean>. Matches light/dark theme
+// via CSS variables. Falls back to native confirm() if markup is missing.
+function themedConfirm(message, opts) {
+  opts = opts || {};
+  var overlay = document.getElementById('themed-confirm-overlay');
+  if (!overlay) return Promise.resolve(window.confirm(message));
+  var titleEl   = document.getElementById('tc-title');
+  var msgEl     = document.getElementById('tc-msg');
+  var okBtn     = document.getElementById('tc-confirm');
+  var cancelBtn = document.getElementById('tc-cancel');
+  titleEl.textContent = opts.title || 'Confirm';
+  msgEl.textContent   = message || '';
+  okBtn.textContent     = opts.confirmText || 'Clear';
+  cancelBtn.textContent = opts.cancelText  || 'Cancel';
+
+  return new Promise(function (resolve) {
+    function close(result) {
+      overlay.classList.remove('open');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    }
+    function onOk()     { close(true); }
+    function onCancel() { close(false); }
+    function onBackdrop(e) { if (e.target === overlay) close(false); }
+    function onKey(e) {
+      if (e.key === 'Escape') close(false);
+      else if (e.key === 'Enter') close(true);
+    }
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+    overlay.classList.add('open');
+    setTimeout(function () { try { okBtn.focus(); } catch (e) {} }, 0);
+  });
+}
+
 // ===== PER-TABLE CLEAR BUTTONS =====
 // Adds a small "🗑 Clear" button to every .mat-table header. On press it asks
 // for confirmation, then wipes only the typed values in that table (rows and
@@ -3849,7 +3954,7 @@ function setupTableClearButtons() {
     var firstTh = table.querySelector('thead th');
     if (!firstTh) return;
     // A readable name for the confirm message, from the header label text.
-    var label = (firstTh.textContent || 'this table').replace(/[▸◂▶►▼]/g, '').trim() || 'this table';
+    var label = ((firstTh.textContent || 'this table').replace(/[▸◂▶►▼]/g, '').trim() || 'this table').toUpperCase();
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'tbl-clear-btn';
@@ -3858,13 +3963,17 @@ function setupTableClearButtons() {
     // Don't let a click on the header (e.g. the Fittings collapse toggle) fire.
     btn.addEventListener('click', function (ev) {
       ev.stopPropagation();
-      var ok = window.confirm('Clear all entries in the "' + label + '" table?\n\nThis erases the typed values only — the table itself stays. This cannot be undone.');
-      if (!ok) return;
-      clearOneTable(table);
-      if (typeof setStatus === 'function') {
-        setStatus('Cleared the "' + label + '" table.');
-        setTimeout(function () { setStatus(''); }, 3000);
-      }
+      themedConfirm(
+        'This cannot be undone.',
+        { title: 'Clear ALL entries in "' + label + '"?', confirmText: 'Clear' }
+      ).then(function (ok) {
+        if (!ok) return;
+        clearOneTable(table);
+        if (typeof setStatus === 'function') {
+          setStatus('Cleared the "' + label + '" table.');
+          setTimeout(function () { setStatus(''); }, 3000);
+        }
+      });
     });
     firstTh.appendChild(btn);
   });
