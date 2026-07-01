@@ -11752,17 +11752,27 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
     var op=(obj.opacity==null?1:obj.opacity);
     var a=(obj.angle||0);
     var lineH=efpx*1.35;
+    // Block width (widest line) so right/center alignment is measured from obj.x
+    // as the LEFT edge — identical to the screen/raster paths. Anchoring on obj.x
+    // (same coord space as the leader line) keeps the label glued to its leader at
+    // any scale. (The old code used obj.x as the alignment point and subtracted the
+    // per-line width, which pushed right-aligned leader labels a full block-width
+    // left of their line in the vector PDF.)
+    var vmaxW=0;
+    lines.forEach(function(ln){ if(ln==='') return; var w_=f.widthOfTextAtSize(ln,fsize)*sc; if(w_>vmaxW) vmaxW=w_; });
     // Per-line draw. Canvas baseline ~ obj.y + i*lineH (top-anchored fillText
     // uses alphabetic baseline; pdf-lib drawText y is the baseline too).
     lines.forEach(function(ln,i){
       if(ln==='') return;
       var tw=f.widthOfTextAtSize(ln,fsize)*sc;     // back to canvas px
-      var lx = obj.x + (align==='center'? -tw/2 : align==='right'? -tw : 0);
+      // Per-line LEFT edge within the [obj.x, obj.x+vmaxW] block.
+      var _off = (align==='center'? (vmaxW-tw)/2 : align==='right'? (vmaxW-tw) : 0);
+      var lx = obj.x + _off;
       var ly = obj.y + i*lineH;
       if(a){
         // rotate around (obj.x,obj.y)
         var ca=Math.cos(a), sa=Math.sin(a);
-        var rx0 = (align==='center'? -tw/2 : align==='right'? -tw : 0);
+        var rx0 = _off;
         var ry0 = i*lineH;
         var rx = obj.x + rx0*ca - ry0*sa;
         var ry = obj.y + rx0*sa + ry0*ca;
