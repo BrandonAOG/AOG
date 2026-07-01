@@ -1758,6 +1758,51 @@ window.AOG.debugState=function(){
     pdfBytes:(typeof _pdfBytes!=='undefined'&&_pdfBytes?_pdfBytes.byteLength:0)
   };
 };
+// One-shot export diagnosis. Run AOG.diagnoseExport() in the console AFTER moving a
+// few extracted items, then paste the result. Shows exactly which export branch will
+// run and whether each moved item is detected (so we know if its ghost gets patched).
+window.AOG.diagnoseExport=function(){
+  function mv(arr){ try{ return arr.filter(function(o){return o._fromExplode && typeof _movedExplodeObj==='function' && _movedExplodeObj(o);}).length; }catch(e){ return 'err'; } }
+  function fe(arr){ try{ return arr.filter(function(o){return o._fromExplode;}).length; }catch(e){ return 'err'; } }
+  var out={
+    FULL_REDRAW:(typeof _FULL_REDRAW!=='undefined'?_FULL_REDRAW:null),
+    explodedFromPage:(typeof _explodedFromPage!=='undefined'?_explodedFromPage:null),
+    explodedGraphicsExist:(typeof _explodedGraphicsExist==='function'?_explodedGraphicsExist():null),
+    WHITE_COVER:(typeof _shouldWhiteCoverPage==='function'?_shouldWhiteCoverPage():null),
+    patchesWillRun:(typeof _shouldWhiteCoverPage==='function'?!_shouldWhiteCoverPage():null),
+    baseSnap:(typeof _baseSnap!=='undefined' && !!_baseSnap),
+    fromExplode:{
+      shapes:fe(typeof shapeObjs!=='undefined'?shapeObjs:[]),
+      measures:fe(typeof measureObjs!=='undefined'?measureObjs:[]),
+      text:fe(typeof textObjs!=='undefined'?textObjs:[]),
+      polylines:fe(typeof polylineObjs!=='undefined'?polylineObjs:[]),
+      leaders:fe(typeof leaderObjs!=='undefined'?leaderObjs:[]),
+      pen:fe(typeof penObjs!=='undefined'?penObjs:[]),
+      images:(typeof imgOverlays!=='undefined'?imgOverlays.filter(function(o){return o._fromPdfPage;}).length:0)
+    },
+    movedFromExplode:{
+      shapes:mv(typeof shapeObjs!=='undefined'?shapeObjs:[]),
+      measures:mv(typeof measureObjs!=='undefined'?measureObjs:[]),
+      text:mv(typeof textObjs!=='undefined'?textObjs:[]),
+      polylines:mv(typeof polylineObjs!=='undefined'?polylineObjs:[]),
+      leaders:mv(typeof leaderObjs!=='undefined'?leaderObjs:[])
+    },
+    // Do moved extracted objects carry the original-position fields the patcher needs?
+    sampleMovedFields:(function(){
+      var all=[].concat(
+        (typeof shapeObjs!=='undefined'?shapeObjs:[]),
+        (typeof measureObjs!=='undefined'?measureObjs:[]),
+        (typeof textObjs!=='undefined'?textObjs:[]),
+        (typeof polylineObjs!=='undefined'?polylineObjs:[]),
+        (typeof leaderObjs!=='undefined'?leaderObjs:[])
+      ).filter(function(o){return o._fromExplode && typeof _movedExplodeObj==='function' && _movedExplodeObj(o);});
+      return all.slice(0,4).map(function(o){ return {type:o.type||(o.isArrow?'arrow':'?'), hasOX1:o._oX1!=null, hasOCx:o._oCx!=null, hasOX:o._oX!=null, array:(o.pts?'polyline/leader':'')}; });
+    })()
+  };
+  console.log('=== AOG EXPORT DIAGNOSIS ===');
+  console.log(JSON.stringify(out,null,2));
+  return out;
+};
 
 var IS_IPHONE = /iPhone/.test(navigator.userAgent);
 var IS_IPAD   = /iPad/.test(navigator.userAgent) ||
@@ -2593,7 +2638,9 @@ function renderCommentObjs(ctx){
 function _markupInit(m){
   if(m.angle===undefined || m.cx===undefined){
     m.cx=(m.x1+m.x2)/2; m.cy=(m.y1+m.y2)/2;
-    m.w=Math.abs(m.x2-m.x1)||20; m.h=Math.abs(m.y2-m.y1)||6;
+    // Keep the TRUE size (no fabricated 20x6 default). A zero-size markup is a
+    // stray click with no drag; drawMarkupOnCtx skips it rather than inventing a box.
+    m.w=Math.abs(m.x2-m.x1); m.h=Math.abs(m.y2-m.y1);
     if(m.angle===undefined) m.angle=0;
   }
   return m;
@@ -2615,13 +2662,16 @@ function _markupSyncAABB(m){
 // weight sensible at either zoom.
 function drawMarkupOnCtx(ctx,m,sc,lw){
   _markupInit(m);
+  // Skip degenerate marks (a click with no drag) — they'd otherwise show as a lone
+  // colored box/point with no content.
+  if(m.w<2 && m.h<2) return;
   var w=m.w*sc, h=m.h*sc;
   ctx.save();
   ctx.globalAlpha=m.opacity;
   ctx.translate(m.cx*sc, m.cy*sc);
   ctx.rotate(m.angle||0);
   if(m.type==='highlight'){
-    ctx.fillStyle=m.color; ctx.fillRect(-w/2,-h/2,w||20*sc,h||6*sc);
+    ctx.fillStyle=m.color; ctx.fillRect(-w/2,-h/2,w,h);
   } else if(m.type==='strikeout'){
     ctx.strokeStyle=m.color; ctx.lineWidth=lw;
     ctx.beginPath(); ctx.moveTo(-w/2,0); ctx.lineTo(w/2,0); ctx.stroke();
@@ -3820,7 +3870,13 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n){
         var _cxs=_cp.map(function(p){return p.x;}), _cys=_cp.map(function(p){return p.y;});
         var _iw=Math.max.apply(null,_cxs)-Math.min.apply(null,_cxs);
         var _ih=Math.max.apply(null,_cys)-Math.min.apply(null,_cys);
-        if(_pgArea>0 && (_iw*_ih) >= _pgArea*0.6){ _hasDominantRaster=true; break; }
+        // Only a NEAR-FULL-PAGE image counts as a dominant backdrop. That matches
+        // the >=0.92 extraction skip below: such an image is NOT extracted, so it's
+        // un-reproduced and the page must be kept. Smaller embedded photos (logos,
+        // equipment images) ARE extracted as movable overlays and reproduced, so
+        // they must NOT force keep-original — otherwise annotation-based drawings
+        // (whose linework IS extracted) get stuck keeping the page and ghost on move.
+        if(_pgArea>0 && (_iw*_ih) >= _pgArea*0.92){ _hasDominantRaster=true; break; }
       }
     }
   }catch(e){}
@@ -7607,6 +7663,11 @@ function renderTextObjs(){
   var _hideId = (_hideText && _hideText.id!==undefined) ? _hideText.id : null;
   textObjs.forEach(function(obj){
     if(obj._editing) return;
+    // Never render an empty text object. A text with no visible characters can only
+    // be a stray remnant (e.g. a text edit interrupted by an app kill and restored
+    // from autosave); with a highlight set it shows as a lone colored box on the
+    // canvas. It carries no content, so skip it entirely.
+    if(!obj.text || obj.text.trim()==='') return;
     // While this text is being moved/rotated/resized, it's drawn live on the
     // selection canvas instead — skip it here so the old position/angle doesn't
     // ghost behind the live preview.
@@ -11423,6 +11484,10 @@ function _downloadBlob(blob, name){
 // whatever is active (no early returns: handle them all) fixes that.
 function commitAllForExport(){
   try{ if(typeof textOv!=='undefined' && textOv && textOv.style.display!=='none' && typeof commitText==='function') commitText(); }catch(e){}
+  // Drop any stray empty text objects (e.g. a text edit interrupted by an app kill
+  // and later restored from autosave). They render as an empty highlighted box and
+  // must never appear in an export.
+  try{ if(typeof textObjs!=='undefined') { for(var _ti=textObjs.length-1;_ti>=0;_ti--){ var _to=textObjs[_ti]; if(!_to || typeof _to.text!=='string' || _to.text.trim()===''){ textObjs.splice(_ti,1); } } } }catch(e){}
   try{ if(typeof _editingComment!=='undefined' && _editingComment && typeof commitCommentEdit==='function') commitCommentEdit(); }catch(e){}
   try{ if(typeof selImg!=='undefined' && selImg && typeof commitImgSelection==='function') commitImgSelection(); }catch(e){}
   try{ if(typeof selectedLeader!=='undefined' && selectedLeader && typeof commitLeaderSelection==='function') commitLeaderSelection(); }catch(e){}
@@ -11482,6 +11547,47 @@ function _movedExplodeObj(o){
   if(o._oX1!=null) return Math.abs(o.x1-o._oX1)>e||Math.abs(o.y1-o._oY1)>e||Math.abs(o.x2-o._oX2)>e||Math.abs(o.y2-o._oY2)>e;
   if(o._oCx!=null) return Math.abs(o.cx-o._oCx)>e||Math.abs(o.cy-o._oCy)>e||Math.abs(o.w-o._oW)>e||Math.abs(o.h-o._oH)>e||((o.angle||0)!==0);
   if(o._oX!=null)  return Math.abs(o.x-o._oX)>e||Math.abs(o.y-o._oY)>e;
+  return false;
+}
+
+// Did the page's GRAPHICS (linework/shapes/images) actually get extracted into
+// redrawable objects? White-covering the original page is only safe when they did
+// — otherwise the survey lives only in the original page and covering it erases it.
+// Text-only extraction does NOT count: the linework would be lost. A dominant
+// raster backdrop is skipped on import, so it never produces _fromExplode graphics.
+function _explodedGraphicsExist(){
+  try{
+    if(typeof shapeObjs!=='undefined'   && shapeObjs.some(function(o){return o._fromExplode;}))   return true;
+    if(typeof measureObjs!=='undefined' && measureObjs.some(function(o){return o._fromExplode;})) return true;
+    if(typeof imgOverlays!=='undefined' && imgOverlays.some(function(o){return o._fromExplode;})) return true;
+  }catch(e){}
+  return false;
+}
+// The ONLY condition under which the export deletes/whites-out the original page.
+// Requires: full-redraw mode, the page was flagged as exploded, AND we truly have
+// extracted graphics that reproduce it. This makes erasing the site plan impossible
+// when the content wasn't captured (raster survey, annotation-only linework, etc.).
+function _shouldWhiteCoverPage(){
+  return _FULL_REDRAW && _explodedFromPage && _explodedGraphicsExist();
+}
+// Any extracted (page-derived) object the user has MOVED/resized/rotated. When the
+// page is KEPT (not white-covered), such moves can't be reflected in a native-vector
+// export without hacks (the pristine page still shows the original). In that case we
+// export the clean flattened composite instead — the backdrop already has every
+// extracted object erased, so moves are reflected with no white cover-ups.
+function _anyMovedExtracted(){
+  try{
+    if(typeof shapeObjs!=='undefined'   && shapeObjs.some(function(o){return o._fromExplode && _movedExplodeObj(o);}))   return true;
+    if(typeof measureObjs!=='undefined' && measureObjs.some(function(o){return o._fromExplode && _movedExplodeObj(o);})) return true;
+    if(typeof textObjs!=='undefined'    && textObjs.some(function(o){return o._fromExplode && _movedExplodeObj(o);}))    return true;
+    if(typeof imgOverlays!=='undefined' && imgOverlays.some(function(ov){
+      if(!ov._fromPdfPage || ov._origCx==null) return false;
+      var e=0.75;
+      return Math.abs(ov.cx-ov._origCx)>e||Math.abs(ov.cy-ov._origCy)>e||
+             Math.abs(ov.w-ov._origW)>e||Math.abs(ov.h-ov._origH)>e||
+             (ov.angle||0)!==0||ov.flipH||ov.flipV;
+    })) return true;
+  }catch(e){}
   return false;
 }
 
@@ -11661,7 +11767,7 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
     //     out separately in the overlay-build step).
     // When the page IS white-covered, draw every extracted object so they reproduce
     // the erased content.
-    var _keepOriginal = !(_FULL_REDRAW && _explodedFromPage);
+    var _keepOriginal = !_shouldWhiteCoverPage();
     if(o._fromExplode){
       if(_keepOriginal && !movedExplode(o)){ _dbgCnt.skippedExplode++; return false; }
       if(movedExplode(o)) _dbgCnt.movedDrawn++;
@@ -11880,6 +11986,17 @@ function _buildVectorPdf(attachJson, onReady){
       shapes:shapeObjs.length, measures:measureObjs.length, text:textObjs.length, images:imgOverlays.length});
     if(!_vectorBackdropOK || !_pdfBytes || typeof window.PDFLib==='undefined'){ dbg('export','FALLBACK to raster — vector path unavailable',{vectorOK:_vectorBackdropOK, pdfBytes:!!_pdfBytes, pdflib:typeof window.PDFLib}); onReady(null); return; }
 
+    // No white cover-ups. If the page is KEPT (its own content isn't reconstructed
+    // from extracted objects) but the user MOVED extracted content, the pristine
+    // page would still show the originals and the only way to hide them in a native
+    // page is to paint over them — a hack. Instead, fall back to the clean flattened
+    // composite: the on-screen backdrop already has every extracted object erased, so
+    // the export reflects the moves exactly, with nothing painted over.
+    if(!_shouldWhiteCoverPage() && _anyMovedExtracted()){
+      dbg('export','kept page + moved extracted content → clean composite export (no white patches)');
+      onReady(null); return;
+    }
+
     // Image overlays are raster (pixels), so they can't be vectors — but we embed
     // each as its OWN native-resolution image in the PDF so it's as sharp as its
     // source allows. Axis-aligned (un-rotated) images go in natively; flips are
@@ -12015,7 +12132,7 @@ function _buildVectorPdf(attachJson, onReady){
               // and surveys are rasterized on import, not extracted — covering them
               // white would erase the site plan and leave only the markups. In that
               // case we keep the original page intact and just stamp the overlay.
-              if(_FULL_REDRAW && _explodedFromPage){
+              if(_shouldWhiteCoverPage()){
                 try{
                   var _annCount=0;
                   try{ var _a=page.node.Annots && page.node.Annots(); _annCount=(_a&&_a.size)?_a.size():0; }catch(e){}
@@ -12080,14 +12197,10 @@ function _buildVectorPdf(attachJson, onReady){
                   });
                 });
               });
-              // Clean removal of MOVED extracted vectors/text (LEGACY mode only).
-              // In FULL-REDRAW there's nothing to remove — the page is blank and we
-              // simply draw every object at its current position.
-              if(VEC_ANNO_TYPES && !_FULL_REDRAW){
-                chain=chain.then(function(){
-                  return _stampBackdropPatches(pdf, page, sz, sc, v2p, rot);
-                });
-              }
+              // No stamp/white-patch pass. The only remaining kept-page cases here
+              // have NO moved extracted content (moves are routed to the clean
+              // composite export above), so there is nothing to cover — and we never
+              // paint white over the page.
               // Paint the true-vector annotations LAST so they sit crisply on top.
               if(VEC_ANNO_TYPES){
                 chain=chain.then(function(){
