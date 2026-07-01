@@ -1834,6 +1834,30 @@ html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap      {
 /* Mobile accordion disabled — it duplicated the page-2 tables. Hide its
    container in every state (screen, print, all widths) as a safeguard. */
 #mobile-p2-accordions { display: none !important; }
+
+/* Per-table "Clear" button (screen-only; hidden in capture/print).
+   Outlined pill that matches the table header text color in each theme. */
+.tbl-clear-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 8px; padding: 1px 8px;
+  font-size: 10px; font-weight: 600; line-height: 1.5;
+  color: #7A2E0C; background: transparent;
+  border: 1px solid #7A2E0C; border-radius: 5px;
+  cursor: pointer; vertical-align: middle;
+  white-space: nowrap; letter-spacing: 0.2px;
+  -webkit-appearance: none; appearance: none;
+  transition: background 0.12s ease;
+}
+.tbl-clear-btn:hover { background: rgba(122,46,12,0.12); }
+.tbl-clear-btn:active { transform: translateY(0.5px); }
+body.dark-mode .tbl-clear-btn {
+  color: #00FFC8; border-color: #00FFC8;
+}
+body.dark-mode .tbl-clear-btn:hover { background: rgba(0,255,200,0.14); }
+/* Never show the clear buttons in the captured image / print / PDF. */
+body.printing .tbl-clear-btn,
+body.mobile-printing .tbl-clear-btn { display: none !important; }
+@media print { .tbl-clear-btn { display: none !important; } }
 </style>
 </head>
 <body>
@@ -1883,11 +1907,11 @@ html.windows body.printing:not(.mobile-printing) #page1 .yn-checkbox-wrap      {
     <div class="permit-section">
       <div class="permit-row">
         <label>Homeowner's Name:</label>
-        <input class="permit-input flex-grow" type="text">
+        <input class="permit-input flex-grow" type="text" data-field="customer-name">
       </div>
       <div class="permit-row">
         <label>Job Address:</label>
-        <input class="permit-input flex-grow" type="text">
+        <input class="permit-input flex-grow" type="text" data-field="job-address">
       </div>
     </div>
 
@@ -3388,6 +3412,25 @@ async function pdfRenderPageCanvases() {
   return canvases;
 }
 
+// Build "Name - Address - Permitting Info - RESUMABLE.pdf" from the tagged
+// fields, sanitized for filesystems. Falls back gracefully when blank.
+function pdfResumableFilename() {
+  function val(sel) {
+    var el = document.querySelector(sel);
+    return el && el.value ? el.value.trim() : '';
+  }
+  function clean(s) {
+    return s.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  var name = clean(val('[data-field="customer-name"]'));
+  var addr = clean(val('[data-field="job-address"]'));
+  var parts = [];
+  if (name) parts.push(name);
+  if (addr) parts.push(addr);
+  parts.push('Permitting Info');
+  return parts.join(' - ') + ' - RESUMABLE.pdf';
+}
+
 // ── GENERATE RESUMABLE PDF ──────────────────────────────────────────────
 async function saveFillablePdf() {
   if (typeof PDFLib === 'undefined') {
@@ -3432,7 +3475,7 @@ async function saveFillablePdf() {
     pdfDoc.setTitle('Always On Generators — Permitting Info (Resumable)');
 
     var bytes = await pdfDoc.save();
-    var fname = 'AlwaysOn_Generators_Permitting_Info - RESUMABLE.pdf';
+    var fname = pdfResumableFilename();
     var blob = new Blob([bytes], { type: 'application/pdf' });
 
     // Share on mobile if possible, else download.
@@ -3771,6 +3814,62 @@ function setupWireCards() {
   });
 }
 
+// ===== PER-TABLE CLEAR BUTTONS =====
+// Adds a small "🗑 Clear" button to every .mat-table header. On press it asks
+// for confirmation, then wipes only the typed values in that table (rows and
+// structure are kept), syncs any mobile mirror inputs, updates indicators,
+// and saves. Screen-only — hidden in capture/print via CSS.
+function clearOneTable(table) {
+  if (!table) return;
+  var inputs = table.querySelectorAll('input, textarea');
+  inputs.forEach(function (el) {
+    if (el.type === 'checkbox' || el.type === 'radio') {
+      el.checked = false;
+    } else {
+      el.value = '';
+    }
+    // Keep a mobile mirror (if any) in sync.
+    if (el._mobMirror) {
+      el._mobMirror.value = '';
+      try { el._mobMirror.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+    }
+    try {
+      el.dispatchEvent(new Event('input',  { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) {}
+  });
+  if (typeof saveFormData === 'function') saveFormData();
+}
+
+function setupTableClearButtons() {
+  var tables = document.querySelectorAll('table.mat-table');
+  tables.forEach(function (table) {
+    if (table._clearWired) return;
+    table._clearWired = true;
+    var firstTh = table.querySelector('thead th');
+    if (!firstTh) return;
+    // A readable name for the confirm message, from the header label text.
+    var label = (firstTh.textContent || 'this table').replace(/[▸◂▶►▼]/g, '').trim() || 'this table';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tbl-clear-btn';
+    btn.textContent = 'Clear';
+    btn.setAttribute('aria-label', 'Clear ' + label + ' table');
+    // Don't let a click on the header (e.g. the Fittings collapse toggle) fire.
+    btn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      var ok = window.confirm('Clear all entries in the "' + label + '" table?\n\nThis erases the typed values only — the table itself stays. This cannot be undone.');
+      if (!ok) return;
+      clearOneTable(table);
+      if (typeof setStatus === 'function') {
+        setStatus('Cleared the "' + label + '" table.');
+        setTimeout(function () { setStatus(''); }, 3000);
+      }
+    });
+    firstTh.appendChild(btn);
+  });
+}
+
 function initFormAndAccordions() {
   ensureStableKeys();
   restoreFormData();
@@ -3778,6 +3877,7 @@ function initFormAndAccordions() {
   initMobileAccordions();
   setupFittingsCollapse();
   setupWireCards();
+  setupTableClearButtons();
   // After accordions exist, restrict numeric fields (real inputs + mirrors).
   if (typeof applyNumericOnlyToPage2 === 'function') applyNumericOnlyToPage2();
 }
