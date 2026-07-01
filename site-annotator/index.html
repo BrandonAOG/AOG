@@ -7587,22 +7587,13 @@ function renderTextObjs(){
     var align=obj.textAlign||'left';
     tCtx.textAlign=align;
     var maxW=measureLinesWFull(lines,fpx,family,obj.bold,obj.italic);
-    // Compute anchor x for alignment.
-    // Right-anchored leader labels (left-hanging callouts) must be pinned by their
-    // RIGHT edge (_anchorX = the leader shoulder), NOT the stored obj.x left edge.
-    // obj.x is only refreshed when the label is edited, so after a DPI/scale change
-    // it goes stale — screen would draw at the stale left edge while export re-pins
-    // to _anchorX, and the two drift apart. Re-derive the left edge here from the
-    // CURRENT measured width so screen matches export exactly (WYSIWYG).
-    var ax;
-    if(obj._anchorRight===true && obj._anchorX!=null){
-      var _rightEdge=obj._anchorX;
-      ax = align==='right'  ? _rightEdge
-         : align==='center' ? _rightEdge - maxW/2
-         :                     _rightEdge - maxW;
-    } else {
-      ax=obj.x+(align==='center'?maxW/2:align==='right'?maxW:0);
-    }
+    // Anchor x for alignment. obj.x (the label's left edge) lives in the SAME
+    // coordinate space as the leader line, so text and leader scale together and
+    // stay glued at any zoom/DPI. (Earlier code re-pinned right-anchored leader
+    // labels to a cached _anchorX; that value is baked at the typing DPI, so when
+    // the plan scale changed it no longer matched the glyph width and the label
+    // slid off — on screen AND, worse, on export. Using obj.x removes that drift.)
+    var ax=obj.x+(align==='center'?maxW/2:align==='right'?maxW:0);
     // Draw background if bgOpacity>0 — tight, per-line highlight.
     // Each line gets its own rectangle hugging that line's ACTUAL glyphs with
     // exactly 1.5px above/below — so the bar is the same tightness at any font
@@ -11114,20 +11105,12 @@ function compositeExport(maxPx){
       ctx.textAlign=align_;
       var maxW_=measureLinesWFull(lines_,Math.round(efpx*scale),fam,obj.bold,obj.italic);
       var ax_;
-      // Right-anchored leader labels (left-hanging callouts) bake obj.x as
-      // (_anchorX - width), where width was measured at the DPI the label was
-      // typed at. If the export DPI differs, that width no longer matches the
-      // glyphs and the label slides off its arrow. Re-pin the RIGHT edge to the
-      // leader shoulder (_anchorX) and use the export's own measured width so the
-      // label stays glued to its leader at any DPI/scale.
-      if(obj._anchorRight===true && obj._anchorX!=null){
-        var _rightEdge_=Math.round(obj._anchorX*scale);
-        ax_ = align_==='right'  ? _rightEdge_
-            : align_==='center' ? _rightEdge_ - maxW_/2
-            :                     _rightEdge_ - maxW_;
-      } else {
-        ax_=Math.round(obj.x*scale)+(align_==='center'?maxW_/2:align_==='right'?maxW_:0);
-      }
+      // Use obj.x (left edge) — same coordinate space as the leader line, so both
+      // scale by `scale` together and stay aligned at any export DPI. Do NOT re-pin
+      // to a cached _anchorX: that was measured at the typing DPI and, once the plan
+      // scale changed, no longer matched the glyph width — which pushed the text far
+      // left of its leader on export. Matching the on-screen obj.x path fixes that.
+      ax_=Math.round(obj.x*scale)+(align_==='center'?maxW_/2:align_==='right'?maxW_:0);
       // Background — tight, per-line, hugs each line's actual glyphs (matches screen).
       if(obj.bgOpacity&&obj.bgOpacity>0){
         ctx.save(); ctx.globalAlpha=obj.opacity*obj.bgOpacity; ctx.fillStyle=obj.bgColor||'#ffff00';
