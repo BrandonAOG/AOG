@@ -7552,8 +7552,22 @@ function renderTextObjs(){
     var align=obj.textAlign||'left';
     tCtx.textAlign=align;
     var maxW=measureLinesWFull(lines,fpx,family,obj.bold,obj.italic);
-    // Compute anchor x for alignment
-    var ax=obj.x+(align==='center'?maxW/2:align==='right'?maxW:0);
+    // Compute anchor x for alignment.
+    // Right-anchored leader labels (left-hanging callouts) must be pinned by their
+    // RIGHT edge (_anchorX = the leader shoulder), NOT the stored obj.x left edge.
+    // obj.x is only refreshed when the label is edited, so after a DPI/scale change
+    // it goes stale — screen would draw at the stale left edge while export re-pins
+    // to _anchorX, and the two drift apart. Re-derive the left edge here from the
+    // CURRENT measured width so screen matches export exactly (WYSIWYG).
+    var ax;
+    if(obj._anchorRight===true && obj._anchorX!=null){
+      var _rightEdge=obj._anchorX;
+      ax = align==='right'  ? _rightEdge
+         : align==='center' ? _rightEdge - maxW/2
+         :                     _rightEdge - maxW;
+    } else {
+      ax=obj.x+(align==='center'?maxW/2:align==='right'?maxW:0);
+    }
     // Draw background if bgOpacity>0 — tight, per-line highlight.
     // Each line gets its own rectangle hugging that line's ACTUAL glyphs with
     // exactly 1.5px above/below — so the bar is the same tightness at any font
