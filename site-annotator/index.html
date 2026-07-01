@@ -3606,6 +3606,11 @@ function _askPdfImportOptions(f){
 
 function _loadPDFRasterized(f){
   if(typeof pdfjsLib==='undefined'){ toast('PDF support requires an internet connection.','warn'); return; }
+  // Invalidate the PREVIOUS file's bytes synchronously. arrayBuffer() resolves
+  // async, so without this a first export right after opening a new file could
+  // paint annotations onto the old page geometry. Null → vector export cleanly
+  // falls back to the (always-correct) raster path until the new bytes are ready.
+  _pdfBytes=null; _vectorBackdropOK=false;
   try{ f.arrayBuffer().then(function(b){ _pdfBytes=b; }).catch(function(){ _pdfBytes=null; }); }catch(e){ _pdfBytes=null; }
   // pdf.js 3.x REQUIRES a worker source. The original code set this in a
   // guard that executed before the library loaded, so it was never applied
@@ -3666,6 +3671,8 @@ function _pdfColorToHex(c){
 // Main entry. Renders page, then explodes text + images into editable objects.
 function _loadPDFExploded(f){
   if(typeof pdfjsLib==='undefined'){ toast('PDF support requires an internet connection.','warn'); return; }
+  // Invalidate previous file's bytes synchronously (see _loadPDFRasterized note).
+  _pdfBytes=null; _vectorBackdropOK=false;
   try{ f.arrayBuffer().then(function(b){ _pdfBytes=b; }).catch(function(){ _pdfBytes=null; }); }catch(e){ _pdfBytes=null; }
   if(pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc){
     pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -11954,6 +11961,17 @@ function _buildVectorPdf(attachJson, onReady){
               var VW=(rot===90||rot===270)?PH:PW;
               var VH=(rot===90||rot===270)?PW:PH;
               var sc=baseCv.width/VW;                             // base px per PDF point (visual)
+              // Geometry sanity check. _pdfBytes is assigned ASYNCHRONOUSLY on load
+              // and isn't cleared when a new document opens, so a first export right
+              // after switching files can map annotations onto the PREVIOUS page's
+              // size — leaders and text land far off. If the loaded page's aspect
+              // doesn't match the on-screen canvas, the bytes are stale/mismatched:
+              // throw to fall through to the always-correct raster fallback instead
+              // of emitting a mispositioned vector PDF.
+              var _scY=baseCv.height/VH;
+              if(!(sc>0)||!(_scY>0)||Math.abs(sc-_scY)>0.01*Math.max(sc,_scY)){
+                throw new Error('vector export geometry mismatch (stale PDF bytes?) sc='+sc+' scY='+_scY);
+              }
               // Visual(pt) → unrotated page(pt) mapping for drawing.
               function v2p(vx,vy){
                 if(rot===90)  return {x:PW-vy, y:vx};
