@@ -3796,12 +3796,42 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n){
   // extracted objects represent content ALREADY present in the original page, so
   // the export must NOT re-draw them (that would double the linework). They're
   // tagged _fromExplode below and skipped at export time.
+  // Detect a DOMINANT raster backdrop (scanned/flattened survey). Such an image
+  // is intentionally NOT extracted as a movable overlay (see the >=0.92 page-area
+  // skip in the image walk below), so nothing reproduces it. If we let the export
+  // treat this page as "fully exploded" it would white-cover and DELETE the survey,
+  // leaving only annotations. Measure the largest image's on-page coverage via CTM
+  // tracking (independent of the EXPLODE_OTHER toggle) and, if a page-sized raster
+  // dominates, keep the original page content on export. This is exact, not a
+  // heuristic: when a backdrop this large exists, it IS the page.
+  var _hasDominantRaster=false;
+  try{
+    var _fnA=opList.fnArray, _agA=opList.argsArray;
+    var _cm=vp.transform.slice(), _stk=[];
+    var _mmul=function(a,b){return [a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];};
+    var _pgArea=w*h;
+    for(var _wi=0;_wi<_fnA.length;_wi++){
+      var _f=_fnA[_wi], _ag=_agA[_wi];
+      if(_f===OPS.save){ _stk.push(_cm.slice()); }
+      else if(_f===OPS.restore){ if(_stk.length) _cm=_stk.pop(); }
+      else if(_f===OPS.transform){ _cm=_mmul(_cm,_ag); }
+      else if(_f===OPS.paintImageXObject || _f===OPS.paintJpegXObject || _f===OPS.paintInlineImage){
+        var _cp=[[0,0],[1,0],[1,1],[0,1]].map(function(p){return {x:_cm[0]*p[0]+_cm[2]*p[1]+_cm[4], y:_cm[1]*p[0]+_cm[3]*p[1]+_cm[5]};});
+        var _cxs=_cp.map(function(p){return p.x;}), _cys=_cp.map(function(p){return p.y;});
+        var _iw=Math.max.apply(null,_cxs)-Math.min.apply(null,_cxs);
+        var _ih=Math.max.apply(null,_cys)-Math.min.apply(null,_cys);
+        if(_pgArea>0 && (_iw*_ih) >= _pgArea*0.6){ _hasDominantRaster=true; break; }
+      }
+    }
+  }catch(e){}
   _vectorBackdropOK = true;
   _vecPageNum = n;
   // Remember whether this load extracted the page's own content into objects, so
   // the export knows those objects duplicate what's already in the original page.
-  _explodedFromPage = (EXPLODE_OTHER || EXPLODE_TEXT) && !_denseDrawing;
-  dbg('import','page loaded for vector export',{page:n, explodeOther:EXPLODE_OTHER, explodeText:EXPLODE_TEXT, dense:_denseDrawing, explodedFromPage:_explodedFromPage});
+  // A dominant raster backdrop is NOT reproduced by objects, so such a page must
+  // keep its original content (never white-cover).
+  _explodedFromPage = (EXPLODE_OTHER || EXPLODE_TEXT) && !_denseDrawing && !_hasDominantRaster;
+  dbg('import','page loaded for vector export',{page:n, explodeOther:EXPLODE_OTHER, explodeText:EXPLODE_TEXT, dense:_denseDrawing, dominantRaster:_hasDominantRaster, explodedFromPage:_explodedFromPage});
 
   var styles=tc.styles||{};
 
@@ -11621,16 +11651,20 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
   var movedExplode=_movedExplodeObj;   // shared detector
   var _dbgCnt={drawn:0, skippedExplode:0, movedDrawn:0};
   function visible(o){
-    // FULL-REDRAW mode: every extracted element is a free-floating object drawn
-    // at its CURRENT position (the original page content is covered, so there's
-    // nothing underneath to double). Unmoved elements draw at their import spot;
-    // moved ones draw where the user put them. No patch/stamp/wipe needed.
-    // LEGACY mode (off): keep original page; skip unmoved extracted, draw moved.
-    if(!_FULL_REDRAW){
-      if(o._fromExplode && !movedExplode(o)){ _dbgCnt.skippedExplode++; return false; }
-      if(o._fromExplode && movedExplode(o)) _dbgCnt.movedDrawn++;
-    } else {
-      if(o._fromExplode && movedExplode(o)) _dbgCnt.movedDrawn++;
+    // The original page content is KEPT unless we perform a full white-cover redraw,
+    // which happens ONLY when the page was genuinely exploded into objects that
+    // reproduce it (_FULL_REDRAW && _explodedFromPage). Whenever the original is
+    // kept — legacy mode, a dense vector drawing, or a dominant raster backdrop —
+    // the extracted (_fromExplode) objects already exist in that original page:
+    //   • skip the UNMOVED ones (drawing them would double the linework/text)
+    //   • draw only the ones the user actually MOVED (their original spot is patched
+    //     out separately in the overlay-build step).
+    // When the page IS white-covered, draw every extracted object so they reproduce
+    // the erased content.
+    var _keepOriginal = !(_FULL_REDRAW && _explodedFromPage);
+    if(o._fromExplode){
+      if(_keepOriginal && !movedExplode(o)){ _dbgCnt.skippedExplode++; return false; }
+      if(movedExplode(o)) _dbgCnt.movedDrawn++;
     }
     var L=layers[o.layerIdx]; var vis=!(L && !L.visible); if(vis)_dbgCnt.drawn++; return vis;
   }
