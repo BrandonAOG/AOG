@@ -5697,6 +5697,23 @@ function onDown(e){
     dCtx.beginPath(); dCtx.moveTo(startX,startY);
     lastPenX=startX; lastPenY=startY;
     if(tool==='pen'){ penPathPoints=[{x:startX,y:startY}]; }
+    // Eraser: also stamp a dot at the press point on every visible layer, so a
+    // single tap (no drag) erases too, across all layers.
+    if(tool==='eraser'){
+      layers.forEach(function(L){
+        if(!L.visible) return;
+        var lx=L.ctx;
+        lx.save();
+        lx.globalCompositeOperation='destination-out';
+        lx.lineCap='round'; lx.lineJoin='round';
+        lx.beginPath();
+        lx.arc(startX, startY, strokeW*2, 0, Math.PI*2);
+        lx.fill();
+        lx.restore();
+      });
+      eraseVectorAt(startX, startY, strokeW*2);
+      composite();
+    }
   }
 }
 
@@ -5983,7 +6000,23 @@ function onMove(e){
     penPathPoints.push({x:x,y:y});
     lastPenX=x; lastPenY=y;
   } else if(tool==='eraser'){
-    lc.save(); lc.globalCompositeOperation='destination-out'; lc.lineWidth=strokeW*4; lc.lineCap='round'; lc.lineTo(x,y); lc.stroke(); lc.restore();
+    // Erase baked pixels on EVERY visible layer (not just the active one) so
+    // highlights / pen strokes that were flattened onto any layer can be removed.
+    // Each layer keeps its own sub-path position, so advance the segment on all
+    // of them from the last point to the current point.
+    layers.forEach(function(L){
+      if(!L.visible) return;
+      var lx=L.ctx;
+      lx.save();
+      lx.globalCompositeOperation='destination-out';
+      lx.lineWidth=strokeW*4; lx.lineCap='round'; lx.lineJoin='round';
+      lx.beginPath();
+      lx.moveTo(lastPenX, lastPenY);
+      lx.lineTo(x, y);
+      lx.stroke();
+      lx.restore();
+    });
+    lastPenX=x; lastPenY=y;
     // Also erase vector objects the eraser passes over
     eraseVectorAt(x, y, strokeW*2);
     composite();
@@ -7661,6 +7694,9 @@ function renderTextObjs(){
   var _hideText = _dragText
     || ((selHandle!==-1 && selectedShape && selectedShape.type==='text') ? selectedShape._textObj : null);
   var _hideId = (_hideText && _hideText.id!==undefined) ? _hideText.id : null;
+  // Render markup (highlight / strike / underline) FIRST so it sits UNDERNEATH the
+  // text drawn below — keeps notes/text readable and matches the export stacking.
+  renderMarkupObjs();
   textObjs.forEach(function(obj){
     if(obj._editing) return;
     // Never render an empty text object. A text with no visible characters can only
@@ -7780,8 +7816,7 @@ function renderTextObjs(){
     }
     tCtx.restore();
   });
-  // Render markup objects on same canvas
-  renderMarkupObjs();
+  // (Markup is now rendered ABOVE, before the text loop, so text sits on top of it.)
 }
 
 // ── Hit test: find text object at canvas position ────────────
@@ -11161,6 +11196,16 @@ function compositeExport(maxPx){
       ctx.save(); ctx.scale(scale,scale); _drawImgOv(ctx, ov); ctx.restore();
     });
   }catch(ex){ console.warn('[Export] imgOverlays:',ex); }
+  // Markup objects (highlight / strikethrough / underline markup) — drawn EARLY so
+  // they sit UNDERNEATH shapes, comments (notes) and text, matching the intent that
+  // annotations never obscure notes/text. (Previously drawn last, which put a
+  // highlight dragged across a note/text on TOP of it in the exported file.)
+  try{
+    markupObjs.forEach(function(m){
+      var layer=layers[m.layerIdx]; if(layer&&!layer.visible) return;
+      drawMarkupOnCtx(ctx, m, scale, Math.max(2*scale,2));
+    });
+  }catch(ex){ console.warn('[Export] markupObjs (early):',ex); }
   // Shape objects (rect/ellipse/cloud — live objects not on layer canvases)
   try{
     shapeObjs.forEach(function(s){
@@ -11342,13 +11387,6 @@ function compositeExport(maxPx){
       drawCommentBox(ctx,c,scale);
     });
   }catch(ex){ console.warn('[Export] commentObjs:',ex); }
-  // Markup objects (highlight / strikethrough / underline markup)
-  try{
-    markupObjs.forEach(function(m){
-      var layer=layers[m.layerIdx]; if(layer&&!layer.visible) return;
-      drawMarkupOnCtx(ctx, m, scale, Math.max(2*scale,2));
-    });
-  }catch(ex){ console.warn('[Export] markupObjs:',ex); }
   return out;
 }
 
