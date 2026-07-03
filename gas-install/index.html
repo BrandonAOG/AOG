@@ -118,7 +118,7 @@ body.dark-mode {
   background: var(--panel);
   padding: 4px 8px;
   padding-top: calc(4px + env(safe-area-inset-top, 0px));
-  display: flex; justify-content: flex-start; gap: 6px; flex-wrap: nowrap; align-items: center;
+  display: flex; justify-content: flex-start; gap: 4px; flex-wrap: nowrap; align-items: center;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
@@ -127,18 +127,15 @@ body.dark-mode {
   border-bottom: 1px solid var(--border-bright);
   transition: background-color 0.3s ease; box-sizing: border-box;
 }
-/* On wide screens the buttons fit without scrolling, so center them
-   over the (max-width:1050px) page content instead of hugging the left
-   edge of the viewport. Below this width the bar scrolls horizontally,
-   where flex-start must stay so no buttons get pushed out of reach. */
-@media (min-width: 768px) {
-  .action-bar { justify-content: center; }
-}
+/* Center the buttons when they fit; auto-margins collapse safely when the
+   bar overflows and scrolls, so nothing gets clipped off the left edge. */
+.action-bar > :first-child { margin-left: auto; }
+.action-bar > :last-child { margin-right: auto; }
 .action-bar::-webkit-scrollbar { height: 4px; }
 .action-bar::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 4px; }
 .action-bar .btn {
   flex: 0 0 auto; min-width: max-content;
-  padding: 8px 14px; font-size: 12px;
+  padding: 6px 8px; font-size: 10px;
   overflow: visible; text-overflow: clip;
 }
 body.dark-mode .action-bar {
@@ -159,11 +156,9 @@ body.dark-mode .action-bar {
   overflow: hidden; text-overflow: ellipsis;
 }
 @media (max-width: 480px) {
-  .action-bar { padding: 4px 6px; padding-top: calc(4px + env(safe-area-inset-top, 0px)); gap: 6px; }
-  .action-bar .btn { padding: 8px 12px; font-size: 12px; }
+  .action-bar { padding: 4px 4px; padding-top: calc(4px + env(safe-area-inset-top, 0px)); gap: 3px; }
 }
 @media (max-width: 360px) {
-  .action-bar .btn { font-size: 11px; padding: 8px 10px; letter-spacing: 0; }
 }
 body.dark-mode .btn {
   background: rgba(0,255,200,0.08); border-color: rgba(0,255,200,0.25);
