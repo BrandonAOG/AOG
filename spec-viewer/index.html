@@ -85,11 +85,13 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(circle 
 .hdr::before{top:0;animation:sl 4s linear infinite}
 .hdr::after{bottom:0;animation:sl 4s linear infinite reverse}
 @keyframes sl{0%,100%{opacity:0;transform:scaleX(0)}50%{opacity:1;transform:scaleX(1)}}
-.logo-row{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin-bottom:10px}
-.logo-img{width:70px;height:70px;object-fit:contain;filter:drop-shadow(0 0 12px rgba(251,191,36,.6));animation:lop 3s ease-in-out infinite}
+.logo-row{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:nowrap;margin-bottom:10px}
+@media(min-width:480px){.logo-row{gap:14px}}
+.title-block{text-align:left;min-width:0}
+.logo-img{width:70px;height:70px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 12px rgba(251,191,36,.6));animation:lop 3s ease-in-out infinite}
 @media(min-width:480px){.logo-img{width:90px;height:90px}}
 @keyframes lop{0%,100%{filter:drop-shadow(0 0 12px rgba(251,191,36,.6))}50%{filter:drop-shadow(0 0 22px rgba(251,191,36,.9)) drop-shadow(0 0 36px rgba(249,115,22,.6))}}
-.co-name{font-family:var(--fd);font-size:1.4rem;font-weight:900;letter-spacing:2px;line-height:1.1;background:linear-gradient(135deg,var(--yb) 0%,var(--o) 50%,var(--od) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.co-name{font-family:var(--fd);font-size:clamp(1.05rem,4.5vw,1.4rem);font-weight:900;letter-spacing:2px;line-height:1.1;background:linear-gradient(135deg,var(--yb) 0%,var(--o) 50%,var(--od) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
 @media(min-width:480px){.co-name{font-size:1.8rem;letter-spacing:3px}}
 .tagline{font-family:var(--fm);font-size:.65rem;letter-spacing:4px;color:var(--be);text-transform:uppercase}
 .subtitle{font-family:var(--fd);font-size:.7rem;letter-spacing:5px;color:var(--dim);margin-top:8px;text-transform:uppercase}
@@ -427,7 +429,7 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(circle 
     <img src="../logo.png" alt="Always On Generators" class="logo-img"
          onerror="this.style.display='none';document.getElementById('logo-fallback').style.display='flex'">
     <div id="logo-fallback" style="display:none;width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,rgba(251,191,36,.2),rgba(249,115,22,.1));border:2px solid rgba(251,191,36,.4);align-items:center;justify-content:center;font-family:var(--fd);font-size:1.4rem;font-weight:900;color:var(--yb)">AOG</div>
-    <div>
+    <div class="title-block">
       <div class="co-name">Always On<br>Generators</div>
       <div class="tagline">// Power When You Need It //</div>
     </div>
