@@ -303,6 +303,20 @@ body { font-family: var(--font-body); background: var(--bg-dark); color: var(--t
 </style>
 </head>
 <body>
+<script>
+/* Error log: keeps the last 10 JS errors on this device so Report a Bug can attach them. */
+(function(){
+  var KEY='aog_error_log', MAX=10;
+  function log(msg,src){ try{
+    var a=JSON.parse(localStorage.getItem(KEY)||'[]');
+    a.push({t:new Date().toISOString(),page:location.pathname,msg:String(msg||'unknown').slice(0,200),src:String(src||'').slice(0,120)});
+    while(a.length>MAX)a.shift();
+    localStorage.setItem(KEY,JSON.stringify(a));
+  }catch(e){} }
+  window.addEventListener('error',function(e){ log(e.message,(e.filename||'')+(e.lineno?':'+e.lineno+':'+(e.colno||0):'')); });
+  window.addEventListener('unhandledrejection',function(e){ var r=e.reason; log('Unhandled promise rejection: '+(r&&r.message?r.message:r), r&&r.stack?String(r.stack).split('\n')[1]:''); });
+})();
+</script>
 <canvas id="bg-canvas"></canvas>
 <div id="offline-banner">No network connection · Hub available offline</div>
 
@@ -3919,6 +3933,19 @@ document.querySelectorAll('.cat-btn').forEach(function(btn) {
       'Timezone: ' + Intl.DateTimeFormat().resolvedOptions().timeZone,
       'Timestamp: ' + new Date().toString()
     ];
+    // Attach the last few recorded JS errors (kept short: mailto links have length limits)
+    try {
+      var errs = JSON.parse(localStorage.getItem('aog_error_log') || '[]').slice(-3);
+      if (errs.length) {
+        lines.push('', '--- RECENT ERRORS (last ' + errs.length + ' of up to 10 recorded) ---');
+        errs.forEach(function(e){
+          lines.push('[' + e.t + '] ' + (e.page || '') );
+          lines.push('  ' + (e.msg || '') + (e.src ? '  @ ' + e.src : ''));
+        });
+      } else {
+        lines.push('', '--- RECENT ERRORS: none recorded ---');
+      }
+    } catch (e) {}
     return lines.join('\n');
   }
 
