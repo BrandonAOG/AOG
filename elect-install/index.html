@@ -236,6 +236,19 @@ body.dark-mode .action-bar {
 @media (max-width: 640px) { .btn { padding: 8px 14px; font-size: 9px; } }
 body.dark-mode .btn { background: rgba(0,255,200,0.08); border-color: rgba(0,255,200,0.25); color: #00FFC8; text-shadow: 0 0 4px rgba(0,255,200,0.3); }
 .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: var(--glow); transform: translateY(-1px); }
+
+/* Quiet, always-there "Draft saved HH:MM" badge — separate from #save-status
+   (transient action messages like Capture/PDF progress) so the two never
+   fight over the same line. Lets the user notice at a glance that a draft
+   exists/was restored, instead of autosave silently happening. */
+#autosave-indicator {
+  position: fixed; bottom: 8px; right: 10px; z-index: 500;
+  font-size: 10px; color: var(--text-muted); background: var(--panel);
+  padding: 3px 9px; border-radius: 10px; border: 1px solid var(--border);
+  display: none; pointer-events: none; opacity: 0.9;
+  font-family: var(--font-mono);
+}
+body.dark-mode #autosave-indicator { border-color: var(--border-bright); }
 body.dark-mode .btn:hover { background: rgba(0,255,200,0.12); border-color: #00FFC8; box-shadow: 0 0 12px rgba(0,255,200,0.25); text-shadow: 0 0 8px rgba(0,255,200,0.6); }
 .btn:active { transform: translateY(0); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
@@ -491,6 +504,7 @@ body.dark-mode .footer-other-input { border-bottom-color: rgba(0,255,200,0.3) !i
   min-width: 28px !important;
   max-width: 28px !important;
   text-align: center;
+  margin: 0 auto !important;
 }
 @media screen {
 body.dark-mode #fittings-table td.row-label,
@@ -619,8 +633,8 @@ body.dark-mode .field-row label { color: #E0F7FF; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; width: 100%; }
 @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; gap: 8px; } }
 .section { margin-bottom: 14px; width: 100%; }
-.section-title { font-weight: bold; font-size: 13px; margin-bottom: 8px; text-transform: uppercase; color: #D35E13; font-family: Arial, sans-serif; padding-bottom: 4px; border-bottom: 1px solid rgba(211,94,19,0.2); }
-body.dark-mode .section-title { color: #00FFC8; border-bottom-color: rgba(0,255,200,0.2); }
+.section-title { font-weight: bold; font-size: 13px; margin-bottom: 8px; text-transform: uppercase; color: #D35E13; font-family: Arial, sans-serif; background: #DCEBF9; padding: 10px 12px; border-radius: 2px; }
+body.dark-mode .section-title { background: transparent; color: #00FFC8; padding: 0 0 10px; border-bottom: 1px solid rgba(0,255,200,0.2); }
 .section-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-bottom: 8px; font-size: 13px; line-height: 1.6; width: 100%; font-family: Arial, sans-serif; }
 @media (max-width: 480px) { .section-row { font-size: 12px; gap: 4px 6px; margin-bottom: 6px; } }
 .section-row label { color: var(--text); flex-shrink: 0; font-family: Arial, sans-serif; }
@@ -645,7 +659,7 @@ body.dark-mode hr.section-hr { border-top-color: rgba(0,255,200,0.15); }
 .ts-container { margin-bottom: 0; width: 100%; }
 .ts-block { border: 1px solid rgba(211,94,19,0.2); border-radius: 4px; margin-bottom: 10px; overflow: hidden; transition: all 0.3s ease; width: 100%; }
 body.dark-mode .ts-block { border-color: rgba(0,255,200,0.15); background: rgba(26,40,71,0.5); }
-.ts-header { display: flex; align-items: center; justify-content: space-between; background: #f0f0f0; padding: 10px 12px; cursor: pointer; user-select: none; transition: background 0.3s ease; gap: 8px; flex-wrap: wrap; font-family: Arial, sans-serif; }
+.ts-header { display: flex; align-items: center; justify-content: space-between; background: #DCEBF9; padding: 10px 12px; cursor: pointer; user-select: none; transition: background 0.3s ease; gap: 8px; flex-wrap: wrap; font-family: Arial, sans-serif; }
 body.dark-mode .ts-header { background: rgba(36,52,88,0.7); }
 .ts-header-left { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 13px; text-transform: uppercase; color: #D35E13; flex-shrink: 0; min-width: 0; font-family: Arial, sans-serif; }
 body.dark-mode .ts-header-left { color: #00FFC8; }
@@ -713,7 +727,7 @@ body.dark-mode .notice { color: #7DD3FC; }
     background-attachment: initial !important;
   }
 
-  .action-bar, .theme-toggle-btn, .notice { display: none !important; }
+  .action-bar, .theme-toggle-btn, .notice, #save-status, #autosave-indicator { display: none !important; }
   .app-footer { display: none !important; }
 
   /* Neutralise any dark-mode element backgrounds that don't use CSS vars */
@@ -1705,8 +1719,8 @@ body.dark-mode .ft-label { color: #7DD3FC; }
 <div class="action-bar" id="action-bar">
   <button class="btn" onclick="window.location.href='../'">🏠 HOME</button>
   <button class="btn pdf-btn-hidden" id="btn-pdf" onclick="openPrintPreview()">📄 PDF</button>
-  <button class="btn" id="btn-capture" onclick="saveSmart()">📸 CAPTURE</button>
   <button class="btn" id="btn-editpdf" onclick="saveFillablePdf()">📝 PDF✎</button>
+  <button class="btn" id="btn-capture" onclick="saveSmart()">📸 CAPTURE</button>
   <button class="btn" onclick="document.getElementById('load-draft-input').click()">📂 LOAD</button>
   <input type="file" id="load-draft-input" accept=".json,.pdf" style="display:none;" onchange="loadDraftFile(this)">
   <button class="btn" onclick="clearForm()">🗑 CLEAR</button>
@@ -1726,6 +1740,7 @@ body.dark-mode .ft-label { color: #7DD3FC; }
   </button>
 </div>
 <div id="save-status" style="position:fixed;top:44px;left:0;right:0;z-index:99998;text-align:center;font-size:10px;color:var(--text-muted);background:var(--panel);padding:2px 8px;display:none;font-family:Arial,sans-serif;"></div>
+<div id="autosave-indicator" aria-hidden="true"></div>
 
 <div class="page-wrapper">
 
@@ -2236,6 +2251,7 @@ function clearForm() {
   themedConfirm('This cannot be undone.', { title: 'Clear ALL entries?', confirmText: 'Clear all' }).then(function (ok) {
     if (!ok) return;
     try { localStorage.removeItem(SAVE_KEY); } catch(e) {}
+    _updateAutosaveIndicator(null);
     // Remove all extra transfer switches, keep only the first
     document.querySelectorAll('.ts-block:not(:first-child)').forEach(el => el.remove());
     renumberTS();
@@ -2314,6 +2330,8 @@ function openPrintPreview() {
 
 // ===== CAPTURE HELPER: swap mobile accordion <=> real tables =====
 function showRealTablesForCapture() {
+  var existingOverride = document.getElementById('capture-override');
+  if (existingOverride) existingOverride.remove();
   const style = document.createElement('style');
   style.id = 'capture-override';
   style.textContent = [
@@ -2341,6 +2359,8 @@ function showRealTablesForCapture() {
     '#page2 .wireway-polaris-row .grid-section { flex: 1 !important; min-width: 0 !important; overflow: visible !important; }',
     'table.mat-table td { overflow: visible !important; vertical-align: middle !important; }',
     '#page2 table.mat-table td input[type="text"] { width: 100% !important; font-size: 13px !important; height: auto !important; line-height: 1.3 !important; overflow: visible !important; }',
+    // Fittings/Wireway/Polaris Taps only: slightly larger, centered input text.
+    '#page2 #fittings-table td input[type="text"], #page2 #wireway-table td input[type="text"], #page2 #polaris-table td input[type="text"] { font-size: 14.5px !important; text-align: center !important; }',
     'table.mat-table td input[type="text"] { overflow: visible !important; height: auto !important; line-height: 1.3 !important; display: block !important; }',
     '.footer-field input[type="text"] { height: 24px !important; line-height: 24px !important; overflow: visible !important; box-sizing: border-box !important; }',
     '.footer-field label { font-size: 15px !important; line-height: 1.5 !important; }',
@@ -2389,7 +2409,7 @@ function showRealTablesForCapture() {
     'body[class*="seasonal-"] .form-page, body[class*="seasonal-"] #page1 .section, body[class*="seasonal-"] #page1 .top-fields, body[class*="seasonal-"] #page1 .ts-block, body[class*="seasonal-"] .ts-body { background: #ffffff !important; }',
     'body[class*="seasonal-"] #page2 table.mat-table td { background: #ffffff !important; }',
     'body[class*="seasonal-"] #page2 table.mat-table td.row-label { background: rgba(211,94,19,0.15) !important; }',
-    'body[class*="seasonal-"] input, body[class*="seasonal-"] textarea, body[class*="seasonal-"] select { background: #ffffff !important; color: #1F2937 !important; }',
+    'body[class*="seasonal-"] input, body[class*="seasonal-"] textarea, body[class*="seasonal-"] select { background: #ffffff !important; color: #1F2937 !important; border-color: #1F2937 !important; }',
     'body[class*="seasonal-"] input[type="checkbox"], body[class*="seasonal-"] input[type="radio"] { background: initial !important; }',
     // ---- Force the plain LIGHT theme on capture: override every dark-mode /
     //      seasonal CSS variable so text, accents and borders match the base
@@ -2397,7 +2417,16 @@ function showRealTablesForCapture() {
     'body, body.dark-mode, body[class*="seasonal-"] { --cyan:#D35E13 !important; --cyan-dim:#D35E13 !important; --cyan-dark:#D35E13 !important; --amber:#D35E13 !important; --amber-dim:#D35E13 !important; --bg:#FFFFFF !important; --panel:#FFFFFF !important; --panel2:#FAFAFA !important; --border:rgba(211,94,19,0.25) !important; --border-bright:rgba(211,94,19,0.5) !important; --text:#1F2937 !important; --text-muted:#6B7280 !important; --text-dim:#9CA3AF !important; }',
     'body[class*="seasonal-"] .form-page, body.dark-mode .form-page { border-color:rgba(211,94,19,0.5) !important; box-shadow:none !important; }',
     'body[class*="seasonal-"] .checklist-title::after, body[class*="seasonal-"] .logo-text::after, body[class*="seasonal-"] .doc-title::after { content:"" !important; }',
-    '#seasonal-canvas { display: none !important; }'
+    '#seasonal-canvas { display: none !important; }',
+    '.action-bar, #save-status, #autosave-indicator { display: none !important; }',
+    // Section title bar — now matches on-screen styling (both have the same
+    // light-blue background as Transfer Switch headers, same padding/size).
+    '.section-title { background: #DCEBF9 !important; color: #D35E13 !important; padding: 10px 12px !important; border-bottom: none !important; }',
+    'body[class*="seasonal-"] .section-title, body.dark-mode .section-title { background: #DCEBF9 !important; color: #D35E13 !important; }',
+    '.ts-header, body[class*="seasonal-"] .ts-header, body.dark-mode .ts-header { background: #DCEBF9 !important; }',
+    // Hide the collapsible Transfer Switch ▼ toggle — it's a screen-only UI
+    // affordance, not something that belongs in a static capture/PDF.
+    '.ts-toggle { display: none !important; }'
   ].join('\n');
   document.head.appendChild(style);
 }
@@ -2419,7 +2448,15 @@ function forceDesktopLayout() {
   }
   // table text inputs — match PDF print apparent size for capture (~13px at 1050px width)
   document.querySelectorAll('table.mat-table td input[type="text"]').forEach(el => {
+    if (el.closest('#fittings-table, #wireway-table, #polaris-table')) return; // sized separately below
     setInline(el, { fontSize: '13px', height: 'auto', lineHeight: '1.3', padding: '1px 0', overflow: 'visible', display: 'block', boxSizing: 'border-box' });
+  });
+  // Fittings/Wireway/Polaris Taps only: slightly larger (+1.5px), centered.
+  // Set inline (not just via stylesheet) since the generic rule above also
+  // sets font-size inline, and inline !important always wins over a
+  // stylesheet !important regardless of selector specificity.
+  document.querySelectorAll('#fittings-table td input[type="text"], #wireway-table td input[type="text"], #polaris-table td input[type="text"]').forEach(el => {
+    setInline(el, { fontSize: '14.5px', height: 'auto', lineHeight: '1.3', padding: '1px 0', overflow: 'visible', display: 'block', boxSizing: 'border-box', textAlign: 'center', marginLeft: 'auto', marginRight: 'auto' });
   });
   document.querySelectorAll('table.mat-table td').forEach(el => {
     setInline(el, { overflow: 'visible', height: 'auto' });
@@ -2462,12 +2499,14 @@ function forceDesktopLayout() {
   // (e.g. "Any Miscues or Delays during the job") — swap it for a wrapping div
   // mirror that keeps its boxed look during capture.
   document.querySelectorAll('textarea.textarea-field').forEach(ta => {
+    ta.blur(); // drop focus first — :focus uses var(--cyan), which we don't want baked into the mirror
     const div = document.createElement('div');
     div.className = 'textarea-field-mirror';
     const cs = window.getComputedStyle(ta);
     div.style.cssText = [
       'width:100%', 'max-width:100%', 'box-sizing:border-box',
-      'border:1px solid ' + cs.borderTopColor, 'border-radius:3px',
+      // Hardcoded, not read from computed style — shouldn't vary by focus state.
+      'border:1px solid rgba(211,94,19,0.4)', 'border-radius:3px',
       'font-family:Arial, sans-serif', 'font-size:16px', 'line-height:1.6',
       'padding:8px', 'min-height:' + cs.minHeight, 'white-space:pre-wrap',
       'word-break:break-word', 'overflow-wrap:anywhere',
@@ -2501,6 +2540,7 @@ function forceDesktopLayout() {
   // Native <input type="date"> stores YYYY-MM-DD and html2canvas renders that raw
   // ISO value (year first). Swap it for a text mirror showing MM/DD/YYYY for capture.
   document.querySelectorAll('input[type="date"]').forEach(function (di) {
+    di.blur(); // drop focus first — :focus uses var(--cyan), which we don't want baked into the mirror
     var span = document.createElement('span');
     span.className = 'date-capture-mirror';
     var cs = window.getComputedStyle(di);
@@ -2516,7 +2556,9 @@ function forceDesktopLayout() {
       'min-width:0', 'width:' + (cs.width || 'auto'),
       'font-family:Arial, sans-serif', 'font-size:17px',
       'line-height:1.2', 'color:#111111',
-      'border-bottom:1px solid ' + (cs.borderBottomColor || '#1F2937'),
+      // Hardcoded, not read from computed style — the underline color should
+      // never vary by focus state, dark-mode, or season in the capture output.
+      'border-bottom:1px solid #1F2937',
       'padding:' + cs.padding, 'text-align:left', 'box-sizing:border-box',
       'white-space:nowrap'
     ].join(';');
@@ -2681,6 +2723,15 @@ function isIOSDevice() {
   var iPadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   return iOS || iPadOS;
 }
+// Mobile/tablet capture is already fast — the slower render scale (see
+// captureScale in the capture functions) only needs to apply on desktop.
+function _isDesktopDevice() {
+  var ua = navigator.userAgent || '';
+  if (/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)) return false;
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return false; // iPadOS
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return false; // touch-primary
+  return true;
+}
 // Quick capability probe: can this browser share files at all?
 function canShareFiles() {
   try {
@@ -2701,13 +2752,27 @@ function saveSmart() {
 
 function captureAndShare() {
   setStatus('Rendering pages, please wait…');
+  _showRenderOverlay('Rendering your form…');
   const pages = document.querySelectorAll('.form-page');
   const wasDark = document.body.classList.contains('dark-mode');
   if (wasDark) document.body.classList.remove('dark-mode');
-  showRealTablesForCapture();
-  const restoreLayout = forceDesktopLayout();
+
+  var restoreLayout = function(){};
+  try {
+    showRealTablesForCapture();
+    restoreLayout = forceDesktopLayout();
+  } catch (setupErr) {
+    // If either of these throws synchronously, the overlay would otherwise
+    // stay up forever with zero indication anything went wrong.
+    _hideRenderOverlay();
+    if (wasDark) document.body.classList.add('dark-mode');
+    setStatus('⚠ Render setup failed: ' + (setupErr && setupErr.message ? setupErr.message : setupErr));
+    setTimeout(() => setStatus(''), 6000);
+    return;
+  }
 
   function cleanup() {
+    _hideRenderOverlay();
     hideRealTablesAfterCapture();
     restoreLayout();
     if (wasDark) document.body.classList.add('dark-mode');
@@ -2725,13 +2790,16 @@ function captureAndShare() {
   // Render every page to a File, then open the native iOS Share Sheet.
   function renderAll() {
     return whenReadyToCapture().then(function () {
+      _updateRenderOverlay('Rendering ' + pages.length + ' page(s)…');
+      var captureScale = _isDesktopDevice() ? 1.5 : 2;
       var jobs = Array.prototype.map.call(pages, function (page, idx) {
         var fname = buildFilename('jpg', idx + 1, pages.length);
         var restoreFill = fitPageToSheet(page);
         var capH = measureFullHeight(page);
-        return html2canvas(page, { scale: 2, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } })
+        return _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } }), 45000, 'Page ' + (idx + 1) + ' render')
           .then(function (canvas) {
             restoreFill();
+            _updateRenderOverlay('Page ' + (idx + 1) + ' of ' + pages.length + ' rendered…');
             canvas = fitToLetter(canvas);
             return { file: dataURLtoFile(canvas.toDataURL('image/jpeg', 0.85), fname), dataURL: canvas.toDataURL('image/jpeg', 0.85), fname: fname };
           })
@@ -2767,7 +2835,7 @@ function captureAndShare() {
       cleanup();
       fallback();
     }
-  }).catch(function () {
+  }).catch(function (err) {
     cleanup();
     setStatus('⚠ Could not render pages — try again.');
   });
@@ -2814,33 +2882,51 @@ function showImageOverlay(results, wasDark) {
 // ===== ANDROID =====
 function saveForAndroid() {
   setStatus('Rendering pages, please wait…');
+  _showRenderOverlay('Rendering your form…');
   const pages = document.querySelectorAll('.form-page');
   const wasDark = document.body.classList.contains('dark-mode');
   if (wasDark) document.body.classList.remove('dark-mode');
-  showRealTablesForCapture();
-  const restoreLayout = forceDesktopLayout();
-  let completed = 0;
+
+  let restoreLayout = function(){};
+  try {
+    showRealTablesForCapture();
+    restoreLayout = forceDesktopLayout();
+  } catch (setupErr) {
+    _hideRenderOverlay();
+    if (wasDark) document.body.classList.add('dark-mode');
+    setStatus('⚠ Render setup failed: ' + (setupErr && setupErr.message ? setupErr.message : setupErr));
+    setTimeout(() => setStatus(''), 6000);
+    return;
+  }
+
+  function finish(msg) {
+    _hideRenderOverlay(); hideRealTablesAfterCapture(); restoreLayout();
+    setStatus(msg);
+    setTimeout(() => setStatus(''), msg.indexOf('⚠') === 0 ? 5000 : 4000);
+    if (wasDark) document.body.classList.add('dark-mode');
+  }
+  let completed = 0, failed = false;
   whenReadyToCapture().then(() => {
-  pages.forEach((page, idx) => {
-    const restoreFill = fitPageToSheet(page);
-    const capH = measureFullHeight(page);
-    html2canvas(page, { scale: 2, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } }).then(canvas => {
-      restoreFill();
-      canvas = fitToLetter(canvas);
-      const link = document.createElement('a');
-      link.download = buildFilename('jpg', idx + 1, pages.length);
-      link.href = canvas.toDataURL('image/jpeg', 0.85); link.click();
-      completed++;
-      if (completed === pages.length) { hideRealTablesAfterCapture(); restoreLayout(); setStatus(`${pages.length} image(s) sent to your Downloads folder.`); setTimeout(() => setStatus(''), 4000); if (wasDark) document.body.classList.add('dark-mode'); }
-    }).catch(err => {
-      restoreFill();
-      completed++;
-      hideRealTablesAfterCapture(); restoreLayout();
-      setStatus('⚠ Could not render page ' + (idx + 1) + ' — try again.');
-      setTimeout(() => setStatus(''), 5000);
-      if (wasDark) document.body.classList.add('dark-mode');
+    _updateRenderOverlay('Rendering ' + pages.length + ' page(s)…');
+    var captureScale = _isDesktopDevice() ? 1.5 : 2;
+    pages.forEach((page, idx) => {
+      const restoreFill = fitPageToSheet(page);
+      const capH = measureFullHeight(page);
+      _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } }), 45000, 'Page ' + (idx + 1) + ' render').then(canvas => {
+        restoreFill();
+        _updateRenderOverlay('Page ' + (idx + 1) + ' of ' + pages.length + ' rendered…');
+        canvas = fitToLetter(canvas);
+        const link = document.createElement('a');
+        link.download = buildFilename('jpg', idx + 1, pages.length);
+        link.href = canvas.toDataURL('image/jpeg', 0.85); link.click();
+        completed++;
+        if (completed === pages.length) finish(`${pages.length} image(s) sent to your Downloads folder.`);
+      }).catch(err => {
+        restoreFill();
+        completed++;
+        if (!failed) { failed = true; finish('⚠ Could not render page ' + (idx + 1) + ' — try again.'); }
+      });
     });
-  });
   });
 }
 
@@ -2849,6 +2935,77 @@ function setStatus(msg) {
   if (!el) return;
   el.textContent = msg;
   el.style.display = msg ? 'block' : 'none';
+}
+
+// ── RENDER OVERLAY ──
+// The capture pipeline temporarily mutates the LIVE, visible page (forces
+// desktop width/layout, swaps inputs for wrapping-div mirrors, strips
+// seasonal/dark-mode) so html2canvas can render it accurately. Without
+// something covering the screen, the user sees all of that thrash directly.
+// This overlay masks it with a simple spinner while any capture-based flow
+// (CAPTURE, PDF Edit, share) is running.
+function _showRenderOverlay(msg) {
+  var existing = document.getElementById('render-overlay');
+  if (existing) existing.remove();
+  if (!document.getElementById('render-spin-style')) {
+    var s = document.createElement('style');
+    s.id = 'render-spin-style';
+    s.textContent = '@keyframes render-spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(s);
+  }
+  var overlay = document.createElement('div');
+  overlay.id = 'render-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;padding:20px;box-sizing:border-box;';
+  var spinner = document.createElement('div');
+  spinner.style.cssText = 'width:36px;height:36px;border:4px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:render-spin 0.8s linear infinite;margin-bottom:14px;';
+  var lbl = document.createElement('div');
+  lbl.id = 'render-overlay-label';
+  lbl.style.cssText = 'font-size:13px;color:#ccc;';
+  lbl.textContent = msg || 'Rendering your form…';
+  var sub = document.createElement('div');
+  sub.id = 'render-overlay-sub';
+  sub.style.cssText = 'font-size:11px;color:#888;margin-top:8px;max-width:280px;';
+  sub.textContent = 'A form this size can take up to 30 seconds — this isn\'t frozen.';
+  overlay.appendChild(spinner);
+  overlay.appendChild(lbl);
+  overlay.appendChild(sub);
+  document.body.appendChild(overlay);
+  return overlay;
+}
+// Update the overlay's label text in place (no flicker/rebuild) so the
+// person can see it's actively progressing through pages, not stuck.
+function _updateRenderOverlay(msg) {
+  var lbl = document.getElementById('render-overlay-label');
+  if (lbl) lbl.textContent = msg;
+}
+function _hideRenderOverlay() {
+  var el = document.getElementById('render-overlay');
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+}
+
+// Safety net: if html2canvas ever stalls (browser quirk, huge table, etc.)
+// this rejects after a generous timeout instead of leaving the render
+// overlay spinning forever with no way out.
+function _withTimeout(promise, ms, label) {
+  return new Promise(function (resolve, reject) {
+    var done = false;
+    var timer = setTimeout(function () {
+      if (done) return;
+      done = true;
+      reject(new Error((label || 'Render') + ' timed out — try again.'));
+    }, ms);
+    promise.then(function (v) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(v);
+    }, function (err) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
 }
 
 // ===== INIT =====
@@ -2868,9 +3025,27 @@ function collectFormData() {
   return data;
 }
 
+function _draftTimeLabel(ts) {
+  if (!ts) return '';
+  try { return new Date(ts).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); }
+  catch(e) { return ''; }
+}
+// Small always-there badge (not the transient #save-status banner) so
+// autosaving is visible instead of silently happening in the background.
+function _updateAutosaveIndicator(ts) {
+  const el = document.getElementById('autosave-indicator');
+  if (!el) return;
+  if (!ts) { el.style.display = 'none'; return; }
+  el.textContent = 'Draft saved ' + _draftTimeLabel(ts);
+  el.style.display = 'block';
+}
+
 function saveFormData() {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(collectFormData()));
+    var data = collectFormData();
+    data.__saved_at = Date.now();
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    _updateAutosaveIndicator(data.__saved_at);
   } catch(e) {}
 }
 
@@ -2909,7 +3084,18 @@ function restoreFormData() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return;
-    applyFormData(JSON.parse(raw));
+    const data = JSON.parse(raw);
+    applyFormData(data);
+    if (data.__saved_at) {
+      _updateAutosaveIndicator(data.__saved_at);
+      // One-time heads-up so a stale/unrelated draft doesn't silently carry
+      // into a new job unnoticed.
+      const topInputs = document.querySelectorAll('.top-fields .field-row input[type="text"]');
+      const restoredName = (topInputs[0] ? topInputs[0].value.trim() : '');
+      const msg = 'Restored draft from ' + _draftTimeLabel(data.__saved_at) + (restoredName ? ' — ' + restoredName : '');
+      setStatus(msg);
+      setTimeout(function(){ setStatus(''); }, 6000);
+    }
   } catch(e) {}
 }
 
@@ -2963,15 +3149,29 @@ async function saveFillablePdf() {
     return;
   }
   setStatus('Building resumable PDF…');
+  _showRenderOverlay('Building your PDF…');
 
   // Mirror the CAPTURE pipeline so the rendered look matches the print sheet.
   var pages = document.querySelectorAll('.form-page');
   var wasDark = document.body.classList.contains('dark-mode');
   if (wasDark) document.body.classList.remove('dark-mode');
-  if (typeof showRealTablesForCapture === 'function') showRealTablesForCapture();
-  var restoreLayout = (typeof forceDesktopLayout === 'function') ? forceDesktopLayout() : function(){};
+
+  var restoreLayout = function(){};
+  try {
+    if (typeof showRealTablesForCapture === 'function') showRealTablesForCapture();
+    restoreLayout = (typeof forceDesktopLayout === 'function') ? forceDesktopLayout() : function(){};
+  } catch (setupErr) {
+    // If either of these throws synchronously, the overlay would otherwise
+    // stay up forever with zero indication anything went wrong.
+    _hideRenderOverlay();
+    if (wasDark) document.body.classList.add('dark-mode');
+    setStatus('⚠ Render setup failed: ' + (setupErr && setupErr.message ? setupErr.message : setupErr));
+    setTimeout(function(){ setStatus(''); }, 6000);
+    return;
+  }
 
   function cleanup() {
+    _hideRenderOverlay();
     if (typeof hideRealTablesAfterCapture === 'function') hideRealTablesAfterCapture();
     restoreLayout();
     if (wasDark) document.body.classList.add('dark-mode');
@@ -2987,25 +3187,37 @@ async function saveFillablePdf() {
     var pdfDoc = await PDFDocument.create();
     var PAGE_W = 612; // US Letter width (pt)
 
-    for (var idx = 0; idx < pages.length; idx++) {
-      var page = pages[idx];
+    _updateRenderOverlay('Rendering ' + pages.length + ' page(s)…');
+    var captureScale = _isDesktopDevice() ? 1.5 : 2;
+    // Render every page's canvas in parallel.
+    var jobs = Array.prototype.map.call(pages, function (page, jIdx) {
       var restoreFill = (typeof fitPageToSheet === 'function') ? fitPageToSheet(page) : function(){};
       var capH = (typeof measureFullHeight === 'function') ? measureFullHeight(page) : page.scrollHeight;
-      var canvas;
-      try {
-        canvas = await html2canvas(page, { scale: 2, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } });
-      } finally {
-        restoreFill();
-      }
-      if (typeof fitToLetter === 'function') canvas = fitToLetter(canvas);
+      return _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } }), 45000, 'Page ' + (jIdx + 1) + ' render')
+        .then(function (canvas) {
+          restoreFill();
+          _updateRenderOverlay('Page ' + (jIdx + 1) + ' of ' + pages.length + ' rendered…');
+          return (typeof fitToLetter === 'function') ? fitToLetter(canvas) : canvas;
+        })
+        .catch(function (err) { restoreFill(); throw err; });
+    });
+    var canvases = await Promise.all(jobs);
+    _updateRenderOverlay('Building your PDF…');
 
-      var imgData = canvas.toDataURL('image/png');
-      var pngBytes = Uint8Array.from(atob(imgData.split(',')[1]), function(c){ return c.charCodeAt(0); });
-      var png = await pdfDoc.embedPng(pngBytes);
-      var scale = PAGE_W / png.width;
-      var PAGE_H = png.height * scale;
+    for (var idx = 0; idx < canvases.length; idx++) {
+      var canvas = canvases[idx];
+      // JPEG instead of PNG: PNG's lossless compression is the single slowest
+      // step in this whole pipeline for a large scale-2 canvas (multiple seconds
+      // per page on an older phone). CAPTURE already ships JPEG at 0.85 for the
+      // exact same rendered content, so this isn't a new quality trade-off —
+      // 0.92 here keeps it a bit crisper since this is the "official" PDF copy.
+      var imgData = canvas.toDataURL('image/jpeg', 0.92);
+      var jpgBytes = Uint8Array.from(atob(imgData.split(',')[1]), function(c){ return c.charCodeAt(0); });
+      var jpg = await pdfDoc.embedJpg(jpgBytes);
+      var scale = PAGE_W / jpg.width;
+      var PAGE_H = jpg.height * scale;
       var p = pdfDoc.addPage([PAGE_W, PAGE_H]);
-      p.drawImage(png, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
+      p.drawImage(jpg, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
     }
 
     // Embed full JSON for a lossless reload round-trip.
