@@ -3733,11 +3733,35 @@ body { font-family: var(--font-body); background: var(--bg-dark); color: var(--t
 
   var generation = 0; // increment on every switch; old loops see stale gen and die
 
-  function loop(gen){
+  // Fixed-timestep loop: scenes advance one tick per 1/60s of REAL time, so the
+  // animation speed is identical on 60Hz, 120Hz (ProMotion), and throttled 30fps
+  // devices. Previously one tick ran per FRAME, so 120Hz phones played at double
+  // speed and momentary frame drops made everything visibly slow down.
+  var STEP = 1000 / 60;
+  var last = 0, acc = 0;
+
+  function loop(gen, now){
     if(gen !== generation) return; // stale loop from previous theme — stop it
-    theme.draw();
-    raf = requestAnimationFrame(function(){ loop(gen); });
+    if(now === undefined) now = performance.now();
+    if(!last) last = now;
+    acc += now - last;
+    last = now;
+    // Returning from another page / hidden tab: don't fast-forward a huge backlog
+    if(acc > 250) acc = 250;
+    var steps = 0;
+    while(acc >= STEP && steps < 2){ // catch up at most 2 ticks per frame
+      theme.draw();
+      acc -= STEP;
+      steps++;
+    }
+    raf = requestAnimationFrame(function(t){ loop(gen, t); });
   }
+
+  // Reset the clock whenever the page becomes visible again (HOME button return,
+  // app switcher, lock screen) so there's no burst or stall on re-entry.
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden){ last = 0; acc = 0; }
+  });
 
 
 
@@ -3747,6 +3771,7 @@ body { font-family: var(--font-body); background: var(--bg-dark); color: var(--t
     resize();
     state = {};
     theme.init();
+    last = 0; acc = 0;
     loop(generation);
   });
 
