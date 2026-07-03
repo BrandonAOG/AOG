@@ -315,7 +315,7 @@ body { font-family: var(--font-body); background: var(--bg-dark); color: var(--t
 
   <div class="status-bar">
     <div class="status-item"><span class="status-dot"></span><span>System Online</span></div>
-    <div class="status-item"><span class="status-dot yellow"></span><span>14 Tools Active</span></div>
+    <div class="status-item"><span class="status-dot yellow"></span><span>15 Tools Active</span></div>
     <div class="status-item"><span class="status-dot orange"></span><span>Field Ready</span></div>
     <div class="status-item" id="sw-status-item"><span class="status-dot blue" id="sw-status-dot"></span><span id="sw-status-label">Sync Enabled</span></div>
   </div>
@@ -3823,7 +3823,17 @@ if('serviceWorker' in navigator){
       });
       console.log('[SW] Registered');
     }).catch(function(err){console.warn('[SW] Failed:',err);});
-    navigator.serviceWorker.addEventListener('controllerchange',function(){window.location.reload();});
+    // Reload when a NEW SW replaces an old one — but not on the first-ever install,
+    // where clients.claim() also fires controllerchange and would reload the page
+    // out from under the user. Loop-guarded so it can only fire once.
+    var _hadController = !!navigator.serviceWorker.controller;
+    var _swRefreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(!_hadController){ _hadController = true; return; } // first install — no reload
+      if(_swRefreshing) return;
+      _swRefreshing = true;
+      window.location.reload();
+    });
   });
   document.getElementById('update-reload-btn').addEventListener('click',function(){if(waitingWorker)waitingWorker.postMessage({action:'SKIP_WAITING'});});
   document.getElementById('update-toast-later').addEventListener('click',function(){document.getElementById('update-toast').classList.remove('visible');});
