@@ -88,12 +88,13 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 
 /* ── FORM ── */
 .fg{display:grid;gap:10px;}
+.fg>*{min-width:0;} /* let grid tracks shrink below select/input intrinsic width so nothing spills off-screen */
 .fg-2{grid-template-columns:1fr 1fr;}
 .fg-3{grid-template-columns:1fr 1fr 1fr;}
 @media(max-width:500px){.fg-2,.fg-3{grid-template-columns:1fr 1fr;}}
 .field{display:flex;flex-direction:column;gap:3px;}
 .field label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);}
-.field input,.field select,.field textarea{border:1px solid var(--border);border-radius:var(--rs);padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);background:#fff;width:100%;transition:border .15s;}
+.field input,.field select,.field textarea{border:1px solid var(--border);border-radius:var(--rs);padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);background:#fff;width:100%;min-width:0;max-width:100%;transition:border .15s;}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--blue);}
 .field input[type=number]{font-family:'JetBrains Mono',monospace;font-weight:500;text-align:right;}
 .hint{font-size:10px;color:var(--text3);}
