@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.2.4';
+var CACHE_NAME = 'aog-forms-v2.3.0';
 var DEV_MODE   = false;
 
 // Tracks whether this SW instance has already run a precache repair pass
@@ -23,6 +23,8 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
+  '⚡ Conduit Fill now recalculates instantly when you switch between Raceway and Nipple.',
+  '🔔 Update notices like this one now appear on every form, not just a few.',
   '🐞 Added a Report a Bug button — pick the form with the problem and it emails Brandon with your device details attached automatically.',
   '💡 Added a Suggestions button — send ideas for any form, or pitch a brand new one.',
   '📣 You can now add your name and choose to be credited in the update banner when you report a bug or send a suggestion.',
@@ -441,4 +443,4 @@ self.addEventListener('message', function(event) {
 
 // ============================================================
 //  END OF SERVICE WORKER
-// ============================================================ 
+// ============================================================
