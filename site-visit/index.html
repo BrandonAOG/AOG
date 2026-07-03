@@ -134,7 +134,8 @@ body.dark-mode {
   width: 100%;
   background: var(--panel); padding: 4px 8px;
   padding-top: max(4px, env(safe-area-inset-top, 4px));
-  display: flex; justify-content: center; gap: 4px; flex-wrap: nowrap; align-items: center;
+  display: flex; justify-content: flex-start; gap: 4px; flex-wrap: nowrap; align-items: center;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   box-shadow: 0 4px 18px rgba(0,0,0,0.3);
   border-bottom: 1px solid var(--border-bright);
   transition: background-color 0.3s ease; box-sizing: border-box;
@@ -155,12 +156,10 @@ body.dark-mode .action-bar {
   font-family: Arial, sans-serif; color: var(--cyan); text-transform: uppercase;
   clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
-  white-space: nowrap; flex: 1; min-width: 0; text-align: center;
+  white-space: nowrap; flex: 0 0 auto; min-width: 0; text-align: center;
   display: inline-flex; align-items: center; justify-content: center;
   overflow: hidden; text-overflow: ellipsis;
 }
-@media (max-width: 480px) { .btn { padding: 6px 4px; font-size: 9px; } }
-@media (max-width: 360px) { .btn { font-size: 8px; padding: 6px 3px; letter-spacing: 0; } }
 body.dark-mode .btn {
   background: rgba(0,255,200,0.08); border-color: rgba(0,255,200,0.25);
   color: #00FFC8; text-shadow: 0 0 4px rgba(0,255,200,0.3);
