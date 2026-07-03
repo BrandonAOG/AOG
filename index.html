@@ -10,7 +10,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Always On Generators - Forms Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
@@ -90,14 +90,14 @@ body { font-family: var(--font-body); background: var(--bg-dark); color: var(--t
 }
 
 /* OFFLINE BANNER */
-#offline-banner { display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 9999; padding: 10px 20px; background: rgba(6,9,19,0.97); border-bottom: 1px solid var(--orange); text-align: center; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 3px; color: var(--orange-bright); text-transform: uppercase; animation: bannerPulse 2s ease-in-out infinite; }
+#offline-banner { display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 9999; padding: 10px 20px; padding-top: max(10px, env(safe-area-inset-top, 10px)); background: rgba(6,9,19,0.97); border-bottom: 1px solid var(--orange); text-align: center; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 3px; color: var(--orange-bright); text-transform: uppercase; animation: bannerPulse 2s ease-in-out infinite; }
 #offline-banner.visible { display: block; }
 @keyframes bannerPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 #offline-banner::before { content: 'WARNING  '; color: var(--yellow-bright); }
 #offline-banner::after  { content: '  WARNING'; color: var(--yellow-bright); }
 
 /* UPDATE TOAST */
-#update-toast { display: none; position: fixed; bottom: 24px; right: 24px; z-index: 9998; padding: 20px 22px; background: rgba(11,16,35,0.98); border: 1px solid rgba(251,191,36,0.4); border-radius: 10px; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; max-width: 360px; width: calc(100vw - 48px); box-shadow: 0 0 40px rgba(251,191,36,0.12), 0 20px 60px rgba(0,0,0,0.6); animation: toastIn 0.4s cubic-bezier(0.4,0,0.2,1) forwards; }
+#update-toast { display: none; position: fixed; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); right: 24px; z-index: 9998; padding: 20px 22px; background: rgba(11,16,35,0.98); border: 1px solid rgba(251,191,36,0.4); border-radius: 10px; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; max-width: 360px; width: calc(100vw - 48px); box-shadow: 0 0 40px rgba(251,191,36,0.12), 0 20px 60px rgba(0,0,0,0.6); animation: toastIn 0.4s cubic-bezier(0.4,0,0.2,1) forwards; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 #update-toast.visible { display: flex; flex-direction: column; gap: 14px; }
 #update-toast-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -116,17 +116,18 @@ body { font-family: var(--font-body); background: var(--bg-dark); color: var(--t
 #update-reload-btn:hover { box-shadow: 0 0 24px rgba(251,191,36,0.5); transform: scale(1.03); }
 
 /* LAYOUT */
-.container { position: relative; z-index: 10; max-width: 1100px; margin: 0 auto; padding: 48px 28px 40px; min-height: 100vh; display: flex; flex-direction: column; }
+.container { position: relative; z-index: 10; max-width: 1100px; margin: 0 auto; padding: 48px 28px 40px; padding-top: max(48px, calc(24px + env(safe-area-inset-top, 0px))); padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); min-height: 100vh; display: flex; flex-direction: column; }
 
 /* HEADER */
 .header { text-align: center; margin-bottom: 36px; padding-bottom: 32px; position: relative; }
 .header-rule { height: 1px; background: linear-gradient(90deg, transparent 0%, rgba(251,191,36,0.5) 25%, rgba(249,115,22,0.5) 50%, rgba(0,212,255,0.35) 75%, transparent 100%); margin-bottom: 34px; position: relative; }
 .header-rule::before { content: 'AOG'; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); background: var(--bg-dark); padding: 0 14px; font-family: var(--font-display); font-size: 0.5rem; font-weight: 700; letter-spacing: 4px; color: rgba(251,191,36,0.5); }
-.logo-wrap { display: flex; align-items: center; justify-content: center; gap: 28px; flex-wrap: wrap; margin-bottom: 18px; }
-.logo-img { width: 96px; height: 96px; object-fit: contain; filter: drop-shadow(0 0 12px rgba(251,191,36,0.6)) drop-shadow(0 0 24px rgba(249,115,22,0.4)) brightness(1.1); animation: logoPulse 3s ease-in-out infinite; }
+.logo-wrap { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: nowrap; margin-bottom: 18px; }
+@media (min-width: 480px) { .logo-wrap { gap: 28px; } }
+.title-block { text-align: left; min-width: 0; }
+.logo-img { width: 96px; height: 96px; object-fit: contain; flex-shrink: 0; filter: drop-shadow(0 0 12px rgba(251,191,36,0.6)) drop-shadow(0 0 24px rgba(249,115,22,0.4)) brightness(1.1); animation: logoPulse 3s ease-in-out infinite; }
 @keyframes logoPulse { 0%, 100% { filter: drop-shadow(0 0 12px rgba(251,191,36,0.6)) drop-shadow(0 0 24px rgba(249,115,22,0.4)) brightness(1.1); } 50% { filter: drop-shadow(0 0 18px rgba(251,191,36,0.8)) drop-shadow(0 0 36px rgba(249,115,22,0.6)) brightness(1.2); } }
-.title-block { text-align: left; }
-@media (max-width: 600px) { .title-block { text-align: center; } }
+
 .company-name { font-family: var(--font-display); font-size: clamp(1.5rem, 5vw, 2.5rem); font-weight: 900; letter-spacing: clamp(2px,0.5vw,5px); line-height: 1.05; background: linear-gradient(135deg, #fff 0%, var(--yellow-bright) 35%, var(--orange) 75%, var(--orange-deep) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
 .tagline { font-family: var(--font-mono); font-size: clamp(0.55rem,1.3vw,0.75rem); letter-spacing: 4px; color: var(--blue-electric); text-transform: uppercase; opacity: 0.75; }
 .subtitle { display: inline-flex; align-items: center; gap: 12px; margin-top: 16px; font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 5px; color: var(--text-dim); text-transform: uppercase; opacity: 0.6; }
@@ -260,7 +261,7 @@ body { font-family: var(--font-body); background: var(--bg-dark); color: var(--t
 
 /* Other phone/tablet shared responsive fixes */
 @media (max-width: 700px) {
-  .container { padding: 26px 14px 30px; }
+  .container { padding: 26px 14px 30px; padding-top: max(26px, calc(14px + env(safe-area-inset-top, 0px))); padding-bottom: calc(30px + env(safe-area-inset-bottom, 0px)); }
   .logo-img { width: 72px; height: 72px; }
   .status-bar { border-radius: 8px; }
   .status-item { padding: 11px 8px; font-size: 0.56rem; letter-spacing: 0.5px; }
