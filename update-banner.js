@@ -119,7 +119,10 @@
   });
 
   // ── Register SW and watch for a waiting update ─────────────
-  navigator.serviceWorker.register('/AOG/sw.js', { scope: '/AOG/' })
+  // Resolve sw.js relative to this script's own URL so it works no matter
+  // where the app is hosted (GitHub Pages subpath, custom domain root, etc.)
+  var _swUrl = new URL('sw.js', document.currentScript && document.currentScript.src ? document.currentScript.src : window.location.href).href;
+  navigator.serviceWorker.register(_swUrl, { scope: new URL('./', _swUrl).href })
     .then(function (reg) {
 
       // Actively check for a new sw.js NOW and every few minutes. Without this, the browser
