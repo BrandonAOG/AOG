@@ -1415,6 +1415,10 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
   border-bottom: 1px solid var(--border-bright);
   transition: background-color 0.3s ease; box-sizing: border-box;
 }
+/* Center the buttons when they fit; auto-margins collapse safely when the
+   bar overflows and scrolls, so nothing gets clipped off the left edge. */
+.action-bar > :first-child { margin-left: auto; }
+.action-bar > :last-child { margin-right: auto; }
 /* Action-bar top padding is uniform across all devices: the base .action-bar
    rule uses max(4px, env(safe-area-inset-top)), which is ~0 on desktop and the
    real notch/status-bar height on modern iOS — no per-platform override needed. */
@@ -1452,7 +1456,6 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
 @media screen and (min-width: 768px) {
   /* On wide screens all buttons fit, so re-center them (phones stay left-aligned
      so the HOME button isn't clipped when the row overflows and scrolls). */
-  .action-bar { justify-content: center; }
   body.mobile-safari .company-name                      { font-size: var(--fs-ipad-company-name) !important; }
   body.mobile-safari .doc-title                         { font-size: var(--fs-ipad-doc-title) !important; }
   body.mobile-safari .section-header                    { font-size: var(--fs-ipad-section-header) !important; padding: var(--pd-ipad-section-header) !important; }
@@ -1622,6 +1625,7 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
      below catch that case. Placed LAST so it wins the cascade over every dark rule.
    ============================================================================ */
 </style>
+<script src="../update-banner.js"></script>
 </head>
 
 <body>
