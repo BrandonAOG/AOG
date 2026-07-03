@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Always On Generators – Spec Viewer</title>
 <link rel="manifest" href="../manifest.json">
 <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
@@ -336,6 +336,7 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(circle 
   width: 100%;
   background: var(--hbtn-bg, rgba(15,21,53,.92));
   padding: 4px 8px;
+  padding-top: max(4px, env(safe-area-inset-top, 4px));
   display: flex; gap: 4px; flex-wrap: nowrap; align-items: center;
   box-shadow: 0 4px 18px rgba(0,0,0,0.4);
   border-bottom: 1px solid var(--border, rgba(251,191,36,0.25));
