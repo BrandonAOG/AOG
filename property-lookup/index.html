@@ -647,12 +647,17 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     padding:4px 8px;
     padding-top:max(4px, env(safe-area-inset-top, 4px));
     display:flex; gap:4px; flex-wrap:nowrap; align-items:center;
+    overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
     box-shadow:0 4px 18px var(--shadow-soft);
     border-bottom:1px solid var(--line);
     box-sizing:border-box;
   }
+  /* Center the buttons when they fit; auto-margins collapse safely when the
+     bar overflows and scrolls, so nothing gets clipped off the left edge. */
+  .action-bar > :first-child { margin-left: auto; }
+  .action-bar > :last-child { margin-right: auto; }
   .action-bar .ab-btn{
-    flex:1; min-width:0; padding:6px 8px; font-size:10px; font-weight:700; letter-spacing:.5px;
+    flex:0 0 auto; min-width:0; padding:6px 8px; font-size:10px; font-weight:700; letter-spacing:.5px;
     color:var(--signal); text-transform:uppercase; text-decoration:none; white-space:nowrap;
     text-align:center; font-family:var(--disp),Arial,sans-serif;
     border:1px solid var(--line); background:var(--input-bg);
@@ -687,10 +692,6 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .action-bar .theme-toggle-btn:hover{ border-color:var(--signal); }
   @media (max-width:480px){
     .action-bar{ padding:4px 4px; gap:3px; padding-top:max(4px, env(safe-area-inset-top, 4px)); }
-    .action-bar .ab-btn{ padding:6px 4px; font-size:9px; }
-  }
-  @media (max-width:360px){
-    .action-bar .ab-btn{ font-size:8px; padding:6px 3px; letter-spacing:0; }
   }
 
   /* ---------- Print-only header (hidden on screen) ---------- */
