@@ -11,6 +11,34 @@
 //  That's the only file you need to touch when you update.
 // ============================================================
 
+// ── Lightweight error log ─────────────────────────────────────
+// Records the last 10 JS errors (per device) so the Hub's
+// "Report a Bug" email can attach them automatically. Stored in
+// localStorage under 'aog_error_log'. No network, no tracking.
+(function () {
+  var KEY = 'aog_error_log', MAX = 10;
+  function log(msg, src) {
+    try {
+      var arr = JSON.parse(localStorage.getItem(KEY) || '[]');
+      arr.push({
+        t: new Date().toISOString(),
+        page: location.pathname,
+        msg: String(msg || 'unknown').slice(0, 200),
+        src: String(src || '').slice(0, 120)
+      });
+      while (arr.length > MAX) arr.shift();
+      localStorage.setItem(KEY, JSON.stringify(arr));
+    } catch (e) { /* storage full/blocked — never break the page over logging */ }
+  }
+  window.addEventListener('error', function (e) {
+    log(e.message, (e.filename || '') + (e.lineno ? ':' + e.lineno + ':' + (e.colno || 0) : ''));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    log('Unhandled promise rejection: ' + (r && r.message ? r.message : r), r && r.stack ? String(r.stack).split('\n')[1] : '');
+  });
+})();
+
 (function () {
   if (!('serviceWorker' in navigator)) return;
 
