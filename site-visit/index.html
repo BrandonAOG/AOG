@@ -3043,6 +3043,13 @@ function showRealTablesForCapture() {
     '#page2 .grid-section { display: block !important; }',
     '#page2 .footer-fields { display: block !important; }',
     '#mobile-p2-accordions { display: none !important; }',
+    // ---- Kill the mobile card "size label" pseudo-element for capture/PDF-edit ----
+    // On real mobile browsing, .mat-table td:not(.row-label)::before shows the
+    // wire size (e.g. "500 CU") as a card label. During capture the tables render
+    // as full grids (headers already show the size), so this pseudo-element becomes
+    // a redundant duplicate underneath the orange header — remove it unconditionally
+    // so it can never render regardless of which mobile/desktop CSS wins the cascade.
+    '#page2 #cu-wire-table tbody td:not(.row-label)::before, #page2 #al-wire-table tbody td:not(.row-label)::before, #page2 #thhn-table tbody td:not(.row-label)::before { content: none !important; }',
     'table.mat-table td { overflow: visible !important; vertical-align: middle !important; }',
     'table.mat-table td input[type="text"] { overflow: visible !important; height: 18px !important; line-height: 18px !important; display: block !important; }',
     '.footer-field input[type="text"] { height: 24px !important; line-height: 24px !important; overflow: visible !important; box-sizing: border-box !important; }',
