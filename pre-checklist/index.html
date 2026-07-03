@@ -105,8 +105,8 @@ body.dark-mode {
   transition: background-color 0.3s ease;
 }
 .action-bar .btn { padding: 6px 8px; font-size: 10px; flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 480px) { .action-bar { padding: 4px; gap: 3px; } .action-bar .btn { padding: 6px 4px; font-size: 9px; } }
-@media (max-width: 768px) { .action-bar { padding: 4px 6px; gap: 4px; } }
+@media (max-width: 480px) { .action-bar { padding: 4px; padding-top: calc(4px + env(safe-area-inset-top, 0px)); gap: 3px; } .action-bar .btn { padding: 6px 4px; font-size: 9px; } }
+@media (max-width: 768px) { .action-bar { padding: 4px 6px; padding-top: calc(4px + env(safe-area-inset-top, 0px)); gap: 4px; } }
 @media screen { body.dark-mode .action-bar { background: linear-gradient(90deg, rgba(15,21,53,0.9) 0%, rgba(26,40,71,0.8) 50%, rgba(15,21,53,0.9) 100%); border-bottom-color: rgba(0,255,200,0.25); box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 20px rgba(0,255,200,0.08); }}
 
 .btn {
