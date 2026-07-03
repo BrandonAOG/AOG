@@ -42,12 +42,13 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 .header::before{top:0;animation:scanline 4s linear infinite}
 .header::after{bottom:0;animation:scanline 4s linear infinite reverse}
 @keyframes scanline{0%,100%{opacity:0;transform:scaleX(0)}50%{opacity:1;transform:scaleX(1)}}
-.logo-wrap{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;margin-bottom:12px}
-.logo-img{width:70px;height:70px;object-fit:contain;filter:drop-shadow(0 0 12px rgba(251,191,36,.6)) drop-shadow(0 0 24px rgba(249,115,22,.4)) brightness(1.1);animation:logoPulse 3s ease-in-out infinite}
+.logo-wrap{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:nowrap;margin-bottom:12px}
+@media(min-width:480px){.logo-wrap{gap:20px}}
+.logo-img{width:70px;height:70px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 12px rgba(251,191,36,.6)) drop-shadow(0 0 24px rgba(249,115,22,.4)) brightness(1.1);animation:logoPulse 3s ease-in-out infinite}
 @media(min-width:480px){.logo-img{width:90px;height:90px}}
 @keyframes logoPulse{0%,100%{filter:drop-shadow(0 0 12px rgba(251,191,36,.6)) drop-shadow(0 0 24px rgba(249,115,22,.4)) brightness(1.1)}50%{filter:drop-shadow(0 0 18px rgba(251,191,36,.8)) drop-shadow(0 0 36px rgba(249,115,22,.6)) brightness(1.2)}}
-.title-block{text-align:left}@media(max-width:600px){.title-block{text-align:center}}
-.company-name{font-family:var(--font-display);font-size:1.4rem;font-weight:900;letter-spacing:3px;line-height:1.1;background:linear-gradient(135deg,var(--yellow-bright) 0%,var(--orange) 50%,var(--orange-deep) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:5px}
+.title-block{text-align:left;min-width:0}
+.company-name{font-family:var(--font-display);font-size:clamp(1.05rem,4.5vw,1.4rem);font-weight:900;letter-spacing:2px;line-height:1.1;background:linear-gradient(135deg,var(--yellow-bright) 0%,var(--orange) 50%,var(--orange-deep) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:5px}
 @media(min-width:480px){.company-name{font-size:1.8rem}}
 .tagline{font-family:var(--font-mono);font-size:.74rem;letter-spacing:5px;color:var(--blue-electric);text-transform:uppercase;text-shadow:0 0 8px rgba(0,212,255,.5)}
 .subtitle{font-family:var(--font-display);font-size:.8rem;letter-spacing:6px;color:var(--text-dim);margin-top:10px;text-transform:uppercase;font-weight:400}
