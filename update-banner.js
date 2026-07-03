@@ -119,7 +119,7 @@
   });
 
   // ── Register SW and watch for a waiting update ─────────────
-  navigator.serviceWorker.register('../sw.js', { scope: '../' })
+  navigator.serviceWorker.register('/AOG/sw.js', { scope: '/AOG/' })
     .then(function (reg) {
 
       // Actively check for a new sw.js NOW and every few minutes. Without this, the browser
