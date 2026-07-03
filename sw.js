@@ -8,8 +8,11 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.2.0';
+var CACHE_NAME = 'aog-forms-v2.2.1';
 var DEV_MODE   = false;
+
+// Tracks whether this SW instance has already run a precache repair pass
+var _repairRan = false;
 
 // Stores last known cache progress so late-loading pages can request it
 var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE during development/testing
@@ -20,6 +23,10 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
+  '🗂 Fixed offline page: tapping a tool now opens it correctly.',
+  '📴 Fixed Pre-Install Checklist (and other pages) sometimes not working offline — the app now self-repairs its offline files.',
+  '⚡ Property Lookup county data now loads from cache — much faster, way less data used.',
+  '🛠 Fixed a surprise page reload that could happen on first install.',
   '📋 Added Pre-Install Checklist.',
   '🎆 Added seasonal themes to the Electrical and Site Visits forms.',
   '🧹 Added a Clear badge to every table so each table can be cleared separately. (Requested by Jonathan)',
@@ -33,6 +40,7 @@ var PRECACHE_URLS = [
   './manifest.json',
   './logo.png',
   './sw.js',
+  './update-banner.js',
   './estimate/',
   './maintenance/',
   './site-visit/',
@@ -164,11 +172,36 @@ self.addEventListener('activate', function(event) {
         );
       })
       .then(function() {
+        // SELF-HEAL: install() skips files that fail to download (one LTE hiccup
+        // and a page silently never gets cached — e.g. "pre-checklist doesn't
+        // work offline"). Re-check every core URL here and re-fetch any that are
+        // missing, so a bad install repairs itself on the next activation/launch.
+        return ensurePrecached();
+      })
+      .then(function() {
         console.log('[SW] Activated — claiming all clients');
         return self.clients.claim();
       })
   );
 });
+
+// Re-add any PRECACHE_URLS entries missing from the current cache.
+// Safe to run repeatedly; only fetches what's absent.
+function ensurePrecached() {
+  return caches.open(CACHE_NAME).then(function(cache) {
+    var scope = self.registration.scope;
+    return Promise.all(PRECACHE_URLS.map(function(url) {
+      var absUrl = url.startsWith('http') ? url : new URL(url, scope).href;
+      return cache.match(absUrl).then(function(hit) {
+        if (hit) return;
+        console.log('[SW] Repairing missing precache entry:', absUrl);
+        return cache.add(absUrl).catch(function(err) {
+          console.warn('[SW] Repair failed (will retry next activation):', absUrl, err);
+        });
+      });
+    }));
+  });
+}
 
 // ============================================================
 //  FETCH — Request handling strategies
@@ -220,6 +253,13 @@ self.addEventListener('fetch', function(event) {
   var accept = request.headers.get('Accept') || '';
 
   if (accept.includes('text/html')) {
+    // Once per SW startup (the browser kills and restarts SWs constantly),
+    // piggyback a background repair pass on the first page navigation so any
+    // precache entry that failed earlier gets retried whenever there's network.
+    if (!_repairRan) {
+      _repairRan = true;
+      event.waitUntil(ensurePrecached().catch(function(){}));
+    }
     event.respondWith(staleWhileRevalidate(request));
     return;
   }
@@ -240,6 +280,16 @@ self.addEventListener('fetch', function(event) {
 
   if (url.pathname.match(/\.(js|css)$/i)) {
     event.respondWith(staleWhileRevalidate(request));
+    return;
+  }
+
+  // Versioned data files (county compact .json.gz, territory geojson, manifest).
+  // These are versioned in the filename (e.g. _v3), so cache-first is safe: a new
+  // build gets a new filename and simply misses the cache once. Without this rule
+  // they fell through to networkFirst and re-downloaded 5–11 MB per file on every
+  // online visit even though a cached copy was sitting right there.
+  if (url.pathname.match(/\.(json|json\.gz|geojson)$/i)) {
+    event.respondWith(cacheFirst(request));
     return;
   }
 
@@ -303,7 +353,12 @@ function networkFirst(request) {
 // ============================================================
 function staleWhileRevalidate(request) {
   return caches.open(CACHE_NAME).then(function(cache) {
-    return cache.match(request).then(function(cachedResponse) {
+    // Check our own cache first, then ALL caches. The global fallback covers the
+    // "update hostage" case: a newly shipped page already precached by a WAITING
+    // service worker (new cache) can still be served offline by the active one.
+    return cache.match(request).then(function(hit) {
+      return hit || caches.match(request);
+    }).then(function(cachedResponse) {
       var networkFetch = fetch(request).then(function(networkResponse) {
         if (networkResponse && networkResponse.ok) {
           cache.put(request, networkResponse.clone());
