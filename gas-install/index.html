@@ -2031,7 +2031,14 @@ function addRow(tbody, label, numCols, isHeader) {
   const lbl = document.createElement('td');
   lbl.className   = isHeader ? 'row-label section-header' : 'row-label';
   lbl.textContent = label;
-  if (isHeader) lbl.colSpan = numCols + 1;
+  if (isHeader) {
+    lbl.colSpan = numCols + 1;
+    // Inline (not stylesheet) so it always wins regardless of whatever
+    // alternating-row/other rule might otherwise dilute it — var() keeps
+    // it correctly following light/dark mode.
+    lbl.style.setProperty('background', 'var(--header-bg)', 'important');
+    lbl.style.setProperty('color', 'var(--header-fg)', 'important');
+  }
   tr.appendChild(lbl);
   if (!isHeader) {
     for (let i = 0; i < numCols; i++) {
