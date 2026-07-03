@@ -99,13 +99,18 @@ body.dark-mode {
   background: var(--panel);
   padding: 4px 8px;
   padding-top: calc(4px + env(safe-area-inset-top, 0px));
-  display: flex; justify-content: center; gap: 4px; flex-wrap: nowrap; align-items: center;
+  display: flex; justify-content: flex-start; gap: 4px; flex-wrap: nowrap; align-items: center;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   box-shadow: 0 4px 18px rgba(0,0,0,0.3);
   border-bottom: 1px solid var(--border-bright);
   transition: background-color 0.3s ease;
 }
-.action-bar .btn { padding: 6px 8px; font-size: 10px; flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 480px) { .action-bar { padding: 4px; padding-top: calc(4px + env(safe-area-inset-top, 0px)); gap: 3px; } .action-bar .btn { padding: 6px 4px; font-size: 9px; } }
+/* Center the buttons when they fit; auto-margins collapse safely when the
+   bar overflows and scrolls, so nothing gets clipped off the left edge. */
+.action-bar > :first-child { margin-left: auto; }
+.action-bar > :last-child { margin-right: auto; }
+.action-bar .btn { padding: 6px 8px; font-size: 10px; flex: 0 0 auto; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 480px) { .action-bar { padding: 4px 4px; padding-top: calc(4px + env(safe-area-inset-top, 0px)); gap: 3px; } }
 @media (max-width: 768px) { .action-bar { padding: 4px 6px; padding-top: calc(4px + env(safe-area-inset-top, 0px)); gap: 4px; } }
 @media screen { body.dark-mode .action-bar { background: linear-gradient(90deg, rgba(15,21,53,0.9) 0%, rgba(26,40,71,0.8) 50%, rgba(15,21,53,0.9) 100%); border-bottom-color: rgba(0,255,200,0.25); box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 20px rgba(0,255,200,0.08); }}
 
