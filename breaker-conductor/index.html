@@ -148,11 +148,17 @@ select:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 2px rgba(2
   background: var(--bg-card, #0F1535);
   padding: 4px 8px;
   padding-top: max(4px, env(safe-area-inset-top, 4px));
-  display: flex; justify-content: center; gap: 4px; flex-wrap: nowrap; align-items: center;
+  display: flex; justify-content: flex-start; gap: 4px; flex-wrap: nowrap; align-items: center;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none
+  
   box-shadow: 0 4px 18px rgba(0,0,0,0.4);
   border-bottom: 1px solid var(--border, rgba(251,191,36,0.25));
   box-sizing: border-box;
 }
+/* Center the buttons when they fit; auto-margins collapse safely when the
+   bar overflows and scrolls, so nothing gets clipped off the left edge. */
+.action-bar > :first-child { margin-left: auto; }
+.action-bar > :last-child { margin-right: auto; }
 [data-theme="light"] .action-bar {
   background: #fff;
   border-bottom-color: rgba(217,119,6,0.3);
@@ -179,11 +185,7 @@ select:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 2px rgba(2
 [data-theme="light"] .action-bar .theme-toggle-ab { color: #D97706; border-color: rgba(217,119,6,0.4); }
 .action-bar .theme-toggle-ab:hover { border-color: var(--orange-bright, #FBBF24); box-shadow: 0 0 8px rgba(251,191,36,0.3); }
 @media (max-width: 480px) {
-  .action-bar { padding: 4px 4px; gap: 3px; }
-  .action-bar .ab-btn { padding: 6px 4px; font-size: 9px; }
-}
-@media (max-width: 360px) {
-  .action-bar .ab-btn { font-size: 8px; padding: 6px 3px; letter-spacing: 0; }
+  .action-bar { padding: 4px 4px; padding-top: max(4px, env(safe-area-inset-top, 4px)); gap: 3px; }
 }
 </style>
 </head>
