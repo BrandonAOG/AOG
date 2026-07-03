@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.2.3';
+var CACHE_NAME = 'aog-forms-v2.2.4';
 var DEV_MODE   = false;
 
 // Tracks whether this SW instance has already run a precache repair pass
