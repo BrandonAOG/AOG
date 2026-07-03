@@ -1375,13 +1375,10 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   transition: background-color 0.3s ease;
   box-sizing: border-box;
 }
-/* On wide screens the buttons fit without scrolling, so center them
-   over the centered page content instead of hugging the left edge of
-   the viewport. Below this width the bar scrolls horizontally, where
-   flex-start must stay so no buttons get pushed out of reach. */
-@media (min-width: 768px) {
-  .action-bar { justify-content: center; }
-}
+/* Center the buttons when they fit; auto-margins collapse safely when the
+   bar overflows and scrolls, so nothing gets clipped off the left edge. */
+.action-bar > :first-child { margin-left: auto; }
+.action-bar > :last-child { margin-right: auto; }
 .action-bar::-webkit-scrollbar { height: 4px; }
 .action-bar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 body.dark-mode .action-bar {
@@ -1398,6 +1395,7 @@ body.dark-mode .action-bar {
 /* === TEMP: hide the regular PDF button. To restore, delete this rule AND remove the 'pdf-btn-hidden' class from the PDF button(s). === */
 .pdf-btn-hidden { display: none !important; }
 </style>
+<script src="../update-banner.js"></script>
 </head>
 
 <body>
@@ -5095,7 +5093,7 @@ if ('serviceWorker' in navigator) {
         reg.update();
         // If one is already waiting, ask it to activate immediately (works if
         // sw.js calls self.skipWaiting() on the SKIP_WAITING message).
-        function _nudge(sw) { if (sw) { try { sw.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {} } }
+        function _nudge(sw) { if (sw) { try { sw.postMessage({ action: 'SKIP_WAITING' }); } catch (e) {} } }
         if (reg.waiting) _nudge(reg.waiting);
         reg.addEventListener('updatefound', function () {
           var nw = reg.installing;
