@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.2.1';
+var CACHE_NAME = 'aog-forms-v2.2.2';
 var DEV_MODE   = false;
 
 // Tracks whether this SW instance has already run a precache repair pass
@@ -23,13 +23,10 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '🗂 Fixed offline page: tapping a tool now opens it correctly.',
-  '📴 Fixed Pre-Install Checklist (and other pages) sometimes not working offline — the app now self-repairs its offline files.',
-  '⚡ Property Lookup county data now loads from cache — much faster, way less data used.',
-  '🛠 Fixed a surprise page reload that could happen on first install.',
-  '📋 Added Pre-Install Checklist.',
-  '🎆 Added seasonal themes to the Electrical and Site Visits forms.',
-  '🧹 Added a Clear badge to every table so each table can be cleared separately. (Requested by Jonathan)',
+  '🐞 Added a Report a Bug button — pick the form with the problem and it emails Brandon with your device details attached automatically.',
+  '💡 Added a Suggestions button — send ideas for any form, or pitch a brand new one.',
+  '📣 You can now add your name and choose to be credited in the update banner when you report a bug or send a suggestion.',
+  '🔗 Added a Share App button — sends the hub link straight from your share sheet.',
 ];
 // ============================================================
 
