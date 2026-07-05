@@ -138,7 +138,7 @@
     // and never resumes it. So 'playback' is now a last resort: only used
     // (sessionForce=true) after a gesture-driven kick left the clock
     // frozen, and handed back to 'ambient' the moment the clock ticks.
-    setSession((sessionLive || !sessionForce) ? 'ambient' : 'playback');
+    setSession((sessionLive || !_mayForce()) ? 'ambient' : 'playback');
     if (ctx && ctx.state === 'closed') ctx = null; // rebuilt after zombie teardown
     if (!ctx && !hadGesture) { dbg('getCtx: pre-gesture, refusing to create'); return null; }
     if (!ctx) {
@@ -340,9 +340,30 @@
   function restartSessionEl() {
     if (sessionEl) { try { sessionEl.pause(); sessionEl.currentTime = 0; } catch (e) {} }
   }
+  // ── MUSIC-FIRST GATE for the 'playback' kick ────────────────────────
+  // 'playback' is non-mixable: starting the looper under it PAUSES whatever
+  // the user is playing (Music, Spotify, Pandora...). Only allow the forced
+  // kick when we have a context AND it is not 'interrupted'. No context yet
+  // (e.g. the very first activateSession() of a tap, which runs before the
+  // context is built) => we cannot know if music owns the session, so stay
+  // 'ambient'; the activation-event re-kick later in the SAME tap runs
+  // after the context exists and makes the informed call. If music is
+  // detected, stand sessionForce down entirely: a playing music app means
+  // the OS audio session is already live, so the cold-launch dead-session
+  // bug can't be present and 'ambient' will mix in fine.
+  function _mayForce() {
+    if (!sessionForce) return false;
+    if (!ctx) return false;                       // can't see the session yet — don't risk it
+    if (ctx.state === 'interrupted') {            // music owns the session
+      sessionForce = false;
+      dbg('music detected — playback kick permanently stood down');
+      return false;
+    }
+    return true;
+  }
   function activateSession() {
     if (sessionLive || LEGACY_IOS) return;
-    setSession((sessionLive || !sessionForce) ? 'ambient' : 'playback');
+    setSession((sessionLive || !_mayForce()) ? 'ambient' : 'playback');
     try {
       if (!sessionEl) {
         sessionEl = new Audio(SILENT_WAV);
