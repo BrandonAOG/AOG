@@ -193,7 +193,7 @@
     if (pipedEl) { try { pipedEl.pause(); pipedEl.src = ''; } catch (e) {} pipedEl = null; }
   }
   function activateSession() {
-    if (!IS_IOS || sessionLive) return;
+    if (sessionLive) return;
     try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') { navigator.audioSession.type = 'playback'; dbg('audioSession.type -> playback (gesture)'); } } catch (e) {}
     try {
       if (!sessionEl) {
@@ -233,7 +233,7 @@
   // live and we stop poking it. Also restart ambience since earlier
   // goLive() calls happened on a frozen engine.
   setInterval(function () {
-    if (!IS_IOS || sessionLive || !ctx || ctx.state !== 'running') return;
+    if (sessionLive || !ctx || ctx.state !== 'running') return;
     if (ctx.currentTime > 0) {
       sessionLive = true;
       dbg('CLOCK TICKING — audio session confirmed live');
@@ -249,7 +249,7 @@
   // 'running', re-arm the unlock so the next tap does the full activation.
   var lastLiveT = 0, stuckTicks = 0;
   setInterval(function () {
-    if (!IS_IOS || !sessionLive || !ctx || ctx.state !== 'running') { stuckTicks = 0; return; }
+    if (!sessionLive || !ctx || ctx.state !== 'running') { stuckTicks = 0; return; }
     if (ctx.currentTime === lastLiveT) {
       if (++stuckTicks >= 3) {
         dbg('clock REFROZE — re-arming session unlock');
@@ -278,13 +278,11 @@
     // every page load unconditionally discards the load-time context and
     // rebuilds fresh, right here inside the gesture.
     if (!ctxTrusted) {
+      dbg('1st gesture: discarding load-time ctx (state=' + (ctx && ctx.state) + ')');
+      if (ctx) { try { ctx.close(); } catch (e) {} }
+      ctx = null;
+      sceneStarted = false;
       ctxTrusted = true;
-      if (IS_IOS) {
-        dbg('1st gesture: discarding load-time ctx (state=' + (ctx && ctx.state) + ')');
-        if (ctx) { try { ctx.close(); } catch (e) {} }
-        ctx = null;
-        sceneStarted = false;
-      }
     }
     var c = getCtx();
     if (c && c.state !== 'running') {
@@ -1216,7 +1214,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.5.8',
+    version: 'v3.5.9',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
