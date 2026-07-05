@@ -15,6 +15,11 @@
 
   var ctx = null;
   var muted = localStorage.getItem('aog-sound-muted') === '1';
+  // Ambient state must exist BEFORE the startup retry loop runs: on desktop
+  // revisits the browser grants audio instantly, so goLive() -> applyScene()
+  // -> stopAmbient() fires synchronously at load. Defining amb later crashed
+  // the whole script (killing window.AOGSound and the sound panel button).
+  var amb = { nodes: [], timers: [], scene: null };
 
   // ── DEBUG LOG (overlay enabled via localStorage 'aog-sound-debug'='1') ──
   try { localStorage.removeItem('aog-sound-debug'); } catch (e) {} // debug overlay retired
@@ -157,7 +162,9 @@
       tryStart();
     }, 500);
   }
-  startRetryLoop(); // attempt zero-tap start right now
+  // NOTE: the initial startRetryLoop() call happens at the BOTTOM of this
+  // file (just before the public API) — running it here crashed on desktop
+  // because goLive -> applyScene touches SCENES/SEASONS/amb defined below.
 
   // PERSISTENT gesture rescue: any tap/keypress revives a suspended context.
   // (Not once-only — after returning from the background the context is
@@ -231,11 +238,27 @@
       sessionLive = true;
       dbg('CLOCK TICKING — audio session confirmed live');
       stopPipedEl();
-      if (sessionEl) { try { sessionEl.pause(); } catch (e) {} }
+      // DO NOT pause sessionEl: the silent looper is what HOLDS the iOS
+      // audio session open. Pausing it (a past "cleanup") let iOS drop the
+      // session and the clock refroze — the cold-launch bug came back.
       sceneStarted = false;
       tryStart();
     }
   }, 250);
+  // RE-FREEZE GUARD (iOS): if the clock ever stops advancing again while
+  // 'running', re-arm the unlock so the next tap does the full activation.
+  var lastLiveT = 0, stuckTicks = 0;
+  setInterval(function () {
+    if (!IS_IOS || !sessionLive || !ctx || ctx.state !== 'running') { stuckTicks = 0; return; }
+    if (ctx.currentTime === lastLiveT) {
+      if (++stuckTicks >= 3) {
+        dbg('clock REFROZE — re-arming session unlock');
+        sessionLive = false; pipedCtx = null; stuckTicks = 0;
+        if (sessionEl) { try { sessionEl.play().catch(function(){}); } catch (e) {} }
+      }
+    } else stuckTicks = 0;
+    lastLiveT = ctx.currentTime;
+  }, 400);
 
   function gestureUnlock() {
     activateSession(); // MUST be first — inside the gesture, activates iOS system audio session
@@ -886,7 +909,7 @@
   /* ================= AMBIENT LOOPS ================= */
   // Continuous quiet beds: rain, wind, hum (60Hz electrical), engine, drone
 
-  var amb = { nodes: [], timers: [], scene: null };
+  // (amb is declared at the top of the file — see note there)
 
   function stopAmbient() {
     amb.nodes.forEach(function (n) { try { n.stop ? n.stop() : n.disconnect(); } catch (e) {} });
@@ -1190,8 +1213,10 @@
 
   /* ================= PUBLIC API ================= */
 
+  startRetryLoop(); // zero-tap start attempt — everything above is now defined
+
   window.AOGSound = {
-    version: 'v3.5.6',
+    version: 'v3.5.8',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
