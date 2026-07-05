@@ -1096,7 +1096,7 @@ function _captureCSS() {
     '*::before, *::after { background-image:none !important; }',
     '.company-name { color:#D97706 !important; }',
     '.doc-title { color:#1F2937 !important; }',
-    '.doc-title::after, .company-name::after { content:"" !important; }',
+    'body[class*="seasonal-"] .doc-title::after, body[class*="seasonal-"] .company-name::after, .doc-title::after, .company-name::after { content:"" !important; }',
     '.page-header { border-bottom-color:#D97706 !important; }',
     '.info-label, .field-label { color:#6B7280 !important; }',
     'input, textarea, select { background:#ffffff !important; color:#1F2937 !important; -webkit-text-fill-color:#1F2937 !important; }',
@@ -1142,6 +1142,13 @@ function capturePageToCanvas() {
     onclone: function (clonedDoc) {
       try { clonedDoc.body.classList.remove('dark-mode'); } catch (e) {}
       try { clonedDoc.documentElement.classList.remove('dark-mode-pending'); } catch (e) {}
+      // Strip the seasonal theme at the source: remove seasonal- body classes,
+      // the injected seasonal stylesheet, and the particle canvas from the clone
+      // so no theme colors, emojis, or effects can bleed into the capture.
+      try { clonedDoc.body.className = clonedDoc.body.className.replace(/\bseasonal-\S+/g, '').trim(); } catch (e) {}
+      try { var ss = clonedDoc.getElementById('seasonal-styles'); if (ss && ss.parentNode) ss.parentNode.removeChild(ss); } catch (e) {}
+      try { var sc = clonedDoc.getElementById('seasonal-canvas'); if (sc && sc.parentNode) sc.parentNode.removeChild(sc); } catch (e) {}
+      try { var sp = clonedDoc.getElementById('seasonal-print-hide'); if (sp && sp.parentNode) sp.parentNode.removeChild(sp); } catch (e) {}
       try { var st = clonedDoc.createElement('style'); st.textContent = _captureCSS(); clonedDoc.head.appendChild(st); } catch (e) {}
 
       // Drop broken images so html2canvas never calls createPattern() on a 0x0 image.
