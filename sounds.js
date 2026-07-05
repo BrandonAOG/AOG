@@ -396,9 +396,24 @@
       // switch is respected from here on. ('playback' was only the starter.)
       setSession('ambient');
       stopPipedEl();
-      // DO NOT pause sessionEl: the silent looper is what HOLDS the iOS
-      // audio session open. Pausing it (a past "cleanup") let iOS drop the
+      // DO NOT stop sessionEl: the silent looper is what HOLDS the iOS
+      // audio session open. Stopping it (a past "cleanup") let iOS drop the
       // session and the clock refroze — the cold-launch bug came back.
+      // BUT: the looper started under the 'playback' category, and a
+      // media element KEEPS the category it started with — which is what
+      // put the audio chip in the Dynamic Island / Now Playing. The
+      // category is re-evaluated when playback starts, so RESTART the
+      // looper here so it re-acquires the session under 'ambient'
+      // (mixable, no media indicator). The refreeze guard below is the
+      // backstop if iOS drops the session during the swap.
+      if (sessionEl) {
+        try {
+          sessionEl.pause(); sessionEl.currentTime = 0;
+          var pr = sessionEl.play();
+          if (pr && pr.catch) pr.catch(function () {});
+          dbg('sessionEl restarted under ambient — island chip released');
+        } catch (e) {}
+      }
       sceneStarted = false;
       tryStart();
       return;
@@ -591,8 +606,25 @@
   // when returning via the app switcher. If the context came back anything
   // other than 'running', don't trust resume() — tear it down and rebuild.
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { dbg('hidden'); return; }
+    if (document.hidden) {
+      dbg('hidden');
+      // LOCK-SCREEN / BACKGROUND SILENCE: pause the silent looper (and the
+      // piped element) whenever the app leaves the foreground — locking the
+      // phone included. A playing media element is what surfaces the audio
+      // chip on the lock screen / Dynamic Island; with everything paused
+      // while hidden, nothing shows there. The session may lapse while
+      // paused, but the resume path below (plus the gesture unlock and
+      // refreeze guard) re-acquires it as soon as the app is back.
+      if (sessionEl) { try { sessionEl.pause(); } catch (e) {} }
+      if (pipedEl)   { try { pipedEl.pause();   } catch (e) {} }
+      return;
+    }
     dbg('visible again: state=' + (ctx && ctx.state));
+    // Re-arm the looper: a previously-allowed element may resume without a
+    // fresh gesture; if iOS blocks it, the next tap's unlock handles it.
+    if (sessionEl) {
+      try { var pv = sessionEl.play(); if (pv && pv.catch) pv.catch(function () {}); } catch (e) {}
+    }
     if (ctx && ctx.state !== 'running') {
       try { ctx.close(); } catch (e) {}
       ctx = null;
