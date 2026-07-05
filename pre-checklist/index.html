@@ -14,6 +14,7 @@ Unauthorized copying, reproduction, or distribution is prohibited.
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="AOG Pre-Install">
 <title>Always On Generators – Pre-Install Checklist</title>
+<script src="../sounds.js" defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
 
 <style>
@@ -664,8 +665,12 @@ function toggleTheme() {
 }
 
 // ===== CLEAR FORM =====
-function clearForm() {
-  if (!confirm('Clear all fields?')) return;
+function clearForm(confirmed) {
+  if (confirmed !== true) {
+    if (window.AOGConfirm) { AOGConfirm('Clear all fields?').then(function(ok){ if (ok) clearForm(true); }); }
+    else if (confirm('Clear all fields?')) clearForm(true);
+    return;
+  }
   document.querySelectorAll('input[type="text"], input[type="date"], textarea').forEach(function(el) { el.value = ''; });
   document.querySelectorAll('input[type="checkbox"]').forEach(function(el) { el.checked = false; });
   try { localStorage.removeItem('aog-autosave'); } catch (e) {}

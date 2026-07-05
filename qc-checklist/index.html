@@ -14,6 +14,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Quality Control Checklist</title>
+<script src="../sounds.js" defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="manifest" href="../manifest.json">
 <script src="../update-banner.js"></script>
@@ -1995,8 +1996,12 @@ document.addEventListener('change', function(e) {
 });
 
 // ── CLEAR ──
-function clearForm() {
-  if (!confirm('Clear all fields?')) return;
+function clearForm(confirmed) {
+  if (confirmed !== true) {
+    if (window.AOGConfirm) { AOGConfirm('Clear all fields?').then(function(ok){ if (ok) clearForm(true); }); }
+    else if (confirm('Clear all fields?')) clearForm(true);
+    return;
+  }
   document.querySelectorAll('input[type="text"],input[type="date"]').forEach(function(el){ el.value=''; });
   document.querySelectorAll('input[type="checkbox"]').forEach(function(el){ el.checked=false; });
   document.querySelectorAll('textarea').forEach(function(el){ el.value=''; });
@@ -3700,6 +3705,7 @@ function createSeasonalCanvas(theme) {
       }
       function explode(p){
         p.phase='burst'; p.flash=1;
+        if (window.AOGSound) AOGSound.play('explosion');
         var type=pick(['sphere','sphere','ring','willow','chrys']);
         var n=type==='ring'?44:(30+(Math.random()*22|0));
         var base=rnd(3.2,5.4);
@@ -3758,7 +3764,7 @@ function createSeasonalCanvas(theme) {
         tick: function(p){
           var kk, src;
           if (p.phase==='wait'){
-            if (--p.delay<=0){ src=newRise(); for (kk in src) p[kk]=src[kk]; }
+            if (--p.delay<=0){ src=newRise(); for (kk in src) p[kk]=src[kk]; if (window.AOGSound) AOGSound.play('launch'); }
             return;
           }
           if (p.phase==='rise'){

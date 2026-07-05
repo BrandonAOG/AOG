@@ -18,6 +18,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="manifest" href="../manifest.json">
 <link rel="apple-touch-icon" href="../icons/icon-192.png">
 <title>Always On Generators – Electrical Installation Forms</title>
+<script src="../sounds.js" defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
 
 <style>
@@ -5916,6 +5917,7 @@ function createSeasonalCanvas(theme) {
       }
       function explode(p){
         p.phase='burst'; p.flash=1;
+        if (window.AOGSound) AOGSound.play('explosion');
         var type=pick(['sphere','sphere','ring','willow','chrys']);
         var n=type==='ring'?44:(30+(Math.random()*22|0));
         var base=rnd(3.2,5.4);
@@ -5974,7 +5976,7 @@ function createSeasonalCanvas(theme) {
         tick: function(p){
           var kk, src;
           if (p.phase==='wait'){
-            if (--p.delay<=0){ src=newRise(); for (kk in src) p[kk]=src[kk]; }
+            if (--p.delay<=0){ src=newRise(); for (kk in src) p[kk]=src[kk]; if (window.AOGSound) AOGSound.play('launch'); }
             return;
           }
           if (p.phase==='rise'){

@@ -22,6 +22,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 
 
 <title>Always On Generators – Gas Installation Checklist</title>
+<script src="../sounds.js" defer></script>
 <style>
 /* ============================================================
    CSS CUSTOM PROPERTIES
@@ -2294,8 +2295,12 @@ window.addEventListener('DOMContentLoaded', () => {
 /* ================================================================
    CLEAR
 ================================================================ */
-function clearForm() {
-  if (!confirm('Clear all fields? This cannot be undone.')) return;
+function clearForm(confirmed) {
+  if (confirmed !== true) {
+    if (window.AOGConfirm) { AOGConfirm('Clear all fields? This cannot be undone.').then(function(ok){ if (ok) clearForm(true); }); }
+    else if (confirm('Clear all fields? This cannot be undone.')) clearForm(true);
+    return;
+  }
   document.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], textarea').forEach(el => el.value = '');
   document.querySelectorAll('input[type="checkbox"]').forEach(el => {
     el.checked = false;
@@ -4315,6 +4320,7 @@ function createSeasonalCanvas(theme) {
       }
       function explode(p){
         p.phase='burst'; p.flash=1;
+        if (window.AOGSound) AOGSound.play('explosion');
         var type=pick(['sphere','sphere','ring','willow','chrys']);
         var n=type==='ring'?44:(30+(Math.random()*22|0));
         var base=rnd(3.2,5.4);
@@ -4373,7 +4379,7 @@ function createSeasonalCanvas(theme) {
         tick: function(p){
           var kk, src;
           if (p.phase==='wait'){
-            if (--p.delay<=0){ src=newRise(); for (kk in src) p[kk]=src[kk]; }
+            if (--p.delay<=0){ src=newRise(); for (kk in src) p[kk]=src[kk]; if (window.AOGSound) AOGSound.play('launch'); }
             return;
           }
           if (p.phase==='rise'){

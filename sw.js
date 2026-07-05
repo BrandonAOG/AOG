@@ -1,6 +1,6 @@
 // ============================================================
 //  Always On Generators – Field Hub
-//  Service Worker  |  sw.js  |  Version: aog-forms-v2.0.0
+//  Service Worker  |  sw.js  |  Version: aog-forms-v3.5.2
 //  Scope: root (../)
 //
 //  ⚠ WHEN YOU UPDATE ANY TOOL:
@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.3.0';
+var CACHE_NAME = 'aog-forms-v2.4.0';
 var DEV_MODE   = false;
 
 // Tracks whether this SW instance has already run a precache repair pass
@@ -29,6 +29,7 @@ var CHANGELOG = [
   '💡 Added a Suggestions button — send ideas for any form, or pitch a brand new one.',
   '📣 You can now add your name and choose to be credited in the update banner when you report a bug or send a suggestion.',
   '🔗 Added a Share App button — sends the hub link straight from your share sheet.',
+  '🎚️ Added Sound to app with settings that has 166 tone styles — up to 25 per sound type, including 13 fireworks and a Random Mix thunder.',
 ];
 // ============================================================
 
@@ -40,6 +41,7 @@ var PRECACHE_URLS = [
   './logo.png',
   './sw.js',
   './update-banner.js',
+  './sounds.js',
   './estimate/',
   './maintenance/',
   './site-visit/',
@@ -277,6 +279,16 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
+  // The sound engine and update banner should be CURRENT after an update, but
+  // must never be SLOW. Timed race: give the network 600ms — if a fresh copy
+  // arrives that fast, use it (instant updates on good connections); otherwise
+  // serve the cached copy immediately (reliable on job-site connections) and
+  // let the network response refresh the cache in the background for next load.
+  if (isSameOrigin && url.pathname.match(/(sounds|update-banner)\.js$/i)) {
+    event.respondWith(networkRace(request, 600));
+    return;
+  }
+
   if (url.pathname.match(/\.(js|css)$/i)) {
     event.respondWith(staleWhileRevalidate(request));
     return;
@@ -294,6 +306,34 @@ self.addEventListener('fetch', function(event) {
 
   event.respondWith(networkFirst(request));
 });
+
+// ============================================================
+//  STRATEGY: Network Race — network wins only if faster than timeoutMs,
+//  otherwise cached copy is served and the network refreshes cache silently
+// ============================================================
+function networkRace(request, timeoutMs) {
+  return caches.open(CACHE_NAME).then(function(cache) {
+    return cache.match(request).then(function(hit) {
+      return hit || caches.match(request);
+    }).then(function(cached) {
+      var networkFetch = fetch(request).then(function(res) {
+        if (res && res.ok) {
+          caches.open(CACHE_NAME).then(function(c) { c.put(request, res.clone()); });
+        }
+        return res;
+      });
+      if (!cached) {
+        // nothing cached (first ever load) — network is the only option
+        return networkFetch;
+      }
+      var timer = new Promise(function(resolve) {
+        setTimeout(function() { resolve(cached); }, timeoutMs);
+      });
+      // Whichever finishes first wins; network errors fall back to cache
+      return Promise.race([networkFetch.catch(function() { return cached; }), timer]);
+    });
+  });
+}
 
 // ============================================================
 //  STRATEGY: Network First
