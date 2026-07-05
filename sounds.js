@@ -21,6 +21,11 @@
   // the whole script (killing window.AOGSound and the sound panel button).
   var amb = { nodes: [], timers: [], scene: null };
 
+  // All audible output routes through the context's master limiter
+  // (built in getCtx) instead of raw destination — prevents the hard
+  // clipping that sounds like crackling static on older iOS.
+  function out(c) { return (c && c._master) || c.destination; }
+
   // ── DEBUG LOG (overlay enabled via localStorage 'aog-sound-debug'='1') ──
   var DBG_ON = true; // force-on for this diagnostic build
   var dbgLog = [];
@@ -78,8 +83,27 @@
     if (!ctx) {
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
-      try { ctx = new AC({ latencyHint: 'interactive', sampleRate: 44100 }); } catch (e) { try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e2) { ctx = new AC(); } }
+      // DO NOT pass sampleRate: iPhone hardware runs at 48000 Hz, and on
+      // older iOS (13–15) forcing 44100 pushes WebKit through a low-quality
+      // software resampler that makes ALL output crackle and distort.
+      // Let the context run at the device's native rate.
+      try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { ctx = new AC(); }
       ctx._bornAt = Date.now();
+      // Master bus: soft limiter so overlapping sounds (booms + clicks +
+      // ambient loops) can't sum past 0dB. Older iOS hard-clips the mix,
+      // which sounds like crunchy static; the limiter prevents that.
+      try {
+        var lim = ctx.createDynamicsCompressor();
+        lim.threshold.value = -10;
+        lim.knee.value = 6;
+        lim.ratio.value = 12;
+        lim.attack.value = 0.002;
+        lim.release.value = 0.15;
+        var mg = ctx.createGain();
+        mg.gain.value = 0.9;
+        lim.connect(mg).connect(ctx.destination);
+        ctx._master = lim;
+      } catch (e) { ctx._master = ctx.destination; }
     }
     // iOS PWAs surface an extra 'interrupted' state after backgrounding —
     // treat anything not running as resumable
@@ -216,7 +240,7 @@
           el2.loop = true;
           var src = c.createMediaElementSource(el2);
           var g = c.createGain(); g.gain.value = 0.0001;
-          src.connect(g); g.connect(c.destination);
+          src.connect(g); g.connect(out(c));
           el2.play().then(function(){ dbg('piped el playing'); }).catch(function(e){ dbg('piped el blocked: ' + e.name); });
           pipedCtx = c; pipedEl = el2;
           dbg('audio-el piped through ctx');
@@ -323,10 +347,10 @@
         try { c.suspend().then(function(){ return c.resume(); }).catch(function(){}); } catch (e) {}
       }
       try {
-        var b = c.createBuffer(1, 1, 22050);
+        var b = c.createBuffer(1, 1, c.sampleRate);
         var src = c.createBufferSource();
         src.buffer = b;
-        src.connect(c.destination);
+        src.connect(out(c));
         src.start(0);
       } catch (e) {}
     }
@@ -372,7 +396,7 @@
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(o.vol || 0.15, t + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g).connect(c.destination);
+    osc.connect(g).connect(out(c));
     osc.start(t); osc.stop(t + dur + 0.05);
   }
 
@@ -396,7 +420,7 @@
     f.frequency.setValueAtTime(o.from || 2000, t);
     if (o.to) f.frequency.exponentialRampToValueAtTime(o.to, t + dur);
     var g = c.createGain(); g.gain.value = o.vol || 0.1;
-    src.connect(f).connect(g).connect(c.destination);
+    src.connect(f).connect(g).connect(out(c));
     src.start(t);
   }
 
@@ -453,7 +477,7 @@
     f.frequency.setValueAtTime(220, t);
     f.frequency.exponentialRampToValueAtTime(70, t + dur);
     var g = c.createGain(); g.gain.value = vol;
-    src.connect(f).connect(g).connect(c.destination);
+    src.connect(f).connect(g).connect(out(c));
     src.start(t);
   }
 
@@ -555,7 +579,7 @@
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(0.014, t + 0.15);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(g).connect(c.destination);
+      o.connect(g).connect(out(c));
       lfo.start(t); o.start(t);
       lfo.stop(t + dur + 0.05); o.stop(t + dur + 0.05);
     }
@@ -954,7 +978,7 @@
       lfo.connect(lg).connect(f.frequency); lfo.start();
       amb.nodes.push(lfo);
     }
-    src.connect(f).connect(g).connect(c.destination);
+    src.connect(f).connect(g).connect(out(c));
     src.start();
     amb.nodes.push(src, g);
   }
@@ -963,7 +987,7 @@
     var c = ctx;
     var o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.value = freq; g.gain.value = vol;
-    o.connect(g).connect(c.destination); o.start();
+    o.connect(g).connect(out(c)); o.start();
     amb.nodes.push(o, g);
   }
 
@@ -1262,7 +1286,7 @@
           o.frequency.value = 880; o.type = 'sine';
           g.gain.setValueAtTime(0.15, c.currentTime);
           g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.4);
-          o.connect(g); g.connect(c.destination);
+          o.connect(g); g.connect(out(c));
           o.start(); o.stop(c.currentTime + 0.4);
           dbg('beep scheduled ok, state=' + c.state);
         } catch (e) { dbg('beep ERROR: ' + e.message); }
@@ -1286,7 +1310,7 @@
         var aS = 'none';
         try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v3.6.5-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v3.6.6-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1307,7 +1331,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.5-dbg',
+    version: 'v3.6.6-dbg',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
