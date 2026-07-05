@@ -25,15 +25,57 @@
   // (built in getCtx) instead of raw destination — prevents the hard
   // clipping that sounds like crackling static on older iOS.
   function out(c) { return (c && c._master) || c.destination; }
+  // Read the master-bus RMS from the analyser tap (0 = graph rendering silence)
+  function rms() {
+    try {
+      if (!ctx || !ctx._an) return -1;
+      ctx._an.getFloatTimeDomainData(ctx._anBuf);
+      var s = 0;
+      for (var i = 0; i < ctx._anBuf.length; i++) s += ctx._anBuf[i] * ctx._anBuf[i];
+      return Math.sqrt(s / ctx._anBuf.length);
+    } catch (e) { return -1; }
+  }
+
+  // ── DEBUG: one-time launch fingerprint + lifecycle event tracing ──
+  if (DBG_ON) {
+    try {
+      var nav0 = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
+      dbg('LAUNCH navType=' + (nav0.type || '?') +
+          ' standalone=' + (navigator.standalone === true) +
+          ' visible=' + document.visibilityState +
+          ' audioSession=' + (navigator.audioSession ? navigator.audioSession.type : 'N/A'), true);
+      dbg('UA ' + navigator.userAgent, true);
+    } catch (e) {}
+    ['visibilitychange', 'freeze', 'resume'].forEach(function (ev) {
+      document.addEventListener(ev, function () { dbg('EVT doc.' + ev); });
+    });
+    ['pageshow', 'pagehide', 'focus', 'blur'].forEach(function (ev) {
+      window.addEventListener(ev, function (e) {
+        dbg('EVT win.' + ev + (e && 'persisted' in e ? ' persisted=' + e.persisted : ''));
+      });
+    });
+  }
 
   // ── DEBUG LOG (overlay enabled via localStorage 'aog-sound-debug'='1') ──
   var DBG_ON = true; // force-on for this diagnostic build
-  var dbgLog = [];
-  function dbg(msg) {
+  var dbgLog = [];   // FULL history (copyable), overlay shows the tail
+  function snap() {  // one-line context snapshot appended to every log entry
+    var s = '';
+    try {
+      s = ' [ctx:' + (ctx ? ctx.state : 'NULL') +
+          (ctx ? ' t=' + ctx.currentTime.toFixed(3) : '') +
+          (ctx && ctx._master !== ctx.destination ? '' : '') +
+          ' vis:' + document.visibilityState.charAt(0) +
+          (navigator.audioSession ? ' aS:' + navigator.audioSession.type : '') +
+          ']';
+    } catch (e) {}
+    return s;
+  }
+  function dbg(msg, noSnap) {
     if (!DBG_ON) return;
-    var t = (performance.now() / 1000).toFixed(1);
-    dbgLog.push(t + 's ' + msg);
-    if (dbgLog.length > 14) dbgLog.shift();
+    var t = (performance.now() / 1000).toFixed(2);
+    dbgLog.push(t + 's ' + msg + (noSnap ? '' : snap()));
+    if (dbgLog.length > 500) dbgLog.shift();
   }
 
   // Per-category sound preferences (controlled by the hub Sound Panel)
@@ -105,6 +147,25 @@
         lim.connect(mg).connect(ctx.destination);
         ctx._master = lim;
       } catch (e) { ctx._master = ctx.destination; }
+      // ── DEBUG instrumentation on every new context ──
+      try {
+        dbg('CTX CREATED sr=' + ctx.sampleRate +
+            ' baseLat=' + (ctx.baseLatency != null ? ctx.baseLatency.toFixed(4) : '?') +
+            ' outLat=' + (ctx.outputLatency != null ? ctx.outputLatency.toFixed(4) : '?') +
+            ' state=' + ctx.state + ' gesture=' + hadGesture);
+        // Analyser tap on the master bus: proves whether the WebAudio graph
+        // is actually RENDERING samples (rms>0) even when the speaker is
+        // silent — separates "graph dead" from "OS session muted".
+        var an = ctx.createAnalyser();
+        an.fftSize = 512;
+        ctx._an = an;
+        ctx._anBuf = new Float32Array(an.fftSize);
+        if (ctx._master !== ctx.destination) ctx._master.connect(an);
+        var myCtx = ctx;
+        ctx.addEventListener && ctx.addEventListener('statechange', function () {
+          dbg('EVT statechange -> ' + myCtx.state + (myCtx === ctx ? '' : ' (old ctx)'));
+        });
+      } catch (e) { dbg('ctx instrument ERR: ' + e.message); }
     }
     // iOS PWAs surface an extra 'interrupted' state after backgrounding —
     // treat anything not running as resumable
@@ -226,6 +287,12 @@
         sessionEl.setAttribute('playsinline', '');
         sessionEl.loop = true;
         sessionEl.volume = 0.01;
+        ['playing', 'pause', 'suspend', 'stalled', 'error', 'ended'].forEach(function (ev) {
+          sessionEl.addEventListener(ev, function () {
+            dbg('EVT sessionEl.' + ev + ' rs=' + sessionEl.readyState +
+                (sessionEl.error ? ' err=' + sessionEl.error.code : ''));
+          });
+        });
       }
       // Second known unfreezer: route the element THROUGH the WebAudio
       // graph. The element's playback drags the context's rendering onto
@@ -285,7 +352,7 @@
     lastLiveT = ctx.currentTime;
   }, 400);
 
-  function gestureUnlock() {
+  function gestureUnlock(evt) {
     // One physical tap fires pointerdown+touchstart+touchend+click. Treat
     // that burst as ONE unlock attempt, or the fail counter hits 2 within a
     // single tap and destroys the context MID-RESUME (resume is async).
@@ -293,6 +360,7 @@
     var now = Date.now();
     if (gestureUnlock._last && now - gestureUnlock._last < 350) return;
     gestureUnlock._last = now;
+    dbg('GESTURE ' + (evt && evt.type ? evt.type : '?') + ' trusted=' + (evt && evt.isTrusted));
     activateSession(); // MUST be first — inside the gesture, activates iOS system audio session
     // If the session just came alive but our context was born BEFORE it
     // (frozen clock), rebuild it now inside this gesture.
@@ -948,6 +1016,13 @@
         try { ctx.resume().then(flushPending).catch(function () {}); } catch (e) {}
       }
       if (mode !== 'vibrate') RAW[k]();
+      if (DBG_ON && mode !== 'vibrate') {
+        var pn = Date.now();
+        if (!S._lastProbe || pn - S._lastProbe > 1000) {
+          S._lastProbe = pn;
+          setTimeout(function () { dbg('post-play(' + k + ') graphRMS=' + rms().toFixed(4)); }, 120);
+        }
+      }
       if (mode !== 'sound') buzz(k);
     };
   });
@@ -1261,38 +1336,134 @@
 
 
 
-  /* ================= DEBUG OVERLAY ================= */
+  /* ================= DEBUG OVERLAY v2 ================= */
+  // Goal: pinpoint WHY cold-launch audio is silent until an app-switcher
+  // round-trip. Key diagnostics:
+  //   graphRMS  — analyser on the master bus. >0 means WebAudio IS rendering
+  //               samples. If graphRMS>0 during a beep but you HEAR nothing,
+  //               the block is the OS audio session, not WebAudio.
+  //   EL BEEP   — audible beep via an HTML <audio> element (a totally
+  //               separate audio path). If EL BEEP is audible while TEST
+  //               BEEP is silent, WebAudio specifically is blocked. If BOTH
+  //               are silent, the whole app audio session is dead.
+  //   COPY LOG  — copies the FULL event history to the clipboard so you can
+  //               paste it back for analysis.
   if (DBG_ON) (function () {
+    // Audible 440Hz 0.35s beep as a WAV data-URI, built at runtime —
+    // played through a plain <audio> element (bypasses WebAudio entirely).
+    function makeBeepWav() {
+      var sr = 8000, dur = 0.35, n = Math.floor(sr * dur);
+      var bytes = new Uint8Array(44 + n);
+      function w32(o, v) { bytes[o]=v&255; bytes[o+1]=(v>>8)&255; bytes[o+2]=(v>>16)&255; bytes[o+3]=(v>>24)&255; }
+      function w16(o, v) { bytes[o]=v&255; bytes[o+1]=(v>>8)&255; }
+      function ws(o, s) { for (var i=0;i<s.length;i++) bytes[o+i]=s.charCodeAt(i); }
+      ws(0,'RIFF'); w32(4,36+n); ws(8,'WAVE'); ws(12,'fmt '); w32(16,16);
+      w16(20,1); w16(22,1); w32(24,sr); w32(28,sr); w16(32,1); w16(34,8);
+      ws(36,'data'); w32(40,n);
+      for (var i=0;i<n;i++) {
+        var env = Math.min(1, i/200) * Math.min(1, (n-i)/400);
+        bytes[44+i] = 128 + Math.round(Math.sin(i*2*Math.PI*440/sr) * 100 * env);
+      }
+      var bin = '';
+      for (var j=0;j<bytes.length;j++) bin += String.fromCharCode(bytes[j]);
+      return 'data:audio/wav;base64,' + btoa(bin);
+    }
+    var beepWav = null;
+
+    function fullReport() {
+      var lines = [];
+      lines.push('=== AOG SOUND DEBUG REPORT ' + new Date().toISOString() + ' ===');
+      lines.push('version: v3.6.8-dbg');
+      try {
+        lines.push('UA: ' + navigator.userAgent);
+        lines.push('standalone: ' + (navigator.standalone === true) +
+                   '  displayMode-standalone: ' + (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
+        lines.push('audioSession: ' + (navigator.audioSession ? navigator.audioSession.type : 'API not available'));
+        lines.push('ctx: ' + (ctx ? (ctx.state + ' t=' + ctx.currentTime.toFixed(3) + ' sr=' + ctx.sampleRate +
+                   ' baseLat=' + ctx.baseLatency + ' outLat=' + ctx.outputLatency +
+                   ' age=' + (ctx._bornAt ? ((Date.now()-ctx._bornAt)/1000).toFixed(1)+'s' : '?')) : 'NULL'));
+        lines.push('graphRMS now: ' + rms().toFixed(5));
+        lines.push('hadGesture: ' + hadGesture + '  ctxTrusted: ' + ctxTrusted +
+                   '  sessionLive: ' + sessionLive + '  sceneStarted: ' + sceneStarted);
+        lines.push('muted: ' + muted + '  mode: ' + mode + '  visibility: ' + document.visibilityState);
+        lines.push('sessionEl: ' + (sessionEl ? ('paused=' + sessionEl.paused + ' t=' + sessionEl.currentTime.toFixed(2) +
+                   ' rs=' + sessionEl.readyState + (sessionEl.error ? ' ERR=' + sessionEl.error.code : '')) : 'null'));
+        lines.push('pipedEl: ' + (pipedEl ? ('paused=' + pipedEl.paused + ' t=' + pipedEl.currentTime.toFixed(2)) : 'null'));
+      } catch (e) { lines.push('report err: ' + e.message); }
+      lines.push('--- event log (' + dbgLog.length + ' entries) ---');
+      return lines.concat(dbgLog).join('\n');
+    }
+
     function build() {
       var d = document.createElement('div');
       d.id = 'aog-snd-dbg';
-      d.style.cssText = 'position:fixed;left:6px;right:6px;bottom:6px;z-index:99999;background:rgba(0,0,0,.88);color:#4ade80;font:10px/1.45 monospace;padding:8px;border-radius:8px;border:1px solid #4ade80;pointer-events:auto;white-space:pre-wrap;word-break:break-all;';
+      d.style.cssText = 'position:fixed;left:6px;right:6px;bottom:6px;z-index:99999;background:rgba(0,0,0,.9);color:#4ade80;font:10px/1.45 monospace;padding:8px;border-radius:8px;border:1px solid #4ade80;pointer-events:auto;white-space:pre-wrap;word-break:break-all;';
       var head = document.createElement('div');
       head.style.cssText = 'color:#fbbf24;margin-bottom:4px;';
       var log = document.createElement('div');
+      log.style.cssText = 'max-height:34vh;overflow-y:auto;-webkit-overflow-scrolling:touch;';
       var row = document.createElement('div');
-      row.style.cssText = 'margin-top:6px;display:flex;gap:6px;';
-      function mkbtn(txt, fn) {
+      row.style.cssText = 'margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;';
+      function mkbtn(txt, fn, color) {
         var b = document.createElement('button');
         b.textContent = txt;
-        b.style.cssText = 'flex:1;padding:6px;font:bold 11px monospace;background:#fbbf24;color:#000;border:none;border-radius:6px;';
+        b.style.cssText = 'flex:1;min-width:70px;padding:7px 2px;font:bold 10px monospace;background:' + (color || '#fbbf24') + ';color:#000;border:none;border-radius:6px;';
         b.addEventListener('click', fn);
         return b;
       }
-      row.appendChild(mkbtn('TEST BEEP', function () {
-        dbg('TEST BEEP tapped');
+      // WebAudio beep — logs whether the graph rendered anything
+      row.appendChild(mkbtn('WA BEEP', function () {
+        dbg('WA BEEP tapped');
         try {
           var c = getCtx();
+          if (!c) { dbg('WA BEEP: no ctx'); return; }
           var o = c.createOscillator(), g = c.createGain();
           o.frequency.value = 880; o.type = 'sine';
           g.gain.setValueAtTime(0.15, c.currentTime);
           g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.4);
           o.connect(g); g.connect(out(c));
           o.start(); o.stop(c.currentTime + 0.4);
-          dbg('beep scheduled ok, state=' + c.state);
-        } catch (e) { dbg('beep ERROR: ' + e.message); }
+          dbg('WA beep scheduled');
+          [80, 200, 350].forEach(function (ms) {
+            setTimeout(function () { dbg('WA beep +' + ms + 'ms graphRMS=' + rms().toFixed(4)); }, ms);
+          });
+        } catch (e) { dbg('WA beep ERROR: ' + e.message); }
       }));
-      row.appendChild(mkbtn('REBUILD CTX', function () {
+      // HTML <audio> element beep — separate audio path from WebAudio
+      row.appendChild(mkbtn('EL BEEP', function () {
+        dbg('EL BEEP tapped');
+        try {
+          if (!beepWav) beepWav = makeBeepWav();
+          var a = new Audio(beepWav);
+          a.setAttribute('playsinline', '');
+          a.volume = 1;
+          var p = a.play();
+          if (p && p.then) {
+            p.then(function () { dbg('EL beep play() RESOLVED'); })
+             .catch(function (e) { dbg('EL beep play() REJECTED: ' + e.name + ' ' + e.message); });
+          }
+          setTimeout(function () { dbg('EL beep +300ms paused=' + a.paused + ' t=' + a.currentTime.toFixed(2)); }, 300);
+        } catch (e) { dbg('EL beep ERROR: ' + e.message); }
+      }));
+      row.appendChild(mkbtn('COPY LOG', function () {
+        var txt = fullReport();
+        function fallback() {
+          var ta = document.createElement('textarea');
+          ta.value = txt;
+          ta.style.cssText = 'position:fixed;top:0;left:0;width:2px;height:2px;opacity:0;';
+          document.body.appendChild(ta);
+          ta.focus(); ta.select();
+          try { document.execCommand('copy'); dbg('log copied (execCommand)'); }
+          catch (e) { dbg('copy FAILED: ' + e.message); }
+          document.body.removeChild(ta);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(txt)
+            .then(function () { dbg('log copied (' + txt.length + ' chars)'); })
+            .catch(fallback);
+        } else fallback();
+      }, '#4ade80'));
+      row.appendChild(mkbtn('REBUILD', function () {
         dbg('manual rebuild');
         try { if (ctx) ctx.close(); } catch (e) {}
         ctx = null; sceneStarted = false; getCtx(); startRetryLoop();
@@ -1300,27 +1471,41 @@
       row.appendChild(mkbtn('OFF', function () {
         localStorage.removeItem('aog-sound-debug');
         d.remove();
-      }));
+      }, '#f87171'));
       d.appendChild(head); d.appendChild(log); d.appendChild(row);
       document.body.appendChild(d);
-      var lastT = -1, frozen = 0;
+
+      var lastT = -1, frozen = 0, peak = 0;
       setInterval(function () {
         var t = ctx ? ctx.currentTime : -1;
         if (ctx && ctx.state === 'running') { frozen = (t === lastT) ? frozen + 1 : 0; }
         lastT = t;
+        var r = rms(); if (r > peak) peak = r;
         var aS = 'none';
         try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v3.6.7-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v3.6.8-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
           (frozen > 1 ? ' *FROZEN*' : ' (ticking)') +
           '  sr:' + (ctx ? ctx.sampleRate : '-') + '\n' +
-          'sessionLive:' + sessionLive + '  scene:' + sceneStarted +
-          '  muted:' + muted + '  mode:' + mode;
-        log.textContent = dbgLog.join('\n');
+          'graphRMS:' + (r < 0 ? '-' : r.toFixed(3)) + ' peak:' + peak.toFixed(3) +
+          '  sessionLive:' + sessionLive + '  muted:' + muted + '  mode:' + mode;
+        var atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
+        log.textContent = dbgLog.slice(-40).join('\n');
+        if (atBottom) log.scrollTop = log.scrollHeight;
       }, 400);
+
+      // Periodic state sampler: dense for the first 20s after launch (the
+      // window where the cold-start bug lives), sparse afterwards.
+      var samples = 0;
+      (function sample() {
+        dbg('SAMPLE ' + (ctx ? ('t=' + ctx.currentTime.toFixed(3) + ' rms=' + rms().toFixed(4) +
+            ' sessionEl=' + (sessionEl ? (sessionEl.paused ? 'paused' : 'playing@' + sessionEl.currentTime.toFixed(1)) : 'null')) : 'ctx NULL'), true);
+        samples++;
+        setTimeout(sample, samples < 20 ? 1000 : 5000);
+      })();
     }
     if (document.body) build();
     else document.addEventListener('DOMContentLoaded', build);
@@ -1332,7 +1517,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.7-dbg',
+    version: 'v3.6.8-dbg',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
