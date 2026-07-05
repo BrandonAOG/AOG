@@ -257,6 +257,12 @@
   }, 400);
 
   function gestureUnlock() {
+    // One physical tap fires pointerdown+touchstart+touchend+click. Treat
+    // that burst as ONE unlock attempt, or the fail counter hits 2 within a
+    // single tap and destroys the context MID-RESUME (resume is async).
+    var now = Date.now();
+    if (gestureUnlock._last && now - gestureUnlock._last < 350) return;
+    gestureUnlock._last = now;
     activateSession(); // MUST be first — inside the gesture, activates iOS system audio session
     // If the session just came alive but our context was born BEFORE it
     // (frozen clock), rebuild it now inside this gesture.
@@ -284,7 +290,8 @@
     var c = getCtx();
     if (c && c.state !== 'running') {
       gestureUnlock._fails = (gestureUnlock._fails || 0) + 1;
-      if (gestureUnlock._fails >= 2) {
+      // never rebuild a context still inside its resume window
+      if (gestureUnlock._fails >= 2 && c._bornAt && now - c._bornAt > 1500) {
         try { c.close(); } catch (e) {}
         ctx = null;
         gestureUnlock._fails = 0;
@@ -1259,7 +1266,7 @@
         if (ctx && ctx.state === 'running') { frozen = (t === lastT) ? frozen + 1 : 0; }
         lastT = t;
         head.textContent =
-          'v3.6.1-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v3.6.2-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  vis:' + document.visibilityState + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1280,7 +1287,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.1-dbg',
+    version: 'v3.6.2-dbg',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
