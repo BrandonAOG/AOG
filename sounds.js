@@ -25,6 +25,16 @@
   // (built in getCtx) instead of raw destination — prevents the hard
   // clipping that sounds like crackling static on older iOS.
   function out(c) { return (c && c._master) || c.destination; }
+
+  // Set the iOS audio session category (no-op elsewhere / if unsupported)
+  function setSession(type) {
+    try {
+      if (navigator.audioSession && navigator.audioSession.type !== type) {
+        navigator.audioSession.type = type;
+        dbg('audioSession.type -> ' + type);
+      }
+    } catch (e) {}
+  }
   // Read the master-bus RMS from the analyser tap (0 = graph rendering silence)
   function rms() {
     try {
@@ -115,12 +125,14 @@
   };
 
   function getCtx() {
-    // iOS 17+ Audio Session API: request the 'ambient' session type
-    // explicitly. 'ambient' RESPECTS the ringer/silent switch (sounds mute
-    // when the phone is switched to silent) and mixes with other audio.
-    // ('playback' would keep the frozen-clock workaround stronger, but it
-    // bypasses the silent switch — not wanted for a UI-sounds app.)
-    try { if (navigator.audioSession && navigator.audioSession.type !== 'ambient') { navigator.audioSession.type = 'ambient'; dbg('audioSession.type -> ambient'); } } catch (e) {}
+    // iOS 17+ Audio Session API — HYBRID strategy (see setSession below):
+    // 'playback' is the only type that reliably ACTIVATES the audio session
+    // on a cold standalone-PWA launch (with 'ambient' the whole session —
+    // WebAudio AND <audio> elements — stays frozen until an app-switcher
+    // round-trip). But 'playback' bypasses the ringer/silent switch. So we
+    // use 'playback' only while kick-starting the session, then flip to
+    // 'ambient' the moment the clock is confirmed ticking.
+    setSession(sessionLive ? 'ambient' : 'playback');
     if (ctx && ctx.state === 'closed') ctx = null; // rebuilt after zombie teardown
     if (!ctx && !hadGesture) { dbg('getCtx: pre-gesture, refusing to create'); return null; }
     if (!ctx) {
@@ -280,7 +292,7 @@
   }
   function activateSession() {
     if (sessionLive) return;
-    try { if (navigator.audioSession && navigator.audioSession.type !== 'ambient') { navigator.audioSession.type = 'ambient'; dbg('audioSession.type -> ambient (gesture)'); } } catch (e) {}
+    setSession(sessionLive ? 'ambient' : 'playback');
     try {
       if (!sessionEl) {
         sessionEl = new Audio(SILENT_WAV);
@@ -329,6 +341,9 @@
     if (ctx.currentTime > 0) {
       sessionLive = true;
       dbg('CLOCK TICKING — audio session confirmed live');
+      // Session is up — hand it back to 'ambient' so the ringer/silent
+      // switch is respected from here on. ('playback' was only the starter.)
+      setSession('ambient');
       stopPipedEl();
       // DO NOT pause sessionEl: the silent looper is what HOLDS the iOS
       // audio session open. Pausing it (a past "cleanup") let iOS drop the
@@ -346,6 +361,7 @@
       if (++stuckTicks >= 3) {
         dbg('clock REFROZE — re-arming session unlock');
         sessionLive = false; pipedCtx = null; stuckTicks = 0;
+        setSession('playback'); // starter category again until it ticks
         if (sessionEl) { try { sessionEl.play().catch(function(){}); } catch (e) {} }
       }
     } else stuckTicks = 0;
@@ -1373,7 +1389,7 @@
     function fullReport() {
       var lines = [];
       lines.push('=== AOG SOUND DEBUG REPORT ' + new Date().toISOString() + ' ===');
-      lines.push('version: v3.6.8-dbg');
+      lines.push('version: v3.6.9-dbg');
       try {
         lines.push('UA: ' + navigator.userAgent);
         lines.push('standalone: ' + (navigator.standalone === true) +
@@ -1484,7 +1500,7 @@
         var aS = 'none';
         try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v3.6.8-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v3.6.9-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1517,7 +1533,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.8-dbg',
+    version: 'v3.6.9-dbg',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
