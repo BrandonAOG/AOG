@@ -384,12 +384,47 @@
     lastLiveT = ctx.currentTime;
   }, 400);
 
+  // Events that actually carry TRANSIENT USER ACTIVATION for touch input.
+  // Per the HTML spec (and WebKit's implementation of it), the down-events
+  // only activate for MICE: mousedown, and pointerdown when pointerType is
+  // 'mouse'. For fingers, activation is granted on the UP side of the tap:
+  // pointerup / touchend / click. touchstart and pointerdown(touch) grant
+  // NOTHING — HTMLMediaElement.play() called from them is rejected with
+  // NotAllowedError on iOS.
+  var ACTIVATION_EVENTS = { touchend: 1, pointerup: 1, click: 1, mousedown: 1, keydown: 1 };
   function gestureUnlock(evt) {
     // One physical tap fires pointerdown+touchstart+touchend+click. Treat
     // that burst as ONE unlock attempt, or the fail counter hits 2 within a
     // single tap and destroys the context MID-RESUME (resume is async).
     hadGesture = true;
     var now = Date.now();
+    var etype = (evt && evt.type) || '';
+    // ── SESSION KICK ON ACTIVATING EVENTS (runs even inside the dedupe) ──
+    // THE COLD-LAUNCH KILLER LIVED HERE: the 350ms dedupe below pins the
+    // full unlock ritual to the FIRST event of every tap burst — always
+    // pointerdown(touch) on iOS — which carries NO user activation. So
+    // sessionEl.play(), the ONE call that can activate the iOS system
+    // audio session from inside the page, was rejected on every tap
+    // forever; the touchend/click of the same tap (which WOULD have been
+    // allowed) hit the dedupe and returned early. Interval-driven retries
+    // have no activation at all. Net effect: nothing in the page could
+    // ever bring the session up, and only an app-switcher round-trip
+    // (which reactivates the session at the OS level) produced sound.
+    // Fix: re-attempt the media-element kick + resume + primer buffer on
+    // the activation-carrying events of the SAME tap, bypassing the dedupe.
+    if (!sessionLive && ACTIVATION_EVENTS[etype]) {
+      dbg('ACTIVATION-EVT ' + etype + ' — session kick inside activation');
+      activateSession(); // safe to re-enter: reuses sessionEl, guards piping
+      var ca = ctx; // created moments ago by this tap's pointerdown pass
+      if (ca) {
+        if (ca.state !== 'running') { try { ca.resume().catch(function () {}); } catch (e) {} }
+        try { // primer buffer, now from a context that HAS activation
+          var ba = ca.createBuffer(1, 1, ca.sampleRate);
+          var sa = ca.createBufferSource();
+          sa.buffer = ba; sa.connect(out(ca)); sa.start(0);
+        } catch (e) {}
+      }
+    }
     if (gestureUnlock._last && now - gestureUnlock._last < 350) return;
     gestureUnlock._last = now;
     dbg('GESTURE ' + (evt && evt.type ? evt.type : '?') + ' trusted=' + (evt && evt.isTrusted));
@@ -459,7 +494,7 @@
     else verifyAlive(); // 'running' can be a lie after iOS suspends the PWA — verify the clock is ticking
     if (ctx && pipedCtx !== ctx) activateSession(); // pipe the CURRENT ctx (it may have just been rebuilt above)
   }
-  ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'].forEach(function (ev) {
+  ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click', 'keydown'].forEach(function (ev) {
     document.addEventListener(ev, gestureUnlock, { passive: true });
   });
 
@@ -1405,7 +1440,7 @@
     function fullReport() {
       var lines = [];
       lines.push('=== AOG SOUND DEBUG REPORT ' + new Date().toISOString() + ' ===');
-      lines.push('version: v3.6.11');
+      lines.push('version: v3.6.12');
       try {
         lines.push('UA: ' + navigator.userAgent);
         lines.push('standalone: ' + (navigator.standalone === true) +
@@ -1516,7 +1551,7 @@
         var aS = 'none';
         try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v3.6.11  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v3.6.12  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1549,7 +1584,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.11',
+    version: 'v3.6.12',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
