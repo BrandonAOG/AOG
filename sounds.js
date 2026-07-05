@@ -78,6 +78,7 @@
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
       try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { ctx = new AC(); }
+      ctx._bornAt = Date.now();
     }
     // iOS PWAs surface an extra 'interrupted' state after backgrounding —
     // treat anything not running as resumable
@@ -99,6 +100,10 @@
       watchdogBusy = false;
       if (!ctx || ctx.state !== 'running') return;
       if (ctx.currentTime === t0) {
+        // GRACE PERIOD: a newborn context legitimately sits at 0.00 while
+        // iOS spins up the session — killing it here strangled every
+        // recovery attempt (watchdog executed each new ctx within 300ms).
+        if (ctx._bornAt && Date.now() - ctx._bornAt < 3000) { dbg('clock 0.00 but ctx young — grace, not killing'); return; }
         // Zombie: clock frozen. Tear down and rebuild from scratch.
         dbg('ZOMBIE detected (clock frozen) - rebuilding');
         try { ctx.close(); } catch (e) {}
@@ -255,7 +260,8 @@
     activateSession(); // MUST be first — inside the gesture, activates iOS system audio session
     // If the session just came alive but our context was born BEFORE it
     // (frozen clock), rebuild it now inside this gesture.
-    if (ctx && ctx.state === 'running' && ctx.currentTime === 0 && gestureUnlock._sawFrozen) {
+    if (ctx && ctx.state === 'running' && ctx.currentTime === 0 && gestureUnlock._sawFrozen &&
+        !(ctx._bornAt && Date.now() - ctx._bornAt < 3000)) {
       dbg('ctx frozen at 0.00 across gestures — rebuilding in gesture');
       try { ctx.close(); } catch (e) {}
       ctx = null; sceneStarted = false;
@@ -285,6 +291,7 @@
         sceneStarted = false;
         dbg('unlock failed x2: rebuilt ctx in gesture');
         c = getCtx(); // fresh context, born inside a user gesture
+        pipedCtx = null; // force activateSession below/next to pipe THIS ctx
       }
     } else {
       gestureUnlock._fails = 0;
@@ -301,6 +308,7 @@
     }
     if (!ctx || ctx.state !== 'running') { dbg('gesture: state=' + (ctx && ctx.state) + ' -> tryStart'); tryStart(); }
     else verifyAlive(); // 'running' can be a lie after iOS suspends the PWA — verify the clock is ticking
+    if (ctx && pipedCtx !== ctx) activateSession(); // pipe the CURRENT ctx (it may have just been rebuilt above)
   }
   ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'].forEach(function (ev) {
     document.addEventListener(ev, gestureUnlock, { passive: true });
@@ -1251,7 +1259,7 @@
         if (ctx && ctx.state === 'running') { frozen = (t === lastT) ? frozen + 1 : 0; }
         lastT = t;
         head.textContent =
-          'v3.6.0-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v3.6.1-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  vis:' + document.visibilityState + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1266,10 +1274,13 @@
     else document.addEventListener('DOMContentLoaded', build);
   })();
 
+  try {
+    dbg('audioSession API: ' + (navigator.audioSession ? ('yes, type=' + navigator.audioSession.type) : 'NOT AVAILABLE'));
+  } catch (e) {}
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.0-dbg',
+    version: 'v3.6.1-dbg',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
