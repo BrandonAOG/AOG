@@ -19,6 +19,21 @@
   // ── DEBUG LOG (overlay enabled via localStorage 'aog-sound-debug'='1') ──
   try { localStorage.removeItem('aog-sound-debug'); } catch (e) {} // debug overlay retired
   function dbg() {} // no-op (was the debug overlay logger)
+  // Cached old pages may still draw the retired 🐞 debug button — hunt it
+  // down and remove it whenever it appears (the sound panel builds lazily,
+  // so a one-time sweep isn't enough).
+  (function scrubDebugUI() {
+    function sweep() {
+      var el = document.getElementById('aog-snd-dbg');
+      if (el) el.remove();
+      var btns = document.querySelectorAll('button');
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].textContent.indexOf('sound debug overlay') !== -1) btns[i].remove();
+      }
+    }
+    if (document.body) { sweep(); setInterval(sweep, 1500); }
+    else document.addEventListener('DOMContentLoaded', function () { sweep(); setInterval(sweep, 1500); });
+  })();
 
   // Per-category sound preferences (controlled by the hub Sound Panel)
   var DEFAULT_PREFS = { taps: true, animations: true, seasonal: true, forms: true, alerts: true };
@@ -162,9 +177,16 @@
   // why that "fixed" it.) We keep doing this on every gesture until we see
   // the clock actually advance.
   var SILENT_WAV = 'data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
-  var sessionEl = null, sessionLive = false, pipedCtx = null;
+  // Only iOS needs any of this — on desktop/Android these workarounds just
+  // burn CPU (looping elements) and can wedge the audio stack.
+  var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var sessionEl = null, sessionLive = false, pipedCtx = null, pipedEl = null;
+  function stopPipedEl() {
+    if (pipedEl) { try { pipedEl.pause(); pipedEl.src = ''; } catch (e) {} pipedEl = null; }
+  }
   function activateSession() {
-    if (sessionLive) return;
+    if (!IS_IOS || sessionLive) return;
     try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') { navigator.audioSession.type = 'playback'; dbg('audioSession.type -> playback (gesture)'); } } catch (e) {}
     try {
       if (!sessionEl) {
@@ -178,6 +200,7 @@
       // the same live session, which can start a frozen clock.
       var c = ctx;
       if (c && pipedCtx !== c) {
+        stopPipedEl(); // release the previous context's looping element
         try {
           // an element can only be attached to ONE context ever, and we
           // rebuild contexts — so each context gets its own fresh element
@@ -188,7 +211,7 @@
           var g = c.createGain(); g.gain.value = 0.0001;
           src.connect(g); g.connect(c.destination);
           el2.play().then(function(){ dbg('piped el playing'); }).catch(function(e){ dbg('piped el blocked: ' + e.name); });
-          pipedCtx = c;
+          pipedCtx = c; pipedEl = el2;
           dbg('audio-el piped through ctx');
         } catch (e2) { dbg('pipe failed: ' + e2.name); }
       }
@@ -203,10 +226,12 @@
   // live and we stop poking it. Also restart ambience since earlier
   // goLive() calls happened on a frozen engine.
   setInterval(function () {
-    if (sessionLive || !ctx || ctx.state !== 'running') return;
+    if (!IS_IOS || sessionLive || !ctx || ctx.state !== 'running') return;
     if (ctx.currentTime > 0) {
       sessionLive = true;
       dbg('CLOCK TICKING — audio session confirmed live');
+      stopPipedEl();
+      if (sessionEl) { try { sessionEl.pause(); } catch (e) {} }
       sceneStarted = false;
       tryStart();
     }
@@ -230,11 +255,13 @@
     // every page load unconditionally discards the load-time context and
     // rebuilds fresh, right here inside the gesture.
     if (!ctxTrusted) {
-      dbg('1st gesture: discarding load-time ctx (state=' + (ctx && ctx.state) + ')');
-      if (ctx) { try { ctx.close(); } catch (e) {} }
-      ctx = null;
-      sceneStarted = false;
       ctxTrusted = true;
+      if (IS_IOS) {
+        dbg('1st gesture: discarding load-time ctx (state=' + (ctx && ctx.state) + ')');
+        if (ctx) { try { ctx.close(); } catch (e) {} }
+        ctx = null;
+        sceneStarted = false;
+      }
     }
     var c = getCtx();
     if (c && c.state !== 'running') {
@@ -1164,7 +1191,7 @@
   /* ================= PUBLIC API ================= */
 
   window.AOGSound = {
-    version: 'v3.5.2',
+    version: 'v3.5.6',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
