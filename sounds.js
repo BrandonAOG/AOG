@@ -132,7 +132,13 @@
     // round-trip). But 'playback' bypasses the ringer/silent switch. So we
     // use 'playback' only while kick-starting the session, then flip to
     // 'ambient' the moment the clock is confirmed ticking.
-    setSession(sessionLive ? 'ambient' : 'playback');
+    // MUSIC-FRIENDLY ESCALATION: default to 'ambient', which MIXES with
+    // whatever the user is already playing (Music, podcasts). 'playback'
+    // is non-mixable — the moment we touch it, iOS PAUSES the user's music
+    // and never resumes it. So 'playback' is now a last resort: only used
+    // (sessionForce=true) after a gesture-driven kick left the clock
+    // frozen, and handed back to 'ambient' the moment the clock ticks.
+    setSession((sessionLive || !sessionForce) ? 'ambient' : 'playback');
     if (ctx && ctx.state === 'closed') ctx = null; // rebuilt after zombie teardown
     if (!ctx && !hadGesture) { dbg('getCtx: pre-gesture, refusing to create'); return null; }
     if (!ctx) {
@@ -142,7 +148,13 @@
       // older iOS (13–15) forcing 44100 pushes WebKit through a low-quality
       // software resampler that makes ALL output crackle and distort.
       // Let the context run at the device's native rate.
-      try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { ctx = new AC(); }
+      // OLD-iOS CRACKLE FIX: 'interactive' requests the smallest render
+      // buffer the hardware offers; older iPhones can't fill it in time
+      // when several sounds overlap, and every underrun is an audible
+      // crackle/pop on the speaker. 'balanced' asks for a larger buffer
+      // (~2x latency, still fine for UI blips) and removes the underruns.
+      var hint = LEGACY_IOS ? 'balanced' : 'interactive';
+      try { ctx = new AC({ latencyHint: hint }); } catch (e) { ctx = new AC(); }
       ctx._bornAt = Date.now();
       // Master bus: soft limiter so overlapping sounds (booms + clicks +
       // ambient loops) can't sum past 0dB. Older iOS hard-clips the mix,
@@ -155,7 +167,9 @@
         lim.attack.value = 0.002;
         lim.release.value = 0.15;
         var mg = ctx.createGain();
-        mg.gain.value = 0.9;
+        // Old iPhone speakers physically distort near full scale even when
+        // the digital signal is clean — leave them more headroom.
+        mg.gain.value = LEGACY_IOS ? 0.7 : 0.9;
         lim.connect(mg).connect(ctx.destination);
         ctx._master = lim;
       } catch (e) { ctx._master = ctx.destination; }
@@ -286,13 +300,23 @@
   // burn CPU (looping elements) and can wedge the audio stack.
   var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // LEGACY iOS (pre-17, feature-detected via the Audio Session API): the
+  // cold-launch dead-session bug does NOT exist there, so the looping
+  // <audio> activator is pure downside — HTMLMediaElement playback on old
+  // iOS claims the audio session and PAUSES the user's Music app, and a
+  // forever-looping element keeps it paused. Legacy unlocks fine with the
+  // in-gesture silent WebAudio buffer alone, which mixes with music.
+  var LEGACY_IOS = IS_IOS && !navigator.audioSession;
+  // 'playback' escalation flag — see getCtx(). false = stay 'ambient'
+  // (mix with the user's music); true = cold-launch kick in progress.
+  var sessionForce = false;
   var sessionEl = null, sessionLive = false, pipedCtx = null, pipedEl = null;
   function stopPipedEl() {
     if (pipedEl) { try { pipedEl.pause(); pipedEl.src = ''; } catch (e) {} pipedEl = null; }
   }
   function activateSession() {
-    if (sessionLive) return;
-    setSession(sessionLive ? 'ambient' : 'playback');
+    if (sessionLive || LEGACY_IOS) return;
+    setSession((sessionLive || !sessionForce) ? 'ambient' : 'playback');
     try {
       if (!sessionEl) {
         sessionEl = new Audio(SILENT_WAV);
@@ -340,6 +364,7 @@
     if (sessionLive || !ctx) return;
     if (ctx.state === 'running' && ctx.currentTime > 0) {
       sessionLive = true;
+      sessionForce = false; // stand down — mix with the user's music again
       dbg('CLOCK TICKING — audio session confirmed live');
       // Session is up — hand it back to 'ambient' so the ringer/silent
       // switch is respected from here on. ('playback' was only the starter.)
@@ -360,6 +385,11 @@
     // ~1.5s. The moment the OS session is ready, the next fresh context
     // ticks within a second instead of after 10+ seconds of lucky taps.
     if (hadGesture && ctx._bornAt && Date.now() - ctx._bornAt > 1500) {
+      // A gesture happened, the polite 'ambient' kick ran, and the clock is
+      // STILL frozen 1.5s later — this is the genuine cold-launch dead
+      // session. NOW escalate to 'playback' (this will pause the user's
+      // music, unavoidable on the buggy builds) until the clock ticks.
+      if (!sessionForce) { sessionForce = true; dbg('escalating to playback category — ambient kick failed'); }
       dbg('recycle: ctx frozen ' + ((Date.now() - ctx._bornAt) / 1000).toFixed(1) + 's, session not live — rebuilding');
       try { ctx.close(); } catch (e) {}
       ctx = null; sceneStarted = false; pipedCtx = null;
@@ -377,6 +407,7 @@
       if (++stuckTicks >= 3) {
         dbg('clock REFROZE — re-arming session unlock');
         sessionLive = false; pipedCtx = null; stuckTicks = 0;
+        sessionForce = true;    // a refreeze IS the buggy case — escalate
         setSession('playback'); // starter category again until it ticks
         if (sessionEl) { try { sessionEl.play().catch(function(){}); } catch (e) {} }
       }
@@ -1440,7 +1471,7 @@
     function fullReport() {
       var lines = [];
       lines.push('=== AOG SOUND DEBUG REPORT ' + new Date().toISOString() + ' ===');
-      lines.push('version: v1.1');
+      lines.push('version: v1.2');
       try {
         lines.push('UA: ' + navigator.userAgent);
         lines.push('standalone: ' + (navigator.standalone === true) +
@@ -1551,7 +1582,7 @@
         var aS = 'none';
         try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v1.1  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v1.2  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1584,7 +1615,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v1.1',
+    version: 'v1.2',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
