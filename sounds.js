@@ -310,6 +310,23 @@
   // 'playback' escalation flag — see getCtx(). false = stay 'ambient'
   // (mix with the user's music); true = cold-launch kick in progress.
   var sessionForce = false;
+  // ── COLD-LAUNCH FIRST-TAP KICK (iOS standalone PWA) ─────────────────
+  // On the buggy iOS builds a cold home-screen launch comes up with a DEAD
+  // system audio session: the polite 'ambient' kick on the first gesture
+  // silently fails, escalation to 'playback' happens 1.5s later, but that
+  // escalated kick only works inside a NEW gesture — so sound (and the
+  // Dynamic Island indicator) only appeared after a SECOND tap or an
+  // app-switcher round-trip. Pre-arm sessionForce on cold standalone
+  // launches so the VERY FIRST activating tap plays the silent looper
+  // under 'playback' — the one category that reliably activates the
+  // session — reproducing the switcher effect on first launch. The
+  // clock-tick watcher above already hands the category back to 'ambient'
+  // (and clears sessionForce) the moment audio is confirmed live, so the
+  // ringer/silent switch is respected after the kick. The interrupted
+  // guard in gestureUnlock stands this down if music owns the session.
+  var IS_STANDALONE = (window.navigator.standalone === true) ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if (IS_IOS && !LEGACY_IOS && IS_STANDALONE) sessionForce = true;
   var sessionEl = null, sessionLive = false, pipedCtx = null, pipedEl = null;
   function stopPipedEl() {
     if (pipedEl) { try { pipedEl.pause(); pipedEl.src = ''; } catch (e) {} pipedEl = null; }
@@ -475,6 +492,7 @@
       // else is playing (frozen/suspended context, not interrupted).
       if (ctx && ctx.state === 'interrupted') {
         dbg('ctx INTERRUPTED (music owns session) — yielding, staying ambient');
+        sessionForce = false; // stand down the cold-launch 'playback' kick — never steal the session
         try { ctx.resume().catch(function () {}); } catch (e) {}
       }
       dbg('ACTIVATION-EVT ' + etype + ' — session kick inside activation');
