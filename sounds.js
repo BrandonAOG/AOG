@@ -314,6 +314,15 @@
   function stopPipedEl() {
     if (pipedEl) { try { pipedEl.pause(); pipedEl.src = ''; } catch (e) {} pipedEl = null; }
   }
+  // The audio session CATEGORY is applied when playback STARTS. If the
+  // silent looper is already playing (or has a pending play) under
+  // 'ambient', flipping audioSession.type to 'playback' does nothing to
+  // it — the element must be stopped and re-played for the escalated
+  // category to actually take the session. Called whenever sessionForce
+  // flips true; the next activateSession()/gesture replays it fresh.
+  function restartSessionEl() {
+    if (sessionEl) { try { sessionEl.pause(); sessionEl.currentTime = 0; } catch (e) {} }
+  }
   function activateSession() {
     if (sessionLive || LEGACY_IOS) return;
     setSession((sessionLive || !sessionForce) ? 'ambient' : 'playback');
@@ -384,12 +393,19 @@
     // recycling: close the frozen context and build a fresh one every
     // ~1.5s. The moment the OS session is ready, the next fresh context
     // ticks within a second instead of after 10+ seconds of lucky taps.
+    // MUSIC-FIRST: an interrupted context means another app is playing.
+    // Don't escalate and don't churn rebuilds (a fresh ctx would just come
+    // up interrupted again) — nudge resume() and wait for iOS to end it.
+    if (ctx.state === 'interrupted') {
+      try { ctx.resume().catch(function () {}); } catch (e) {}
+      return;
+    }
     if (hadGesture && ctx._bornAt && Date.now() - ctx._bornAt > 1500) {
       // A gesture happened, the polite 'ambient' kick ran, and the clock is
       // STILL frozen 1.5s later — this is the genuine cold-launch dead
       // session. NOW escalate to 'playback' (this will pause the user's
       // music, unavoidable on the buggy builds) until the clock ticks.
-      if (!sessionForce) { sessionForce = true; dbg('escalating to playback category — ambient kick failed'); }
+      if (!sessionForce) { sessionForce = true; restartSessionEl(); dbg('escalating to playback category — ambient kick failed'); }
       dbg('recycle: ctx frozen ' + ((Date.now() - ctx._bornAt) / 1000).toFixed(1) + 's, session not live — rebuilding');
       try { ctx.close(); } catch (e) {}
       ctx = null; sceneStarted = false; pipedCtx = null;
@@ -407,8 +423,11 @@
       if (++stuckTicks >= 3) {
         dbg('clock REFROZE — re-arming session unlock');
         sessionLive = false; pipedCtx = null; stuckTicks = 0;
-        sessionForce = true;    // a refreeze IS the buggy case — escalate
-        setSession('playback'); // starter category again until it ticks
+        if (ctx.state !== 'interrupted') { // music-first: never steal the session
+          sessionForce = true;    // a refreeze with nothing playing — escalate
+          restartSessionEl();     // fresh start so 'playback' actually applies
+          setSession('playback'); // starter category again until it ticks
+        }
         if (sessionEl) { try { sessionEl.play().catch(function(){}); } catch (e) {} }
       }
     } else stuckTicks = 0;
@@ -444,6 +463,20 @@
     // Fix: re-attempt the media-element kick + resume + primer buffer on
     // the activation-carrying events of the SAME tap, bypassing the dedupe.
     if (!sessionLive && ACTIVATION_EVENTS[etype]) {
+      // MUSIC-FIRST POLICY: an 'interrupted' context means another app
+      // (Music, podcast) owns the audio session. The ONLY way to force
+      // sound out of an interruption from inside a page is a 'playback'
+      // takeover — which pauses the user's music. Per app policy we now
+      // NEVER do that while music holds the session: stay 'ambient',
+      // keep gently nudging resume()/the silent looper (on healthy
+      // builds ambient mixes in fine), and accept that on the buggy
+      // builds our sounds stay silent until iOS ends the interruption.
+      // The 'playback' escalation below only ever fires when NOTHING
+      // else is playing (frozen/suspended context, not interrupted).
+      if (ctx && ctx.state === 'interrupted') {
+        dbg('ctx INTERRUPTED (music owns session) — yielding, staying ambient');
+        try { ctx.resume().catch(function () {}); } catch (e) {}
+      }
       dbg('ACTIVATION-EVT ' + etype + ' — session kick inside activation');
       activateSession(); // safe to re-enter: reuses sessionEl, guards piping
       var ca = ctx; // created moments ago by this tap's pointerdown pass
@@ -1471,7 +1504,7 @@
     function fullReport() {
       var lines = [];
       lines.push('=== AOG SOUND DEBUG REPORT ' + new Date().toISOString() + ' ===');
-      lines.push('version: v1.2');
+      lines.push('version: v1.4');
       try {
         lines.push('UA: ' + navigator.userAgent);
         lines.push('standalone: ' + (navigator.standalone === true) +
@@ -1582,7 +1615,7 @@
         var aS = 'none';
         try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v1.2  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v1.4  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1615,7 +1648,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v1.2',
+    version: 'v1.4',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
