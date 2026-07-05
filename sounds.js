@@ -1440,7 +1440,7 @@
     function fullReport() {
       var lines = [];
       lines.push('=== AOG SOUND DEBUG REPORT ' + new Date().toISOString() + ' ===');
-      lines.push('version: v3.6.12');
+      lines.push('version: v1.1');
       try {
         lines.push('UA: ' + navigator.userAgent);
         lines.push('standalone: ' + (navigator.standalone === true) +
@@ -1551,7 +1551,7 @@
         var aS = 'none';
         try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v3.6.12  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v1.1  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1584,7 +1584,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.12',
+    version: 'v1.1',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
