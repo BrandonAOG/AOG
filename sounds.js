@@ -22,8 +22,14 @@
   var amb = { nodes: [], timers: [], scene: null };
 
   // ── DEBUG LOG (overlay enabled via localStorage 'aog-sound-debug'='1') ──
-  try { localStorage.removeItem('aog-sound-debug'); } catch (e) {} // debug overlay retired
-  function dbg() {} // no-op logger — call sites kept so behavior is byte-identical
+  var DBG_ON = true; // force-on for this diagnostic build
+  var dbgLog = [];
+  function dbg(msg) {
+    if (!DBG_ON) return;
+    var t = (performance.now() / 1000).toFixed(1);
+    dbgLog.push(t + 's ' + msg);
+    if (dbgLog.length > 14) dbgLog.shift();
+  }
 
   // Per-category sound preferences (controlled by the hub Sound Panel)
   var DEFAULT_PREFS = { taps: true, animations: true, seasonal: true, forms: true, alerts: true };
@@ -68,6 +74,7 @@
     // for the 'playback' session type is the documented fix.
     try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') { navigator.audioSession.type = 'playback'; dbg('audioSession.type -> playback'); } } catch (e) {}
     if (ctx && ctx.state === 'closed') ctx = null; // rebuilt after zombie teardown
+    if (!ctx && !hadGesture) { dbg('getCtx: pre-gesture, refusing to create'); return null; }
     if (!ctx) {
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
@@ -108,9 +115,12 @@
       }
     }, 300);
   }
-  // Create the context IMMEDIATELY at load (starts suspended, resumes on
-  // first gesture) so there is zero setup cost when the first sound fires.
-  getCtx();
+  // DO NOT create a context at load. On some iOS builds, creating an
+  // AudioContext before ANY user touch wedges the app's entire audio system
+  // for its lifetime — every context (even later gesture-born ones) stays
+  // frozen at 0.00 until the app is backgrounded. Creation is deferred to
+  // the first gesture.
+  var hadGesture = false;
   function ready() { return !muted && ctx && ctx.state === 'running'; }
 
   // ── Zero-tap audio strategy ─────────────────────────────────
@@ -254,6 +264,7 @@
     // One physical tap fires pointerdown+touchstart+touchend+click. Treat
     // that burst as ONE unlock attempt, or the fail counter hits 2 within a
     // single tap and destroys the context MID-RESUME (resume is async).
+    hadGesture = true;
     var now = Date.now();
     if (gestureUnlock._last && now - gestureUnlock._last < 350) return;
     gestureUnlock._last = now;
@@ -275,9 +286,8 @@
     // every page load unconditionally discards the load-time context and
     // rebuilds fresh, right here inside the gesture.
     if (!ctxTrusted) {
-      dbg('1st gesture: discarding load-time ctx (state=' + (ctx && ctx.state) + ')');
-      if (ctx) { try { ctx.close(); } catch (e) {} }
-      ctx = null;
+      dbg('1st gesture: creating FIRST ctx now (none existed at load)');
+      if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; }
       sceneStarted = false;
       ctxTrusted = true;
     }
@@ -299,6 +309,12 @@
     }
     if (c) {
       if (c.state !== 'running') { try { c.resume(); } catch (e) {} }
+      else if (c.currentTime === 0 && c._bornAt && now - c._bornAt > 1200) {
+        // running-but-frozen: plain resume() is a no-op on a wedged state
+        // machine — a full suspend->resume cycle can unstick it
+        dbg('frozen while running: suspend->resume cycle');
+        try { c.suspend().then(function(){ return c.resume(); }).catch(function(){}); } catch (e) {}
+      }
       try {
         var b = c.createBuffer(1, 1, 22050);
         var src = c.createBufferSource();
@@ -1212,13 +1228,77 @@
   /* ================= PUBLIC API ================= */
 
 
+
+  /* ================= DEBUG OVERLAY ================= */
+  if (DBG_ON) (function () {
+    function build() {
+      var d = document.createElement('div');
+      d.id = 'aog-snd-dbg';
+      d.style.cssText = 'position:fixed;left:6px;right:6px;bottom:6px;z-index:99999;background:rgba(0,0,0,.88);color:#4ade80;font:10px/1.45 monospace;padding:8px;border-radius:8px;border:1px solid #4ade80;pointer-events:auto;white-space:pre-wrap;word-break:break-all;';
+      var head = document.createElement('div');
+      head.style.cssText = 'color:#fbbf24;margin-bottom:4px;';
+      var log = document.createElement('div');
+      var row = document.createElement('div');
+      row.style.cssText = 'margin-top:6px;display:flex;gap:6px;';
+      function mkbtn(txt, fn) {
+        var b = document.createElement('button');
+        b.textContent = txt;
+        b.style.cssText = 'flex:1;padding:6px;font:bold 11px monospace;background:#fbbf24;color:#000;border:none;border-radius:6px;';
+        b.addEventListener('click', fn);
+        return b;
+      }
+      row.appendChild(mkbtn('TEST BEEP', function () {
+        dbg('TEST BEEP tapped');
+        try {
+          var c = getCtx();
+          var o = c.createOscillator(), g = c.createGain();
+          o.frequency.value = 880; o.type = 'sine';
+          g.gain.setValueAtTime(0.15, c.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.4);
+          o.connect(g); g.connect(c.destination);
+          o.start(); o.stop(c.currentTime + 0.4);
+          dbg('beep scheduled ok, state=' + c.state);
+        } catch (e) { dbg('beep ERROR: ' + e.message); }
+      }));
+      row.appendChild(mkbtn('REBUILD CTX', function () {
+        dbg('manual rebuild');
+        try { if (ctx) ctx.close(); } catch (e) {}
+        ctx = null; sceneStarted = false; getCtx(); startRetryLoop();
+      }));
+      row.appendChild(mkbtn('OFF', function () {
+        localStorage.removeItem('aog-sound-debug');
+        d.remove();
+      }));
+      d.appendChild(head); d.appendChild(log); d.appendChild(row);
+      document.body.appendChild(d);
+      var lastT = -1, frozen = 0;
+      setInterval(function () {
+        var t = ctx ? ctx.currentTime : -1;
+        if (ctx && ctx.state === 'running') { frozen = (t === lastT) ? frozen + 1 : 0; }
+        lastT = t;
+        head.textContent =
+          'v3.6.4-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          '  gesture:' + hadGesture + '\n' +
+          'ctx:' + (ctx ? ctx.state : 'NULL') +
+          '  time:' + (ctx ? t.toFixed(2) : '-') +
+          (frozen > 1 ? ' *FROZEN*' : ' (ticking)') +
+          '  sr:' + (ctx ? ctx.sampleRate : '-') + '\n' +
+          'sessionLive:' + sessionLive + '  scene:' + sceneStarted +
+          '  muted:' + muted + '  mode:' + mode;
+        log.textContent = dbgLog.join('\n');
+      }, 400);
+    }
+    if (document.body) build();
+    else document.addEventListener('DOMContentLoaded', build);
+  })();
+
   try {
     dbg('audioSession API: ' + (navigator.audioSession ? ('yes, type=' + navigator.audioSession.type) : 'NOT AVAILABLE'));
   } catch (e) {}
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.3',
+    version: 'v3.6.4-dbg',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
