@@ -78,7 +78,7 @@
     if (!ctx) {
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
-      try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { ctx = new AC(); }
+      try { ctx = new AC({ latencyHint: 'interactive', sampleRate: 44100 }); } catch (e) { try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e2) { ctx = new AC(); } }
       ctx._bornAt = Date.now();
     }
     // iOS PWAs surface an extra 'interrupted' state after backgrounding —
@@ -308,7 +308,14 @@
       gestureUnlock._fails = 0;
     }
     if (c) {
-      if (c.state !== 'running') { try { c.resume(); } catch (e) {} }
+      if (c.state !== 'running') {
+        try {
+          var rid = (gestureUnlock._rid = (gestureUnlock._rid || 0) + 1);
+          dbg('resume#' + rid + ' requested');
+          c.resume().then(function () { dbg('resume#' + rid + ' RESOLVED, state=' + c.state); })
+                    .catch(function (e) { dbg('resume#' + rid + ' REJECTED: ' + (e && e.name)); });
+        } catch (e) { dbg('resume threw: ' + e.message); }
+      }
       else if (c.currentTime === 0 && c._bornAt && now - c._bornAt > 1200) {
         // running-but-frozen: plain resume() is a no-op on a wedged state
         // machine — a full suspend->resume cycle can unstick it
@@ -1276,9 +1283,11 @@
         var t = ctx ? ctx.currentTime : -1;
         if (ctx && ctx.state === 'running') { frozen = (t === lastT) ? frozen + 1 : 0; }
         lastT = t;
+        var aS = 'none';
+        try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v3.6.4-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
-          '  gesture:' + hadGesture + '\n' +
+          'v3.6.5-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
           (frozen > 1 ? ' *FROZEN*' : ' (ticking)') +
@@ -1298,7 +1307,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.4-dbg',
+    version: 'v3.6.5-dbg',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
