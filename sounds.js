@@ -73,11 +73,12 @@
   };
 
   function getCtx() {
-    // iOS 17+ Audio Session API: in home-screen (standalone) web apps, iOS
-    // defaults web audio to an 'ambient'-style session where AudioContext
-    // reports 'running' but its clock stays frozen at 0.00 forever. Asking
-    // for the 'playback' session type is the documented fix.
-    try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') { navigator.audioSession.type = 'playback'; dbg('audioSession.type -> playback'); } } catch (e) {}
+    // iOS 17+ Audio Session API: request the 'ambient' session type
+    // explicitly. 'ambient' RESPECTS the ringer/silent switch (sounds mute
+    // when the phone is switched to silent) and mixes with other audio.
+    // ('playback' would keep the frozen-clock workaround stronger, but it
+    // bypasses the silent switch — not wanted for a UI-sounds app.)
+    try { if (navigator.audioSession && navigator.audioSession.type !== 'ambient') { navigator.audioSession.type = 'ambient'; dbg('audioSession.type -> ambient'); } } catch (e) {}
     if (ctx && ctx.state === 'closed') ctx = null; // rebuilt after zombie teardown
     if (!ctx && !hadGesture) { dbg('getCtx: pre-gesture, refusing to create'); return null; }
     if (!ctx) {
@@ -218,7 +219,7 @@
   }
   function activateSession() {
     if (sessionLive) return;
-    try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') { navigator.audioSession.type = 'playback'; dbg('audioSession.type -> playback (gesture)'); } } catch (e) {}
+    try { if (navigator.audioSession && navigator.audioSession.type !== 'ambient') { navigator.audioSession.type = 'ambient'; dbg('audioSession.type -> ambient (gesture)'); } } catch (e) {}
     try {
       if (!sessionEl) {
         sessionEl = new Audio(SILENT_WAV);
@@ -1310,7 +1311,7 @@
         var aS = 'none';
         try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v3.6.6-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v3.6.7-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1331,7 +1332,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.6-dbg',
+    version: 'v3.6.7-dbg',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
