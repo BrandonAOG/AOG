@@ -67,7 +67,7 @@
   }
 
   // ── DEBUG LOG (overlay enabled via localStorage 'aog-sound-debug'='1') ──
-  var DBG_ON = true; // force-on for this diagnostic build
+  var DBG_ON = localStorage.getItem('aog-sound-debug') === '1'; // overlay off by default
   var dbgLog = [];   // FULL history (copyable), overlay shows the tail
   function snap() {  // one-line context snapshot appended to every log entry
     var s = '';
@@ -1405,7 +1405,7 @@
     function fullReport() {
       var lines = [];
       lines.push('=== AOG SOUND DEBUG REPORT ' + new Date().toISOString() + ' ===');
-      lines.push('version: v3.6.10-dbg');
+      lines.push('version: v3.6.11');
       try {
         lines.push('UA: ' + navigator.userAgent);
         lines.push('standalone: ' + (navigator.standalone === true) +
@@ -1516,7 +1516,7 @@
         var aS = 'none';
         try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v3.6.10-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v3.6.11  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1549,7 +1549,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.10-dbg',
+    version: 'v3.6.11',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
