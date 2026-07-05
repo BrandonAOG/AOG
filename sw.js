@@ -1,6 +1,6 @@
 // ============================================================
 //  Always On Generators – Field Hub
-//  Service Worker  |  sw.js  |  Version: aog-forms-v3.6.5
+//  Service Worker  |  sw.js  |  Version: aog-forms-v3.6.10
 //  Scope: root (../)
 //
 //  ⚠ WHEN YOU UPDATE ANY TOOL:
@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v3.6.5';
+var CACHE_NAME = 'aog-forms-v3.6.10';
 var DEV_MODE   = false;
 
 // Tracks whether this SW instance has already run a precache repair pass
@@ -23,8 +23,9 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '🎚️ Sound Settings now has 166 hand-picked tone styles — up to 25 per sound type, including 13 fireworks and a Random Mix thunder.',
-  '🔊 Every style was auditioned and chosen by Brandon. Tap any pill in Sound Settings to preview and switch.',
+  '🔊 Fixed crackly/distorted audio on older iPhones (native sample rate + master limiter).',
+  '🔇 Sounds now respect the ringer/silent switch.',
+  '🚀 Fix for silent sound on first app launch (audio session starter).',
 ];
 // ============================================================
 

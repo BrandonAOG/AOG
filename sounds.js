@@ -337,8 +337,8 @@
   // live and we stop poking it. Also restart ambience since earlier
   // goLive() calls happened on a frozen engine.
   setInterval(function () {
-    if (sessionLive || !ctx || ctx.state !== 'running') return;
-    if (ctx.currentTime > 0) {
+    if (sessionLive || !ctx) return;
+    if (ctx.state === 'running' && ctx.currentTime > 0) {
       sessionLive = true;
       dbg('CLOCK TICKING — audio session confirmed live');
       // Session is up — hand it back to 'ambient' so the ringer/silent
@@ -350,6 +350,22 @@
       // session and the clock refroze — the cold-launch bug came back.
       sceneStarted = false;
       tryStart();
+      return;
+    }
+    // iOS 18 finding (from device logs): a context created BEFORE the OS
+    // audio session is ready NEVER starts ticking — no resume/suspend
+    // cycle revives it. The only cure is a context created AFTER the
+    // session comes up. So while the session isn't confirmed live, keep
+    // recycling: close the frozen context and build a fresh one every
+    // ~1.5s. The moment the OS session is ready, the next fresh context
+    // ticks within a second instead of after 10+ seconds of lucky taps.
+    if (hadGesture && ctx._bornAt && Date.now() - ctx._bornAt > 1500) {
+      dbg('recycle: ctx frozen ' + ((Date.now() - ctx._bornAt) / 1000).toFixed(1) + 's, session not live — rebuilding');
+      try { ctx.close(); } catch (e) {}
+      ctx = null; sceneStarted = false; pipedCtx = null;
+      var c = getCtx(); // fresh context; getCtx() resumes non-running states
+      if (c && c.state !== 'running') { try { c.resume().catch(function () {}); } catch (e) {} }
+      activateSession(); // re-pipe the looper element through the new ctx
     }
   }, 250);
   // RE-FREEZE GUARD (iOS): if the clock ever stops advancing again while
@@ -1389,7 +1405,7 @@
     function fullReport() {
       var lines = [];
       lines.push('=== AOG SOUND DEBUG REPORT ' + new Date().toISOString() + ' ===');
-      lines.push('version: v3.6.9-dbg');
+      lines.push('version: v3.6.10-dbg');
       try {
         lines.push('UA: ' + navigator.userAgent);
         lines.push('standalone: ' + (navigator.standalone === true) +
@@ -1500,7 +1516,7 @@
         var aS = 'none';
         try { if (navigator.audioSession) aS = navigator.audioSession.type; } catch (e) {}
         head.textContent =
-          'v3.6.9-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
+          'v3.6.10-dbg  standalone:' + (navigator.standalone === true ? 'YES' : 'no') +
           '  gesture:' + hadGesture + '  aS:' + aS + '\n' +
           'ctx:' + (ctx ? ctx.state : 'NULL') +
           '  time:' + (ctx ? t.toFixed(2) : '-') +
@@ -1533,7 +1549,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v3.6.9-dbg',
+    version: 'v3.6.10-dbg',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
