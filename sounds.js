@@ -15,10 +15,15 @@
 
   var ctx = null;
   var muted = localStorage.getItem('aog-sound-muted') === '1';
+  // Ambient state must exist BEFORE the startup retry loop runs: on desktop
+  // revisits the browser grants audio instantly, so goLive() -> applyScene()
+  // -> stopAmbient() fires synchronously at load. Defining amb later crashed
+  // the whole script (killing window.AOGSound and the sound panel button).
+  var amb = { nodes: [], timers: [], scene: null };
 
   // ── DEBUG LOG (overlay enabled via localStorage 'aog-sound-debug'='1') ──
   try { localStorage.removeItem('aog-sound-debug'); } catch (e) {} // debug overlay retired
-  function dbg() {} // no-op (was the debug overlay logger)
+  function dbg() {} // no-op logger — call sites kept so behavior is byte-identical
 
   // Per-category sound preferences (controlled by the hub Sound Panel)
   var DEFAULT_PREFS = { taps: true, animations: true, seasonal: true, forms: true, alerts: true };
@@ -67,6 +72,7 @@
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
       try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { ctx = new AC(); }
+      ctx._bornAt = Date.now();
     }
     // iOS PWAs surface an extra 'interrupted' state after backgrounding —
     // treat anything not running as resumable
@@ -88,6 +94,10 @@
       watchdogBusy = false;
       if (!ctx || ctx.state !== 'running') return;
       if (ctx.currentTime === t0) {
+        // GRACE PERIOD: a newborn context legitimately sits at 0.00 while
+        // iOS spins up the session — killing it here strangled every
+        // recovery attempt (watchdog executed each new ctx within 300ms).
+        if (ctx._bornAt && Date.now() - ctx._bornAt < 3000) { dbg('clock 0.00 but ctx young — grace, not killing'); return; }
         // Zombie: clock frozen. Tear down and rebuild from scratch.
         dbg('ZOMBIE detected (clock frozen) - rebuilding');
         try { ctx.close(); } catch (e) {}
@@ -142,7 +152,9 @@
       tryStart();
     }, 500);
   }
-  startRetryLoop(); // attempt zero-tap start right now
+  // NOTE: the initial startRetryLoop() call happens at the BOTTOM of this
+  // file (just before the public API) — running it here crashed on desktop
+  // because goLive -> applyScene touches SCENES/SEASONS/amb defined below.
 
   // PERSISTENT gesture rescue: any tap/keypress revives a suspended context.
   // (Not once-only — after returning from the background the context is
@@ -162,7 +174,14 @@
   // why that "fixed" it.) We keep doing this on every gesture until we see
   // the clock actually advance.
   var SILENT_WAV = 'data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
-  var sessionEl = null, sessionLive = false, pipedCtx = null;
+  // Only iOS needs any of this — on desktop/Android these workarounds just
+  // burn CPU (looping elements) and can wedge the audio stack.
+  var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var sessionEl = null, sessionLive = false, pipedCtx = null, pipedEl = null;
+  function stopPipedEl() {
+    if (pipedEl) { try { pipedEl.pause(); pipedEl.src = ''; } catch (e) {} pipedEl = null; }
+  }
   function activateSession() {
     if (sessionLive) return;
     try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') { navigator.audioSession.type = 'playback'; dbg('audioSession.type -> playback (gesture)'); } } catch (e) {}
@@ -178,6 +197,7 @@
       // the same live session, which can start a frozen clock.
       var c = ctx;
       if (c && pipedCtx !== c) {
+        stopPipedEl(); // release the previous context's looping element
         try {
           // an element can only be attached to ONE context ever, and we
           // rebuild contexts — so each context gets its own fresh element
@@ -188,7 +208,7 @@
           var g = c.createGain(); g.gain.value = 0.0001;
           src.connect(g); g.connect(c.destination);
           el2.play().then(function(){ dbg('piped el playing'); }).catch(function(e){ dbg('piped el blocked: ' + e.name); });
-          pipedCtx = c;
+          pipedCtx = c; pipedEl = el2;
           dbg('audio-el piped through ctx');
         } catch (e2) { dbg('pipe failed: ' + e2.name); }
       }
@@ -207,16 +227,41 @@
     if (ctx.currentTime > 0) {
       sessionLive = true;
       dbg('CLOCK TICKING — audio session confirmed live');
+      stopPipedEl();
+      // DO NOT pause sessionEl: the silent looper is what HOLDS the iOS
+      // audio session open. Pausing it (a past "cleanup") let iOS drop the
+      // session and the clock refroze — the cold-launch bug came back.
       sceneStarted = false;
       tryStart();
     }
   }, 250);
+  // RE-FREEZE GUARD (iOS): if the clock ever stops advancing again while
+  // 'running', re-arm the unlock so the next tap does the full activation.
+  var lastLiveT = 0, stuckTicks = 0;
+  setInterval(function () {
+    if (!sessionLive || !ctx || ctx.state !== 'running') { stuckTicks = 0; return; }
+    if (ctx.currentTime === lastLiveT) {
+      if (++stuckTicks >= 3) {
+        dbg('clock REFROZE — re-arming session unlock');
+        sessionLive = false; pipedCtx = null; stuckTicks = 0;
+        if (sessionEl) { try { sessionEl.play().catch(function(){}); } catch (e) {} }
+      }
+    } else stuckTicks = 0;
+    lastLiveT = ctx.currentTime;
+  }, 400);
 
   function gestureUnlock() {
+    // One physical tap fires pointerdown+touchstart+touchend+click. Treat
+    // that burst as ONE unlock attempt, or the fail counter hits 2 within a
+    // single tap and destroys the context MID-RESUME (resume is async).
+    var now = Date.now();
+    if (gestureUnlock._last && now - gestureUnlock._last < 350) return;
+    gestureUnlock._last = now;
     activateSession(); // MUST be first — inside the gesture, activates iOS system audio session
     // If the session just came alive but our context was born BEFORE it
     // (frozen clock), rebuild it now inside this gesture.
-    if (ctx && ctx.state === 'running' && ctx.currentTime === 0 && gestureUnlock._sawFrozen) {
+    if (ctx && ctx.state === 'running' && ctx.currentTime === 0 && gestureUnlock._sawFrozen &&
+        !(ctx._bornAt && Date.now() - ctx._bornAt < 3000)) {
       dbg('ctx frozen at 0.00 across gestures — rebuilding in gesture');
       try { ctx.close(); } catch (e) {}
       ctx = null; sceneStarted = false;
@@ -239,13 +284,15 @@
     var c = getCtx();
     if (c && c.state !== 'running') {
       gestureUnlock._fails = (gestureUnlock._fails || 0) + 1;
-      if (gestureUnlock._fails >= 2) {
+      // never rebuild a context still inside its resume window
+      if (gestureUnlock._fails >= 2 && c._bornAt && now - c._bornAt > 1500) {
         try { c.close(); } catch (e) {}
         ctx = null;
         gestureUnlock._fails = 0;
         sceneStarted = false;
         dbg('unlock failed x2: rebuilt ctx in gesture');
         c = getCtx(); // fresh context, born inside a user gesture
+        pipedCtx = null; // force activateSession below/next to pipe THIS ctx
       }
     } else {
       gestureUnlock._fails = 0;
@@ -262,6 +309,7 @@
     }
     if (!ctx || ctx.state !== 'running') { dbg('gesture: state=' + (ctx && ctx.state) + ' -> tryStart'); tryStart(); }
     else verifyAlive(); // 'running' can be a lie after iOS suspends the PWA — verify the clock is ticking
+    if (ctx && pipedCtx !== ctx) activateSession(); // pipe the CURRENT ctx (it may have just been rebuilt above)
   }
   ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'].forEach(function (ev) {
     document.addEventListener(ev, gestureUnlock, { passive: true });
@@ -859,7 +907,7 @@
   /* ================= AMBIENT LOOPS ================= */
   // Continuous quiet beds: rain, wind, hum (60Hz electrical), engine, drone
 
-  var amb = { nodes: [], timers: [], scene: null };
+  // (amb is declared at the top of the file — see note there)
 
   function stopAmbient() {
     amb.nodes.forEach(function (n) { try { n.stop ? n.stop() : n.disconnect(); } catch (e) {} });
@@ -1163,8 +1211,14 @@
 
   /* ================= PUBLIC API ================= */
 
+
+  try {
+    dbg('audioSession API: ' + (navigator.audioSession ? ('yes, type=' + navigator.audioSession.type) : 'NOT AVAILABLE'));
+  } catch (e) {}
+  startRetryLoop(); // zero-tap start attempt — everything above is now defined
+
   window.AOGSound = {
-    version: 'v3.5.2',
+    version: 'v3.6.3',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
