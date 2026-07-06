@@ -1284,7 +1284,7 @@
   }
 
   var LOOPS = {
-    rain:   function () { noiseLoopNode('bandpass', 3800, 0.4, 0.05); noiseLoopNode('lowpass', 500, 0.5, 0.028); },
+    rain:   function () { noiseLoopNode('bandpass', 3800, 0.4, 0.05); noiseLoopNode('lowpass', 500, 0.5, 0.020); },
     wind:   function () { noiseLoopNode('bandpass', 320, 0.7, 0.08, true); noiseLoopNode('bandpass', 900, 0.8, 0.02, true); },
     hum:    function () { // weighted toward harmonics — 60Hz alone is inaudible on phone/laptop speakers
               oscLoopNode('sine', 60, 0.02); oscLoopNode('sine', 120, 0.022);
