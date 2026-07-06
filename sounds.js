@@ -1,5 +1,5 @@
 /* ============================================================
-   AOG Sound Engine v1.0.4 — drop-in UI + ambient sounds (no files)
+   AOG Sound Engine v1.0.5 — drop-in UI + ambient sounds (no files)
    <script src="./sounds.js"></script>  (../sounds.js from sub-pages)
 
    - Synthesized with Web Audio API → 100% offline in the PWA
@@ -1574,8 +1574,12 @@
   } catch (e) {}
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
+  // Scene queued by the hub's inline theme script (which runs before this
+  // deferred file): pick it up now, otherwise ambient never starts at load.
+  if (window.__aogPendingScene) { amb.scene = window.__aogPendingScene; window.__aogPendingScene = null; }
+
   window.AOGSound = {
-    version: 'v1.0.4',
+    version: 'v1.0.5',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
