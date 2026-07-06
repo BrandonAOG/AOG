@@ -124,6 +124,8 @@
         mg.gain.value = LEGACY_IOS ? 0.7 : 0.9;
         lim.connect(mg).connect(ctx.destination);
         ctx._master = lim;
+        ctx._masterGain = mg; // kept so the hide/close path can duck the bus
+        ctx._masterLevel = mg.gain.value; // restore target on resume
       } catch (e) { ctx._master = ctx.destination; }
     }
     // iOS PWAs surface an extra 'interrupted' state after backgrounding —
@@ -572,12 +574,28 @@
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
       
+      // CLICK/STUTTER FIX: duck the master bus and fade ambience FIRST,
+      // while the context is still rendering. Previously we suspended the
+      // context here and stopAmbient()'s fade ran on a frozen graph — the
+      // looping noise beds were then chopped mid-waveform, producing the
+      // clipping/stuttering pop heard when closing/backgrounding the app.
+      try {
+        if (ctx && ctx._masterGain && ctx.state === 'running') {
+          ctx._masterGain.gain.setTargetAtTime(0, ctx.currentTime, 0.01);
+        }
+      } catch (e) {}
+      stopAmbient(); // fades sources while audio is still live
+
       // NON-iOS BATTERY: suspend the context while hidden — safe on
       // Android/desktop (resume() is reliable there) and stops all audio
       // rendering. NOT done on iOS: rebuild-on-return handles it and
       // suspend/resume cycles are what trigger the frozen-clock bug.
+      // Deferred ~80ms so the duck/fade above gets rendered first.
       if (!IS_IOS && ctx && ctx.state === 'running') {
-        try { ctx.suspend().catch(function(){}); } catch (e) {}
+        setTimeout(function () {
+          if (!document.hidden) return; // came back before we suspended
+          try { if (ctx) ctx.suspend().catch(function(){}); } catch (e) {}
+        }, 80);
       }
       // LOCK-SCREEN / BACKGROUND SILENCE: pause the silent looper (and the
       // piped element) whenever the app leaves the foreground — locking the
@@ -594,6 +612,13 @@
     if (!IS_IOS && ctx && ctx.state === 'suspended') {
       try { ctx.resume().catch(function(){}); } catch (e) {}
     }
+    // Un-duck the master bus (it was faded to 0 on hide)
+    try {
+      if (ctx && ctx._masterGain) {
+        var lvl = (ctx._masterLevel != null) ? ctx._masterLevel : 0.9;
+        ctx._masterGain.gain.setTargetAtTime(lvl, ctx.currentTime, 0.02);
+      }
+    } catch (e) {}
     // Re-arm the looper: a previously-allowed element may resume without a
     // fresh gesture; if iOS blocks it, the next tap's unlock handles it.
     if (sessionEl) {
@@ -1400,10 +1425,11 @@
   if (document.body) watchBodyClass();
   else document.addEventListener('DOMContentLoaded', watchBodyClass);
 
-  // Pause ambience in background tabs
+  // Restart ambience on return. (Stopping on hide is handled by the main
+  // visibilitychange handler above, which fades BEFORE suspending — calling
+  // stopAmbient here as well ran after the context froze and caused pops.)
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) stopAmbient();
-    else { sceneStarted = false; startRetryLoop(); }
+    if (!document.hidden) { sceneStarted = false; startRetryLoop(); }
   });
 
   /* ================= AUTO EVENT HOOKS ================= */
@@ -1485,6 +1511,12 @@
     lastInvalid = now;
     S.error();
   }, true);
+
+  // TRUE CLOSE (swipe-away / navigation): no time for automation — zero the
+  // master bus instantly so the OS session teardown doesn't clip mid-wave.
+  window.addEventListener('pagehide', function () {
+    try { if (ctx && ctx._masterGain) ctx._masterGain.gain.value = 0; } catch (e) {}
+  });
 
   // Connectivity
   window.addEventListener('online',  function () { S.online();  });
