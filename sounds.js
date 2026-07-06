@@ -989,16 +989,16 @@
       popcorn: function(){ for(var i=0;i<9;i++){ noiseBurst({dur:.03,vol:.12,filter:'bandpass',from:900+Math.random()*800,q:1.5,curve:2,delay:i*.09+Math.random()*.04}); } }
     },
     thunder: {
-      boomer: function(){ tone({type:'sine',from:80,to:22,dur:1.2,vol:.2}); noiseBurst({dur:1.4,vol:.09,from:350,to:45,curve:1.6,delay:.02}); },
-      rumble: function(){ thunder(); },
-      roll: function(){ thunder(0.07); setTimeout(function(){ thunder(0.05); }, 600 + Math.random()*400); },
-      grumble: function(){ noiseBurst({dur:3,vol:.09,from:120,to:40,curve:1.2,mod:14}); tone({type:'sine',from:45,to:25,dur:2.5,vol:.08}); },
-      stadium: function(){ noiseBurst({dur:.1,vol:.2,from:900,to:150,curve:1.2}); tone({type:'sine',from:100,to:30,dur:.7,vol:.16}); noiseBurst({dur:2.2,vol:.07,from:500,to:80,curve:1.4,mod:9,delay:.15}); },
-      finale3: function(){ [0,.55,1.2].forEach(function(d,i){ tone({type:'sine',from:95-i*12,to:28,dur:.7,vol:.15-i*.03,delay:d}); noiseBurst({dur:.9,vol:.08-i*.015,from:400,to:60,curve:1.7,delay:d+.03}); }); },
-      heavy: function(){ tone({type:'sine',from:70,to:24,dur:.9,vol:.22}); noiseBurst({dur:.08,vol:.18,filter:'lowpass',from:600,curve:2}); tone({type:'sine',from:55,to:20,dur:1.1,vol:.14,delay:.45}); noiseBurst({dur:1.5,vol:.07,from:250,to:45,curve:1.5,delay:.5}); },
-      ripper: function(){ noiseBurst({dur:1.1,vol:.13,filter:'bandpass',from:1800,to:120,q:1.1,curve:1,mod:40}); tone({type:'sine',from:90,to:28,dur:1.3,vol:.12,delay:.4}); },
-      mountain: function(){ noiseBurst({dur:2.6,vol:.07,from:110,to:38,curve:1.3,mod:11,delay:.3}); tone({type:'sine',from:38,to:24,dur:2.2,vol:.06,delay:.35}); },
-      growl: function(){ noiseBurst({dur:2.2,vol:.11,from:260,to:60,curve:1.3,mod:34}); tone({type:'sine',from:52,to:30,dur:1.8,vol:.07,delay:.1}); }
+      boomer: function(){ tone({type:'sine',from:80,to:22,dur:1.2,vol:.26}); noiseBurst({dur:1.4,vol:.12,from:350,to:45,curve:1.6,delay:.02}); },
+      rumble: function(){ thunder(0.13); },
+      roll: function(){ thunder(0.09); setTimeout(function(){ thunder(0.065); }, 600 + Math.random()*400); },
+      grumble: function(){ noiseBurst({dur:3,vol:.12,from:120,to:40,curve:1.2,mod:14}); tone({type:'sine',from:45,to:25,dur:2.5,vol:.1}); },
+      stadium: function(){ noiseBurst({dur:.1,vol:.26,from:900,to:150,curve:1.2}); tone({type:'sine',from:100,to:30,dur:.7,vol:.21}); noiseBurst({dur:2.2,vol:.09,from:500,to:80,curve:1.4,mod:9,delay:.15}); },
+      finale3: function(){ [0,.55,1.2].forEach(function(d,i){ tone({type:'sine',from:95-i*12,to:28,dur:.7,vol:.19-i*.04,delay:d}); noiseBurst({dur:.9,vol:.1-i*.02,from:400,to:60,curve:1.7,delay:d+.03}); }); },
+      heavy: function(){ tone({type:'sine',from:70,to:24,dur:.9,vol:.28}); noiseBurst({dur:.08,vol:.23,filter:'lowpass',from:600,curve:2}); tone({type:'sine',from:55,to:20,dur:1.1,vol:.18,delay:.45}); noiseBurst({dur:1.5,vol:.09,from:250,to:45,curve:1.5,delay:.5}); },
+      ripper: function(){ noiseBurst({dur:1.1,vol:.17,filter:'bandpass',from:1800,to:120,q:1.1,curve:1,mod:40}); tone({type:'sine',from:90,to:28,dur:1.3,vol:.16,delay:.4}); },
+      mountain: function(){ noiseBurst({dur:2.6,vol:.09,from:110,to:38,curve:1.3,mod:11,delay:.3}); tone({type:'sine',from:38,to:24,dur:2.2,vol:.08,delay:.35}); },
+      growl: function(){ noiseBurst({dur:2.2,vol:.14,from:260,to:60,curve:1.3,mod:34}); tone({type:'sine',from:52,to:30,dur:1.8,vol:.09,delay:.1}); }
     },
     fanfare: {
       victory: function(){ [659,659,659,784,659,784,1046].forEach(function(f,i){ tone({type:'square',from:f,dur:i===6?.45:.09,vol:.05,delay:i*.11}); }); },
