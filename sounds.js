@@ -1344,7 +1344,7 @@
     drone:  function () {
       oscLoopNode('sine', 42, 0.03); oscLoopNode('sine', 84, 0.02); oscLoopNode('sine', 126, 0.01);
       oscLoopNode('sine', 168, 0.008); oscLoopNode('sine', 252, 0.005);
-      noiseLoopNode(900, 0.012, true); // wobbling filtered air — the "shimmer"
+      noiseLoopNode('bandpass', 900, 0.8, 0.012, true); // wobbling filtered air — the "shimmer"
     },
     fire:   function () { noiseLoopNode('lowpass', 1100, 0.6, 0.045); noiseLoopNode('highpass', 3200, 1, 0.016); },
     arcbuzz:function () { oscLoopNode('sawtooth', 110, 0.011); noiseLoopNode('highpass', 3000, 1, 0.009); },
@@ -1456,9 +1456,16 @@
     if (!profile) return;
     unduck(); // never start a scene into a ducked/zeroed master bus
     amb.playingKey = key;
-    if (profile.loop && LOOPS[profile.loop]) LOOPS[profile.loop]();
-    if (profile.once && S[profile.once]) S[profile.once]();
-    if (profile.occ) profile.occ.forEach(function (o) { scheduleOccasional(o[0], o[1], o[2]); });
+    try {
+      if (profile.loop && LOOPS[profile.loop]) LOOPS[profile.loop]();
+      if (profile.once && S[profile.once]) S[profile.once]();
+      if (profile.occ) profile.occ.forEach(function (o) { scheduleOccasional(o[0], o[1], o[2]); });
+    } catch (e) {
+      // A broken loop must never propagate into the theme cycler (it calls
+      // AOGSound.scene() synchronously — an exception here stopped the theme
+      // from rendering at all). Ambience degrades to silence instead.
+      stopAmbient();
+    }
   }
 
   // Seasonal class can be added by page scripts after load — watch for it
