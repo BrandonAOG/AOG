@@ -1,5 +1,5 @@
 /* ============================================================
-   AOG Sound Engine v1.0.6 — drop-in UI + ambient sounds (no files)
+   AOG Sound Engine v1.0.8 — drop-in UI + ambient sounds (no files)
    <script src="./sounds.js"></script>  (../sounds.js from sub-pages)
 
    - Synthesized with Web Audio API → 100% offline in the PWA
@@ -1333,7 +1333,19 @@
               oscLoopNode('sine', 60, 0.02); oscLoopNode('sine', 120, 0.022);
               oscLoopNode('triangle', 180, 0.014); oscLoopNode('sine', 240, 0.009); },
     engine: engineLoopNode,
-    drone:  function () { oscLoopNode('sine', 42, 0.03); oscLoopNode('sine', 84, 0.02); oscLoopNode('sine', 126, 0.01); },
+    // Drafting room: soft paper/air room tone — a barely-there mid-band wash,
+    // no electrical character. Used by blueprint (was wrongly on 'hum').
+    paper:  function () { noiseLoopNode('lowpass', 1400, 0.7, 0.011); noiseLoopNode('bandpass', 3000, 0.6, 0.004); },
+    // Sub-bass foundation kept for systems that can reproduce it, but small
+    // laptop/phone speakers can't play 42–126 Hz at all — the drone scenes
+    // (aurora g5, black hole, ion storm...) were silent on them. Added mid
+    // harmonics (168/252 Hz, quiet) plus a faint slow-breathing airy noise
+    // wash so the bed is audible everywhere without changing its character.
+    drone:  function () {
+      oscLoopNode('sine', 42, 0.03); oscLoopNode('sine', 84, 0.02); oscLoopNode('sine', 126, 0.01);
+      oscLoopNode('sine', 168, 0.008); oscLoopNode('sine', 252, 0.005);
+      noiseLoopNode(900, 0.012, true); // wobbling filtered air — the "shimmer"
+    },
     fire:   function () { noiseLoopNode('lowpass', 1100, 0.6, 0.045); noiseLoopNode('highpass', 3200, 1, 0.016); },
     arcbuzz:function () { oscLoopNode('sawtooth', 110, 0.011); noiseLoopNode('highpass', 3000, 1, 0.009); },
     fan:    fanLoopNode
@@ -1361,8 +1373,8 @@
     'supercell':      { loop: 'wind' },                      // bolts hooked
     'matrix':         { occ: [['tick', 400, 900]] },
     'sonar':          {},                                    // ping synced to sweep
-    'blueprint':      { loop: 'hum' },
-    'solarflare':     {},                                    // eruptions hooked
+    'blueprint':      { loop: 'paper', occ: [['tick', 1800, 4500]] }, // drafting room + pencil strokes (was 'hum' — mains buzz fit electrical scenes, not a drawing)
+    'solarflare':     { loop: 'fire' },                      // eruptions hooked — continuous plasma roar underneath (was silent between eruptions)
     'lichtenberg':    {},                                    // figures hooked
     'aurora g5':      { loop: 'drone' },                     // bursts hooked
     'tornado alley':  { loop: 'wind', occ: [['wind', 5000, 11000]] },
@@ -1654,7 +1666,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v1.0.6',
+    version: 'v1.0.8',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
