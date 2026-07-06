@@ -1279,9 +1279,11 @@
   var LOOPS = {
     rain:   function () { noiseLoopNode('bandpass', 3800, 0.4, 0.022); noiseLoopNode('lowpass', 500, 0.5, 0.012); },
     wind:   function () { noiseLoopNode('bandpass', 320, 0.7, 0.03, true); },
-    hum:    function () { oscLoopNode('sine', 60, 0.014); oscLoopNode('sine', 120, 0.008); oscLoopNode('triangle', 180, 0.004); },
+    hum:    function () { // weighted toward harmonics — 60Hz alone is inaudible on phone/laptop speakers
+              oscLoopNode('sine', 60, 0.012); oscLoopNode('sine', 120, 0.012);
+              oscLoopNode('triangle', 180, 0.008); oscLoopNode('sine', 240, 0.005); },
     engine: engineLoopNode,
-    drone:  function () { oscLoopNode('sine', 42, 0.02); oscLoopNode('sine', 63, 0.01); },
+    drone:  function () { oscLoopNode('sine', 42, 0.018); oscLoopNode('sine', 84, 0.012); oscLoopNode('sine', 126, 0.006); },
     fire:   function () { noiseLoopNode('lowpass', 1100, 0.6, 0.02); noiseLoopNode('highpass', 3200, 1, 0.008); },
     arcbuzz:function () { oscLoopNode('sawtooth', 110, 0.011); noiseLoopNode('highpass', 3000, 1, 0.009); },
     fan:    fanLoopNode
