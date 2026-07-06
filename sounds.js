@@ -1,5 +1,5 @@
 /* ============================================================
-   AOG Sound Engine v1.0.5 — drop-in UI + ambient sounds (no files)
+   AOG Sound Engine v1.0.6 — drop-in UI + ambient sounds (no files)
    <script src="./sounds.js"></script>  (../sounds.js from sub-pages)
 
    - Synthesized with Web Audio API → 100% offline in the PWA
@@ -19,12 +19,25 @@
   // revisits the browser grants audio instantly, so goLive() -> applyScene()
   // -> stopAmbient() fires synchronously at load. Defining amb later crashed
   // the whole script (killing window.AOGSound and the sound panel button).
-  var amb = { nodes: [], timers: [], scene: null };
+  var amb = { nodes: [], timers: [], scene: null, playingKey: null };
 
   // All audible output routes through the context's master limiter
   // (built in getCtx) instead of raw destination — prevents the hard
   // clipping that sounds like crackling static on older iOS.
   function out(c) { return (c && c._master) || c.destination; }
+
+  // Restore the master bus after any duck/hard-mute (hide, pagehide). MUST be
+  // called on every comeback path — a bfcache restore brings the page back
+  // with the SAME context and a zeroed gain, which silenced everything.
+  function unduck() {
+    try {
+      if (ctx && ctx._masterGain) {
+        var lvl = (ctx._masterLevel != null) ? ctx._masterLevel : 0.9;
+        if (ctx.state === 'running') ctx._masterGain.gain.setTargetAtTime(lvl, ctx.currentTime, 0.02);
+        else ctx._masterGain.gain.value = lvl;
+      }
+    } catch (e) {}
+  }
 
   // Set the iOS audio session category (no-op elsewhere / if unsupported)
   function setSession(type) {
@@ -90,7 +103,7 @@
     // 'ambient' mixes with everything and respects the ringer switch. Cost:
     // on the buggy iOS cold-launch dead-session case, sound may need an
     // app-switcher round-trip to wake up — acceptable; music is sacred.
-    setSession('ambient');
+    if (IS_IOS) setSession('ambient'); // no-op elsewhere — skip the work on desktop/Android
     if (ctx && ctx.state === 'closed') ctx = null; // rebuilt after zombie teardown
     if (!ctx && !hadGesture) {  return null; }
     if (!ctx) {
@@ -190,7 +203,7 @@
     var c = getCtx(); // getCtx() also calls resume()
     if (!c) return;
     verifyAlive();
-    c.onstatechange = function () { if (c.state === 'running') goLive(); };
+    c.onstatechange = function () { if (c === ctx && c.state === 'running') goLive(); }; // ignore stale/rebuilt contexts
     if (c.state === 'running') goLive();
     else if (c.resume) c.resume().then(goLive).catch(function () {});
   }
@@ -244,7 +257,6 @@
   var LEGACY_IOS = IS_IOS && !navigator.audioSession;
   // 'playback' escalation flag — see getCtx(). false = stay 'ambient'
   // (mix with the user's music); true = cold-launch kick in progress.
-  var sessionForce = false;
   // ── COLD-LAUNCH FIRST-TAP KICK (iOS standalone PWA) ─────────────────
   // On the buggy iOS builds a cold home-screen launch comes up with a DEAD
   // system audio session: the polite 'ambient' kick on the first gesture
@@ -259,8 +271,6 @@
   // (and clears sessionForce) the moment audio is confirmed live, so the
   // ringer/silent switch is respected after the kick. The interrupted
   // guard in gestureUnlock stands this down if music owns the session.
-  var IS_STANDALONE = (window.navigator.standalone === true) ||
-    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
   // (pre-arm removed — AMBIENT ONLY policy; sessionForce is permanently false)
   var sessionEl = null, sessionLive = false, pipedCtx = null, pipedEl = null;
   function stopPipedEl() {
@@ -272,9 +282,6 @@
   // it — the element must be stopped and re-played for the escalated
   // category to actually take the session. Called whenever sessionForce
   // flips true; the next activateSession()/gesture replays it fresh.
-  function restartSessionEl() {
-    if (sessionEl) { try { sessionEl.pause(); sessionEl.currentTime = 0; } catch (e) {} }
-  }
   // ── MUSIC-FIRST GATE for the 'playback' kick ────────────────────────
   // 'playback' is non-mixable: starting the looper under it PAUSES whatever
   // the user is playing (Music, Spotify, Pandora...). Only allow the forced
@@ -286,7 +293,6 @@
   // detected, stand sessionForce down entirely: a playing music app means
   // the OS audio session is already live, so the cold-launch dead-session
   // bug can't be present and 'ambient' will mix in fine.
-  function _mayForce() { return false; } // AMBIENT ONLY — never force 'playback'
   function activateSession() {
     // iOS-ONLY MACHINERY: the silent looper, the piped element, and the
     // session kick exist solely to work around iOS's audio-session
@@ -343,7 +349,6 @@
     if (sessionLive || !ctx) return;
     if (ctx.state === 'running' && ctx.currentTime > 0) {
       sessionLive = true;
-      sessionForce = false; // stand down — mix with the user's music again
       
       // Session is up — hand it back to 'ambient' so the ringer/silent
       // switch is respected from here on. ('playback' was only the starter.)
@@ -459,7 +464,6 @@
       // else is playing (frozen/suspended context, not interrupted).
       if (ctx && ctx.state === 'interrupted') {
         
-        sessionForce = false; // stand down the cold-launch 'playback' kick — never steal the session
         try { ctx.resume().catch(function () {}); } catch (e) {}
       }
       
@@ -495,9 +499,9 @@
     // every page load unconditionally discards the load-time context and
     // rebuilds fresh, right here inside the gesture.
     if (!ctxTrusted) {
-      
-      if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; }
-      sceneStarted = false;
+      // iOS-only cure: on desktop/Android a load-time context is healthy —
+      // discarding it here ate the first click's sound for no benefit.
+      if (IS_IOS && ctx) { try { ctx.close(); } catch (e) {} ctx = null; sceneStarted = false; }
       ctxTrusted = true;
     }
     var c = getCtx();
@@ -554,6 +558,10 @@
   // click/tap/keypress, so gate on it (browsers without the API skip the
   // fallback — the direct tap/click listeners above still cover them).
   function gestureIfActive(evt) {
+    // Once audio is confirmed healthy there is nothing left to unlock —
+    // without this, every scroll/wheel tick past the dedupe re-ran the full
+    // activation ritual (primer buffers, session pokes) forever.
+    if (ctx && ctx.state === 'running' && (!IS_IOS || (sessionLive && ctx.currentTime > 0))) return;
     if (navigator.userActivation && navigator.userActivation.hasBeenActive) gestureUnlock(evt);
   }
   ['wheel', 'touchmove'].forEach(function (ev) {
@@ -565,7 +573,7 @@
   // browser can take back to us — tab switch, app switcher, back/forward cache.
   ['focus', 'pageshow'].forEach(function (ev) {
     window.addEventListener(ev, function () {
-      if (!document.hidden) { sceneStarted = false; startRetryLoop(); }
+      if (!document.hidden) { unduck(); sceneStarted = false; startRetryLoop(); }
     });
   });
   // iOS standalone PWAs often fire ONLY visibilitychange (no focus/pageshow)
@@ -612,13 +620,7 @@
     if (!IS_IOS && ctx && ctx.state === 'suspended') {
       try { ctx.resume().catch(function(){}); } catch (e) {}
     }
-    // Un-duck the master bus (it was faded to 0 on hide)
-    try {
-      if (ctx && ctx._masterGain) {
-        var lvl = (ctx._masterLevel != null) ? ctx._masterLevel : 0.9;
-        ctx._masterGain.gain.setTargetAtTime(lvl, ctx.currentTime, 0.02);
-      }
-    } catch (e) {}
+    unduck(); // master bus was faded to 0 on hide
     // Re-arm the looper: a previously-allowed element may resume without a
     // fresh gesture; if iOS blocks it, the next tap's unlock handles it.
     if (sessionEl) {
@@ -1002,11 +1004,11 @@
       deep: function(){ noiseBurst({dur:.05,vol:.28,filter:'lowpass',from:800,curve:1.5}); tone({type:'sine',from:100,to:22,dur:.9,vol:.3,delay:.01}); noiseBurst({dur:1.1,vol:.14,from:900,to:60,curve:2,delay:.03}); noiseBurst({dur:1.2,vol:.08,from:300,to:40,curve:1.6,delay:.35}); },
       realistic: function(){ boom(); },
       distant: function(){ noiseBurst({dur:.9,vol:.12,from:500,to:60,curve:2}); tone({type:'sine',from:70,to:28,dur:.8,vol:.12,delay:.05}); noiseBurst({dur:1.2,vol:.06,from:250,to:45,curve:1.5,delay:.4}); },
-      finale: function(){ boom(0.2); setTimeout(function(){ boom(0.22); }, 220 + Math.random()*120); setTimeout(function(){ boom(0.26); }, 500 + Math.random()*150); },
+      finale: function(){ boom(0.2); setTimeout(function(){ if (allowed('seasonal')) boom(0.22); }, 220 + Math.random()*120); setTimeout(function(){ if (allowed('seasonal')) boom(0.26); }, 500 + Math.random()*150); },
       artillery: function(){ noiseBurst({dur:.045,vol:.32,filter:'highpass',from:400,curve:1}); tone({type:'sine',from:140,to:30,dur:.45,vol:.24,delay:.005}); noiseBurst({dur:.3,vol:.1,from:900,to:100,curve:2,delay:.42}); },
-      thunderous: function(){ boom(0.24); setTimeout(function(){ thunder(0.1); }, 300); },
+      thunderous: function(){ boom(0.24); setTimeout(function(){ if (allowed('seasonal')) thunder(0.1); }, 300); },
       mortar: function(){ tone({type:'sine',from:65,to:20,dur:1.1,vol:.3}); noiseBurst({dur:.07,vol:.24,from:700,curve:2}); noiseBurst({dur:1.4,vol:.1,from:400,to:50,curve:1.7,delay:.1}); },
-      doubleburst: function(){ boom(0.18); setTimeout(function(){ boom(0.22); }, 180); },
+      doubleburst: function(){ boom(0.18); setTimeout(function(){ if (allowed('seasonal')) boom(0.22); }, 180); },
       sparkstorm: function(){ noiseBurst({dur:.05,vol:.16,filter:'highpass',from:600,curve:1.5}); for(var i=0;i<60;i++){ var w=.05+Math.pow(Math.random(),.5)*1.8; noiseBurst({dur:.012,vol:.08*(1-w/2),filter:'highpass',from:2000+Math.random()*5000,curve:1,delay:w}); } },
       lowbloom: function(){ tone({type:'sine',from:80,to:30,dur:.8,vol:.2}); noiseBurst({dur:1.6,vol:.08,filter:'bandpass',from:700,to:120,q:.9,curve:1.3,delay:.05}); },
       crackleonly: function(){ for(var i=0;i<35;i++){ var w=Math.pow(Math.random(),.6)*1.3; noiseBurst({dur:.015,vol:.1*(1-w/1.5),filter:'highpass',from:3000+Math.random()*4000,curve:1,delay:w}); } },
@@ -1016,7 +1018,7 @@
     thunder: {
       boomer: function(){ tone({type:'sine',from:80,to:22,dur:1.2,vol:.26}); noiseBurst({dur:1.4,vol:.12,from:350,to:45,curve:1.6,delay:.02}); },
       rumble: function(){ thunder(0.13); },
-      roll: function(){ thunder(0.09); setTimeout(function(){ thunder(0.065); }, 600 + Math.random()*400); },
+      roll: function(){ thunder(0.09); setTimeout(function(){ if (!muted) thunder(0.065); }, 600 + Math.random()*400); },
       grumble: function(){ noiseBurst({dur:3,vol:.12,from:120,to:40,curve:1.2,mod:14}); tone({type:'sine',from:45,to:25,dur:2.5,vol:.1}); },
       stadium: function(){ noiseBurst({dur:.1,vol:.26,from:900,to:150,curve:1.2}); tone({type:'sine',from:100,to:30,dur:.7,vol:.21}); noiseBurst({dur:2.2,vol:.09,from:500,to:80,curve:1.4,mod:9,delay:.15}); },
       finale3: function(){ [0,.55,1.2].forEach(function(d,i){ tone({type:'sine',from:95-i*12,to:28,dur:.7,vol:.19-i*.04,delay:d}); noiseBurst({dur:.9,vol:.1-i*.02,from:400,to:60,curve:1.7,delay:d+.03}); }); },
@@ -1084,7 +1086,13 @@
     var ks = ['boomer','rumble','roll','grumble','stadium','finale3','heavy','ripper','mountain','growl'];
     VARIANTS.thunder[ks[Math.floor(Math.random() * ks.length)]]();
   };
-  function pick(name) { return (VARIANTS[name][toneChoice[name]] || VARIANTS[name][DEFAULT_TONES[name]])(); }
+  function pick(name) {
+    var v = VARIANTS[name] && (VARIANTS[name][toneChoice[name]] || VARIANTS[name][DEFAULT_TONES[name]]);
+    if (!v) { // stale/tampered localStorage — fall back to any variant
+      for (var k in VARIANTS[name]) { v = VARIANTS[name][k]; break; }
+    }
+    if (v) return v();
+  }
 
   function trashSound() { // delete: sci-fi disintegrate (picked by Brandon)
     noiseBurst({ dur: 0.4, vol: 0.08, filter: 'highpass', from: 1500, to: 6000, curve: 1, mod: 50 });
@@ -1196,11 +1204,15 @@
       verifyAlive(); // self-heal a zombie context; if frozen, it rebuilds so the NEXT tap plays
       if (!allowed(CATS[k] || 'taps')) {  return; }
       
+      var deferred = false;
       if (mode !== 'vibrate' && ctx && ctx.state !== 'running') {
         pendingSound = { k: k, t: Date.now() }; // replay once unlocked
+        deferred = true;
         try { ctx.resume().then(flushPending).catch(function () {}); } catch (e) {}
       }
-      if (mode !== 'vibrate') RAW[k]();
+      // Skip the immediate play when deferred — it was a silent no-op that
+      // still allocated buffers on a frozen graph.
+      if (mode !== 'vibrate' && !deferred) RAW[k]();
       
       if (mode !== 'sound') buzz(k);
     };
@@ -1214,6 +1226,7 @@
   function stopAmbient() {
     // Fade gain nodes to zero over ~60ms before stopping sources — a hard
     // stop() mid-waveform produces an audible click/pop on scene changes.
+    amb.playingKey = null;
     var nodes = amb.nodes; amb.nodes = [];
     amb.timers.forEach(clearTimeout);
     amb.timers = [];
@@ -1228,7 +1241,10 @@
       }
     });
     function kill() {
-      nodes.forEach(function (n) { try { n.stop ? n.stop() : n.disconnect(); } catch (e) {} });
+      nodes.forEach(function (n) {
+        try { if (n.stop) n.stop(); } catch (e) {}
+        try { n.disconnect(); } catch (e) {} // release gains/filters too, not just sources
+      });
     }
     if (faded) setTimeout(kill, 120); else kill();
   }
@@ -1246,11 +1262,11 @@
       var lfo = c.createOscillator(), lg = c.createGain();
       lfo.frequency.value = 0.13; lg.gain.value = freq * 0.5;
       lfo.connect(lg).connect(f.frequency); lfo.start();
-      amb.nodes.push(lfo);
+      amb.nodes.push(lfo, lg);
     }
     src.connect(f).connect(g).connect(out(c));
     src.start();
-    amb.nodes.push(src, g);
+    amb.nodes.push(src, f, g); // filter tracked too, so teardown disconnects it
   }
 
   function oscLoopNode(type, freq, vol) {
@@ -1279,7 +1295,9 @@
     lfo.connect(lg).connect(g.gain); lfo.start();
     src.connect(f).connect(g).connect(out(c));
     src.start();
-    amb.nodes.push(src, g, lfo);
+    // lg tracked so the fade zeros the LFO depth too — otherwise the flutter
+    // keeps riding on top of the faded gain and pulses during teardown
+    amb.nodes.push(src, f, g, lfo, lg);
     // Faint motor whir underneath
     oscLoopNode('triangle', 95, 0.009);
   }
@@ -1297,7 +1315,7 @@
     lfo.type = 'triangle'; lfo.frequency.value = 13; lg.gain.value = 0.016; // deep throb
     lfo.connect(lg).connect(g.gain); lfo.start();
     o.connect(f).connect(g).connect(out(c)); o.start();
-    amb.nodes.push(o, g, lfo);
+    amb.nodes.push(o, f, g, lfo, lg); // lg tracked: fade must zero the throb depth or the fade itself pulses
     // Second harmonic so it carries on phone speakers
     var o2 = c.createOscillator(); o2.type = 'triangle'; o2.frequency.value = 164;
     var g2 = c.createGain(); g2.gain.value = 0.012;
@@ -1400,17 +1418,32 @@
   };
 
   function applyScene() {
-    stopAmbient();
-    if (!ready()) return;
-    var profile = null;
-    if (amb.scene && SCENES[amb.scene]) profile = SCENES[amb.scene];
-    if (!profile) { // form pages: read seasonal class off <body>
-      var m = (document.body && document.body.className || '').match(/seasonal-([a-z]+)/);
-      if (m && SEASONS[m[1]]) profile = SEASONS[m[1]];
+    // Resolve the target profile FIRST so an unchanged scene is a no-op.
+    // applyScene is re-triggered constantly (window focus, pageshow,
+    // visibilitychange, ANY body class mutation) and used to tear down and
+    // rebuild the loops every time — an audible split-second dropout.
+    var profile = null, key = null;
+    if (ready()) {
+      if (amb.scene && SCENES[amb.scene]) { profile = SCENES[amb.scene]; key = 'scene:' + amb.scene; }
+      if (!profile) { // form pages: read seasonal class off <body>
+        var m = (document.body && document.body.className || '').match(/seasonal-([a-z]+)/);
+        if (m && SEASONS[m[1]]) { profile = SEASONS[m[1]]; key = 'season:' + m[1]; }
+      }
+      if (profile) {
+        var cat = (key.indexOf('scene:') === 0) ? 'animations' : 'seasonal';
+        if (!allowed(cat) || mode === 'vibrate') { profile = null; key = null; }
+        else key += '|' + mode; // mode change must rebuild
+      }
     }
+    // Same profile already live (nodes or timers still armed)? Leave it be.
+    if (key && amb.playingKey === key && (amb.nodes.length || amb.timers.length)) {
+      unduck(); // still make sure the bus isn't ducked
+      return;
+    }
+    stopAmbient();
     if (!profile) return;
-    var cat = (amb.scene && SCENES[amb.scene]) ? 'animations' : 'seasonal';
-    if (!allowed(cat) || mode === 'vibrate') return;
+    unduck(); // never start a scene into a ducked/zeroed master bus
+    amb.playingKey = key;
     if (profile.loop && LOOPS[profile.loop]) LOOPS[profile.loop]();
     if (profile.once && S[profile.once]) S[profile.once]();
     if (profile.occ) profile.occ.forEach(function (o) { scheduleOccasional(o[0], o[1], o[2]); });
@@ -1470,7 +1503,13 @@
     if (t.matches('input[type="checkbox"], input[type="radio"]')) {
       if (t.checked) S.pop(); else if (allowed('forms')) tone({ type: 'sine', from: 700, to: 420, dur: 0.05, vol: 0.06 });
       if (t.type === 'checkbox') {
-        var boxes = document.querySelectorAll('input[type="checkbox"]');
+        // Only count VISIBLE checkboxes — hidden toggles (settings panels,
+        // template rows) made "100% complete" unreachable or false-positive
+        var allBoxes = document.querySelectorAll('input[type="checkbox"]');
+        var boxes = [];
+        for (var bi = 0; bi < allBoxes.length; bi++) {
+          if (allBoxes[bi].offsetParent !== null || allBoxes[bi] === t) boxes.push(allBoxes[bi]);
+        }
         if (boxes.length >= 4) {
           var all = true;
           for (var i = 0; i < boxes.length; i++) if (!boxes[i].checked) { all = false; break; }
@@ -1514,8 +1553,13 @@
 
   // TRUE CLOSE (swipe-away / navigation): no time for automation — zero the
   // master bus instantly so the OS session teardown doesn't clip mid-wave.
+  // pageshow/focus/applyScene all call unduck(), so a bfcache restore (which
+  // resumes the SAME page state, gain still 0) recovers immediately.
   window.addEventListener('pagehide', function () {
     try { if (ctx && ctx._masterGain) ctx._masterGain.gain.value = 0; } catch (e) {}
+  });
+  window.addEventListener('pageshow', function (e) {
+    if (e && e.persisted) unduck(); // bfcache restore — same ctx, gain was zeroed
   });
 
   // Connectivity
@@ -1601,17 +1645,16 @@
   //               paste it back for analysis.
   
 
-  try {
-    
-  } catch (e) {}
+  // Scene queued by the hub's inline theme script (which runs before this
+  // deferred file): MUST be picked up BEFORE the retry loop starts. On
+  // desktop with autoplay granted, goLive() fires immediately — grabbing the
+  // scene afterwards meant applyScene ran with no scene, marked itself done,
+  // and the queued theme (aurora g5, black hole, ...) never played at load.
+  if (window.__aogPendingScene) { amb.scene = window.__aogPendingScene; window.__aogPendingScene = null; }
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
-  // Scene queued by the hub's inline theme script (which runs before this
-  // deferred file): pick it up now, otherwise ambient never starts at load.
-  if (window.__aogPendingScene) { amb.scene = window.__aogPendingScene; window.__aogPendingScene = null; }
-
   window.AOGSound = {
-    version: 'v1.0.5',
+    version: 'v1.0.6',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
