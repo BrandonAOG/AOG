@@ -538,7 +538,7 @@
       } catch (e) {}
     }
     if (!ctx || ctx.state !== 'running') {  tryStart(); }
-    else verifyAlive(); // 'running' can be a lie after iOS suspends the PWA — verify the clock is ticking
+    else { verifyAlive(); goLive(); } // ctx rebuilt in-gesture comes up 'running', which skipped tryStart — so ambient scene loops (rain/wind/hum/fan/engine) never launched until something else forced a restart. goLive() is guarded by sceneStarted, so this is a no-op when already live.
     if (ctx && pipedCtx !== ctx) activateSession(); // pipe the CURRENT ctx (it may have just been rebuilt above)
   }
   ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click', 'keydown'].forEach(function (ev) {
