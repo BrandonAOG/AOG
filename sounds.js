@@ -1,5 +1,5 @@
 /* ============================================================
-   AOG Sound Engine v2 — drop-in UI + ambient sounds (no files)
+   AOG Sound Engine v1.0.2 — drop-in UI + ambient sounds (no files)
    <script src="./sounds.js"></script>  (../sounds.js from sub-pages)
 
    - Synthesized with Web Audio API → 100% offline in the PWA
@@ -1568,7 +1568,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v1.0.1',
+    version: 'v1.0.2',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
