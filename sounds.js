@@ -1,5 +1,5 @@
 /* ============================================================
-   AOG Sound Engine v1.0.2 — drop-in UI + ambient sounds (no files)
+   AOG Sound Engine v1.0.3 — drop-in UI + ambient sounds (no files)
    <script src="./sounds.js"></script>  (../sounds.js from sub-pages)
 
    - Synthesized with Web Audio API → 100% offline in the PWA
@@ -1240,16 +1240,16 @@
     for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     var src = c.createBufferSource(); src.buffer = buf; src.loop = true;
     var f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1600; f.Q.value = 0.5;
-    var g = c.createGain(); g.gain.value = 0.026;
+    var g = c.createGain(); g.gain.value = 0.05;
     // Blade-pass flutter: ~22Hz amplitude wobble, shallow depth
     var lfo = c.createOscillator(), lg = c.createGain();
-    lfo.type = 'sine'; lfo.frequency.value = 22; lg.gain.value = 0.007;
+    lfo.type = 'sine'; lfo.frequency.value = 22; lg.gain.value = 0.013;
     lfo.connect(lg).connect(g.gain); lfo.start();
     src.connect(f).connect(g).connect(out(c));
     src.start();
     amb.nodes.push(src, g, lfo);
     // Faint motor whir underneath
-    oscLoopNode('triangle', 95, 0.005);
+    oscLoopNode('triangle', 95, 0.009);
   }
 
   // Engine idle: the defining trait is the firing-pulse LOPE — a rhythmic
@@ -1260,31 +1260,31 @@
     // Rough rumble: sawtooth through a lowpass, gain pulsed by the firing LFO
     var o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 82;
     var f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420; f.Q.value = 0.9;
-    var g = c.createGain(); g.gain.value = 0.014;
+    var g = c.createGain(); g.gain.value = 0.026;
     var lfo = c.createOscillator(), lg = c.createGain();
-    lfo.type = 'triangle'; lfo.frequency.value = 13; lg.gain.value = 0.009; // deep throb
+    lfo.type = 'triangle'; lfo.frequency.value = 13; lg.gain.value = 0.016; // deep throb
     lfo.connect(lg).connect(g.gain); lfo.start();
     o.connect(f).connect(g).connect(out(c)); o.start();
     amb.nodes.push(o, g, lfo);
     // Second harmonic so it carries on phone speakers
     var o2 = c.createOscillator(); o2.type = 'triangle'; o2.frequency.value = 164;
-    var g2 = c.createGain(); g2.gain.value = 0.006;
+    var g2 = c.createGain(); g2.gain.value = 0.012;
     lg.connect(g2.gain); // pulses in sync with the rumble
     o2.connect(g2).connect(out(c)); o2.start();
     amb.nodes.push(o2, g2);
     // Intake/exhaust noise bed
-    noiseLoopNode('lowpass', 260, 0.6, 0.01);
+    noiseLoopNode('lowpass', 260, 0.6, 0.02);
   }
 
   var LOOPS = {
-    rain:   function () { noiseLoopNode('bandpass', 3800, 0.4, 0.022); noiseLoopNode('lowpass', 500, 0.5, 0.012); },
-    wind:   function () { noiseLoopNode('bandpass', 320, 0.7, 0.03, true); },
+    rain:   function () { noiseLoopNode('bandpass', 3800, 0.4, 0.05); noiseLoopNode('lowpass', 500, 0.5, 0.028); },
+    wind:   function () { noiseLoopNode('bandpass', 320, 0.7, 0.08, true); noiseLoopNode('bandpass', 900, 0.8, 0.02, true); },
     hum:    function () { // weighted toward harmonics — 60Hz alone is inaudible on phone/laptop speakers
-              oscLoopNode('sine', 60, 0.012); oscLoopNode('sine', 120, 0.012);
-              oscLoopNode('triangle', 180, 0.008); oscLoopNode('sine', 240, 0.005); },
+              oscLoopNode('sine', 60, 0.02); oscLoopNode('sine', 120, 0.022);
+              oscLoopNode('triangle', 180, 0.014); oscLoopNode('sine', 240, 0.009); },
     engine: engineLoopNode,
-    drone:  function () { oscLoopNode('sine', 42, 0.018); oscLoopNode('sine', 84, 0.012); oscLoopNode('sine', 126, 0.006); },
-    fire:   function () { noiseLoopNode('lowpass', 1100, 0.6, 0.02); noiseLoopNode('highpass', 3200, 1, 0.008); },
+    drone:  function () { oscLoopNode('sine', 42, 0.03); oscLoopNode('sine', 84, 0.02); oscLoopNode('sine', 126, 0.01); },
+    fire:   function () { noiseLoopNode('lowpass', 1100, 0.6, 0.045); noiseLoopNode('highpass', 3200, 1, 0.016); },
     arcbuzz:function () { oscLoopNode('sawtooth', 110, 0.011); noiseLoopNode('highpass', 3000, 1, 0.009); },
     fan:    fanLoopNode
   };
@@ -1568,7 +1568,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v1.0.2',
+    version: 'v1.0.3',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
