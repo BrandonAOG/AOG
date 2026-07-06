@@ -1,5 +1,5 @@
 /* ============================================================
-   AOG Sound Engine v1.0.3 — drop-in UI + ambient sounds (no files)
+   AOG Sound Engine v1.0.4 — drop-in UI + ambient sounds (no files)
    <script src="./sounds.js"></script>  (../sounds.js from sub-pages)
 
    - Synthesized with Web Audio API → 100% offline in the PWA
@@ -544,13 +544,20 @@
   ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click', 'keydown'].forEach(function (ev) {
     document.addEventListener(ev, gestureUnlock, { passive: true });
   });
-  // Fallback: a scroll is a gesture too. touchstart above already catches
-  // finger-scrolls; these cover trackpad/mouse-wheel scrolling and any
-  // browser that only reports movement events.
+  // Fallback: a scroll is a gesture too — but ONLY a human one. Chrome fires
+  // a synthetic 'scroll' at load when restoring scroll position after a
+  // refresh; treating that as a gesture spent the one-shot in-gesture ctx
+  // rebuild with zero audio permission, permanently wedging sound for the
+  // visit. navigator.userActivation.hasBeenActive is true only after a real
+  // click/tap/keypress, so gate on it (browsers without the API skip the
+  // fallback — the direct tap/click listeners above still cover them).
+  function gestureIfActive(evt) {
+    if (navigator.userActivation && navigator.userActivation.hasBeenActive) gestureUnlock(evt);
+  }
   ['wheel', 'touchmove'].forEach(function (ev) {
-    document.addEventListener(ev, gestureUnlock, { passive: true });
+    document.addEventListener(ev, gestureIfActive, { passive: true });
   });
-  window.addEventListener('scroll', gestureUnlock, { passive: true });
+  window.addEventListener('scroll', gestureIfActive, { passive: true });
 
   // Returning to the app: kick the retry loop immediately on every path the
   // browser can take back to us — tab switch, app switcher, back/forward cache.
@@ -1568,7 +1575,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v1.0.3',
+    version: 'v1.0.4',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
