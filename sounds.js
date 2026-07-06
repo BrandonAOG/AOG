@@ -358,6 +358,12 @@
   // bug can't be present and 'ambient' will mix in fine.
   function _mayForce() { return false; } // AMBIENT ONLY — never force 'playback'
   function activateSession() {
+    // iOS-ONLY MACHINERY: the silent looper, the piped element, and the
+    // session kick exist solely to work around iOS's audio-session
+    // lifecycle. Android / desktop Chrome / Edge / Firefox / desktop Safari
+    // have no such bug — WebAudio just works after a gesture — so running
+    // looping audio elements there is pure battery/CPU overhead. Skip it.
+    if (!IS_IOS) { sessionLive = true; return; }
     if (sessionLive || LEGACY_IOS) return;
     setSession('ambient'); // AMBIENT ONLY
     try {
@@ -404,6 +410,7 @@
   // live and we stop poking it. Also restart ambience since earlier
   // goLive() calls happened on a frozen engine.
   setInterval(function () {
+    if (!IS_IOS) return; // iOS-only watchdog — no dead-session bug elsewhere
     if (sessionLive || !ctx) return;
     if (ctx.state === 'running' && ctx.currentTime > 0) {
       sessionLive = true;
@@ -467,6 +474,7 @@
   // 'running', re-arm the unlock so the next tap does the full activation.
   var lastLiveT = 0, stuckTicks = 0;
   setInterval(function () {
+    if (!IS_IOS) return; // iOS-only refreeze guard
     if (!sessionLive || !ctx || ctx.state !== 'running') { stuckTicks = 0; return; }
     if (ctx.currentTime === lastLiveT) {
       if (++stuckTicks >= 3) {
@@ -623,6 +631,13 @@
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
       dbg('hidden');
+      // NON-iOS BATTERY: suspend the context while hidden — safe on
+      // Android/desktop (resume() is reliable there) and stops all audio
+      // rendering. NOT done on iOS: rebuild-on-return handles it and
+      // suspend/resume cycles are what trigger the frozen-clock bug.
+      if (!IS_IOS && ctx && ctx.state === 'running') {
+        try { ctx.suspend().catch(function(){}); } catch (e) {}
+      }
       // LOCK-SCREEN / BACKGROUND SILENCE: pause the silent looper (and the
       // piped element) whenever the app leaves the foreground — locking the
       // phone included. A playing media element is what surfaces the audio
@@ -635,14 +650,22 @@
       return;
     }
     dbg('visible again: state=' + (ctx && ctx.state));
+    if (!IS_IOS && ctx && ctx.state === 'suspended') {
+      try { ctx.resume().catch(function(){}); } catch (e) {}
+    }
     // Re-arm the looper: a previously-allowed element may resume without a
     // fresh gesture; if iOS blocks it, the next tap's unlock handles it.
     if (sessionEl) {
       try { var pv = sessionEl.play(); if (pv && pv.catch) pv.catch(function () {}); } catch (e) {}
     }
     if (ctx && ctx.state !== 'running') {
-      try { ctx.close(); } catch (e) {}
-      ctx = null;
+      if (!IS_IOS && ctx.state === 'suspended') {
+        // non-iOS: resume() above will finish — don't tear down a healthy
+        // suspended context, rebuilding is the iOS workaround only
+      } else {
+        try { ctx.close(); } catch (e) {}
+        ctx = null;
+      }
     }
     sceneStarted = false;
     startRetryLoop();
