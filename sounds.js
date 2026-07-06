@@ -544,6 +544,13 @@
   ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click', 'keydown'].forEach(function (ev) {
     document.addEventListener(ev, gestureUnlock, { passive: true });
   });
+  // Fallback: a scroll is a gesture too. touchstart above already catches
+  // finger-scrolls; these cover trackpad/mouse-wheel scrolling and any
+  // browser that only reports movement events.
+  ['wheel', 'touchmove'].forEach(function (ev) {
+    document.addEventListener(ev, gestureUnlock, { passive: true });
+  });
+  window.addEventListener('scroll', gestureUnlock, { passive: true });
 
   // Returning to the app: kick the retry loop immediately on every path the
   // browser can take back to us — tab switch, app switcher, back/forward cache.
