@@ -138,7 +138,12 @@
     // and never resumes it. So 'playback' is now a last resort: only used
     // (sessionForce=true) after a gesture-driven kick left the clock
     // frozen, and handed back to 'ambient' the moment the clock ticks.
-    setSession((sessionLive || !_mayForce()) ? 'ambient' : 'playback');
+    // AMBIENT ONLY — 'playback' escalation removed entirely. 'playback' is
+    // non-mixable and was pausing the user's music (Music/Spotify/Pandora).
+    // 'ambient' mixes with everything and respects the ringer switch. Cost:
+    // on the buggy iOS cold-launch dead-session case, sound may need an
+    // app-switcher round-trip to wake up — acceptable; music is sacred.
+    setSession('ambient');
     if (ctx && ctx.state === 'closed') ctx = null; // rebuilt after zombie teardown
     if (!ctx && !hadGesture) { dbg('getCtx: pre-gesture, refusing to create'); return null; }
     if (!ctx) {
@@ -326,7 +331,7 @@
   // guard in gestureUnlock stands this down if music owns the session.
   var IS_STANDALONE = (window.navigator.standalone === true) ||
     (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-  if (IS_IOS && !LEGACY_IOS && IS_STANDALONE) sessionForce = true;
+  // (pre-arm removed — AMBIENT ONLY policy; sessionForce is permanently false)
   var sessionEl = null, sessionLive = false, pipedCtx = null, pipedEl = null;
   function stopPipedEl() {
     if (pipedEl) { try { pipedEl.pause(); pipedEl.src = ''; } catch (e) {} pipedEl = null; }
@@ -351,19 +356,10 @@
   // detected, stand sessionForce down entirely: a playing music app means
   // the OS audio session is already live, so the cold-launch dead-session
   // bug can't be present and 'ambient' will mix in fine.
-  function _mayForce() {
-    if (!sessionForce) return false;
-    if (!ctx) return false;                       // can't see the session yet — don't risk it
-    if (ctx.state === 'interrupted') {            // music owns the session
-      sessionForce = false;
-      dbg('music detected — playback kick permanently stood down');
-      return false;
-    }
-    return true;
-  }
+  function _mayForce() { return false; } // AMBIENT ONLY — never force 'playback'
   function activateSession() {
     if (sessionLive || LEGACY_IOS) return;
-    setSession((sessionLive || !_mayForce()) ? 'ambient' : 'playback');
+    setSession('ambient'); // AMBIENT ONLY
     try {
       if (!sessionEl) {
         sessionEl = new Audio(SILENT_WAV);
@@ -458,7 +454,7 @@
       // STILL frozen 1.5s later — this is the genuine cold-launch dead
       // session. NOW escalate to 'playback' (this will pause the user's
       // music, unavoidable on the buggy builds) until the clock ticks.
-      if (!sessionForce) { sessionForce = true; restartSessionEl(); dbg('escalating to playback category — ambient kick failed'); }
+      dbg('ambient kick failed — staying AMBIENT ONLY (no playback escalation); app-switcher round-trip will wake the session');
       dbg('recycle: ctx frozen ' + ((Date.now() - ctx._bornAt) / 1000).toFixed(1) + 's, session not live — rebuilding');
       try { ctx.close(); } catch (e) {}
       ctx = null; sceneStarted = false; pipedCtx = null;
@@ -476,11 +472,9 @@
       if (++stuckTicks >= 3) {
         dbg('clock REFROZE — re-arming session unlock');
         sessionLive = false; pipedCtx = null; stuckTicks = 0;
-        if (ctx.state !== 'interrupted') { // music-first: never steal the session
-          sessionForce = true;    // a refreeze with nothing playing — escalate
-          restartSessionEl();     // fresh start so 'playback' actually applies
-          setSession('playback'); // starter category again until it ticks
-        }
+        // AMBIENT ONLY: no 'playback' escalation on refreeze — just make
+        // sure the ambient looper is playing and let the rebuild path run.
+        setSession('ambient');
         if (sessionEl) { try { sessionEl.play().catch(function(){}); } catch (e) {} }
       }
     } else stuckTicks = 0;
