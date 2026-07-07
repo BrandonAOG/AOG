@@ -1335,8 +1335,63 @@
     noiseLoopNode('lowpass', 260, 0.6, 0.02);
   }
 
+  // Rain: the old version was two steady filtered-noise beds — i.e. TV
+  // static. What makes rain read as rain: (1) a darker wash whose density
+  // slowly shifts (gusting), (2) individual droplet transients on top —
+  // mostly noisy ticks (drops on pavement/leaves) with the occasional
+  // pitched plink (drops on water/metal). Droplet one-shots self-stop, so
+  // only the scheduler timer needs tracking; stopAmbient's timer clear
+  // halts new drops and any in-flight ones end within ~100ms of the fade.
+  var dropBuf = null;
+  function rainLoopNode() {
+    var c = ctx;
+    // Downpour roar: a heavy low rumble under a broader, louder wash.
+    // Pouring rain is mostly this dense white roar — the drops sit on top.
+    noiseLoopNode('lowpass', 400, 0.6, 0.05);           // low rumble floor
+    noiseLoopNode('lowpass', 1800, 0.5, 0.055, true);   // main wash, gust swells
+    // Sheeting-water sizzle — much more present than a light shower
+    noiseLoopNode('highpass', 5000, 1, 0.018);
+    // Shared 60ms decaying-noise burst reused by every noise-tick droplet
+    if (!dropBuf || dropBuf.sampleRate !== c.sampleRate) {
+      var len = (c.sampleRate * 0.06) | 0;
+      dropBuf = c.createBuffer(1, len, c.sampleRate);
+      var dd = dropBuf.getChannelData(0);
+      for (var i = 0; i < len; i++) dd[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    }
+    function tick() {
+      var t = c.currentTime, n = 5 + Math.floor(Math.random() * 6);
+      for (var i = 0; i < n; i++) {
+        var at = t + Math.random() * 0.05;
+        if (Math.random() < 0.8) {
+          // Noise tick: drop hitting pavement/leaves. Randomized band + rate
+          // so no two ticks sound alike — identical ticks read as clicking.
+          var s = c.createBufferSource(); s.buffer = dropBuf;
+          s.playbackRate.value = 0.7 + Math.random() * 0.9;
+          var f = c.createBiquadFilter(); f.type = 'bandpass';
+          f.frequency.value = 1800 + Math.random() * 3500; f.Q.value = 2.5;
+          var g = c.createGain(); g.gain.value = 0.02 + Math.random() * 0.03;
+          s.connect(f).connect(g).connect(out(c));
+          s.start(at);
+        } else {
+          // Pitched plink: drop on water — quick downward pitch bend
+          var o = c.createOscillator(); o.type = 'sine';
+          var f0 = 900 + Math.random() * 2200;
+          o.frequency.setValueAtTime(f0, at);
+          o.frequency.exponentialRampToValueAtTime(f0 * 0.55, at + 0.025);
+          var pg = c.createGain();
+          pg.gain.setValueAtTime(0.012 + Math.random() * 0.012, at);
+          pg.gain.exponentialRampToValueAtTime(0.0001, at + 0.05 + Math.random() * 0.05);
+          o.connect(pg).connect(out(c));
+          o.start(at); o.stop(at + 0.12);
+        }
+      }
+      amb.timers.push(setTimeout(tick, 35 + Math.random() * 30));
+    }
+    tick();
+  }
+
   var LOOPS = {
-    rain:   function () { noiseLoopNode('bandpass', 3800, 0.4, 0.05); noiseLoopNode('lowpass', 500, 0.5, 0.020); },
+    rain:   rainLoopNode,
     wind:   function () { noiseLoopNode('bandpass', 320, 0.7, 0.08, true); noiseLoopNode('bandpass', 900, 0.8, 0.02, true); },
     hum:    function () { // weighted toward harmonics — 60Hz alone is inaudible on phone/laptop speakers
               oscLoopNode('sine', 60, 0.02); oscLoopNode('sine', 120, 0.022);
