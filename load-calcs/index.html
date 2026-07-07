@@ -326,7 +326,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
 
 <div class="action-bar" id="action-bar">
   <a class="ab-btn" href="../">🏠 HOME</a>
-  <button class="ab-btn" onclick="printReport()">⎙ REPORT</button>
+  <button class="ab-btn" onclick="capturePDF(this)">⎙ PDF</button>
   <button class="ab-btn" id="ab-capture" onclick="captureReport()">⤓ SAVE IMG</button>
   <a class="ab-btn" onclick="window.print()" style="cursor:pointer;">⎙ FULL</a>
   <a class="ab-btn" onclick="aogNewJobConfirm()" style="cursor:pointer;">↺ NEW JOB</a>
@@ -1920,6 +1920,9 @@ function buildReportHTML(){
     }
     var tot = (totEl.textContent||'').trim();
     if(tot==='—'||tot==='0'||!tot) return;
+    var qtyEl = tr.querySelector('input[id^="qty_"], input[id^="xqty_"]');
+    var q = qtyEl ? (parseInt(qtyEl.value,10)||0) : 0;
+    if(q>1) name += ' ×'+q;
     applLines.push({name:name, tot:tot});
   });
   var pp = document.getElementById('tot_pool_panel');
@@ -1941,7 +1944,8 @@ function buildReportHTML(){
     var val   = (gas&&gas.checked)
       ? (parseInt(qty.value)||1)*250
       : (parseInt(qty.value)||1)*(parseInt(va.value)||5000);
-    if(val) dryerLines.push({name:label+' ×'+(qty.value||1), tot:val.toLocaleString()});
+    var _dq = parseInt(qty.value,10)||1;
+    if(val) dryerLines.push({name:label+(_dq>1?' ×'+_dq:''), tot:val.toLocaleString()});
   }
 
   // ── Cooking ──
@@ -1966,6 +1970,19 @@ function buildReportHTML(){
     var val=isgas?500:(parseInt(vael&&vael.value)||0);
     if(val) cookLines.push({name:'Oven/Range '+(isgas?'(gas 500VA)':'electric'), tot:val.toLocaleString()});
   }
+  // Group identical cooking units into one line with ×N and summed VA
+  (function(){
+    var grouped={}, order=[];
+    cookLines.forEach(function(r){
+      var key=r.name+'|'+r.tot;
+      if(!grouped[key]){ grouped[key]={name:r.name, unitVA:parseInt(r.tot.replace(/,/g,''),10)||0, n:0}; order.push(key); }
+      grouped[key].n++;
+    });
+    cookLines = order.map(function(k){
+      var g=grouped[k];
+      return {name:g.name+(g.n>1?' ×'+g.n:''), tot:(g.unitVA*g.n).toLocaleString()};
+    });
+  })();
 
   // ── HVAC ──
   var hvacLines=[];
@@ -2019,6 +2036,64 @@ function buildReportHTML(){
   var phA=tv('rp_phA'), phB=tv('rp_phB');
   var pwire=tv('rp_wire'), ppanel=tv('rp_panel'), pegc=tv('rp_egc');
 
+  // ── Pool load line items (only counted loads; zeros, gas-excluded-to-0, and managed skipped) ──
+  var poolLines=[];
+  if(gc('has_pool')){
+    // Spa heater
+    var _spaQty=gv('qty_spa');
+    if(_spaQty>0){
+      var _spaGas=gc('gas_spa');
+      var _spaVA=_spaQty*(_spaGas?500:11000);
+      poolLines.push({name:'Spa Heater'+(_spaGas?' (gas 500VA ctrl)':'')+(_spaQty>1?' ×'+_spaQty:''), tot:_spaVA.toLocaleString()});
+    }
+    // 3.5 ton heater
+    if(!(document.getElementById('va_ph35')&&document.getElementById('va_ph35').value==='managed')){
+      var _q35=gv('qty_ph35'), _g35=gc('gas_ph35');
+      var _v35=_q35*(_g35?500:gv('va_ph35'));
+      if(_v35>0) poolLines.push({name:'Pool Heater 3.5 Ton HP'+(_g35?' (gas 500VA ctrl)':'')+(_q35>1?' ×'+_q35:''), tot:_v35.toLocaleString()});
+    }
+    // 5 ton heater
+    if(!(document.getElementById('va_ph5')&&document.getElementById('va_ph5').value==='managed')){
+      var _q5=gv('qty_ph5'), _g5=gc('gas_ph5');
+      var _v5=_q5*(_g5?500:gv('va_ph5'));
+      if(_v5>0) poolLines.push({name:'Pool Heater 5 Ton HP'+(_g5?' (gas 500VA ctrl)':'')+(_q5>1?' ×'+_q5:''), tot:_v5.toLocaleString()});
+    }
+    // Blower
+    if(!(document.getElementById('va_blower')&&document.getElementById('va_blower').value==='managed')){
+      var _bv=gv('va_blower');
+      if(_bv>0) poolLines.push({name:'Blower Motor', tot:_bv.toLocaleString()});
+    }
+    // Pool lights
+    var _lq=gv('qty_plight');
+    if(_lq>0) poolLines.push({name:'Pool Light'+(_lq>1?' ×'+_lq:''), tot:(_lq*300).toLocaleString()});
+    // Dynamic pool pumps
+    if(typeof poolPumpCount!=='undefined'){
+      for(var _n=1;_n<=poolPumpCount;_n++){
+        if(!document.getElementById('ppump_'+_n)) continue;
+        var _pe=document.getElementById('ppva_'+_n);
+        if(_pe&&_pe.value==='managed') continue;
+        var _pv=gv('ppva_'+_n);
+        if(_pv>0) poolLines.push({name:'Pool Pump '+_n+' ('+(gs('ppvolt_'+_n)||'240')+'V)', tot:_pv.toLocaleString()});
+      }
+    }
+    // Dynamic non-continuous loads
+    if(typeof poolNcCount!=='undefined'){
+      for(var _n=1;_n<=poolNcCount;_n++){
+        if(!document.getElementById('pnc_'+_n)) continue;
+        var _ne=document.getElementById('pncva_'+_n);
+        if(_ne&&_ne.value==='managed') continue;
+        var _nv=gv('pncva_'+_n);
+        if(_nv>0){
+          var _nmEl=document.getElementById('pncname_'+_n);
+          poolLines.push({name:(_nmEl&&_nmEl.value?_nmEl.value:'Non-continuous Load '+_n), tot:_nv.toLocaleString()});
+        }
+      }
+    }
+  }
+  var poolRows=poolLines.map(function(r){
+    return '<tr><td>'+r.name+'</td><td class="r">'+r.tot+' VA</td></tr>';
+  }).join('');
+
   // ── Build HTML ──
   var H = function(tag,cls,content){ return '<'+tag+(cls?' class="'+cls+'"':'')+'>'+content+'</'+tag+'>'; };
 
@@ -2053,10 +2128,9 @@ function buildReportHTML(){
   <!-- Left: load inputs -->
   <div>
     <div class="sh">Step 1 — Lighting &amp; Circuits</div>
-    <table class="dt"><tr><td>Floor Area Entered</td><td class="r">${sqftVal||'—'} sq ft</td></tr>
-    <tr><td>General Lighting (3VA/ft²)</td><td class="r">${tv('r1_gl')} VA</td></tr>
-    <tr><td>Small Appliance Circuits</td><td class="r">${tv('r1_sa')} VA</td></tr>
-    <tr><td>Laundry Circuits</td><td class="r">${tv('r1_lc')} VA</td></tr>
+    <table class="dt"><tr><td>General Lighting (${sqftVal||'—'} sq ft × 3VA/ft²)</td><td class="r">${tv('r1_gl')} VA</td></tr>
+    <tr><td>Small Appliance Circuits ×${iv('smapp')||0} (1,500 VA ea.)</td><td class="r">${tv('r1_sa')} VA</td></tr>
+    <tr><td>Laundry Circuits ×${iv('laundry')||0} (1,500 VA ea.)</td><td class="r">${tv('r1_lc')} VA</td></tr>
     <tr class="tot"><td>Step 1 Total</td><td class="r">${s1} VA</td></tr></table>
 
     <div class="sh">Step 2 — HVAC (added @ 100% after demand factor)</div>
@@ -2099,6 +2173,8 @@ function buildReportHTML(){
 
     <div class="sh">Pool Panel Feeder — NEC 680</div>
     <table class="dt">
+      ${poolRows}
+      ${poolRows?'<tr class="tot"><td>Pool Panel Loads Total</td><td class="r">'+poolLines.reduce(function(a,r){return a+parseInt(r.tot.replace(/,/g,''),10);},0).toLocaleString()+' VA</td></tr>':''}
       <tr><td>Phase A</td><td class="r">${phA} A</td></tr>
       <tr><td>Phase B</td><td class="r">${phB} A</td></tr>
       <tr><td>Min. Pool Feeder Wire</td><td class="r">${pwire}</td></tr>
@@ -2125,7 +2201,8 @@ ${managedLines.length>0?'<div style="margin-top:10pt;border:1.5pt solid #D97706;
   .dt .tot td{font-weight:700;border-top:1pt solid #ccc;border-bottom:1pt solid #ccc;background:#fafafa;}
 </style>`;
 
-  return html;
+  // Wrap in 2.5pt orange page border — fills 8.5×11 page inside .15in margins
+  return '<div style="border:2.5pt solid #D97706;padding:10pt 12pt;background:#fff;min-height:10.7in;box-sizing:border-box;">'+html+'</div>';
   } catch(e){ console.error('buildReportHTML error:', e); alert('Report error: '+e.message); return null; }
 }
 
@@ -2134,12 +2211,12 @@ function reportWrapStyles(){
   return '*{box-sizing:border-box;margin:0;padding:0;}'
     +'html,body{height:auto;overflow:hidden;}'
     +'body{font-family:\'Share Tech Mono\',monospace;font-size:9.5pt;color:#000;background:#fff;'
-    +'  width:8.5in;margin:0 auto;padding:.35in .4in .3in .4in;}'
+    +'  width:8.5in;margin:0 auto;padding:.15in;}'
     +'body > *:last-child,body > *:nth-last-child(2){margin-bottom:0!important;}'
     +'@media print{'
     +'  @page{size:8.5in 11in;margin:0;}'
     +'  html,body{height:auto;}'
-    +'  body{width:8.5in;padding:.35in .4in .3in .4in;}'
+    +'  body{width:8.5in;padding:.15in;}'
     +'  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}'
     +'}';
 }
@@ -2237,7 +2314,7 @@ function captureReport(){
   var holder = document.createElement('div');
   holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:816px;background:#fff;'
     + 'font-family:\'Share Tech Mono\',monospace;font-size:9.5pt;color:#000;'
-    + 'padding:34px 38px 29px 38px;box-sizing:border-box;z-index:-1;';
+    + 'padding:14.4px;box-sizing:border-box;z-index:-1;';
   holder.innerHTML = html;
   document.body.appendChild(holder);
 
@@ -2261,8 +2338,10 @@ function captureReport(){
       if(!blob){ restore(); alert('Could not create image.'); return; }
       var file = new File([blob], fileName, { type:'image/jpeg' });
 
-      // Prefer the native share sheet (lets user save to Photos, email, text, etc.)
-      if(navigator.canShare && navigator.canShare({ files:[file] })){
+      // Desktop always downloads directly; share sheet is mobile-only
+      var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+                     || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+      if(isMobile && navigator.canShare && navigator.canShare({ files:[file] })){
         navigator.share({ files:[file], title:'AOG Load Calculation', text:'Load Calculation Report' })
           .then(restore)
           .catch(function(err){
@@ -2292,6 +2371,100 @@ function downloadBlob(blob, fileName){
   a.click();
   document.body.removeChild(a);
   setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+}
+
+// Load jsPDF on demand (cached after first use)
+function loadJsPDF(){
+  return new Promise(function(resolve, reject){
+    if(window.jspdf && window.jspdf.jsPDF) return resolve(window.jspdf.jsPDF);
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = function(){ resolve(window.jspdf.jsPDF); };
+    s.onerror = function(){ reject(new Error('Could not load PDF library (check your connection).')); };
+    document.head.appendChild(s);
+  });
+}
+
+// Capture the report as a PDF (same rendering pipeline as SAVE IMG — no print
+// dialog). Uses the native share sheet when available, otherwise downloads.
+function capturePDF(btn){
+  var html = buildReportHTML();
+  if(html===null) return;
+
+  var origText = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = '… RENDERING'; btn.style.opacity = '0.6'; }
+  var restore = function(){ if(btn){ btn.textContent = origText; btn.style.opacity = '1'; } };
+
+  // Same off-screen fixed-width (8.5in @ 96dpi = 816px) container as SAVE IMG
+  var holder = document.createElement('div');
+  holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:816px;background:#fff;'
+    + 'font-family:\'Share Tech Mono\',monospace;font-size:9.5pt;color:#000;'
+    + 'padding:14.4px;box-sizing:border-box;z-index:-1;';
+  holder.innerHTML = html;
+  document.body.appendChild(holder);
+
+  Promise.all([loadHtml2Canvas(), loadJsPDF()]).then(function(libs){
+    var h2c = libs[0];
+    return h2c(holder, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      windowWidth: 816
+    }).then(function(canvas){ return { canvas: canvas, jsPDF: libs[1] }; });
+  }).then(function(r){
+    document.body.removeChild(holder);
+    var canvas = r.canvas, jsPDF = r.jsPDF;
+
+    var pdf = new jsPDF({ orientation:'portrait', unit:'in', format:'letter' });
+    var pageW = 8.5, pageH = 11;
+    // Height of one PDF page expressed in canvas pixels
+    var pagePx = Math.floor(canvas.width * (pageH / pageW));
+    var pages = Math.max(1, Math.ceil(canvas.height / pagePx));
+
+    for(var p = 0; p < pages; p++){
+      var sliceH = Math.min(pagePx, canvas.height - p * pagePx);
+      var slice = document.createElement('canvas');
+      slice.width = canvas.width;
+      slice.height = sliceH;
+      var ctx = slice.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, slice.width, slice.height);
+      ctx.drawImage(canvas, 0, p * pagePx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      var imgData = slice.toDataURL('image/jpeg', 0.92);
+      if(p > 0) pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, 0, pageW, sliceH * (pageW / canvas.width));
+    }
+
+    var co = (iv('j_co')||'AOG');
+    var addr = (iv('j_addr')||'');
+    var stamp = new Date().toISOString().slice(0,10);
+    var fileName = ('AOG_LoadCalc_' + co + (addr?('_'+addr):'') + '_' + stamp)
+                     .replace(/[^a-z0-9_\-]+/gi,'_').replace(/_+/g,'_') + '.pdf';
+
+    var blob = pdf.output('blob');
+    var file = new File([blob], fileName, { type:'application/pdf' });
+
+    // Desktop always downloads directly; share sheet is mobile-only
+    var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+                   || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent)); // iPadOS reports as Mac
+    if(isMobile && navigator.canShare && navigator.canShare({ files:[file] })){
+      navigator.share({ files:[file], title:'AOG Load Calculation', text:'Load Calculation Report' })
+        .then(restore)
+        .catch(function(err){
+          if(err && err.name === 'AbortError'){ restore(); return; }
+          downloadBlob(blob, fileName); restore();
+        });
+    } else {
+      downloadBlob(blob, fileName);
+      restore();
+    }
+  }).catch(function(err){
+    if(holder.parentNode) document.body.removeChild(holder);
+    restore();
+    console.error('capturePDF error:', err);
+    alert('PDF capture failed: ' + (err && err.message ? err.message : err));
+  });
 }
 </script>
   <script>
