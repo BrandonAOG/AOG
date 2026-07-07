@@ -308,10 +308,15 @@
         sessionEl.setAttribute('playsinline', '');
         sessionEl.loop = true;
         sessionEl.volume = 0.01;
-        ['playing', 'pause', 'suspend', 'stalled', 'error', 'ended'].forEach(function (ev) {
-          sessionEl.addEventListener(ev, function () {
-            
-          });
+        // FAST PATH: 'playing' on the looper is the EARLIEST signal that
+        // iOS accepted the audio session. A context born before that moment
+        // never ticks — so recycle it NOW instead of waiting for the 1.5s
+        // watchdog cycle. This is most of the old 5-10s cold-start silence.
+        sessionEl.addEventListener('playing', function () {
+          if (!IS_IOS || sessionLive) return;
+          if (ctx && ctx.state === 'running' && ctx.currentTime > 0) return; // already ticking
+          if (ctx && ctx._bornAt && Date.now() - ctx._bornAt < 250) return;  // newborn — give it a beat
+          recycleCtx();
         });
       }
       // Second known unfreezer: route the element THROUGH the WebAudio
@@ -390,20 +395,24 @@
       try { ctx.resume().catch(function () {}); } catch (e) {}
       return;
     }
-    if (hadGesture && ctx._bornAt && Date.now() - ctx._bornAt > 1500) {
-      // A gesture happened, the polite 'ambient' kick ran, and the clock is
-      // STILL frozen 1.5s later — this is the genuine cold-launch dead
-      // session. NOW escalate to 'playback' (this will pause the user's
-      // music, unavoidable on the buggy builds) until the clock ticks.
-      
-      
-      try { ctx.close(); } catch (e) {}
-      ctx = null; sceneStarted = false; pipedCtx = null;
-      var c = getCtx(); // fresh context; getCtx() resumes non-running states
-      if (c && c.state !== 'running') { try { c.resume().catch(function () {}); } catch (e) {} }
-      activateSession(); // re-pipe the looper element through the new ctx
-    }
+    // 800ms (was 1500): resume() settles well inside this, and every extra
+    // waiting round was a full silent cycle added to cold-start. The
+    // looper's 'playing' listener usually recycles even sooner.
+    if (hadGesture && ctx._bornAt && Date.now() - ctx._bornAt > 800) recycleCtx();
   }, 250);
+  // Throw away a frozen pre-session context and build a fresh one — the only
+  // cure for the iOS cold-launch dead session (see watchdog comment above).
+  var _lastRecycle = 0;
+  function recycleCtx() {
+    var now = Date.now();
+    if (now - _lastRecycle < 400) return; // event + watchdog can both fire
+    _lastRecycle = now;
+    try { if (ctx) ctx.close(); } catch (e) {}
+    ctx = null; sceneStarted = false; pipedCtx = null;
+    var c = getCtx(); // fresh context; getCtx() resumes non-running states
+    if (c && c.state !== 'running') { try { c.resume().catch(function () {}); } catch (e) {} }
+    activateSession(); // re-pipe the looper element through the new ctx
+  }
   // RE-FREEZE GUARD (iOS): if the clock ever stops advancing again while
   // 'running', re-arm the unlock so the next tap does the full activation.
   var lastLiveT = 0, stuckTicks = 0;
