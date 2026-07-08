@@ -1485,7 +1485,8 @@ const COUNTY_LIVE = {
    Its address search often returns richer, locally-maintained flood-zone info and the actual
    EC on file. Keyed by normalized MUNICIPALITY (city) name. Add more cities as you confirm them. */
 const FORERUNNER = {
-  NAPLES: { url:"https://naplesfl.withforerunner.com/explore", label:"City of Naples flood portal (Forerunner)" }
+  NAPLES:    { url:"https://naplesfl.withforerunner.com/explore", label:"City of Naples flood portal (Forerunner)" },
+  CAPECORAL: { url:"https://capecoralfl.withforerunner.com/",     label:"City of Cape Coral flood portal (Forerunner)" }
 };
 
 /* ---------- LIVE county flood cross-check (vs the effective FEMA NFHL) ----------
@@ -1562,7 +1563,7 @@ const DOCS_CITY = {
     // dept and permitting via the EnerGov self-service portal, NOT Lee County's Accela/eConnect.
     ecLayer: null,   // no public EC point-layer wired; search records in the EnerGov portal
     ecMap:   "https://capecoralfl.withforerunner.com/",
-    ecNote:  "City of Cape Coral (not Lee County): Cape Coral issues its own permits and keeps Elevation Certificates in its EnerGov self-service portal — search the address there. City Building Division (239) 574-0546. Verify before relying on it.",
+    ecNote:  "City of Cape Coral (not Lee County): Cape Coral issues its own permits. Elevation Certificates are searchable by address in the city's Forerunner flood portal; older records may only exist in the EnerGov self-service portal. City Building Division (239) 574-0546. Verify before relying on it.",
     permit:  "https://energovweb.capecoral.gov/EnerGovProd/selfservice#/home",
     permitBy:"address"
   },
