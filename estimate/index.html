@@ -1213,6 +1213,10 @@ body.dark-mode::-webkit-scrollbar-thumb:hover { background: linear-gradient(180d
   .content { padding: 10px 8px; }
   .header { padding: 8px 12px; }
   textarea { height: 80px !important; min-height: 80px !important; }
+  /* ...except the notes boxes, which are sized in LINES by autoGrowNote() (2 resting,
+     3 max). An 80px floor here is taller than their 3-line cap, which pinned them open
+     and stopped them growing. */
+  #gen_notes, #pad_notes, #gas_notes, #ready_notes { height: auto !important; min-height: 0 !important; }
   .doc-title { font-size: 0.85rem; letter-spacing: 2px; }
   .footer { flex-wrap: wrap; gap: 8px; padding: 8px 12px; justify-content: center; }
   .inline-row { flex-wrap: wrap; gap: 5px; }
@@ -3114,7 +3118,7 @@ function openPrintPreview() {
       _snapI(ta, 'min-height', '0px');
       _snapI(ta, 'max-height', 'none');
       _snapI(ta, 'overflow-y', 'hidden');
-      var cap = (window.noteCapHeight ? window.noteCapHeight(ta) : 1e9);
+      var cap = (window.noteLinesHeight ? window.noteLinesHeight(ta, window.NOTE_MAX_LINES) : 1e9);
       var h   = Math.max(40, Math.min(ta.scrollHeight, cap));
       ta.style.setProperty('height',     h + 'px', 'important');
       ta.style.setProperty('min-height', h + 'px', 'important');
@@ -3570,25 +3574,6 @@ function capturePageToCanvas(_fontsReady, _rectSink) {
     var CAPTURE_W = 1050;
     var PAPER_H   = Math.round(CAPTURE_W * 11 / 8.5);
 
-    // ── Sample the notes' ON-SCREEN typography and content width, before the page
-    // is widened to CAPTURE_W. The capture must reproduce the screen's wrapping
-    // exactly: same characters per line ⇒ same line count ⇒ nothing hits the
-    // 3-line cap that didn't already hit it on screen. That means scaling the font
-    // by however much the box itself grows, not stamping a fixed px size.
-    var _noteScreen = {};
-    page.querySelectorAll('#gen_notes, #pad_notes, #gas_notes, #ready_notes').forEach(function(el) {
-      var cs = window.getComputedStyle(el);
-      var lh = parseFloat(cs.lineHeight);
-      if (!lh || isNaN(lh)) lh = parseFloat(cs.fontSize) * 1.25;   // line-height:normal
-      _noteScreen[el.id] = {
-        fs: parseFloat(cs.fontSize),
-        lh: lh,
-        // clientWidth includes padding, excludes border — subtract padding for the
-        // true text column width, which is what governs where lines break.
-        textW: el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-      };
-    });
-
     page.style.width     = CAPTURE_W + 'px';
     page.style.maxWidth  = CAPTURE_W + 'px';
     page.style.height    = 'auto';
@@ -3797,34 +3782,36 @@ function capturePageToCanvas(_fontsReady, _rectSink) {
 
     // ── Notes textareas: capture typography applied to the LIVE DOM ──
     // These get swapped for <div>s in onclone (html2canvas can't wrap textarea text).
-    // The font is scaled by exactly how much the text column widened when the page
-    // went from its on-screen width to CAPTURE_W. Characters-per-line is therefore
-    // unchanged, so the note wraps to the same lines it does on screen and reads at
-    // the same relative size — no fixed px value can do that, because the screen
-    // width varies by device. Math.floor biases the font down so a rounding error
-    // can only ever pull a line break earlier, never push a 4th line into the cap.
+    //
+    // The font is a FIXED px value, deliberately not derived from the screen. The
+    // capture always renders a 1050px-wide sheet, so characters-per-line — and hence
+    // whether a note fits the 3-line cap — depends only on this number. Scaling it by
+    // the screen width gave a phone 20px and a desktop 16.3px, i.e. two different PDFs
+    // from one form, and made the desktop output shift whenever the window was resized.
+    //
+    // It sits below the CAPTURE_FONT_PX used for inputs (20px) because 3 lines of a
+    // long note don't fit the box at 20px. Notes therefore read slightly smaller than
+    // the field text beside them; that is the cost of not truncating the customer's
+    // notes. Raise it only if you also raise NOTE_MAX_LINES.
+    //
     // Height is re-measured here (not in onclone) because the live page, CAPTURE_H
     // and the editable-PDF field rects must all agree. Reverted by restore().
+    var NOTE_CAPTURE_FONT_PX = window.NOTE_CAPTURE_FONT_PX || 16;
+    var NOTE_CAPTURE_LINE_H  = window.NOTE_CAPTURE_LINE_H  || 1.3;
     page.querySelectorAll('#gen_notes, #pad_notes, #gas_notes, #ready_notes').forEach(function(el) {
       _tweak(el, function(e) {
-        var s  = _noteScreen[e.id];
-        var cs = window.getComputedStyle(e);
-        var floorH = parseFloat(cs.height) || 0;   // designed box size, before we touch it
-        if (s && s.textW > 0) {
-          var textW1 = e.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-          var scale  = textW1 / s.textW;
-          e.style.setProperty('font-size',   (Math.floor(s.fs * scale * 10) / 10) + 'px', 'important');
-          e.style.setProperty('line-height', (s.lh * scale) + 'px', 'important');
-        }
+        e.style.setProperty('font-size',   NOTE_CAPTURE_FONT_PX + 'px', 'important');
+        e.style.setProperty('line-height', (NOTE_CAPTURE_FONT_PX * NOTE_CAPTURE_LINE_H) + 'px', 'important');
         e.style.setProperty('box-sizing', 'border-box', 'important');
         e.style.setProperty('overflow', 'hidden', 'important');
-        e.style.setProperty('max-height', 'none', 'important');
-        e.style.setProperty('min-height', '0', 'important');
-        // Re-measure at the capture font/width, then clamp to NOTE_MAX_LINES.
-        e.style.setProperty('height', 'auto', 'important');
-        var cap = (window.noteCapHeight ? window.noteCapHeight(e) : 1e9);
-        // Never below the designed box, never above 3 lines.
-        e.style.setProperty('height', Math.min(Math.max(floorH, e.scrollHeight), cap) + 'px', 'important');
+        // Measure at the capture font/width with the stylesheet floors lifted, then
+        // clamp between 2 and 3 lines OF THE CAPTURE FONT. Reading the element's
+        // current pixel height as a floor is what put 80px (≈3 capture rows) under
+        // every empty box on the phone.
+        var content = window.noteContentHeight ? window.noteContentHeight(e) : 0;
+        var minH    = window.noteLinesHeight ? window.noteLinesHeight(e, window.NOTE_MIN_LINES) : 0;
+        var cap     = window.noteLinesHeight ? window.noteLinesHeight(e, window.NOTE_MAX_LINES) : 1e9;
+        if (content) e.style.setProperty('height', Math.min(Math.max(content, minH), cap) + 'px', 'important');
       });
     });
 
@@ -5846,46 +5833,146 @@ document.addEventListener('DOMContentLoaded', function() {
 // would otherwise beat a plain inline height. min-height in CSS still acts as the
 // floor, so scrollHeight never comes back smaller than the designed box.
 window.NOTE_IDS = ['gen_notes', 'pad_notes', 'gas_notes', 'ready_notes'];
-window.NOTE_MAX_LINES = 3;   // ← change this one number to re-cap every notes box
+window.NOTE_MIN_LINES = 2;    // resting size of an empty box
+window.NOTE_MAX_LINES = 3;    // lines the note may occupy IN THE CAPTURE / PDF
+window.NOTE_CAPTURE_W       = 1050;  // must match CAPTURE_W in capturePageToCanvas()
+window.NOTE_CAPTURE_FONT_PX = 16;    // must match the notes stamp in capturePageToCanvas()
+window.NOTE_CAPTURE_LINE_H  = 1.3;
 
-// Tallest a notes box may get, in px, at whatever typography is currently applied.
+// Height of an N-line notes box, in px, at whatever typography is currently applied.
 // Computed live (not hardcoded) so it stays correct on screen, in print, and in the
 // capture path — each of which uses a different font size, line-height and padding.
-window.noteCapHeight = function(el) {
+// Mixing a px floor with a line-based cap is what broke the phone: the stylesheet's
+// `min-height:80px` on mobile outranked a 65px 3-line cap, so the box could neither
+// grow on screen nor rest at 2 lines in the capture. Everything is lines now.
+window.noteLinesHeight = function(el, lines) {
   var cs = window.getComputedStyle(el);
   var lh = parseFloat(cs.lineHeight);
   if (!lh || isNaN(lh)) lh = parseFloat(cs.fontSize) * 1.25;   // line-height:normal
   var chrome = parseFloat(cs.paddingTop)     + parseFloat(cs.paddingBottom)
              + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
-  return Math.ceil(lh * window.NOTE_MAX_LINES + chrome);       // box-sizing:border-box
+  return Math.ceil(lh * lines + chrome);                       // box-sizing:border-box
+};
+window.noteMinHeight = function(el) { return window.noteLinesHeight(el, window.NOTE_MIN_LINES); };
+
+// ── The real limit: does the text fit 3 lines OF THE CAPTURE SHEET? ──
+// Capping the SCREEN at 3 lines was wrong. The capture renders a 1050px page, so its
+// lines hold far more characters than a phone's do — a phone was refusing text that
+// the PDF had ample room for, while a desktop (whose page is nearly 1050 already) was
+// about right. Rather than approximate that ratio, lay the text out in a hidden probe
+// at the exact capture width and font and measure it.
+//
+// The note is a full-width block, so its text column is pageWidth − chrome, and chrome
+// (page + section + box padding and borders) is a fixed pixel amount that does NOT
+// scale with the page. Hence captureTextW = NOTE_CAPTURE_W − chrome.
+window.noteCaptureFits = function(el) {
+  var page = document.getElementById('page');
+  var cs   = window.getComputedStyle(el);
+  var textW = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  var pageW = page ? page.getBoundingClientRect().width : 0;
+  if (!textW || !pageW) return true;                       // not laid out — don't block
+  var captureTextW = Math.max(40, window.NOTE_CAPTURE_W - (pageW - textW));
+
+  var probe = document.getElementById('note-fit-probe');
+  if (!probe) {
+    probe = document.createElement('div');
+    probe.id = 'note-fit-probe';
+    probe.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(probe);
+  }
+  var lh = window.NOTE_CAPTURE_FONT_PX * window.NOTE_CAPTURE_LINE_H;
+  probe.style.cssText = 'position:absolute!important;left:-99999px!important;top:0!important;' +
+    'visibility:hidden!important;pointer-events:none!important;padding:0!important;border:0!important;' +
+    'white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;' +
+    'width:' + captureTextW + 'px;' +
+    'font-family:' + cs.fontFamily + ';' +
+    'font-size:' + window.NOTE_CAPTURE_FONT_PX + 'px;' +
+    'font-weight:' + cs.fontWeight + ';' +
+    'line-height:' + lh + 'px;';
+  // A trailing newline adds no height to a div the way it does to a textarea. Pad it
+  // so "press Enter on the last line" is measured as the extra line it really is.
+  probe.textContent = el.value + (/\n$/.test(el.value) ? ' ' : '');
+  return Math.round(probe.scrollHeight / lh) <= window.NOTE_MAX_LINES;
+};
+
+// Measure a note's true content height. The stylesheet floors (min-height:43px, and
+// 80px on mobile) have to be lifted first or scrollHeight just reports the floor and
+// the box appears never to grow.
+window.noteContentHeight = function(el) {
+  el.style.setProperty('min-height', '0',    'important');
+  el.style.setProperty('max-height', 'none', 'important');
+  el.style.setProperty('height',     'auto', 'important');
+  return el.scrollHeight;
 };
 
 window.autoGrowNote = function(el) {
   if (!el) return;
-  el.style.setProperty('height', 'auto', 'important');
-  var content = el.scrollHeight;
+  var content = window.noteContentHeight(el);
   if (!content) return;                            // hidden / not laid out yet
-  var cap = window.noteCapHeight(el);
-  el.style.setProperty('height', Math.min(content, cap) + 'px', 'important');
-  el.style.setProperty('max-height', cap + 'px', 'important');
-  // Past 3 lines the box stops growing — let the user scroll inside it so nothing
-  // they typed is invisible on screen. (Print/capture still clip at 3 lines.)
-  el.style.setProperty('overflow-y', content > cap ? 'auto' : 'hidden', 'important');
+  // No screen-side line cap. The box grows to hold whatever the capture-fit gate let
+  // through — on a phone that can be ~7 screen lines for the same text that occupies
+  // 3 lines of the PDF. A resting empty box is still NOTE_MIN_LINES tall.
+  var h = Math.max(content, window.noteMinHeight(el));
+  // Pin all three so no stylesheet floor or ceiling can override the result.
+  el.style.setProperty('height',     h + 'px', 'important');
+  el.style.setProperty('min-height', h + 'px', 'important');
+  el.style.setProperty('max-height', h + 'px', 'important');
+  // Never scroll. Input past the capture's capacity is rejected outright, so there is
+  // never hidden text to scroll to — what you see is exactly what lands in the PDF.
+  el.style.setProperty('overflow', 'hidden', 'important');
 };
 
 window.autoGrowAllNotes = function() {
   window.NOTE_IDS.forEach(function(id) {
-    window.autoGrowNote(document.getElementById(id));
+    var el = document.getElementById(id);
+    if (!el) return;
+    // Called after restoreDraft() and doClearForm(), which set .value directly. The
+    // overflow guard rolls back to _noteLast, so it must track those writes — otherwise
+    // the first overflowing keystroke after a draft restore would wipe the note back to
+    // whatever it was at bind time.
+    el._noteLast = el.value;
+    window.autoGrowNote(el);
   });
 };
 
 (function() {
+  // Reject any edit that pushes the note past NOTE_MAX_LINES. We can't know whether a
+  // keystroke overflows until the browser has laid it out, so the edit is applied,
+  // measured, and rolled back to the last value that fit. `_noteLast` is seeded at bind
+  // time and only advanced on edits that fit, so a note restored from a draft that is
+  // already over the cap can still be deleted from — deleting shrinks the content and
+  // is always accepted.
+  function fits(el) { return window.noteCaptureFits(el); }
   function bind() {
     window.NOTE_IDS.forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener('input', function() { window.autoGrowNote(el); });
-      // Enter now inserts a real line break — the box grows to hold it.
+      el._noteLast = el.value;
+      el.addEventListener('input', function() {
+        if (fits(el)) {
+          el._noteLast = el.value;
+        } else {
+          var caret = el.selectionStart;
+          var delta = el.value.length - el._noteLast.length;   // chars this edit added
+          el.value = el._noteLast;
+          try { el.setSelectionRange(caret - delta, caret - delta); } catch (e) {}
+        }
+        window.autoGrowNote(el);
+      });
+      // Enter is just another edit — the probe measures the newline as a real extra
+      // line, so the input handler above rejects it when there is no room. Refusing it
+      // here too avoids a caret flicker on the rejected keystroke.
+      el.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        var pos = el.selectionStart, end = el.selectionEnd;
+        var probe = el.value.slice(0, pos) + '\n' + el.value.slice(end);
+        var real = el.value;
+        el.value = probe;
+        var ok = fits(el);
+        el.value = real;
+        try { el.setSelectionRange(pos, end); } catch (err) {}
+        if (!ok) e.preventDefault();
+      });
     });
     window.autoGrowAllNotes();
   }
