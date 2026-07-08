@@ -1899,6 +1899,17 @@ const ZONING_LIVE = {
   // item 9ec63c115d3a40509559ebc5e2cb8991.
   HENDRY: { label:"Hendry County Zoning", codeField:"Current_Zo", descField:"Current_Zo", urls:[
     "https://services7.arcgis.com/8l7Qq5t0CPLAJwJK/arcgis/rest/services/Zoning/FeatureServer/1/query"
+  ]},
+  // ✅ Manatee County — the district rides on the county's public "Parcels" FeatureServer (the same
+  // denormalized parcel layer that carries flood zone, year built, trash pickup, etc.). Field
+  // "ZONING" holds the code; it's namespaced by jurisdiction — UNINCORPORATED parcels are bare
+  // (A, RSF-6, PD-MU, "A,PD-MU" for split zoning), while CITY parcels carry a 2-letter prefix
+  // (BR_ Bradenton, PA_ Palmetto, etc.). manateeSetbacks()/renderManateeSetbacks() strip the city
+  // prefix (bailing to a "city district" note) and split comma-joined dual zoning. codeField pinned
+  // to ZONING so detection can't drift to LUC (the property-appraiser USE code) or the many service
+  // columns. YRBLT feeds parcelYearBuilt; the parcels service is CORS-open and token-free.
+  MANATEE: { label:"Manatee County Zoning", codeField:"ZONING", urls:[
+    "https://www.mymanatee.org/gisits/rest/services/publicportal/publicportal/FeatureServer/0/query"
   ]}
 };
 
@@ -5930,6 +5941,253 @@ function renderSanibelSetbacks(districtCode){
   return h;
 }
 
+/* ================================ MANATEE COUNTY ================================
+   Manatee County Land Development Code, Chapter 4, Section 401 (Standard Zoning Districts).
+   Governs the UNINCORPORATED county; the cities (Bradenton, Palmetto, Bradenton Beach,
+   Holmes Beach, Anna Maria) and the Town of Longboat Key run their own codes and are excluded
+   via MANATEE_INCORP. Hand-entered & verified from the uploaded LDC (Supp. No. 15–16; latest
+   dimensional-table ordinance Ord. 23-15, 2-16-23) against the six Schedule-of-Bulk tables:
+     Table 4-4  Village (Myakka City, Parrish, Rubonia)
+     Table 4-5  Agricultural & Single-Family (A, A-1, RSF-1..9)
+     Table 4-6  Duplex & Multi-Family (RDD-3/4.5/6, RMF-6/9/12/16)
+     Table 4-7  Mobile Home (RSMH-4.5/6)
+     Table 4-8  Office / Commercial / Mixed-Use (PR-S/M, NC-S/M, GC, HC, MX, RVP)
+     Table 4-9  Industrial / Extraction / Institutional (LM, HM, EX, MP-I)
+   Values: numbers = minimum feet; the front figures shown are the SINGLE-FAMILY-DETACHED row
+   (the primary case for generator siting). Where the table lists "20/25", the 25 is the
+   front-loaded-garage/carport minimum (§ Table 4-5 fn.5, administratively reducible up to 5 ft).
+   wf = waterfront yard (never < 30 ft; 25 ft on platted lots of record — § 401.3.E.9).
+
+   IMPORTANT — the density suffix is MEANINGFUL here (RSF-6 ≠ RSF-9; RMF-12 ≠ RMF-16), so this
+   table is keyed on the FULL code and does NOT collapse the numeric tier the way Sarasota's does.
+
+   GENERATOR RULE (rides on every unincorporated-Manatee result via renderManateeEquipmentNote):
+   Manatee EXEMPTS residential electrical generators (and residential A/C units) from ALL required
+   yards outright — § 401.3.E.2. Not an encroachment allowance, a full exemption. The real limits
+   are: (1) not in the visibility triangle (§ 1002); (2) not in any easement — and note § 401.3.F.6
+   extends easement encroachment only to A/C & POOL equipment, NOT generators; (3) the 10-ft
+   equipment-separation rule where the district side yard is < 7.5 ft (a spacing rule vs. the
+   neighbor's equipment, not a lot-line setback). */
+const MANATEE_INCORP = new Set(['BRADENTON','PALMETTO','BRADENTONBEACH','HOLMESBEACH','ANNAMARIA','LONGBOATKEY']);
+const MANATEE_SETBACKS = {
+  // --- Table 4-5: Agricultural & Single-Family (front = SF-detached) ---
+  "A":       { front:50, side:10, rear:25, wf:30, minLot:"217,800 sq ft (5 ac)", width:200, height:"2 stories", tightSide:false, note:"General Agriculture. Non-res FAR 0.23; open space 20%. Min lot may not include wetlands unless § 401.3.C.3 met. Yards +35 ft where contiguous to active ag operations (§ 401.3.E.8)." },
+  "A-1":     { front:50, side:10, rear:25, wf:30, minLot:"43,560 sq ft (1 ac)", width:100, height:"2 stories", tightSide:false, note:"Agricultural Suburban — rural-to-suburban transition." },
+  "RSF-1":   { front:40, side:10, rear:25, wf:30, minLot:"30,000 sq ft", width:100, height:"2 stories", tightSide:false, note:"Residential Single-Family RSF-1." },
+  "RSF-2":   { front:25, side:10, rear:25, wf:30, minLot:"15,000 sq ft", width:80, height:"2 stories", tightSide:false, note:"Residential Single-Family RSF-2." },
+  "RSF-3":   { front:25, side:10, rear:20, wf:30, minLot:"10,000 sq ft", width:75, height:"2 stories", tightSide:false, note:"Residential Single-Family RSF-3." },
+  "RSF-4.5": { front:"20/25", side:8, rear:20, wf:30, minLot:"7,000 sq ft", width:70, height:"2 stories", tightSide:false, note:"Residential Single-Family RSF-4.5. Front 20 ft (25 ft for front-loaded garage/carport)." },
+  "RSF-6":   { front:"20/25", side:8, rear:20, wf:30, minLot:"6,000 sq ft", width:60, height:"2 stories", tightSide:false, note:"Residential Single-Family RSF-6. Front 20 ft (25 ft for front-loaded garage/carport)." },
+  "RSF-9":   { front:"15/25", side:5, rear:15, wf:30, minLot:"4,000 sq ft", width:40, height:"2 stories", tightSide:true, note:"Residential Single-Family RSF-9. Front 15 ft (25 ft for front-loaded garage/carport). Side yard 5 ft (< 7.5 ft — the 10-ft equipment-separation rule applies)." },
+  // --- Table 4-6: Duplex & Multi-Family (front = SF-detached row; other building types differ) ---
+  "RDD-3":   { front:25, side:10, rear:20, wf:30, minLot:"8,000 sq ft (SF-det)", width:75, height:"3 stories", tightSide:false, multi:true, note:"Residential Duplex RDD-3. Values shown = single-family-detached row; duplex/semi-detached rows differ — see full Table 4-6." },
+  "RDD-4.5": { front:25, side:8, rear:20, wf:30, minLot:"7,000 sq ft (SF-det)", width:70, height:"3 stories", tightSide:false, multi:true, note:"Residential Duplex RDD-4.5. SF-detached row shown; duplex/semi-detached differ — see full Table 4-6." },
+  "RDD-6":   { front:25, side:8, rear:20, wf:30, minLot:"6,000 sq ft (SF-det)", width:60, height:"3 stories", tightSide:false, multi:true, note:"Residential Duplex RDD-6. SF-detached row shown; duplex/semi-detached differ — see full Table 4-6." },
+  "RMF-6":   { front:"20/25", side:10, rear:20, wf:30, minLot:"6,000 sq ft (SF-det)", width:50, height:"4 stories", tightSide:false, multi:true, note:"Residential Multi-Family RMF-6. SF-detached row shown; multi-family rear 25 ft, attached/semi-detached rows differ — see full Table 4-6." },
+  "RMF-9":   { front:"20/25", side:10, rear:20, wf:30, minLot:"6,000 sq ft (SF-det)", width:50, height:"4 stories", tightSide:false, multi:true, note:"Residential Multi-Family RMF-9. SF-detached row shown; other building types differ — see full Table 4-6." },
+  "RMF-12":  { front:"15/25", side:5, rear:15, wf:30, minLot:"5,000 sq ft (SF-det)", width:40, height:"6 stories", tightSide:true, multi:true, note:"Residential Multi-Family RMF-12. SF-detached row shown; multi-family rear 20 ft. Side 5 ft (< 7.5 ft — 10-ft equipment-separation rule applies). See full Table 4-6." },
+  "RMF-16":  { front:"15/25", side:5, rear:15, wf:30, minLot:"4,000 sq ft (SF-det)", width:40, height:"6 stories", tightSide:true, multi:true, note:"Residential Multi-Family RMF-16. SF-detached row shown; multi-family rear 20 ft. Side 5 ft (< 7.5 ft — 10-ft equipment-separation rule applies). See full Table 4-6." },
+  // --- Table 4-7: Mobile Home ---
+  "RSMH-4.5": { front:5, side:5, rear:5, wf:30, minLot:"3,000–4,750 sq ft (by width)", width:40, height:"1 story (res)", tightSide:true, note:"Mobile Home RSMH-4.5. All yards 5 ft (side < 7.5 ft — 10-ft equipment-separation rule applies). MH/RV exempt from waterfront setback. Min project area 20 ac." },
+  "RSMH-6":   { front:5, side:5, rear:5, wf:30, minLot:"3,000–4,750 sq ft (by width)", width:40, height:"1 story (res)", tightSide:true, note:"Mobile Home RSMH-6. All yards 5 ft (side < 7.5 ft — 10-ft equipment-separation rule applies). MH/RV exempt from waterfront setback. Min project area 20 ac." },
+  // --- Table 4-4: Village ---
+  "VIL-MYAKKA":  { front:"20/25", side:10, rear:20, wf:30, minLot:"10,000 sq ft (SF-det)", width:75, height:"3 stories", tightSide:false, note:"Myakka City Village. Front 20 ft (25 ft front-loaded garage). All-other-residential front 25 ft." },
+  "VIL-RUBONIA": { front:"20/25", side:8, rear:20, wf:30, minLot:"6,000 sq ft (SF-det)", width:60, height:"3 stories", tightSide:false, note:"Rubonia Village. Front 20 ft (25 ft front-loaded garage). Side 8 ft (residential)." },
+  "VIL-PARRISH": { front:"20/25", side:10, rear:20, wf:30, minLot:"10,000 sq ft (SF-det)", width:75, height:"3 stories", tightSide:false, note:"Parrish Village. Front 20 ft (25 ft front-loaded garage). Parrish Commercial Village Overlay (§ 403.4) may add standards." },
+  // --- Table 4-8: Office / Commercial / Mixed-Use (uniform 25/10/15 except RVP) ---
+  "PR-S": { front:25, side:10, rear:15, wf:30, minLot:"10,000 sq ft", width:75, height:"3 stories", tightSide:false, nonres:true, note:"Professional Office, Small. Side/rear 20 ft when abutting single-family residential zoning." },
+  "PR-M": { front:25, side:10, rear:15, wf:30, minLot:"10,000 sq ft", width:75, height:"3 stories", tightSide:false, nonres:true, note:"Professional Office, Medium. Side/rear 20 ft when abutting single-family residential zoning." },
+  "NC-S": { front:25, side:10, rear:15, wf:30, minLot:"7,500 sq ft", width:75, height:"3 stories", tightSide:false, nonres:true, note:"Neighborhood Commercial, Small. Side/rear 20 ft when abutting single-family residential zoning." },
+  "NC-M": { front:25, side:10, rear:15, wf:30, minLot:"7,500 sq ft", width:75, height:"3 stories", tightSide:false, nonres:true, note:"Neighborhood Commercial, Medium. Side/rear 20 ft when abutting single-family residential zoning." },
+  "GC":   { front:25, side:10, rear:15, wf:30, minLot:"7,500 sq ft", width:75, height:"4 stories (6 SP)", tightSide:false, nonres:true, note:"General Commercial. Side/rear 20 ft when abutting single-family residential zoning." },
+  "HC":   { front:25, side:10, rear:15, wf:30, minLot:"7,500 sq ft", width:75, height:"3 stories", tightSide:false, nonres:true, note:"Heavy Commercial. Side/rear 20 ft when abutting single-family residential zoning." },
+  "MX":   { front:25, side:10, rear:15, wf:30, minLot:"7,500 sq ft", width:75, height:"4 stories (6 SP)", tightSide:false, nonres:true, note:"Mixed-Use. Side/rear 20 ft when abutting single-family residential zoning." },
+  "RVP":  { front:"50/5", side:"15/5", rear:15, wf:30, minLot:"10-acre project", width:"30/20/75", height:"1 story (res) / 3 (non-res)", tightSide:false, nonres:true, note:"Recreational Vehicle Park. Perimeter setbacks 50/15/15; internal RV sites 5 ft. Non-RV uses 25/10/15." },
+  // --- Table 4-9: Industrial / Extraction / Institutional (front = general; SF-use figures noted) ---
+  "LM":   { front:25, side:20, rear:20, wf:30, minLot:"10,000 sq ft", width:100, height:"4 stories", tightSide:false, nonres:true, note:"Light Manufacturing. Single-family uses: front 20 / side 8 / rear 20 (§ 531.47.D). 75 ft side/rear when abutting SF residential zoning." },
+  "HM":   { front:25, side:20, rear:20, wf:30, minLot:"10,000 sq ft", width:100, height:"5 stories", tightSide:false, nonres:true, note:"Heavy Manufacturing. Single-family uses: front 20 / side 8 / rear 20 (§ 531.47.D). 75 ft side/rear when abutting SF residential zoning." },
+  "EX":   { front:50, side:10, rear:25, wf:30, minLot:"5 acres", width:200, height:"N/A", tightSide:false, nonres:true, note:"Extraction (mining). Non-res FAR 0.23." },
+  "MP-I": { front:40, side:"30/40", rear:"30/40", wf:30, minLot:"40 acres", height:"7 stories / 84 ft", tightSide:false, nonres:true, note:"Master Planned Institutional. Side/rear 30 ft (non-residential) / 40 ft (residential). Buildings > 35 ft trigger § 401.5. Open space 25%." },
+  // --- Conservation / Recreation / Open Space (no dimensional table row — governed per use / PD) ---
+  "CON":  { front:null, side:null, rear:null, allFormula:true, note:"Conservation — preserves open space, habitat, drainage & recharge areas. Dimensional standards set per approved use; ag operations need a Conservation Plan. Verify in § 401.1.A." },
+  "R/OS": { front:null, side:null, rear:null, allFormula:true, note:"Recreation / Open Space — parks, historic sites, permanent open space. Dimensional standards set per approved use. Verify in § 401.1.B." },
+  // --- Planned Development (§ 402) — project-specific ---
+  // Planned Development (§ 402.7–402.21). GIS stores these HYPHENATED (PD-R, PD-MU, PD-PM…);
+  // the LDC section codes are unhyphenated (PDR, PDMU…). Keyed on the GIS form; aliases map both.
+  "PD-R":  { front:null, side:null, rear:null, pd:true, note:"Planned Development Residential (§ 402.7) — front/side/rear, height and density are set by the approved development order & master site plan. Read the parcel's adopting PD ordinance." },
+  "PD-MH": { front:null, side:null, rear:null, pd:true, note:"Planned Development Mobile Home (§ 402.8) — standards set by the approved development order & master site plan. Read the parcel's adopting PD ordinance." },
+  "PD-RV": { front:null, side:null, rear:null, pd:true, note:"Planned Development Recreational Vehicle (§ 402.9) — standards set by the approved development order & master site plan. Read the parcel's adopting PD ordinance." },
+  "PD-O":  { front:null, side:null, rear:null, pd:true, note:"Planned Development Office (§ 402.10) — standards set by the approved development order & master site plan. Read the parcel's adopting PD ordinance." },
+  "PD-C":  { front:null, side:null, rear:null, pd:true, note:"Planned Development Commercial (§ 402.11) — standards set by the approved development order & master site plan. Read the parcel's adopting PD ordinance." },
+  "PD-RP": { front:null, side:null, rear:null, pd:true, note:"Planned Development Research Park (§ 402.12) — standards set by the approved development order & master site plan. Read the parcel's adopting PD ordinance." },
+  "PD-I":  { front:null, side:null, rear:null, pd:true, note:"Planned Development Industrial (§ 402.13) — standards set by the approved development order & master site plan. Read the parcel's adopting PD ordinance." },
+  "PD-W":  { front:null, side:null, rear:null, pd:true, note:"Planned Development Waterfront (§ 402.14) — standards (incl. waterfront structures) set by the approved development order. Read the parcel's adopting PD ordinance." },
+  "PD-PI": { front:null, side:null, rear:null, pd:true, note:"Planned Development Public Interest (§ 402.15) — standards set by the approved development order. Read the parcel's adopting PD ordinance." },
+  "PD-MU": { front:null, side:null, rear:null, pd:true, note:"Planned Development Mixed Use (§ 402.16) — standards set by the approved development order & master site plan. Read the parcel's adopting PD ordinance." },
+  "PD-UI": { front:null, side:null, rear:null, pd:true, note:"Planned Development Urban Industrial (§ 402.17) — standards set by the approved development order. Read the parcel's adopting PD ordinance." },
+  "PD-PM": { front:null, side:null, rear:null, pd:true, note:"Planned Development Port Manatee (§ 402.18) — standards set by the approved development order. Read the parcel's adopting PD ordinance." },
+  "PD-GC": { front:null, side:null, rear:null, pd:true, note:"Planned Development Golf Course (§ 402.19) — standards set by the approved development order & master site plan. Read the parcel's adopting PD ordinance." },
+  "PD-A":  { front:null, side:null, rear:null, pd:true, note:"Planned Development Agriculture (§ 402.20) — standards set by the approved development order & master site plan. Read the parcel's adopting PD ordinance." },
+  "PD-EZ": { front:null, side:null, rear:null, pd:true, note:"Planned Development Encouragement Zone (§ 402.21) — standards set by the approved development order. Read the parcel's adopting PD ordinance." }
+};
+const MANATEE_DISTRICT_ALIASES = {
+  "GENERALAGRICULTURE":"A","AGRICULTURE":"A","AGRICULTURALSUBURBAN":"A-1",
+  "RESIDENTIALSINGLEFAMILY1":"RSF-1","RESIDENTIALSINGLEFAMILY2":"RSF-2","RESIDENTIALSINGLEFAMILY3":"RSF-3",
+  "RESIDENTIALSINGLEFAMILY45":"RSF-4.5","RESIDENTIALSINGLEFAMILY6":"RSF-6","RESIDENTIALSINGLEFAMILY9":"RSF-9",
+  "RESIDENTIALDUPLEX3":"RDD-3","RESIDENTIALDUPLEX45":"RDD-4.5","RESIDENTIALDUPLEX6":"RDD-6",
+  "RESIDENTIALMULTIFAMILY6":"RMF-6","RESIDENTIALMULTIFAMILY9":"RMF-9","RESIDENTIALMULTIFAMILY12":"RMF-12","RESIDENTIALMULTIFAMILY16":"RMF-16",
+  "RESIDENTIALSINGLEFAMILYMOBILEHOME45":"RSMH-4.5","RESIDENTIALSINGLEFAMILYMOBILEHOME6":"RSMH-6",
+  "MOBILEHOME45":"RSMH-4.5","MOBILEHOME6":"RSMH-6",
+  "MYAKKACITY":"VIL-MYAKKA","MYAKKA":"VIL-MYAKKA","VILLAGEMYAKKACITY":"VIL-MYAKKA",
+  "RUBONIA":"VIL-RUBONIA","VILLAGERUBONIA":"VIL-RUBONIA","PARRISH":"VIL-PARRISH","VILLAGEPARRISH":"VIL-PARRISH",
+  "PROFESSIONALSMALLOFFICE":"PR-S","PROFESSIONALSMALL":"PR-S","PROFESSIONALMEDIUMOFFICE":"PR-M","PROFESSIONALMEDIUM":"PR-M",
+  "NEIGHBORHOODCOMMERCIALSMALL":"NC-S","NEIGHBORHOODCOMMERCIALMEDIUM":"NC-M",
+  "GENERALCOMMERCIAL":"GC","HEAVYCOMMERCIAL":"HC","MIXEDUSE":"MX","RECREATIONALVEHICLEPARK":"RVP",
+  "LIGHTMANUFACTURING":"LM","HEAVYMANUFACTURING":"HM","EXTRACTION":"EX","MASTERPLANNEDINSTITUTIONAL":"MP-I",
+  "CONSERVATION":"CON","RECREATIONOPENSPACE":"R/OS","RECREATION":"R/OS","OPENSPACE":"R/OS",
+  // Descriptive GIS strings AND unhyphenated LDC codes (PDR, PDMU…) -> hyphenated table keys.
+  "PLANNEDDEVELOPMENTRESIDENTIAL":"PD-R","PDR":"PD-R",
+  "PLANNEDDEVELOPMENTMOBILEHOME":"PD-MH","PDMH":"PD-MH",
+  "PLANNEDDEVELOPMENTRECREATIONALVEHICLE":"PD-RV","PDRV":"PD-RV",
+  "PLANNEDDEVELOPMENTOFFICE":"PD-O","PDO":"PD-O",
+  "PLANNEDDEVELOPMENTCOMMERCIAL":"PD-C","PDC":"PD-C",
+  "PLANNEDDEVELOPMENTRESEARCHPARK":"PD-RP","PDRP":"PD-RP",
+  "PLANNEDDEVELOPMENTINDUSTRIAL":"PD-I","PDI":"PD-I",
+  "PLANNEDDEVELOPMENTWATERFRONT":"PD-W","PDW":"PD-W",
+  "PLANNEDDEVELOPMENTPUBLICINTEREST":"PD-PI","PDPI":"PD-PI",
+  "PLANNEDDEVELOPMENTMIXEDUSE":"PD-MU","PDMU":"PD-MU",
+  "PLANNEDDEVELOPMENTURBANINDUSTRIAL":"PD-UI","PDUI":"PD-UI",
+  "PLANNEDDEVELOPMENTPORTMANATEE":"PD-PM","PDPM":"PD-PM",
+  "PLANNEDDEVELOPMENTGOLFCOURSE":"PD-GC","PDGC":"PD-GC",
+  "PLANNEDDEVELOPMENTAGRICULTURE":"PD-A","PDA":"PD-A",
+  "PLANNEDDEVELOPMENTENCOURAGEMENTZONE":"PD-EZ","PDEZ":"PD-EZ",
+  "PLANNEDDEVELOPMENT":"PD-R"
+};
+/* Manatee's parcel GIS namespaces zoning by jurisdiction: unincorporated codes are BARE (A, RSF-6,
+   PD-MU), while a city parcel's code carries a two-letter prefix + underscore — BR_ (Bradenton),
+   and by the same pattern PA_ (Palmetto), BB_ (Bradenton Beach), HB_ (Holmes Beach), AM_ (Anna
+   Maria), LB_ (Longboat Key). Those are CITY districts governed by the city's own code, NOT the
+   Manatee County LDC, so the county renderer must not fire on them. This tests for that prefix. */
+const MANATEE_CITY_PREFIX = { BR:'Bradenton', PA:'Palmetto', BB:'Bradenton Beach', HB:'Holmes Beach', AM:'Anna Maria', LB:'Longboat Key' };
+function manateeCityPrefix(districtCode){
+  if(districtCode==null) return null;
+  const m = String(districtCode).trim().toUpperCase().match(/^([A-Z]{2})_/);
+  return m ? (MANATEE_CITY_PREFIX[m[1]] || m[1]) : null;
+}
+/* Resolve one bare Manatee LDC district token to a setbacks entry. Suffix is significant, so try the
+   FULL normalized code first, then descriptive-string / LDC-code aliases, then a hyphenated PD form.
+   Handles "RSF-6", "RSF6", "RSF 6", "RMF-12", "RSMH-4.5", "A-1", "PD-MU", "PDMU", the long GIS
+   strings, and bare "A". Does NOT strip city prefixes — callers filter those out first. */
+function manateeSetbacksOne(token){
+  if(!token) return null;
+  const raw = String(token).toUpperCase().trim();
+  if(MANATEE_SETBACKS[raw]) return MANATEE_SETBACKS[raw];
+  // Normalize separators: "RSF 6" / "RSF_6" -> "RSF-6"; "PD MU" -> "PD-MU".
+  const dash = raw.replace(/[\s_]+/g,'-').replace(/-+/g,'-');
+  if(MANATEE_SETBACKS[dash]) return MANATEE_SETBACKS[dash];
+  // "RSF6" / "RMF12" -> insert a dash before a trailing numeric tier.
+  const reDash = raw.replace(/^([A-Z]+)[-\s]?([0-9]+(?:\.[0-9]+)?)$/, '$1-$2');
+  if(MANATEE_SETBACKS[reDash]) return MANATEE_SETBACKS[reDash];
+  // Descriptive GIS string or unhyphenated LDC code (letters+digits only) via alias map.
+  const alnum = raw.replace(/[^A-Z0-9]/g,'');
+  if(MANATEE_DISTRICT_ALIASES[alnum]) return MANATEE_SETBACKS[MANATEE_DISTRICT_ALIASES[alnum]];
+  // PD fallback: any unrecognized "PD…" token -> generic Planned Development (residential template).
+  if(/^PD/.test(alnum)) return MANATEE_SETBACKS["PD-R"];
+  return null;
+}
+/* Resolve a Manatee ZONING value, which may be split (comma-joined dual zoning, e.g. "A,PD-MU").
+   Returns { entries:[{token,setbacks}], cityPrefix } — cityPrefix set if ANY token is a city code. */
+function manateeSetbacks(districtCode){
+  if(districtCode==null || String(districtCode).trim()==='') return null;
+  const cityPrefix = manateeCityPrefix(districtCode);
+  // Split only on comma/semicolon (dual zoning like "A,PD-MU"). NOT on "/" — some district codes
+  // legitimately contain a slash (e.g. "R/OS" Recreation/Open Space).
+  const tokens = String(districtCode).split(/[,;]+/).map(t=>t.trim()).filter(Boolean);
+  const entries = [];
+  for(const t of tokens){
+    if(manateeCityPrefix(t)) continue;               // skip city-prefixed tokens
+    const sb = manateeSetbacksOne(t);
+    if(sb) entries.push({ token:t, setbacks:sb });
+  }
+  if(!entries.length && !cityPrefix) return null;
+  return { entries, cityPrefix };
+}
+/* Render one resolved district block (setbacks table or PD marker). No equipment note here — that
+   rides once at the end of renderManateeSetbacks so split-zoning parcels don't repeat it. */
+function renderManateeOneDistrict(token, s){
+  const shown = String(token);
+  if(s.pd){
+    let p=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ PD</span> ${esc(shown)} · setbacks set by the approved PD ordinance (Manatee LDC § 402)</div>`;
+    p+=`<div class="note">${esc(s.note)}</div>`;
+    p+=`<div class="note warnbox">Manatee Planned Development districts (LDC § 402) carry custom, project-specific setbacks, height and density adopted in the development order &amp; master site plan. The standard district tables do not apply — read the recorded PD ordinance for exact numbers.</div>`;
+    return p;
+  }
+  const ft = v => (v==null) ? '<span class="muted">see code</span>'
+                : (typeof v==='number' ? (v===0?'0 ft':v+' ft') : esc(String(v))+' ft');
+  const tref = s.nonres ? 'LDC § 401, Tables 4-8/4-9' : (s.multi ? 'LDC § 401, Table 4-6' : 'LDC § 401, Tables 4-4/4-5');
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(shown)} (Manatee ${esc(tref)})</div>`;
+  if(s.allFormula){
+    h+=`<div class="note">${esc(s.note)}</div>`;
+    h+=`<a class="palink" href="https://library.municode.com/fl/manatee_county/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify § 401 — Manatee LDC (Municode)</a>`;
+    return h;
+  }
+  if(s.minLot) h+=fieldRow('Minimum lot area', esc(String(s.minLot)));
+  if(s.width!=null) h+=fieldRow('Minimum lot width', (typeof s.width==='number'?s.width+' ft':esc(String(s.width))+' ft'));
+  h+=fieldRow('Front'+(s.nonres?'':' (single-family)'), ft(s.front), 'big');
+  h+=fieldRow('Side', ft(s.side));
+  h+=fieldRow('Rear', ft(s.rear));
+  if(s.wf!=null) h+=fieldRow('Waterfront', ft(s.wf));
+  if(s.height) h+=fieldRow('Max building height', esc(String(s.height)));
+  if(typeof s.front==='string' && s.front.indexOf('/')>-1 && !s.nonres) h+=`<div class="note"><b>Front detail:</b> the second figure is the minimum for a front-loaded garage or carport (25 ft), administratively reducible up to 5 ft if 25 ft of sidewalk-to-garage separation is kept (Table 4-5 fn. 5).</div>`;
+  if(s.note) h+=`<div class="note">${esc(s.note)}</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/manatee_county/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify § 401 — Manatee LDC (Municode)</a>`;
+  return h;
+}
+/* Render required setbacks for an unincorporated Manatee County ZONING value (LDC § 401,
+   Tables 4-4..4-9). Handles split zoning ("A,PD-MU") and bails when the code is a city district. */
+function renderManateeSetbacks(districtCode){
+  const r = manateeSetbacks(districtCode);
+  if(!r) return '';
+  // City-prefixed code (BR_*, PA_*, …): governed by the city's own LDC, not the county's. Say so
+  // instead of rendering county numbers that don't apply.
+  if(r.cityPrefix && !r.entries.length){
+    return `<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ CITY</span> ${esc(String(districtCode))} · ${esc(r.cityPrefix)} district</div>`
+      + `<div class="note warnbox">This parcel's zoning code (<b>${esc(String(districtCode))}</b>) is a <b>City of ${esc(r.cityPrefix)}</b> district, not a Manatee County one. Setbacks and generator rules come from ${esc(r.cityPrefix)}'s own land development code — the county LDC § 401 tables do not apply. Look up the district in the city's code.</div>`;
+  }
+  if(!r.entries.length) return '';
+  let h='';
+  const multiZone = r.entries.length > 1;
+  if(multiZone){
+    h+=`<div class="note warnbox"><b>Split zoning.</b> This parcel carries more than one zoning district (<b>${esc(String(districtCode))}</b>). Each applies to a different portion of the site; the standards below are shown per district. A generator's siting depends on which portion it sits in — confirm with the county.</div>`;
+  }
+  const tight = r.entries.some(e=>e.setbacks.tightSide);
+  for(const e of r.entries) h += renderManateeOneDistrict(e.token, e.setbacks);
+  h += renderManateeEquipmentNote({ tightSide: tight });
+  return h;
+}
+/* Manatee's residential generator / mechanical-equipment rule. Rides on every unincorporated-Manatee
+   result — it's a county-wide exemption in § 401.3.E.2, not district-specific. Manatee EXEMPTS
+   residential generators from ALL required yards; the binding limits are the visibility triangle, the
+   no-easement rule (which for generators is absolute — the § 401.3.F.6 easement-encroachment relief
+   covers only A/C & pool equipment), and the 10-ft equipment-separation rule on tight-side lots.
+   Takes the resolved setbacks entry so it can flag the 10-ft rule only where the side yard is < 7.5 ft. */
+function renderManateeEquipmentNote(s){
+  let g=`<div class="freshline snap" style="margin-top:12px"><span class="badge unk">⚡ GENERATOR · LDC § 401.3.E.2</span> generator siting (Manatee County)</div>`;
+  g+=`<div class="note"><b>Residential generators are exempt from every required yard.</b> LDC § 401.3.E.2 lists "residential electrical generators" (and residential A/C units) among structures <b>exempt from the required yards</b> — front, side and rear. The district setbacks above do <b>not</b> constrain a standby generator on a residential site.</div>`;
+  g+=fieldRow('Front yard', 'Exempt from setback');
+  g+=fieldRow('Side yard', 'Exempt from setback');
+  g+=fieldRow('Rear yard', 'Exempt from setback');
+  g+=fieldRow('Visibility triangle', 'Prohibited');
+  g+=fieldRow('Any easement', 'Prohibited');
+  g+=`<div class="note warnbox"><b>The exemption is not unlimited — three real constraints remain:</b><br>· <b>Visibility triangle (§ 1002).</b> The one exclusion written into the exemption itself. Sight triangles at street corners and driveways stay clear.<br>· <b>No easement — and for generators this is absolute.</b> "In drainage swales and easements... no encroachments are permitted." The narrow easement-encroachment relief in § 401.3.F.6 is granted only to <b>air-conditioning and pool equipment</b> — generators are not on that list. Pull the plat; a platted PUE/drainage easement bars the pad.<br>· <b>10-ft equipment separation on tight lots.</b> Where the district's minimum side yard is under 7½ ft, accessory equipment (A/C, pumps, <b>generators</b>) must sit at least 10 ft from the neighbor's similar equipment (Table 4-5 fn. 8; 4-6 fn. 9; 4-7 fn. 3).</div>`;
+  if(s && s.tightSide){
+    g+=`<div class="note"><b>This district has a side yard under 7½ ft</b>, so the 10-ft equipment-separation rule applies here. The generator can sit anywhere in the side yard, but must be ≥ 10 ft from the adjacent lot's A/C, generator or similar equipment — a constraint you can't verify from this parcel alone.</div>`;
+  }
+  g+=`<div class="note"><b>Scope &amp; other rules.</b> The yard exemption is <b>residential</b> only — a generator serving a non-residential use meets the district setback. Noise is governed by the county noise ordinance (Code of Ordinances, Art. II — Noise). In Planned Developments the generator still can't sit in an easement even where the PD sets no yards.</div>`;
+  g+=`<a class="palink" href="https://library.municode.com/fl/manatee_county/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify § 401.3 — Manatee LDC (Municode)</a>`;
+  return g;
+}
+
 /* ---------- Cape Coral required setbacks — LDC Article 4, Table 4.1.3.B ----------
    SOURCE OF TRUTH: City of Cape Coral LAND DEVELOPMENT CODE (Ord. No. 17-19, adopted 8-5-2019),
    printed as Volume II of the Code of Ordinances. The LDC *superseded* the former "Land Use and
@@ -9657,6 +9915,9 @@ async function runLookup(lat,lng,searchCtx){
     // Unincorporated Sarasota County (Unified Development Code, Ch. 124 § 124-76). Cities (Sarasota,
     // Venice, North Port, Longboat Key) adopt their own codes and are excluded via SARASOTA_INCORP.
     if(norm(countyName)==='SARASOTA' && !SARASOTA_INCORP.has(norm(cityName)) && zhit.code){ html += renderSarasotaSetbacks(zhit.code); }
+    // Manatee's parcel layer covers the whole county; city parcels are flagged by a ZONING prefix
+    // (BR_, PA_…), which renderManateeSetbacks() self-detects and reports — so no cityName guard here.
+    if(norm(countyName)==='MANATEE' && zhit.code){ html += renderManateeSetbacks(zhit.code); }
     if(zhit.sheetUrl) html += `<a class="palink" href="${esc(zhit.sheetUrl)}" target="_blank" rel="noopener" style="margin-top:8px">↗ Official zoning map sheet (PDF)</a>`;
     html += `<div class="note" style="padding-top:6px">District read live from <b>${esc(zhit.layerName||jurName)}</b>${zhit.lastEdit?' (layer updated '+esc(zhit.lastEdit.toLocaleDateString())+')':''}. Verify overlays, any PUD/planned-development terms, and the exact front/side/rear setbacks in the adopted code below — those are not a queryable number.</div>`;
     html += `<div class="note warnbox"><b>Not from the property appraiser.</b> The district above comes from <b>${esc(jurName)}</b>'s zoning GIS; setbacks and use standards live in its adopted land development code (Municode) and permitting portal.</div>`;
