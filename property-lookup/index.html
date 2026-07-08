@@ -5930,20 +5930,31 @@ function renderSanibelSetbacks(districtCode){
   return h;
 }
 
-/* ---------- Cape Coral required setbacks — LUDR Article 4, Table 4.1.3.B ----------
+/* ---------- Cape Coral required setbacks — LDC Article 4, Table 4.1.3.B ----------
+   SOURCE OF TRUTH: City of Cape Coral LAND DEVELOPMENT CODE (Ord. No. 17-19, adopted 8-5-2019),
+   printed as Volume II of the Code of Ordinances. The LDC *superseded* the former "Land Use and
+   Development Regulations" (LUDR) — the section numbers carried over, the document name did not.
+   Verified line-by-line against Table 4.1.3.B as printed in Supp. No. 38.
+
    Cape Coral's table uses more yard types than Collier: Front, Front (cul-de-sac), Side,
-   Corner-lot street side, Rear (primary), and Rear for pool cage. Verified against user-pasted
-   Table 4.1.3.B (residential districts). Cape Coral's GIS layer often returns map codes like
-   R-1B/R-1D/R-1W — all map to the single "R-1" standards in the code table (handled in aliasing). */
+   Corner-lot street side, Rear (primary), Rear for pool cage, and Double-frontage. Residential
+   districts also carry a Minimum Lot Area and (R-1/RML only) a Maximum Impervious Surface cap —
+   the latter matters for generator/AC pads, which are impervious (calc method: LDC Art. 1 § 1.15.M).
+
+   The city's GIS layer sometimes returns legacy map codes like R-1A/R-1B/R-1D/R-1W. The LDC has no
+   R-1 subdistricts — there is one R-1 standard — so all of them alias to "R-1" (handled below). */
 const CAPE_CORAL_SETBACKS = {
-  "R-1": { front:25, frontCul:18, side:7.5, rear:20, rearCage:10, cornerSide:10, height:38,
-           rearNote:"Rear 20 ft primary structure / 10 ft pool cage." },
-  "RML": { front:25, frontCul:18, side:7.5, rear:20, rearCage:10, cornerSide:10, height:50,
+  "R-1": { minLot:10000, imperv:"60%", front:25, frontCul:18, side:7.5, rear:20, rearCage:10,
+           doubleFront:25, cornerSide:10, height:38,
+           rearNote:"Rear 20 ft primary structure / 10 ft pool cage.",
+           note:"Minimum width at the setback line: 80 ft (single-family/duplex), 40 ft (semi-detached), 120 ft (attached / multi-family 3+ units)." },
+  "RML": { minLot:10000, imperv:"60%", front:25, frontCul:18, side:7.5, rear:20, rearCage:10,
+           doubleFront:25, cornerSide:10, height:50,
            rearNote:"Rear 20 ft primary / 10 ft pool cage.",
-           note:"Duplexes: front 36/30 ft (per § 5.10.3), side 7.5, rear 20/10, corner side 10, height 38." },
-  "RMM": { front:25, frontCul:18, side:6, rear:26, cornerSide:10, height:60 },
-  "RE":  { front:50, frontCul:36, side:35, rear:35, cornerSide:25, height:38 },
-  "A":   { front:50, frontCul:36, side:35, rear:35, cornerSide:25, height:38,
+           note:"Duplexes: front 36/30 ft (structure design, per § 5.10.3), no cul-de-sac standard, side 7.5, rear 20/10, double-frontage 25, corner side 10, height 38." },
+  "RMM": { minLot:43560, front:25, frontCul:18, side:6, rear:26, doubleFront:25, cornerSide:10, height:60 },
+  "RE":  { minLot:40000, front:50, frontCul:36, side:35, rear:35, doubleFront:50, cornerSide:25, height:38 },
+  "A":   { minLot:"None", front:50, frontCul:36, side:35, rear:35, doubleFront:50, cornerSide:25, height:38,
            note:"Non-residential uses in the A district require a minimum of 4 acres." },
 
   /* --- NON-RESIDENTIAL districts (these tables add Min Lot Area, FAR & Double-frontage) --- */
@@ -5959,7 +5970,7 @@ const CAPE_CORAL_SETBACKS = {
            tableRef:"Article 4 (non-residential standards)" },
 
   /* --- MIXED-USE districts --- */
-  "NC":  { ref:"NC (Neighborhood Commercial): dimensional standards are set in Cape Coral LUDR Table 4.2.12 — see the code for this district.",
+  "NC":  { ref:"NC (Neighborhood Commercial): dimensional standards are set in Cape Coral LDC Table 4.2.12 — see the code for this district.",
            tableRef:"Article 4 (mixed-use standards)" },
   "CC":  { minLot:"None", far:1.25,   front:15, side:"0 ft or 6 ft", rear:15, doubleFront:15, cornerSide:10, height:"None",
            tableRef:"Article 4 (mixed-use standards)",
@@ -5970,7 +5981,7 @@ const CAPE_CORAL_SETBACKS = {
            tableRef:"Article 4 (mixed-use standards)" },
   "SC":  { minLot:"None", far:4,      front:"See § 4.2.15.D.", height:"120 ft (or 10 stories)",
            tableRef:"Article 4 (mixed-use standards)",
-           note:"SC (Suburban Center): front, side, rear, double-frontage and corner-side setbacks are established in Cape Coral LUDR Section 4.2.15.D." }
+           note:"SC (South Cape): front, side, rear, double-frontage and corner-side setbacks are established in Cape Coral LDC Section 4.2.15.D." }
 };
 /* Normalize a detected Cape Coral district to a table key. Cape Coral's GIS layer returns the full
    district DESCRIPTION (e.g. "Single-Family Residential Districts (R-1A & R-1B)"), not a bare code,
@@ -5984,7 +5995,9 @@ function capeCoralSetbacks(districtCode){
   if(CAPE_CORAL_SETBACKS[exact]) return tag(CAPE_CORAL_SETBACKS[exact], exact);
   // Planned Unit Development family (MXPUD, RPUD, CPUD, IPUD, PUD…): setbacks are NOT from a fixed
   // district table — each PUD's dimensional standards are set in its own approved ordinance/master
-  // concept plan (LUDR § 4.2.16). Return a PUD marker so the renderer shows guidance, not numbers.
+  // concept plan (LDC § 4.2.16; procedures at Art. 3 § 3.4.7). Return a PUD marker so the renderer
+  // shows guidance, not numbers. Note LDC Table 4.1.6: "PUD zoning allows all uses consistent with
+  // the Future Land Use Classification."
   if(/PUD\b/.test(U) || /PLANNED\s*(UNIT|DEVELOPMENT|DEVELOP)/.test(U)){
     return { __key:exact, __shown:String(districtCode).trim(), pud:true,
              tableRef:"Section 4.2.16 (Planned Unit Development Districts)" };
@@ -6025,17 +6038,18 @@ function renderCapeCoralSetbacks(districtCode){
   const shown = s.__shown || String(districtCode);
   // Planned Unit Development: no fixed table — setbacks come from the approved PUD ordinance.
   if(s.pud){
-    let p=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ PUD</span> ${esc(shown)} · setbacks set by the approved PUD ordinance (Cape Coral LUDR ${esc(s.tableRef||'Section 4.2.16')})</div>`;
+    let p=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ PUD</span> ${esc(shown)} · setbacks set by the approved PUD ordinance (Cape Coral LDC ${esc(s.tableRef||'Section 4.2.16')})</div>`;
     p+=`<div class="note">This is a <b>Planned Unit Development</b>. Its front, side, rear, height and other dimensional standards are <b>not</b> taken from a standard district table — they're established individually in this property's <b>approved PUD ordinance &amp; master concept plan</b> (the recorded development order). Look up that specific PUD ordinance for its setbacks.</div>`;
-    p+=`<div class="note warnbox">Cape Coral PUD / MXPUD districts (LUDR § 4.2.16) carry custom, project-specific setbacks adopted by City Council ordinance. The standard non-residential / mixed-use table values do <b>not</b> apply — verify the exact numbers in the recorded PUD development order.</div>`;
+    p+=`<div class="note warnbox">Cape Coral PUD / MXPUD districts (LDC § 4.2.16) carry custom, project-specific setbacks adopted by City Council ordinance. The standard non-residential / mixed-use table values do <b>not</b> apply — verify the exact numbers in the recorded PUD development order.</div>`;
     return p;
   }
   const isSub = s.__key && norm(shown)!==norm(s.__key);
   const famNote = isSub ? ` <span class="muted">(${esc(s.__key)} standards)</span>` : '';
   const tref = s.tableRef || 'Table 4.1.3.B';
-  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(shown)}${famNote} (Cape Coral LUDR ${esc(tref)})</div>`;
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(shown)}${famNote} (Cape Coral LDC ${esc(tref)})</div>`;
   // Lot area / FAR (non-residential & mixed-use districts carry these; residential entries don't)
   if(s.minLot!=null){ const lv=(typeof s.minLot==='number')?(fmtNum(s.minLot)+' sq ft'):(/^none$/i.test(String(s.minLot))?'None (no minimum)':String(s.minLot)); h+=fieldRow('Minimum lot area', esc(lv)); }
+  if(s.imperv!=null){ h+=fieldRow('Max impervious surface', esc(String(s.imperv))); }
   if(s.far!=null){ const fv=/^none$/i.test(String(s.far))?'None (no FAR limit)':String(s.far); h+=fieldRow('Floor-area ratio (FAR)', esc(fv)); }
   // Yard setbacks (each rendered only if defined for this district)
   const frontV=setVal(s.front);
@@ -6048,7 +6062,9 @@ function renderCapeCoralSetbacks(districtCode){
   if(s.ref) h+=`<div class="note">${esc(s.ref)}</div>`;
   if(s.rearNote) h+=`<div class="note"><b>Rear detail:</b> ${esc(s.rearNote)}</div>`;
   if(s.note) h+=`<div class="note">${esc(s.note)}</div>`;
-  h+=`<div class="note warnbox">Required minimums from Cape Coral's adopted LUDR (Article 4), keyed to the detected district. R-1 subcodes (R-1A, R-1B, R-1D, R-1W…) share the R-1 setback standards. Verify corner-lot frontage, waterfront, double-frontage and any overlay/PUD conditions in the code before relying on these.</div>`;
+  if(s.imperv) h+=`<div class="note"><b>Impervious cap:</b> generator, AC and pool-equipment concrete pads count toward the ${esc(String(s.imperv))} impervious-surface maximum. Calculation method: LDC Article 1, § 1.15.M.</div>`;
+  h+=`<div class="note warnbox">Required minimums from Cape Coral's adopted <b>Land Development Code</b> (Ord. 17-19, Article 4), keyed to the detected district. ${s.__key==='R-1' ? 'The LDC has no R-1 subdistricts — legacy map codes (R-1A, R-1B, R-1D, R-1W…) all use the single R-1 standard. ' : ''}<b>Irregular residential lots abutting a platted waterway</b> may have front/side/rear setbacks assigned individually by the Director (LDC § 4.1.4). Verify corner-lot frontage, double-frontage and any overlay/PUD conditions in the code before relying on these.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/cape_coral/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify in the Cape Coral Land Development Code (Municode, Vol. II)</a>`;
   return h;
 }
 
@@ -8108,9 +8124,29 @@ function renderCollierGeneratorRules(){
   return g;
 }
 
-/* Cape Coral generator siting — LUDR Article 5 setback-encroachment table. Generators may project
-   into required yards up to the listed distance from the building envelope; verified from the
-   user-pasted encroachment table. Unlike Collier, Cape Coral allows a front-yard projection. */
+/* Cape Coral generator siting — LDC Table 4.1.5 (Article 4) + LDC § 5.1.13.E (Article 5).
+   Verified against the adopted LDC, Supp. No. 38 (Table 4.1.5 as amended by Ord. 29-26, 6-3-2026;
+   § 5.1.13 as amended by Ord. 25-25, 6-4-2025).
+
+   The controlling text, because it is easy to get backwards:
+
+     § 4.1.5.C.3 — "newly installed air conditioners, generators, and pool equipment along with
+     their respective concrete pads, are exempt from building setback requirements but shall not
+     be placed in any easement."
+
+     Table 4.1.5 (Maximum Distance Allowed FROM THE BUILDING ENVELOPE):
+       Generators and HVAC equipment ...... Front: 5 ft (see § 5.1.13) | Side: None | Rear: None
+       Pool equipment ..................... Front: Not allowed         | Side: None | Rear: None
+
+   "None" in that table = no maximum distance from the building, i.e. unrestricted placement in
+   that yard. It does NOT mean "no encroachment allowed." So in the side and rear yards a generator
+   is exempt from the district setback outright; the BINDING constraint is the six-foot perimeter
+   public utility easement (LDC § 5.1.6.A), which in R-1/RML/RE/A may hold nothing but a paved
+   driveway, walkway, sidewalk, fence, or well. Generators are not on that list.
+
+   Practical effect on a typical R-1 lot: the generator's real side-yard floor is the 6 ft PUE,
+   NOT (7.5 ft setback − 5 ft encroachment) = 2.5 ft. HVAC is grouped WITH generators, not with
+   pool equipment; pool equipment is the one that is barred from the front yard. */
 
 /* ---------- Aerial & Street View scouting ----------
    Keyless: the hero image is a static Esri World Imagery export (same source as the map's
@@ -8278,15 +8314,49 @@ function renderWindDesign(lat, lng, cityName, countyName, liveWind){
   return h;
 }
 
-function renderCapeCoralGeneratorRules(){
-  let g=`<div class="freshline snap" style="margin-top:12px"><span class="badge unk">⚡ GENERATOR · LUDR Art. 5</span> generator siting (Cape Coral)</div>`;
-  g+=`<div class="note"><b>Yard encroachment:</b> a generator may project up to <b>5 ft into the front, side, or rear yard</b> from the building envelope. (Cape Coral permits a front-yard projection — unlike some jurisdictions.)</div>`;
-  g+=fieldRow('Front yard', 'up to 5 ft');
-  g+=fieldRow('Side yard', 'up to 5 ft');
-  g+=fieldRow('Rear yard', 'up to 5 ft');
-  g+=`<div class="note">Other mechanical equipment (AC, pool equipment) may encroach 5 ft into <b>side and rear</b> yards but <b>not the front</b>. These are projections from the building envelope, measured on top of the district's required setback.</div>`;
-  g+=`<div class="note warnbox">From Cape Coral's LUDR setback-encroachment table (Article 5). The encroachment is measured from the building envelope (i.e., into the required yard shown above), not from the lot line. Confirm waterfront, PUE (public utility easement), and corner-lot conditions with Cape Coral before siting.</div>`;
-  g+=`<a class="palink" href="https://online.encodeplus.com/regs/capecoral-fl" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify in Cape Coral LUDR (Article 5)</a>`;
+function renderCapeCoralGeneratorRules(districtCode){
+  const U = districtCode ? String(districtCode).toUpperCase() : '';
+  // The six-foot perimeter PUE exists in R-1, RML, RE and A (LDC § 5.1.6.A). RMM and the
+  // non-residential / mixed-use districts are not named in that subsection.
+  const hasPUE = /\bR-?1[A-Z]?\b/.test(U) || /\bRML\b/.test(U) || /\bRE\b/.test(U) ||
+                 /\bRESIDENTIAL ESTATE/.test(U) || /\bAGRICULTUR/.test(U) || U.trim()==='A';
+
+  let g=`<div class="freshline snap" style="margin-top:12px"><span class="badge unk">⚡ GENERATOR · LDC Table 4.1.5 &amp; § 5.1.13</span> generator siting (Cape Coral)</div>`;
+
+  g+=`<div class="note"><b>Generators are exempt from building setbacks.</b> LDC § 4.1.5.C.3: newly installed generators, air conditioners and pool equipment — <i>and their concrete pads</i> — "are exempt from building setback requirements <b>but shall not be placed in any easement</b>." The district setbacks above do <b>not</b> constrain the unit. The easement does.</div>`;
+
+  g+=fieldRow('Side yard', 'Exempt from setback — no distance limit');
+  g+=fieldRow('Rear yard', 'Exempt from setback — no distance limit');
+  g+=fieldRow('Front yard', 'Allowed · ≤ 5 ft from front of building, screened enclosure required', 'big');
+  g+=fieldRow('Any easement', 'Prohibited');
+
+  if(hasPUE){
+    g+=`<div class="note warnbox"><b>The 6-foot perimeter PUE is the real limit.</b> In the R-1, RML, RE and A districts a six-foot public utility easement rings the site (LDC § 5.1.6.A), and nothing may be placed on it except a paved driveway, walkway, sidewalk, fence, or well. <b>A generator is not on that list.</b> So on a standard R-1 lot the closest a generator can sit to a side or rear line is <b>6 ft</b> — not 2.5 ft, and not the 7.5 ft side setback. Pull the plat: the PUE is platted, and utilities or drainage inside it can further restrict the pad.</div>`;
+  } else {
+    g+=`<div class="note warnbox">No six-foot perimeter PUE is imposed on this district by LDC § 5.1.6.A, but <b>any</b> recorded easement still bars a generator pad. Pull the plat and the title work before siting.</div>`;
+  }
+
+  // LDC § 5.1.13 is titled "Single-family residential standards" — its front-yard conditions bind
+  // single-family uses. Show the full checklist for districts where SF is the norm; a pointer elsewhere.
+  const isSF = hasPUE || /\bRMM\b/.test(U) || !U;
+  if(!isSF){
+    g+=`<div class="note">The detailed front-yard enclosure requirements in LDC § 5.1.13.E apply to <b>single-family residential</b> uses. For a single-family use lawfully located in this district, those conditions still apply — see § 5.1.13.E.</div>`;
+  } else
+  g+=`<div class="note"><b>Front-yard generators &amp; HVAC (single-family) — LDC § 5.1.13.E.</b> Permitted in front of the residence, subject to all of:
+    <br>· Screened from the street and from any abutting residential site by an <b>enclosure</b> of materials consistent with the building and painted to match the front façade.
+    <br>· Enclosure max height <b>6 ft</b>, unless more is needed to screen the full height of the equipment. It is not a "wall" for § 5.2.7 purposes.
+    <br>· <b>The enclosure itself must meet all building setbacks</b> for the district — the equipment's setback exemption does not pass through to it.
+    <br>· Equipment no more than <b>5 ft from the front of the building</b>, unless the Florida Building Code requires more.
+    <br>· The enclosure may screen <b>only</b> the generator/HVAC — no other equipment or storage inside it.
+    <br>· Does <b>not</b> apply to temporary portable generators during emergencies or after a natural disaster.</div>`;
+
+  g+=`<div class="note"><b>Other equipment (Table 4.1.5).</b> HVAC is treated <b>identically to generators</b> — 5 ft in the front yard, unlimited in side and rear. <b>Pool equipment is the exception:</b> <b>not allowed</b> in the front yard; unlimited in side and rear. (Existing AC, pool equipment and generators may be maintained and replaced, provided the replacement does not encroach into an easement.)</div>`;
+
+  g+=`<div class="note"><b>Also check:</b> the pad is impervious surface and counts against the district's impervious cap (60% in R-1 and RML; LDC Art. 1 § 1.15.M). Irregular residential lots abutting a platted waterway can have setbacks assigned individually by the Director (§ 4.1.4). And required setbacks must otherwise stay "open and unobstructed from 30 inches above the ground" (§ 4.1.5).</div>`;
+
+  g+=`<div class="note warnbox"><b>Currency:</b> Table 4.1.5 was last amended by Ord. 29-26 (6-3-2026) and § 5.1.13 by Ord. 25-25 (6-4-2025) — both provisions have changed twice in two years. Confirm against the live code and with Cape Coral Development Services before siting.</div>`;
+
+  g+=`<a class="palink" href="https://library.municode.com/fl/cape_coral/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify in the Cape Coral Land Development Code (Municode, Vol. II — Art. 4 &amp; Art. 5)</a>`;
   return g;
 }
 
@@ -9600,7 +9670,7 @@ async function runLookup(lat,lng,searchCtx){
   // Collier County generator siting (LDC 5.03.07) — UNINCORPORATED Collier only. The incorporated
   // cities (Naples has its own § 56-41 rendered above; Marco Island has its own LDC) are excluded.
   if(norm(countyName)==='COLLIER' && !COLLIER_INCORP.has(norm(cityName))){ html += renderCollierGeneratorRules(); }
-  if(norm(cityName)==='CAPECORAL'){ html += renderCapeCoralGeneratorRules(); }
+  if(norm(cityName)==='CAPECORAL'){ html += renderCapeCoralGeneratorRules(zhit && zhit.code ? zhit.code : null); }
   // City of Sanibel: ecological-zone setbacks + the Ch. 126 Div. 16 generator ordinance. Rendered
   // unconditionally for any Sanibel parcel (not gated on a detected zoning code), since Sanibel's
   // ecological-zone GIS isn't reliably point-queryable here — pass the zone code when we DID get one
@@ -9639,7 +9709,8 @@ async function runLookup(lat,lng,searchCtx){
       html += `<a class="palink" href="${esc(z.zoningCh)}" target="_blank" rel="noopener" style="margin-left:6px">↗ Setbacks for ${distTxt} — zoning code, live (Municode)</a>`;
       html += `<div class="note">Opens ${esc(jurName)}'s live zoning chapter. Find the <b>${(zhit&&zhit.code)?esc(String(zhit.code)):'detected'}</b> district section for its exact front/side/rear setbacks — always the current adopted text, never cached here.</div>`;
     } else if(z.code){
-      // Label by source: Municode vs other code platforms (e.g. encodePlus for Cape Coral's LUDR).
+      // Label by source: Municode vs other code platforms. (Cape Coral's zoning now lives in the
+      // Land Development Code, printed as Volume II of its Municode Code of Ordinances.)
       const codeLabel = /municode\.com/i.test(z.code) ? 'Land development code (Municode)' : 'Land development code';
       html += `<a class="palink" href="${esc(z.code)}" target="_blank" rel="noopener" style="margin-left:6px">↗ ${codeLabel}</a>`;
     }
