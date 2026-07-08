@@ -9446,6 +9446,12 @@ function updateSelCursor(x,y){
       else cmtCur=HANDLE_CURSORS[h];              // corners → diagonal (nw/ne/se/sw)
       drawCv.style.cursor=cmtCur; return;
     }
+    // Resize handles (0-7): pick the cursor that matches the handle's CURRENT
+    // on-screen direction, so it rotates with a rotated shape instead of always
+    // showing the un-rotated diagonal. Rotate handles (8-11) keep 'grab'.
+    if(h>=0 && h<=7){
+      drawCv.style.cursor = rotatedResizeCursor(h, selectedShape.angle||0); return;
+    }
     drawCv.style.cursor=HANDLE_CURSORS[h]; return;
   }
   if(isInsideShape(selectedShape,x,y,false)){
@@ -14481,10 +14487,35 @@ var _IMG_RES_CURSORS = [
   'se-resize','s-resize','sw-resize','w-resize'
 ];
 
+// ── Rotation-aware resize cursors ──────────────────────────────────
+// The 8 CSS resize cursors, ordered by the screen-space angle (y-down)
+// of the direction they point: index 0 = E (0°), 1 = SE (45°), 2 = S,
+// 3 = SW, 4 = W, 5 = NW, 6 = N, 7 = NE. They're double-headed, so a
+// direction and its opposite share the same glyph.
+var _RES_CUR_OCTANTS = ['e-resize','se-resize','s-resize','sw-resize',
+                        'w-resize','nw-resize','n-resize','ne-resize'];
+// Base outward angle (radians, screen y-down) of each resize handle 0-7:
+// 0 TL, 1 TC, 2 TR, 3 MR, 4 BR, 5 BC, 6 BL, 7 ML
+var _HANDLE_BASE_ANGLE = [
+  -3*Math.PI/4, -Math.PI/2, -Math.PI/4, 0,
+   Math.PI/4,    Math.PI/2,  3*Math.PI/4, Math.PI
+];
+// Given a resize handle (0-7) and the object's rotation (radians), return
+// the CSS cursor whose arrow lines up with the handle's CURRENT on-screen
+// direction — so cursors rotate together with a rotated image/shape.
+function rotatedResizeCursor(handleIdx, objAngle){
+  if(handleIdx < 0 || handleIdx > 7) return 'nwse-resize';
+  var a = _HANDLE_BASE_ANGLE[handleIdx] + (objAngle || 0);
+  a %= (2 * Math.PI);
+  if(a < 0) a += 2 * Math.PI;
+  var oct = Math.round(a / (Math.PI / 4)) % 8;
+  return _RES_CUR_OCTANTS[oct];
+}
+
 // Compute the correct CSS cursor for the current selImg state
 function _imgCursorForHandle(hi){
   if(hi >= 8)  return 'crosshair';  // rotate handle
-  if(hi >= 0)  return _IMG_RES_CURSORS[hi];
+  if(hi >= 0)  return rotatedResizeCursor(hi, selImg ? (selImg.angle || 0) : 0);
   return 'move';                     // body drag (hi === -1)
 }
 
