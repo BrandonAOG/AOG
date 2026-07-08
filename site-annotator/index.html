@@ -7867,8 +7867,11 @@ function findTextObjAt(x,y){
     var ca=Math.cos(-ang), sa=Math.sin(-ang);
     var lx=dx*ca-dy*sa;
     var ly=dx*sa+dy*ca;
-    // Local text box spans x:[0, estW], y:[-ofpx, estH-ofpx] (baseline-origin).
-    if(lx>=-pad&&lx<=estW+pad&&ly>=-ofpx-pad&&ly<=estH-ofpx+pad){
+    // Local text box spans x:[0, estW], y:[top, top+estH] (baseline-origin),
+    // where top is the TRUE visual top from font metrics — same geometry as the
+    // dashed chrome box, so what you see is exactly what you can click.
+    var _htop=-(function(){var f=_textOvFontMetrics(ofpx,o.fontFamily||'Arial',o.bold,o.italic);return f.asc+(ofpx*TXT_LINE_H-f.asc-f.desc)/2;})();
+    if(lx>=-pad&&lx<=estW+pad&&ly>=_htop-pad&&ly<=_htop+estH+pad){
       return o;
     }
   }
@@ -8074,12 +8077,14 @@ function showTextHover(x, y){
     selCtx.rotate(_hang);
     selCtx.strokeStyle=color; selCtx.lineWidth=1.5/zoom;
     selCtx.setLineDash([4/zoom,3/zoom]); selCtx.globalAlpha=0.7;
-    selCtx.strokeRect(-pad, -oefpx-pad, estW+pad*2, estH+pad*2);
+    var _fmH=_textOvFontMetrics(oefpx,overExisting.fontFamily||'Arial',overExisting.bold,overExisting.italic);
+    var _topH=-(_fmH.asc+(oefpx*TXT_LINE_H-_fmH.asc-_fmH.desc)/2);
+    selCtx.strokeRect(-pad, _topH-pad, estW+pad*2, estH+pad*2);
     // Edit pencil icon hint
     selCtx.setLineDash([]); selCtx.globalAlpha=0.8;
     selCtx.font='bold '+(Math.max(10,11/zoom))+'px Arial,sans-serif';
     selCtx.fillStyle=color; selCtx.textAlign='left';
-    selCtx.fillText('✎ edit', 0, -oefpx-8/zoom);
+    selCtx.fillText('✎ edit', 0, _topH-8/zoom);
     selCtx.restore();
   } else {
     drawCv.style.cursor='crosshair';
@@ -8295,11 +8300,20 @@ function _textBoxDims(o){
   var fpx=ptToCanvasPx(o.fontSize);
   var w=measureLinesWFull(lines,fpx,o.fontFamily||'Arial',o.bold,o.italic);
   var h=lines.length*fpx*TXT_LINE_H;
-  return {fpx:fpx,w:w,h:h};
+  // TRUE visual top of the text block relative to the first baseline (o.y).
+  // The old chrome assumed the glyphs start a full font-size above the baseline
+  // (top = -fpx), but the real cap sits at -(ascent + half-leading) — noticeably
+  // lower with the tight 0.92 line-height. That extra phantom space made the
+  // dashed edit box hang high: big gap above the text, crowded below. Use the
+  // font's measured ascent/descent so the box hugs the block evenly, matching
+  // the live editor's highlight.
+  var fm=_textOvFontMetrics(fpx,o.fontFamily||'Arial',o.bold,o.italic);
+  var top=-(fm.asc+(fpx*TXT_LINE_H-fm.asc-fm.desc)/2);
+  return {fpx:fpx,w:w,h:h,top:top};
 }
 function _textCenter(o){
   var d=_textBoxDims(o), ang=o.angle||0, ca=Math.cos(ang), sa=Math.sin(ang);
-  var lcx=d.w/2, lcy=-d.fpx+d.h/2;
+  var lcx=d.w/2, lcy=d.top+d.h/2;
   return {x:o.x+(lcx*ca-lcy*sa), y:o.y+(lcx*sa+lcy*ca)};
 }
 // Draw the dashed text box + rotate handle for o onto selCtx. Caller has cleared selCv.
@@ -8312,9 +8326,9 @@ function _drawTextChrome(o){
   // Dashed text box (rectangular, hugs the glyphs)
   selCtx.strokeStyle='rgba(0,212,255,0.9)'; selCtx.lineWidth=lw;
   selCtx.setLineDash([5/zoom,3/zoom]); selCtx.globalAlpha=1;
-  selCtx.strokeRect(-pad,-d.fpx-pad,d.w+pad*2,d.h+pad*2);
+  selCtx.strokeRect(-pad,d.top-pad,d.w+pad*2,d.h+pad*2);
   // Connector + rotate handle above top-center
-  var topx=d.w/2, topy=-d.fpx-pad, hubx=topx, huby=topy-ro;
+  var topx=d.w/2, topy=d.top-pad, hubx=topx, huby=topy-ro;
   selCtx.setLineDash([2/zoom,2/zoom]);
   selCtx.beginPath(); selCtx.moveTo(topx,topy); selCtx.lineTo(hubx,huby); selCtx.stroke();
   selCtx.setLineDash([]);
@@ -8386,7 +8400,7 @@ function _textBorderAt(o,x,y){
   var ang=o.angle||0, ca=Math.cos(-ang), sa=Math.sin(-ang);
   var dx=x-o.x, dy=y-o.y;
   var lx=dx*ca-dy*sa, ly=dx*sa+dy*ca;
-  var L=-pad, R=d.w+pad, T=-d.fpx-pad, B=d.h-d.fpx+pad;
+  var L=-pad, R=d.w+pad, T=d.top-pad, B=d.top+d.h+pad;
   if(lx<L-band||lx>R+band||ly<T-band||ly>B+band) return false;   // outside box+band
   if(lx>L+band&&lx<R-band&&ly>T+band&&ly<B-band) return false;   // deep interior → not border
   return true;
@@ -8527,6 +8541,21 @@ function showTextOverlay(cx,cy){
   }
 }
 
+// Measure the font's REAL ascent/descent (what the browser uses to place the
+// baseline inside a line box). Fallback ratios for engines without
+// fontBoundingBox metrics. Used to pin the live editor's first baseline onto
+// the canvas glyph baseline exactly.
+var _fmCv=null,_fmCtx=null;
+function _textOvFontMetrics(px, family, bold, italic){
+  if(!_fmCtx){ _fmCv=document.createElement('canvas'); _fmCtx=_fmCv.getContext('2d'); }
+  _fmCtx.font=(italic?'italic ':'')+(bold?'bold ':'')+px+'px '+family+',sans-serif';
+  var m=_fmCtx.measureText('Hg');
+  return {
+    asc:(m && m.fontBoundingBoxAscent!=null)?m.fontBoundingBoxAscent:px*0.8,
+    desc:(m && m.fontBoundingBoxDescent!=null)?m.fontBoundingBoxDescent:px*0.25
+  };
+}
+
 function repositionTextOverlay(clampToView){
   // clampToView=true ONLY on the initial placement (showTextOverlay). During
   // pan/zoom repositions the old on-screen clamps below pinned the live editor
@@ -8547,8 +8576,7 @@ function repositionTextOverlay(clampToView){
   // viewport-local space only. (Desktop: offsets were 0, identical behavior.)
   // The old "keep above keyboard" clamp (vv.height-60) also yanked any
   // lower-half tap upward — removed for the same reason.
-  var sx = panX + cx*zoom;
-  var sy = panY + cy*zoom - FONT_PX*zoom;
+  var sxA = panX + cx*zoom;              // anchor (glyph start / baseline-left) on screen
   // The box is drawn at renderSz font then visually shrunk with transform:scale
   // when zoomed out (transform-origin top-left). That scale shrinks the box's
   // VISUAL width to boxW*scaleV. The right-anchor must use the SCALED width or
@@ -8557,6 +8585,21 @@ function repositionTextOverlay(clampToView){
   var _renderSz0 = Math.max(16, _screenSz0);
   var _scaleV0   = _screenSz0 / _renderSz0;     // <1 when zoomed out
   if(_scaleV0 >= 0.99) _scaleV0 = 1;            // matches transform:none threshold below
+  // ── Pixel-exact overlay↔canvas alignment ─────────────────────
+  // The canvas draws the committed glyph with its BASELINE at o.y and its left
+  // edge at o.x. The old box placement assumed the textarea's first baseline sat
+  // exactly FONT_PX below the box top and ignored the textarea's own CSS padding
+  // (2px top / 4px left) — so on opening an edit the live text jumped slightly
+  // UP and RIGHT of the committed glyphs. Compute where the browser really puts
+  // the first line's baseline inside the textarea (padding + half-leading from
+  // line-height:TXT_LINE_H + the font's ascent) and offset the box by that, so
+  // the live glyphs sit dead on the canvas ones.
+  var _padL = 4, _padT = 2;                     // matches #text-ov padding:2px 4px
+  var _fm = _textOvFontMetrics(_renderSz0, textFontFamily||'Arial', textBold, textItalic);
+  var _lineHpx = TXT_LINE_H * _renderSz0;
+  var _blOff = _padT + (_lineHpx - (_fm.asc + _fm.desc))/2 + _fm.asc; // baseline below box top (textarea-local px)
+  var sx = sxA - _padL*_scaleV0;                // glyph left = box left + padL·scale
+  var sy = panY + cy*zoom - _blOff*_scaleV0;    // glyph baseline = box top + blOff·scale
   // Keep the text START (the box's left edge) anchored at the click point so
   // the I-beam and typed text land exactly where the user clicked — including
   // on the right side of the canvas. Previously the whole box was shifted left
@@ -8574,7 +8617,9 @@ function repositionTextOverlay(clampToView){
     // Right-anchored (left-hanging leader label): the box's VISUAL right edge
     // (after the scale transform) sits at the anchor point and the box extends
     // LEFT, so the first letter stays put just left of the line at every zoom.
-    var rightEdge = sx;                          // anchor screen-x = visual right edge
+    // The glyphs end padR(4px)·scale left of the box's right edge, so push the
+    // box right by that so the TEXT (not the box) ends at the anchor.
+    var rightEdge = sxA + _padL*_scaleV0;        // box's visual right edge
     sx = rightEdge - boxW*_scaleV0;              // box left edge (scaled width)
     if(clampToView && vpW > 0){
       if(rightEdge > vpW) { rightEdge = vpW; sx = rightEdge - boxW*_scaleV0; }
@@ -8617,8 +8662,12 @@ function repositionTextOverlay(clampToView){
     // here threw the box off by the whole text width once the label was turned.
     // The object's own x/y is the start regardless of anchor mode.
     var _ex=(editingObj?editingObj.x:cx), _ey=(editingObj?editingObj.y:cy);
-    var _gx = _ex + FONT_PX*Math.sin(_eAng);   // rotated glyph-top-left (canvas)
-    var _gy = _ey - FONT_PX*Math.cos(_eAng);
+    // Box top-left = glyph start + the (−padL, −baselineOffset) editor offset
+    // (screen px → canvas px via /zoom) rotated by the label's angle — same
+    // padding/baseline compensation as the unrotated path above.
+    var _oxc = (_padL*_scaleV0)/zoom, _oyc = (_blOff*_scaleV0)/zoom;
+    var _gx = _ex + (-_oxc*Math.cos(_eAng) + _oyc*Math.sin(_eAng));
+    var _gy = _ey + (-_oxc*Math.sin(_eAng) - _oyc*Math.cos(_eAng));
     textOv.style.left = (panX + _gx*zoom) + 'px';
     textOv.style.top  = (panY + _gy*zoom) + 'px';
     textOv.style.transform = 'rotate(' + _eAng + 'rad)' +
@@ -8665,7 +8714,6 @@ function repositionTextOverlay(clampToView){
   // the final clamped overlay position (account for the textarea's CSS padding:
   // 4px left / 2px top) and convert screen→canvas so they line up exactly.
   if(_txtCursorActive){
-    var _padL = 4, _padT = 2; // matches #text-ov padding:2px 4px
     var _caretScreenX;
     if(_textAnchorRight){
       // Right-anchored: the caret/first-letter sits at the box's VISUAL right
@@ -8674,7 +8722,7 @@ function repositionTextOverlay(clampToView){
     } else {
       _caretScreenX = sx + _padL*_scaleV0;
     }
-    var _caretScreenY = sy + _padT + FONT_PX * zoom; // baseline ≈ top + one line
+    var _caretScreenY = sy + _blOff*_scaleV0; // first line's true baseline
     _txtCursorX = (_caretScreenX - panX) / zoom;
     _txtCursorY = (_caretScreenY - panY) / zoom;
     renderTextCursorFrame();
