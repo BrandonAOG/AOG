@@ -9661,8 +9661,11 @@ async function runLookup(lat,lng,searchCtx){
     }
   }catch(e){}
 
-  html += `<div class="card noprint"><div class="ch"><span class="icn">[ DOC ]</span><h2>Permits &amp; Documents</h2>
-    <div class="src">${esc(docJur)}<br>floodplain / permits</div></div><div class="cb">`;
+  /* The Elevation Certificate is a floodplain document, not a permit record — it renders as its
+     own card so tabifyResults() files it under Flood, beside the FEMA Flood Hazard card.
+     Printable (no `noprint`): the EC is the document a reviewer actually wants on the page. */
+  html += `<div class="card"><div class="ch"><span class="icn">[ ELV ]</span><h2>Elevation Certificate</h2>
+    <div class="src">${esc(docJur)}<br>floodplain</div></div><div class="cb">`;
 
   // --- City resident portal (Forerunner): shown when not already represented by a city DOCS entry ---
   const frDoc = (cityName && !docInCity) ? FORERUNNER[norm(cityName)] : null;
@@ -9701,6 +9704,12 @@ async function runLookup(lat,lng,searchCtx){
   } else if(countyName){
     html += `<a class="palink" href="https://www.google.com/search?q=${encodeURIComponent(titleCase(countyName)+' County Florida elevation certificate map lookup')}" target="_blank" rel="noopener" style="margin-top:8px">↗ Find ${esc(titleCase(countyName))} County elevation-certificate lookup</a>`;
   }
+
+  html += `</div></div>`;   // ---- close the Elevation Certificate card ----
+
+  /* ---- Permits & Documents: survey / site plan / permit history ---- */
+  html += `<div class="card noprint"><div class="ch"><span class="icn">[ DOC ]</span><h2>Permits &amp; Documents</h2>
+    <div class="src">${esc(docJur)}<br>permits</div></div><div class="cb">`;
 
   // --- Survey / Site Plan / permit history: deep link to the permitting portal (no public data feed exists) ---
   // City portal wins when the parcel is in a city; else county; else the zoning-config portal.
@@ -9939,7 +9948,7 @@ function tabifyResults(root){
   const MAP=[
     [/jurisdiction/i,'site'],[/parcel/i,'site'],
     [/hoa|sunbiz/i,'hoa'],
-    [/zoning/i,'zoning'],[/flood/i,'flood'],[/wind/i,'wind'],
+    [/zoning/i,'zoning'],[/flood|elevation/i,'flood'],[/wind/i,'wind'],
     [/electric/i,'utilities'],[/natural gas|propane/i,'utilities'],
     [/permit/i,'permits'],[/aerial|street view/i,'aerial']
   ];
