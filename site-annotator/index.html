@@ -8449,22 +8449,27 @@ function _openTextEdit(o){
   // after loading another document, so the measured text width changed). Re-derive
   // the right edge from the CURRENT rendered width and re-base the anchor to it, so
   // the box lands exactly on the text without moving the text itself.
-  var _ovX=o.x;
+  var _ovX=o.x, _ovY=o.y;
   if(_textAnchorRight){
     var _olns=o.text.split('\n');
     var _ofpx=ptToCanvasPx(o.fontSize);
     var _ow=measureLinesWFull(_olns,_ofpx,o.fontFamily||'Arial',o.bold,o.italic);
-    _ovX=o.x+_ow;          // live right edge = where the glyphs actually end
-    o._anchorX=_ovX;       // keep commit pinned to the visible edge (no jump)
+    // Live far end = glyphs' end projected ALONG the label's own direction, so a
+    // rotated leader label's anchor tracks the turned text instead of sliding out
+    // along the canvas x-axis. (angle 0 → _ovX=o.x+_ow, _ovY=o.y, as before.)
+    var _oa=o.angle||0;
+    _ovX=o.x+_ow*Math.cos(_oa);
+    _ovY=o.y+_ow*Math.sin(_oa);
+    o._anchorX=_ovX; o._anchorY=_ovY;   // pin commit to the visible far end (no jump)
   }
-  textX=_ovX; textY=o.y;
+  textX=_ovX; textY=_ovY;
   // Load the text + formatting BEFORE showing/sizing the overlay, so the
   // auto-fit measures the real (full) content and the box grows to show every
   // line instead of clipping to the empty default height.
   textOv.value=o.text;
   _syncTextFmtFromObj(o);
   startTextCursor(o.x, o.y);
-  showTextOverlay(_ovX, o.y);
+  showTextOverlay(_ovX, _ovY);
   _fitTextOv();              // size to the loaded content (all lines visible)
   renderTextCursorFrame();   // draw the box + rotate handle right away
 }
@@ -8593,12 +8598,22 @@ function repositionTextOverlay(){
   // you click. Anchor + rotate about the glyph's top-left corner.
   var _eAng = (editingObj && editingObj.angle) ? editingObj.angle : 0;
   if(_eAng){
-    var _gx = cx + FONT_PX*Math.sin(_eAng);   // rotated glyph-top-left (canvas)
-    var _gy = cy - FONT_PX*Math.cos(_eAng);
+    // Pivot the rotated editor on the glyph START (editingObj.x/.y) — the same
+    // point the canvas renderer and the dashed box rotate about. For a
+    // right-anchored leader label, cx/cy is the FAR (right) end, so feeding it in
+    // here threw the box off by the whole text width once the label was turned.
+    // The object's own x/y is the start regardless of anchor mode.
+    var _ex=(editingObj?editingObj.x:cx), _ey=(editingObj?editingObj.y:cy);
+    var _gx = _ex + FONT_PX*Math.sin(_eAng);   // rotated glyph-top-left (canvas)
+    var _gy = _ey - FONT_PX*Math.cos(_eAng);
     textOv.style.left = (panX + _gx*zoom) + 'px';
     textOv.style.top  = (panY + _gy*zoom) + 'px';
     textOv.style.transform = 'rotate(' + _eAng + 'rad)' +
       (scaleV < 0.99 ? (' scale(' + scaleV.toFixed(3) + ')') : '');
+    textOv.style.transformOrigin = 'top left';
+    // Grow from the start when rotated; right-align would offset the text inside a
+    // wider box and detach it from the pivot.
+    textOv.style.textAlign = 'left';
   }
   textOv.style.color   = color;
   textOv.style.opacity = 1;   // text has no opacity control — keep it full, not faint
@@ -8677,7 +8692,10 @@ function _fitTextOv(){
   // label shows a long bar stretching left from the leader. Keep the RIGHT edge
   // pinned at the anchor and grow the box LEFTWARD as characters are added, so it
   // starts ~one letter wide and grows one character at a time.
-  if(_textAnchorRight){
+  if(_textAnchorRight && !(editingObj && editingObj.angle)){
+    // (Rotated labels skip this: their box is pivoted on the glyph start and just
+    // hugs its width below — the horizontal "grow leftward from the leader" re-fit
+    // only makes sense for an upright label and would slide a rotated box sideways.)
     // The box may carry a scale() transform when zoomed out; the VISUAL right
     // edge is left + width*scale. Pin that visual edge and grow leftward.
     var _trS = textOv.style.transform || '', _siS = _trS.indexOf('scale(');
@@ -8888,7 +8906,13 @@ function commitText(){
         var _eln=val.split('\n');
         var _efpx=ptToCanvasPx(editingObj.fontSize);
         var _emw=measureLinesWFull(_eln,_efpx,editingObj.fontFamily||'Arial',editingObj.bold,editingObj.italic);
-        editingObj.x = editingObj._anchorX - _emw;
+        // Keep the FAR end pinned and grow the start back along the label's own
+        // direction, so a rotated label grows/shrinks in line with its glyphs
+        // instead of drifting along the canvas x-axis. (angle 0 → old behavior.)
+        var _ea=editingObj.angle||0;
+        var _ay=(editingObj._anchorY!=null?editingObj._anchorY:editingObj.y);
+        editingObj.x = editingObj._anchorX - _emw*Math.cos(_ea);
+        editingObj.y = _ay - _emw*Math.sin(_ea);
         editingObj._anchorRight = true;
       }
       var upd=editingObj; editingObj=null;
@@ -8911,7 +8935,7 @@ function commitText(){
              fontFamily:textFontFamily,bold:textBold,italic:textItalic,
              underline:textUnderline,strike:textStrike,textAlign:_newAlign,
              bgColor:textBgColor,bgOpacity:textBgOpacity,
-             _anchorRight:_textAnchorRight, _anchorX:textX};
+             _anchorRight:_textAnchorRight, _anchorX:textX, _anchorY:textY};
     textObjs.push(obj); renderTextObjs(); pushUndo();
     // (No transform box — a freshly placed text just sits there. Re-click to edit.)
   }
