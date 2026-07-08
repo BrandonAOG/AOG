@@ -1305,9 +1305,10 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
     background: rgba(250,103,0,0.40) !important; border-color: #D35E13 !important;
     -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
-  /* Note textareas — sized to show exactly 2 lines without clipping. */
+  /* Note textareas — 40px floor (2 lines), but free to grow with content.
+     openPrintPreview() stamps an exact measured px height inline, which wins. */
   #gen_notes, #pad_notes, #gas_notes, #ready_notes {
-    height: 40px !important; min-height: 40px !important; max-height: 40px !important;
+    min-height: 40px !important; max-height: none !important;
     line-height: 1.25 !important; padding: 2px 5px !important;
     box-sizing: border-box !important; overflow: hidden !important; margin-bottom: 0 !important;
     font-size: calc(0.756rem + 0.3px) !important;
@@ -2095,6 +2096,7 @@ function restoreDraft() {
         }
       } catch(e) {}
     });
+    if (window.autoGrowAllNotes) window.autoGrowAllNotes();
     if (data.__saved_at) {
       _updateAutosaveIndicator(data.__saved_at);
       // One-time heads-up so a stale/unrelated draft doesn't silently carry
@@ -3059,17 +3061,12 @@ function openPrintPreview() {
       _snap(el, 'minHeight',     'auto');
     });
 
-    // textareas — match mobile-safari print heights
-    var taNotes = {
-      'gen_notes': '40px', 'pad_notes': '40px',
-      'gas_notes': '40px', 'ready_notes': '40px'
-    };
-    Object.keys(taNotes).forEach(function(id) {
+    // textareas — match mobile-safari print typography. Height is NOT pinned here;
+    // it gets measured and stamped after the border/padding passes below, so a
+    // long note grows the box instead of clipping at 2 lines.
+    ['gen_notes', 'pad_notes', 'gas_notes', 'ready_notes'].forEach(function(id) {
       var ta = document.getElementById(id);
       if (ta) {
-        _snap(ta, 'height',    taNotes[id]);
-        _snap(ta, 'minHeight', taNotes[id]);
-        _snap(ta, 'maxHeight', taNotes[id]);
         _snap(ta, 'overflow',  'hidden');
         _snap(ta, 'lineHeight','1.25');
         _snap(ta, 'padding',   '2px 5px');
@@ -3103,6 +3100,25 @@ function openPrintPreview() {
         _snap(ta, 'border',  '0.5px solid #D35E13');
         _snap(ta, 'padding', '2px 5px');
       }
+    });
+
+    // ── Notes: measure content at the now-stamped print typography and lock in an
+    // exact height. 40px (2 lines) is the floor and NOTE_MAX_LINES (3) is the ceiling,
+    // so short notes look identical to before and long ones grow by one line, then
+    // clip. _snapI is used so these beat the inline !important heights the on-screen
+    // auto-grow leaves behind — restore() puts those back when the dialog closes.
+    ['gen_notes', 'pad_notes', 'gas_notes', 'ready_notes'].forEach(function(id) {
+      var ta = document.getElementById(id);
+      if (!ta) return;
+      _snapI(ta, 'height',     'auto');
+      _snapI(ta, 'min-height', '0px');
+      _snapI(ta, 'max-height', 'none');
+      _snapI(ta, 'overflow-y', 'hidden');
+      var cap = (window.noteCapHeight ? window.noteCapHeight(ta) : 1e9);
+      var h   = Math.max(40, Math.min(ta.scrollHeight, cap));
+      ta.style.setProperty('height',     h + 'px', 'important');
+      ta.style.setProperty('min-height', h + 'px', 'important');
+      ta.style.setProperty('max-height', h + 'px', 'important');
     });
 
     // .check-item controls sizing
@@ -3760,6 +3776,30 @@ function capturePageToCanvas(_fontsReady, _rectSink) {
       });
     });
 
+    // ── Notes textareas: capture typography applied to the LIVE DOM ──
+    // These get swapped for <div>s in onclone (html2canvas can't wrap textarea text).
+    // If the clone changed their font/height, the clone would be TALLER than the live
+    // page — but CAPTURE_H and the editable-PDF field rects are both measured off the
+    // live page, so the extra height fell off the bottom of the canvas. Style them
+    // here instead: the live page grows, CAPTURE_H sees it, rects stay aligned, and
+    // the clone just copies the computed values. Reverted by restore() via _tweak.
+    page.querySelectorAll('#gen_notes, #pad_notes, #gas_notes, #ready_notes').forEach(function(el) {
+      _tweak(el, function(e) {
+        var cs = window.getComputedStyle(e);
+        var floorH = parseFloat(cs.height) || 0;   // designed box size, before we touch it
+        e.style.setProperty('font-size', (parseFloat(cs.fontSize) + 3) + 'px', 'important');
+        e.style.setProperty('box-sizing', 'border-box', 'important');
+        e.style.setProperty('overflow', 'hidden', 'important');
+        e.style.setProperty('max-height', 'none', 'important');
+        e.style.setProperty('min-height', '0', 'important');
+        // Re-measure at the bumped font, then clamp to NOTE_MAX_LINES.
+        e.style.setProperty('height', 'auto', 'important');
+        var cap = (window.noteCapHeight ? window.noteCapHeight(e) : 1e9);
+        // Never below the designed box, never above 3 lines.
+        e.style.setProperty('height', Math.min(Math.max(floorH, e.scrollHeight), cap) + 'px', 'important');
+      });
+    });
+
     // ── Pair-glue for the first Transfer Switch row (capture only) ──
     // The row is allowed to wrap, but each inline-label is wrapped together with its
     // control in a nowrap inline-flex group, so a wrap can only occur between pairs:
@@ -3887,7 +3927,10 @@ function capturePageToCanvas(_fontsReady, _rectSink) {
 
     Promise.all(_iconPromises).then(function() {
     requestAnimationFrame(function() { requestAnimationFrame(function() {
-      var CAPTURE_H = Math.max(page.scrollHeight, PAPER_H);
+      // +24px of slack so a sub-pixel rounding difference between the live page and
+      // the html2canvas clone can never shave the last border line off the bottom.
+      // cropCanvasToContent() trims any unused white afterwards, so this costs nothing.
+      var CAPTURE_H = Math.max(page.scrollHeight + 24, PAPER_H);
 
       // ── Collect fillable-field rects (for the editable-PDF overlay) ──
       // Measured now, while #page is at capture width, relative to #page's
@@ -3981,12 +4024,14 @@ function capturePageToCanvas(_fontsReady, _rectSink) {
               // Copy geometry / box model
               div.style.cssText = [
                 'width:'          + computed.width,
+                // Mirror the live box exactly. The live textarea was already grown to fit
+                // its text (see the notes _tweak in the capture setup), so a fixed height
+                // here can't clip — and it guarantees the clone is the same height as the
+                // page html2canvas was told to render.
                 'min-height:'     + computed.height,
                 'height:'         + computed.height,
-                'max-height:'     + computed.maxHeight,
+                'max-height:none',
                 'padding:'        + computed.padding,
-                // Shift text up a bit so the larger font doesn't clip at the bottom.
-                'padding-top:'    + Math.max(0, parseFloat(computed.paddingTop) - 4) + 'px',
                 'margin:'         + computed.margin,
                 'margin-top:'     + computed.marginTop,
                 'margin-bottom:'  + computed.marginBottom,
@@ -3995,7 +4040,7 @@ function capturePageToCanvas(_fontsReady, _rectSink) {
                 'border-radius:'  + computed.borderRadius,
                 'box-sizing:'     + computed.boxSizing,
                 'font-family:'    + computed.fontFamily,
-                'font-size:'      + (parseFloat(computed.fontSize) + 3) + 'px',
+                'font-size:'      + computed.fontSize,
                 'font-weight:'    + computed.fontWeight,
                 'line-height:'    + computed.lineHeight,
                 'color:'          + computed.color,
@@ -4304,6 +4349,7 @@ function confirmClear() {
 function doClearForm() {
   document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="date"],input[type="number"],input[data-was-date="1"],textarea').forEach(function(el) { el.value=''; });
   document.querySelectorAll('input[type="checkbox"],input[type="radio"]').forEach(function(el) { el.checked=false; });
+  if (window.autoGrowAllNotes) window.autoGrowAllNotes();
   var today = new Date().toISOString().split('T')[0];
   var todayInput = document.getElementById('today'); if (todayInput) todayInput.value = today;
   var estDone   = document.getElementById('est_done_on'); if (estDone) estDone.value = today;
@@ -5764,18 +5810,66 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 <script>
-// ── SINGLE-LINE NOTES — prevent Enter key wrapping to second line ──
+// ── AUTO-GROW NOTES — boxes expand as the user types (screen + capture + PDF) ──
+// The notes textareas have overflow:hidden and resize:none, so without this they
+// silently clip. We measure scrollHeight and stamp an inline !important height —
+// !important is required because the mobile screen rule
+// (@media screen and (max-width:768px) { textarea { height:80px !important } })
+// would otherwise beat a plain inline height. min-height in CSS still acts as the
+// floor, so scrollHeight never comes back smaller than the designed box.
+window.NOTE_IDS = ['gen_notes', 'pad_notes', 'gas_notes', 'ready_notes'];
+window.NOTE_MAX_LINES = 3;   // ← change this one number to re-cap every notes box
+
+// Tallest a notes box may get, in px, at whatever typography is currently applied.
+// Computed live (not hardcoded) so it stays correct on screen, in print, and in the
+// capture path — each of which uses a different font size, line-height and padding.
+window.noteCapHeight = function(el) {
+  var cs = window.getComputedStyle(el);
+  var lh = parseFloat(cs.lineHeight);
+  if (!lh || isNaN(lh)) lh = parseFloat(cs.fontSize) * 1.25;   // line-height:normal
+  var chrome = parseFloat(cs.paddingTop)     + parseFloat(cs.paddingBottom)
+             + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+  return Math.ceil(lh * window.NOTE_MAX_LINES + chrome);       // box-sizing:border-box
+};
+
+window.autoGrowNote = function(el) {
+  if (!el) return;
+  el.style.setProperty('height', 'auto', 'important');
+  var content = el.scrollHeight;
+  if (!content) return;                            // hidden / not laid out yet
+  var cap = window.noteCapHeight(el);
+  el.style.setProperty('height', Math.min(content, cap) + 'px', 'important');
+  el.style.setProperty('max-height', cap + 'px', 'important');
+  // Past 3 lines the box stops growing — let the user scroll inside it so nothing
+  // they typed is invisible on screen. (Print/capture still clip at 3 lines.)
+  el.style.setProperty('overflow-y', content > cap ? 'auto' : 'hidden', 'important');
+};
+
+window.autoGrowAllNotes = function() {
+  window.NOTE_IDS.forEach(function(id) {
+    window.autoGrowNote(document.getElementById(id));
+  });
+};
+
 (function() {
-  var noteIds = ['gen_notes', 'pad_notes', 'gas_notes', 'ready_notes'];
-  document.addEventListener('DOMContentLoaded', function() {
-    noteIds.forEach(function(id) {
+  function bind() {
+    window.NOTE_IDS.forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') e.preventDefault();
-      });
+      el.addEventListener('input', function() { window.autoGrowNote(el); });
+      // Enter now inserts a real line break — the box grows to hold it.
     });
-  });
+    window.autoGrowAllNotes();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bind);
+  } else {
+    bind();
+  }
+  // Re-fit after fonts settle and on any width change (wrapping shifts).
+  window.addEventListener('load',   function(){ setTimeout(window.autoGrowAllNotes, 60); });
+  window.addEventListener('resize', function(){ window.autoGrowAllNotes(); });
+  window.addEventListener('orientationchange', function(){ setTimeout(window.autoGrowAllNotes, 200); });
 })();
 
 function adjustTopPadding() {
