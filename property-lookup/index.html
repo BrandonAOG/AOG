@@ -2639,7 +2639,10 @@ const ArcGISExportTiles = L.TileLayer.extend({
 const floodLayer = new ArcGISExportTiles(
   FEMA_NFHL_MS + "/export?dpi=96&transparent=true&format=png32&bboxSR=3857&imageSR=3857"
               + "&size=256,256&layers=show:28&f=image&bbox={bbox}",
-  { tileSize:256, opacity:0.45, minZoom:10, maxZoom:19, zIndex:240,
+  // maxZoom must match the map's (23) or Leaflet drops the layer entirely above 19; maxNativeZoom
+  // caps the actual export requests at 19 and upscales beyond. The fill is flat colour so the
+  // stretch is invisible, and floodEdgeLayer draws crisp vector zone outlines over it from z13.
+  { tileSize:256, opacity:0.45, minZoom:10, maxZoom:23, maxNativeZoom:19, zIndex:240,
     attribution:'Flood zones &copy; FEMA NFHL', updateWhenIdle:L.Browser.mobile });
 let floodOn=false;
 const btnFlood=document.getElementById('btnFlood');
@@ -3137,7 +3140,7 @@ function makeRadarFrame(frame){
   // frame = { time:<epoch seconds>, path:"/v2/radar/<ts>" } from the RainViewer JSON
   const url=radarHost+frame.path+'/'+RADAR_TILE+'/{z}/{x}/{y}/'+RADAR_COLOR+'/'+RADAR_SMOOTH+'_'+RADAR_SNOW+'.png';
   const lyr=L.tileLayer(url,{
-    opacity:0, tileSize:RADAR_TILE, maxNativeZoom:RADAR_MAXNATIVE, maxZoom:19,
+    opacity:0, tileSize:RADAR_TILE, maxNativeZoom:RADAR_MAXNATIVE, maxZoom:23,
     updateWhenIdle:L.Browser.mobile, keepBuffer:2, crossOrigin:true,
     attribution:'Radar &copy; <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a>'
   });
@@ -3700,7 +3703,7 @@ async function toggleSurge(on){
     const isImg=/ImageServer/i.test(cat.surgeInun);
     const path=isImg?'/exportImage':'/export';
     const tl=new ArcGISExportTiles(cat.surgeInun+path+'?dpi=96&transparent=true&format=png32&bboxSR=3857&imageSR=3857&size=256,256&f=image&bbox={bbox}',
-      {tileSize:256,opacity:.55,minZoom:5,maxZoom:19,zIndex:243,attribution:'Surge &copy; NOAA/NHC'});
+      {tileSize:256,opacity:.55,minZoom:5,maxZoom:23,maxNativeZoom:19,zIndex:243,attribution:'Surge &copy; NOAA/NHC'});
     tl.addTo(map); nhcSub.surge.tiles=tl; any=true;
   }
   if(!any){ mapToast('No storm-surge watch/warning or inundation issued right now.',2800); nhcSub.surge.on=false; surgeGeoms=[]; inunGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
@@ -3906,7 +3909,7 @@ function warnUrl(){
 }
 function applyWarnFilter(){ try{ warnLayer.setUrl(warnUrl()); }catch(e){} }
 const warnLayer = new ArcGISExportTiles(WARN_BASE,
-  { tileSize:256, opacity:0.5, minZoom:5, maxZoom:19, zIndex:245,
+  { tileSize:256, opacity:0.5, minZoom:5, maxZoom:23, maxNativeZoom:19, zIndex:245,
     attribution:'Warnings &copy; NOAA/NWS', updateWhenIdle:L.Browser.mobile });
 let warnOn=false, warnRefresh=null, warnLegendCache=null;
 /* Fetch the live legend swatches straight from the NWS WWA service so the labels &
