@@ -6714,6 +6714,11 @@ function renderShapeAndMeasure(){
   polylineObjs.forEach(function(pl){
     var layer=layers[pl.layerIdx];
     if(layer&&!layer.visible) return;
+    // The selected polyline is drawn live on selCv (renderPolylineSelection).
+    // Skipping it here avoids a second, overlapping stroke — the same pattern
+    // used for the selected leader below — which is what made dashed/dotted
+    // polylines flash solid while being moved or resized.
+    if(typeof selectedPolyline!=='undefined' && pl===selectedPolyline) return;
     drawPolylineOnCtx(shCtx, pl, 1);
   });
   // Pen / Polygon / Leader / Stamp objects (live, never burned)
@@ -7396,6 +7401,12 @@ drawCv.addEventListener('click',function(e){
       var _lpp=plPoints[plPoints.length-1];
       var _cvpl=constrainHV(_lpp.x,_lpp.y,plp.x,plp.y); plp={x:_cvpl.x,y:_cvpl.y};
     }
+    // The browser fires two `click`s before a `dblclick`, so the second click
+    // of a finishing double-click would stack a duplicate vertex on top of the
+    // one the first click just placed. Skip a point that lands on the previous
+    // one so the committed polyline doesn't end up with two endpoints.
+    var _lastPl=plPoints[plPoints.length-1];
+    if(_lastPl && Math.hypot(plp.x-_lastPl.x, plp.y-_lastPl.y) < 4/zoom) return;
     plPoints.push(plp); plActive=true; redrawPolylinePreview(plp.x,plp.y);
   }
   else if(tool==='leader'){
@@ -9970,6 +9981,12 @@ function renderPolylineSelection(){
   selCtx.strokeStyle='#6c63ff';
   selCtx.lineWidth=(pl.strokeW||2)+6/zoom;
   selCtx.lineCap='round'; selCtx.lineJoin='round';
+  // Match the line's dash so the glow doesn't fill the gaps of a dashed/dotted
+  // polyline (which made it look partly solid). Solid lines keep a solid glow.
+  var _gsw=pl.strokeW||2;
+  if(pl.lineStyle==='dashed') selCtx.setLineDash([_gsw*4,_gsw*3]);
+  else if(pl.lineStyle==='dotted') selCtx.setLineDash([_gsw,_gsw*2.5]);
+  else selCtx.setLineDash([]);
   selCtx.beginPath();
   selCtx.moveTo(pl.pts[0].x,pl.pts[0].y);
   for(var i=1;i<pl.pts.length;i++) selCtx.lineTo(pl.pts[i].x,pl.pts[i].y);
@@ -10044,6 +10061,17 @@ function redrawPolylinePreview(mx,my){
 }
 
 function closePolyline(){
+  // Strip consecutive duplicate vertices before committing — e.g. the extra
+  // point a double-click / double-tap can leave stacked at the finish spot,
+  // which otherwise shows up as a second endpoint when the polyline is resized.
+  if(plPoints.length>=2){
+    var _tol=4/zoom, _clean=[plPoints[0]];
+    for(var _i=1;_i<plPoints.length;_i++){
+      var _prev=_clean[_clean.length-1], _cur=plPoints[_i];
+      if(Math.hypot(_cur.x-_prev.x, _cur.y-_prev.y)>=_tol) _clean.push(_cur);
+    }
+    plPoints=_clean;
+  }
   if(plPoints.length<2){ plPoints=[]; plActive=false; renderShapeAndMeasure(); return; }
   captureState();
   polylineObjs.push({
