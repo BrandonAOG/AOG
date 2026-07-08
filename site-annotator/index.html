@@ -2589,7 +2589,10 @@ function repositionCommentEditor(c){
 
   // Position changes every pan/zoom tick — always update left/top.
   // Viewport-local position only — no visualViewport offsets (see startCommentTextEdit).
-  var newLeft = Math.round(Math.max(0, panX + cx2*zoom)) + 'px';
+  // No Math.max(0,…) clamp here — pinning the editor at the screen's left edge
+  // made the note text move WITH the screen during a pan/zoom instead of
+  // tracking its box. Let it follow the canvas point, even partially off-screen.
+  var newLeft = Math.round(panX + cx2*zoom) + 'px';
   var newTop  = Math.round(panY + cy2*zoom) + 'px';
   if(textOv.style.left !== newLeft) textOv.style.left = newLeft;
   if(textOv.style.top  !== newTop)  textOv.style.top  = newTop;
@@ -8515,7 +8518,8 @@ function showTextOverlay(cx,cy){
   textOv.style.display = 'block';
   // Safety: ensure no leftover note rotation from a prior comment edit.
   textOv.style.transform = 'none'; textOv.style.transformOrigin = '';
-  repositionTextOverlay();
+  textOv._editBoxW = 0;          // new edit session — recompute wrap width
+  repositionTextOverlay(true);   // clamp on-screen ONLY for the initial placement
   // iOS: focus already called in onDown. Desktop + double-tap edit path: focus here.
   if(document.activeElement!==textOv){
     textOv.focus();
@@ -8523,7 +8527,12 @@ function showTextOverlay(cx,cy){
   }
 }
 
-function repositionTextOverlay(){
+function repositionTextOverlay(clampToView){
+  // clampToView=true ONLY on the initial placement (showTextOverlay). During
+  // pan/zoom repositions the old on-screen clamps below pinned the live editor
+  // to the viewport edges, so the text you were typing MOVED WITH THE SCREEN
+  // instead of staying glued to its canvas point. Skip the clamps then — the
+  // editor may go partially off-screen, exactly like every other canvas object.
   if(textOv.style.display==='none') return;
   // The shared textarea currently belongs to a NOTE — its styling is owned by
   // repositionCommentEditor. Never apply text-tool sizing/transform to it.
@@ -8557,6 +8566,9 @@ function repositionTextOverlay(){
   // right edge, then (and only then) pull it back onto the canvas.
   var vpW = viewport.clientWidth, vpH = viewport.clientHeight;
   var boxW = Math.max(200, vpW * 0.5);
+  // Reuse the width locked in at initial placement so the text doesn't re-wrap
+  // (visually jump) when the box is repositioned during a pan/zoom.
+  if(!clampToView && textOv._editBoxW) boxW = textOv._editBoxW;
   var boxH = Math.max(40, Math.max(16, FONT_PX*zoom) * 2);
   if(_textAnchorRight){
     // Right-anchored (left-hanging leader label): the box's VISUAL right edge
@@ -8564,22 +8576,23 @@ function repositionTextOverlay(){
     // LEFT, so the first letter stays put just left of the line at every zoom.
     var rightEdge = sx;                          // anchor screen-x = visual right edge
     sx = rightEdge - boxW*_scaleV0;              // box left edge (scaled width)
-    if(vpW > 0){
+    if(clampToView && vpW > 0){
       if(rightEdge > vpW) { rightEdge = vpW; sx = rightEdge - boxW*_scaleV0; }
       if(rightEdge < 40)  { rightEdge = 40;  sx = rightEdge - boxW*_scaleV0; }
       if(sx < 0){ boxW = rightEdge/_scaleV0; sx = 0; } // shrink instead of going off-screen
       if(boxW < 60) boxW = 60;
     }
-  } else if(vpW > 0){
+  } else if(clampToView && vpW > 0){
     if(sx < 0) sx = 0;
     if(sx > vpW - 40) sx = vpW - 40;          // keep at least a sliver on-screen
     if(sx + boxW*_scaleV0 > vpW) boxW = (vpW - sx)/_scaleV0; // shrink, don't shift
     if(boxW < 60) boxW = 60;                   // minimum usable width
   }
-  if(vpH > 0){
+  if(clampToView && vpH > 0){
     if(sy + boxH > vpH) sy = vpH - boxH;
     if(sy < 0) sy = 0;
   }
+  if(clampToView) textOv._editBoxW = boxW; // lock wrap width for this edit session
   textOv.style.display  = 'block';
   textOv.style.left     = sx+'px';
   textOv.style.top      = sy+'px';
