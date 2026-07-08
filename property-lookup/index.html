@@ -9446,6 +9446,13 @@ async function runLookup(lat,lng,searchCtx){
   }
 
   /* ---- Flood ---- */
+  /* Both the FEMA Flood Hazard card and the Elevation Certificate card now live in the Flood tab,
+     and for some cities (Naples) the resident portal and the EC lookup are the SAME URL. Record
+     whatever portal this card links so the EC card below can reference it instead of re-linking. */
+  let floodPortalUrl = null;
+  const sameUrl = (a,b) => !!a && !!b &&
+    String(a).trim().replace(/\/+$/,'').toLowerCase() === String(b).trim().replace(/\/+$/,'').toLowerCase();
+
   html += `<div class="card"><div class="ch"><span class="icn">[ FLD ]</span><h2>FEMA Flood Hazard</h2>
     <div class="src">FEMA National<br>Flood Hazard Layer</div></div><div class="cb">`;
   html += `<div class="freshline"><span class="badge live">● LIVE</span> effective NFHL, queried in real time</div>`;
@@ -9505,6 +9512,7 @@ async function runLookup(lat,lng,searchCtx){
   if(fr){
     html += `<a class="palink" href="${esc(fr.url)}" target="_blank" rel="noopener" style="margin-top:10px">↗ ${esc(fr.label)} — detailed flood zone by address</a>`;
     html += `<div class="note">The above is the effective FEMA NFHL (the legal flood zone). ${esc(titleCase(cityName))} also maintains a resident flood portal that frequently has more detailed, locally-curated flood-zone and elevation info for an address — worth cross-checking.</div>`;
+    floodPortalUrl = fr.url;
   }
   html += `</div></div>`;
 
@@ -9669,7 +9677,7 @@ async function runLookup(lat,lng,searchCtx){
 
   // --- City resident portal (Forerunner): shown when not already represented by a city DOCS entry ---
   const frDoc = (cityName && !docInCity) ? FORERUNNER[norm(cityName)] : null;
-  if(frDoc){
+  if(frDoc && !sameUrl(frDoc.url, floodPortalUrl)){
     html += `<a class="palink" href="${esc(frDoc.url)}" target="_blank" rel="noopener">↗ ${esc(frDoc.label)} — search this address for its Elevation Certificate</a>`;
     html += `<div class="note">${esc(titleCase(cityName))}'s resident portal lets you search an address and view the Elevation Certificate on file (plus local flood info). This is usually the quickest EC lookup for in-city properties.</div>`;
   }
@@ -9699,7 +9707,12 @@ async function runLookup(lat,lng,searchCtx){
 
   // --- Always offer the human EC map / search page as fallback ---
   if(docCfg){
-    if(docCfg.ecMap) html += `<a class="palink" href="${esc(docCfg.ecMap)}" target="_blank" rel="noopener" style="margin-top:8px">↗ ${esc(docJur)} elevation-certificate map / search</a>`;
+    // Don't re-link the same portal the FEMA Flood Hazard card already linked (same tab, one URL).
+    if(docCfg.ecMap && sameUrl(docCfg.ecMap, floodPortalUrl)){
+      html += `<div class="note">The EC lookup for this address is the same resident portal linked in the <b>FEMA Flood Hazard</b> card above — search the address there to view the Elevation Certificate on file.</div>`;
+    } else if(docCfg.ecMap){
+      html += `<a class="palink" href="${esc(docCfg.ecMap)}" target="_blank" rel="noopener" style="margin-top:8px">↗ ${esc(docJur)} elevation-certificate map / search</a>`;
+    }
     if(docCfg.ecNote) html += `<div class="note">${esc(docCfg.ecNote)}</div>`;
   } else if(countyName){
     html += `<a class="palink" href="https://www.google.com/search?q=${encodeURIComponent(titleCase(countyName)+' County Florida elevation certificate map lookup')}" target="_blank" rel="noopener" style="margin-top:8px">↗ Find ${esc(titleCase(countyName))} County elevation-certificate lookup</a>`;
