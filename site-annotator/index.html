@@ -29,6 +29,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="script" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js">
+<link rel="preload" as="fetch" crossorigin href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js">
 <link rel="preload" as="script" href="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js">
 <link rel="preload" as="script" href="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
 
@@ -3936,14 +3937,45 @@ function _explodePDFPage(n){
     //                 from annotations — the page itself is just a scanned image.
     var _amOff=(pdfjsLib.AnnotationMode && pdfjsLib.AnnotationMode.DISABLE);
     if(_amOff==null) _amOff=0;
+    // ── PIPELINE (reordered for speed) ─────────────────────────────────────
+    // Old flow: await FOUR worker fetches (two of them full parses of the same
+    // content stream), and only then start the backdrop render — the longest
+    // single step. Everything ran end-to-end serial.
+    // New flow:
+    //  • The backdrop render starts IMMEDIATELY. Its DISABLE-intent parse runs
+    //    in the worker while the main thread is still free, and its canvas
+    //    painting overlaps the other fetches below.
+    //  • getOperatorList({DISABLE}) is requested AFTER the render kicked off, so
+    //    it resolves from the render's own intent cache — a lookup, not the full
+    //    second parse it used to be.
+    //  • getTextContent is skipped entirely when the user unticked "text" in the
+    //    import dialog (it can be a multi-second walk on text-heavy sheets).
+    var _t0=(performance&&performance.now)?performance.now():Date.now();
+    var _lap=function(tag){ if(AOG_DEBUG){ var t=(performance&&performance.now)?performance.now():Date.now(); console.log('[AOG:time] '+tag+' +'+Math.round(t-_t0)+'ms'); } };
+    _explodeLap=_lap;   // let _explodeObjects/_finishExplode report per-pass times
+    var _renderP=_renderBackdropNoText(page, null, vp, w, h)
+      .then(function(){ _lap('backdrop render'); return true; })
+      .catch(function(err){ console.warn('[Explode] backdrop render failed:',err); return false; });
     Promise.all([
-      page.getOperatorList(),
-      page.getTextContent(),
+      page.getOperatorList().then(function(r){ _lap('opList(annots)'); return r; }),
+      (EXPLODE_TEXT ? page.getTextContent().then(function(r){ _lap('textContent'); return r; })
+                    : Promise.resolve({items:[]})),
       page.getAnnotations().catch(function(){ return []; }),
-      page.getOperatorList({annotationMode:_amOff}).catch(function(){ return null; })
+      _renderP
     ]).then(function(parts){
       var opList = parts[0], tc = parts[1], annots = parts[2]||[];
-      var opListPage = parts[3] || parts[0];   // fall back if the option is unsupported
+      var _renderOK = parts[3];
+      // Cache hit: the render above already parsed the DISABLE-intent operator
+      // list; this same-intent request returns it without re-parsing.
+      return page.getOperatorList({annotationMode:_amOff}).catch(function(){ return null; })
+        .then(function(opListPage){
+          _lap('opList(page) [cached]');
+          return {opList:opList, tc:tc, annots:annots, opListPage:(opListPage||opList), renderOK:_renderOK};
+        });
+    }).then(function(parts){
+      var opList = parts.opList, tc = parts.tc, annots = parts.annots;
+      var opListPage = parts.opListPage;
+      var _renderOK = parts.renderOK;
       _pageAnnots = annots;   // stash for _explodeObjects
       if(AOG_DEBUG){
         try{
@@ -3954,35 +3986,30 @@ function _explodePDFPage(n){
           });
         }catch(e){ console.warn('annot dbg',e); }
       }
-      _renderBackdropNoText(page, opListPage, vp, w, h).then(function(){
-        // Ink annotations are no longer baked into the backdrop (it renders with
-        // annotationMode DISABLE), so there is nothing to patch out. Kept as a
-        // no-op hook in case a future backdrop path re-enables annotations.
-        return null;
-      }).then(function(){
-        // Run the extraction OUTSIDE the fallback's catch. Previously any error
-        // thrown in here (a bad object emit, a tainted-canvas getImageData…)
-        // fell through to the flatten path below, which calls afterLoad() and
-        // wipes penObjs/markupObjs — so freshly imported highlights and ink
-        // strokes appeared for a frame and then vanished. Extraction failures
-        // must not discard the page that already rendered fine.
-        try{
-          _explodeObjects(page, opListPage, tc, vp, sc, w, h, n, opList);
-        }catch(exObj){
-          console.error('[Explode] object extraction failed (page kept as-is):',exObj);
-          _lastLoadedDpi=Math.round(sc*72);
-          _vectorBackdropOK=true; _vecPageNum=n;
-          _finishExplode(n,w,h,sc,true);
-        }
-      }).catch(function(err){
-        console.warn('[Explode] backdrop render failed, full flatten:',err);
-        // Fallback: plain flatten so the user still sees their drawing.
+      if(!_renderOK){
+        // Backdrop render failed → plain flatten so the user still sees the page.
         page.render({canvasContext:bCtx, viewport:vp}).promise.then(function(){
           _lastLoadedDpi=Math.round(sc*72); afterLoad(); imgOverlays=[]; textObjs=[];
           _vectorBackdropOK=true; _vecPageNum=n;  // pristine page → vectors exportable
           _finishExplode(n,w,h,sc,true);
         });
-      });
+        return;
+      }
+      // Run the extraction OUTSIDE the fallback's catch. Previously any error
+      // thrown in here (a bad object emit, a tainted-canvas getImageData…)
+      // fell through to the flatten path below, which calls afterLoad() and
+      // wipes penObjs/markupObjs — so freshly imported highlights and ink
+      // strokes appeared for a frame and then vanished. Extraction failures
+      // must not discard the page that already rendered fine.
+      try{
+        _explodeObjects(page, opListPage, tc, vp, sc, w, h, n, opList);
+        _lap('explode passes');
+      }catch(exObj){
+        console.error('[Explode] object extraction failed (page kept as-is):',exObj);
+        _lastLoadedDpi=Math.round(sc*72);
+        _vectorBackdropOK=true; _vecPageNum=n;
+        _finishExplode(n,w,h,sc,true);
+      }
     }).catch(function(err){
       toast('PDF parse error: '+err.message,'err');
     });
@@ -4234,6 +4261,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     _bsx.drawImage(baseCv,0,0);
     _baseSnap=_bsx;
   }catch(e){ _baseSnap=null; }
+  _explodeLap('detect+baseSnap');
 
   // ── IMAGE PASS ───────────────────────────────────────────────────────────
   // Walk the operator list tracking the CTM; for each paintImageXObject capture
@@ -4348,6 +4376,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       }
     }
   }catch(e){ console.warn('[Explode] image pass failed:',e); }
+  _explodeLap('image pass ('+imgCount+' images)');
 
   // ── VECTOR PASS ──────────────────────────────────────────────────────────
   // Walk the operator list, decode each constructPath into device-space
@@ -4363,11 +4392,13 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     _extractMarkups(page, opListAnnot, _pageAnnots, vp, sc, w, h,
                     (opList && opList.fnArray) ? opList.fnArray.length : 0);
   }catch(e){ console.warn('[Explode] markup pass failed:',e); }
+  _explodeLap('markup pass');
 
   var vecCount=0;
   if(EXPLODE_OTHER && !_denseDrawing) try{
     vecCount=_extractVectors(opList, vp, sc, w, h);
   }catch(e){ console.warn('[Explode] vector pass failed:',e); }
+  _explodeLap('vector pass ('+vecCount+' objects)');
 
   // ── TEXT PASS (only when the user asked to extract text) ─────────────────
   // When text is left unchecked, we skip both the white-out and the object
@@ -4375,6 +4406,13 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
   var txtCount=0;
   if(EXPLODE_TEXT && !_denseDrawing){
   dbg('import','text extraction ON — whiting out original text fragments on backdrop (display only)');
+  // ONE bulk pixel snapshot of the backdrop for background sampling, and one of
+  // the pre-whiteout base for glyph-color sampling. The old per-point/per-line
+  // getImageData calls (≈25 per fragment) dominated load time on text-heavy
+  // sheets — thousands of fragments meant tens of thousands of readbacks.
+  var _bgPix = _snapPixels(bCtx);
+  var _colPix = _snapPixels(_baseSampleCtx());
+  _explodeLap('text pass: snapshots');
   // First pass: white-out the baked text on the base canvas. Per-fragment boxes
   // overlap to cover each full line. We sample the local background just outside
   // each box; if it reads close to white we snap to pure white so anti-aliased
@@ -4391,7 +4429,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     // patches overlap and no glyph edge peeks through.
     var padX=fpx*0.14, padTop=fpx*0.92, padBot=fpx*0.30;
     var bx=x-padX, by=yBase-padTop, bw=wRun+padX*2, bh=padTop+padBot;
-    var bg=_sampleBgAround(bCtx, bx, by, bw, bh);
+    var bg=_sampleBgAround(bCtx, bx, by, bw, bh, _bgPix);
     // Snap to pure white when the surroundings are basically white (covers the
     // common case cleanly); otherwise keep the sampled color for colored regions.
     var rgb=_hexToRgb(bg);
@@ -4506,7 +4544,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     var fontPt=first.fpx/sc;
     var bold=/bold/i.test(first.fam);
     var ital=/italic|oblique/i.test(first.fam);
-    var col=_sampleTextColor(_baseSampleCtx(), first.x, first.y, first.fpx);
+    var col=_sampleTextColor(_baseSampleCtx(), first.x, first.y, first.fpx, _colPix);
     textObjs.push({
       id: Date.now()+Math.floor(Math.random()*100000)+txtCount,
       x: first.x, y: first.y, text: text, color: col, fontSize: fontPt,
@@ -4521,6 +4559,8 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     }
     txtCount++;
   });
+  _bgPix=null; _colPix=null;   // release the ~4-byte-per-px buffers promptly
+  _explodeLap('text pass: whiteout+merge ('+txtCount+' lines)');
   } // end if(EXPLODE_TEXT)
 
   // ── FREETEXT ANNOTATION PASS ─────────────────────────────────────────────
@@ -4561,15 +4601,22 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       try{
         var inX=Math.max(2,(x1-x0)*0.15), inY=Math.max(2,(y1-y0)*0.15);
         var sgx=x0+inX, sgy=y0+inY, sgw=Math.max(1,(x1-x0)-2*inX), sgh=Math.max(1,(y1-y0)-2*inY);
+        // ONE region readback for the whole sample grid (the old code issued 25
+        // separate 1×1 getImageData calls per note).
+        var _rgx=Math.max(0,Math.min(bCtx.canvas.width-2,Math.round(sgx)));
+        var _rgy=Math.max(0,Math.min(bCtx.canvas.height-2,Math.round(sgy)));
+        var _rgw=Math.max(1,Math.min(bCtx.canvas.width-_rgx,Math.round(sgw)));
+        var _rgh=Math.max(1,Math.min(bCtx.canvas.height-_rgy,Math.round(sgh)));
+        var _reg=bCtx.getImageData(_rgx,_rgy,_rgw,_rgh).data;
         var buckets={}, GN=4;
         for(var sgi=0;sgi<=GN;sgi++){
           for(var sgj=0;sgj<=GN;sgj++){
-            var spx=Math.max(0,Math.min(bCtx.canvas.width-1,Math.round(sgx+sgw*sgi/GN)));
-            var spy=Math.max(0,Math.min(bCtx.canvas.height-1,Math.round(sgy+sgh*sgj/GN)));
-            var spd=bCtx.getImageData(spx,spy,1,1).data;
-            var bkey=((spd[0]>>4)<<8)|((spd[1]>>4)<<4)|(spd[2]>>4);
+            var spx=Math.min(_rgw-1,Math.round(_rgw*sgi/GN));
+            var spy=Math.min(_rgh-1,Math.round(_rgh*sgj/GN));
+            var _ri=(spy*_rgw+spx)*4;
+            var bkey=((_reg[_ri]>>4)<<8)|((_reg[_ri+1]>>4)<<4)|(_reg[_ri+2]>>4);
             var bk=buckets[bkey]||(buckets[bkey]={n:0,r:0,g:0,b:0});
-            bk.n++; bk.r+=spd[0]; bk.g+=spd[1]; bk.b+=spd[2];
+            bk.n++; bk.r+=_reg[_ri]; bk.g+=_reg[_ri+1]; bk.b+=_reg[_ri+2];
           }
         }
         var topBk=null;
@@ -4707,13 +4754,16 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       }
     }
   }catch(e){ console.warn('[Explode] FreeText pass:',e); }
+  _explodeLap('freetext pass');
 
   _finishExplode(n, w, h, sc, false, imgCount, txtCount, vecCount);
+  _explodeLap('finish (render+composite)');
 }
 
 // Snapshot of the base canvas taken BEFORE white-out, so text color sampling
 // reads the original glyph pixels (after white-out they'd be gone).
 var _baseSnap=null;
+var _explodeLap=function(){};   // per-pass timing hook, set by _explodePDFPage
 var _pageAnnots=[];   // pdf.js annotations for the current page (FreeText notes etc.)
 var _explodeBakedHls=[];  // content-stream highlighter fills pulled out this pass
 function _baseSampleCtx(){ return _baseSnap || bCtx; }
@@ -5299,14 +5349,33 @@ function _extractVectors(opList, vp, sc, w, h){
   // arrow pointing at the chevron vertex. Remaining segments stay plain lines.
   var usedSeg={};
   var arrows=[];
+  // Spatial grid over segment ENDPOINTS. The old scan compared every chevron
+  // against every segment — O(n·m), which on line-heavy sheets (thousands of
+  // segs × hundreds of chevrons) burned seconds. Pairing only ever accepts a
+  // match within ~max(8, lw*4) px, so checking the 3×3 cells around the chevron
+  // vertex (cell=64px) sees every possible match while skipping the rest.
+  var _CELL=64, _grid={};
+  for(var _gi=0; _gi<segs.length; _gi++){
+    var _gs=segs[_gi];
+    [ _gs.a, _gs.b ].forEach(function(p){
+      var kx=(p.x/_CELL)|0, ky=(p.y/_CELL)|0, kk=kx+','+ky;
+      (_grid[kk]||(_grid[kk]=[])).push(_gi);
+    });
+  }
   chevrons.forEach(function(ch){
     var best=-1, bestD=1e9, bestEnd=null;
-    for(var si=0; si<segs.length; si++){
-      if(usedSeg[si]) continue;
-      var s=segs[si];
-      var dA=dist(s.a,ch.v), dB=dist(s.b,ch.v);
-      var d=Math.min(dA,dB);
-      if(d<bestD){ bestD=d; best=si; bestEnd=(dA<dB?'a':'b'); }
+    var cvx=(ch.v.x/_CELL)|0, cvy=(ch.v.y/_CELL)|0, _seenSeg={};
+    for(var gx=cvx-1; gx<=cvx+1; gx++) for(var gy=cvy-1; gy<=cvy+1; gy++){
+      var cell=_grid[gx+','+gy]; if(!cell) continue;
+      for(var ci=0; ci<cell.length; ci++){
+        var si=cell[ci];
+        if(usedSeg[si] || _seenSeg[si]) continue;
+        _seenSeg[si]=true;
+        var s=segs[si];
+        var dA=dist(s.a,ch.v), dB=dist(s.b,ch.v);
+        var d=Math.min(dA,dB);
+        if(d<bestD){ bestD=d; best=si; bestEnd=(dA<dB?'a':'b'); }
+      }
     }
     // Only pair if the chevron sits right at a segment end (within ~6px * scale).
     if(best>=0 && bestD < Math.max(8, segs[best].lineW*4)){
@@ -5555,18 +5624,41 @@ function _hexToRgb(hex){
   return {r:parseInt(m[1],16), g:parseInt(m[2],16), b:parseInt(m[3],16)};
 }
 
+// ── PIXEL SNAPSHOT ──────────────────────────────────────────────────────────
+// One getImageData of the WHOLE canvas, sampled by array indexing afterwards.
+// The old samplers issued a separate getImageData per sample point — ~24 calls
+// per text fragment × thousands of fragments = tens of thousands of readbacks,
+// which was the bulk of the multi-second "explode passes" time on text-heavy
+// sheets. One bulk readback + typed-array reads is ~100× cheaper.
+function _snapPixels(ctx){
+  try{
+    var w=ctx.canvas.width, h=ctx.canvas.height;
+    if(!w||!h) return null;
+    return {d:ctx.getImageData(0,0,w,h).data, w:w, h:h};
+  }catch(e){ return null; }
+}
+function _snapPx(snap, x, y){
+  x=Math.max(0,Math.min(snap.w-1,Math.round(x)));
+  y=Math.max(0,Math.min(snap.h-1,Math.round(y)));
+  var i=(y*snap.w+x)*4, d=snap.d;
+  return [d[i],d[i+1],d[i+2],d[i+3]];
+}
+
 // Sample a representative background color from the ring just outside a box.
-function _sampleBgAround(ctx, x, y, w, h){
+// `snap` (optional) = a _snapPixels buffer; when given, no getImageData calls
+// are made — sampling is pure array reads.
+function _sampleBgAround(ctx, x, y, w, h, snap){
   try{
     // Sample a ring of points just OUTSIDE the text box (left, right, above,
     // below — multiple along each edge). Text glyphs are dark; the local
     // background (white or a smooth watermark) is lighter. We take the lightest
     // cluster so a stray sample that lands on a glyph or box edge can't drag the
     // patch dark. This keeps the patch blended with a watermark behind it.
-    var W=ctx.canvas.width, H=ctx.canvas.height;
+    var W=(snap?snap.w:ctx.canvas.width), H=(snap?snap.h:ctx.canvas.height);
     var samples=[];
     function grab(px,py){
       px=Math.max(0,Math.min(W-1,Math.round(px))); py=Math.max(0,Math.min(H-1,Math.round(py)));
+      if(snap){ var s=_snapPx(snap,px,py); samples.push([s[0],s[1],s[2]]); return; }
       var d=ctx.getImageData(px,py,1,1).data; samples.push([d[0],d[1],d[2]]);
     }
     var n=5;
@@ -5590,14 +5682,30 @@ function _sampleBgAround(ctx, x, y, w, h){
 }
 
 // Sample the dominant non-white color near a baseline to recover text color.
-function _sampleTextColor(ctx, x, baselineY, fpx){
+function _sampleTextColor(ctx, x, baselineY, fpx, snap){
   try{
+    var CW=(snap?snap.w:ctx.canvas.width), CH=(snap?snap.h:ctx.canvas.height);
     var sx=Math.max(0,Math.round(x)), sy=Math.max(0,Math.round(baselineY-fpx*0.6));
-    var sw=Math.min(ctx.canvas.width-sx, Math.max(2,Math.round(fpx*0.8)));
-    var sh=Math.min(ctx.canvas.height-sy, Math.max(2,Math.round(fpx*0.8)));
+    var sw=Math.min(CW-sx, Math.max(2,Math.round(fpx*0.8)));
+    var sh=Math.min(CH-sy, Math.max(2,Math.round(fpx*0.8)));
     if(sw<=0||sh<=0) return '#000000';
-    var d=ctx.getImageData(sx,sy,sw,sh).data;
     var br,bg,bb,best=999; // pick the darkest sufficiently-opaque pixel
+    if(snap){
+      // Read from the one-shot snapshot: pure array indexing, no readback call.
+      for(var yy=0; yy<sh; yy++){
+        var row=((sy+yy)*snap.w+sx)*4, d2=snap.d;
+        for(var xx=0; xx<sw; xx++){
+          var ii=row+xx*4;
+          if(d2[ii+3]<128) continue;
+          var lum2=d2[ii]*0.299+d2[ii+1]*0.587+d2[ii+2]*0.114;
+          if(lum2<best && lum2<230){ best=lum2; br=d2[ii]; bg=d2[ii+1]; bb=d2[ii+2]; }
+        }
+      }
+      if(best===999) return '#000000';
+      var h2=function(v){ return ('0'+v.toString(16)).slice(-2); };
+      return '#'+h2(br)+h2(bg)+h2(bb);
+    }
+    var d=ctx.getImageData(sx,sy,sw,sh).data;
     for(var i=0;i<d.length;i+=4){
       if(d[i+3]<128) continue;
       var lum=d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114;
