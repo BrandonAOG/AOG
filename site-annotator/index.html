@@ -282,6 +282,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .markup-btn.active{border-color:var(--acc);color:var(--acc2);background:rgba(108,99,255,.15)}
 /* SELECTION OVERLAY CANVAS */
 #img-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:2}
+#hl-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:3;mix-blend-mode:multiply}
 #shapes-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:3}
 #txt-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:11}
 #sel-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:12}
@@ -1190,6 +1191,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
         <canvas id="base-cv"></canvas>
         <canvas id="draw-cv"></canvas>
         <canvas id="img-cv"></canvas>
+        <canvas id="hl-cv"></canvas>
         <canvas id="shapes-cv"></canvas>
         <canvas id="txt-cv"></canvas>
         <canvas id="sel-cv"></canvas>
@@ -1928,6 +1930,13 @@ var tCv=document.getElementById('txt-cv');
 var tCtx=tCv.getContext('2d');
 var shCv=document.getElementById('shapes-cv');
 var shCtx=shCv.getContext('2d');
+// Highlighter canvas: sits under shapes, CSS mix-blend-mode:multiply so full-
+// alpha highlighter ink darkens the PAGE beneath it (text shows through) exactly
+// like Acrobat's InkHighlight. globalCompositeOperation can't do this on screen
+// because each canvas is a separate DOM element — the blend has to happen at the
+// element-compositing level.
+var hlCv=document.getElementById('hl-cv');
+var hlCtx=hlCv.getContext('2d');
 
 // ── Accurate text width using real canvas measurement ────────────
 // Replaces the inaccurate "chars * fontSize * 0.6" estimate.
@@ -2723,6 +2732,7 @@ function drawMarkupOnCtx(ctx,m,sc,lw){
   var w=m.w*sc, h=m.h*sc;
   ctx.save();
   ctx.globalAlpha=m.opacity;
+  if(m._bakedHl||m.blend) ctx.globalCompositeOperation='multiply';  // flattened exports
   ctx.translate(m.cx*sc, m.cy*sc);
   ctx.rotate(m.angle||0);
   if(m.type==='highlight'){
@@ -2759,6 +2769,8 @@ function drawMarkupOnCtx(ctx,m,sc,lw){
 // pen stroke) with the highlight tool → drag moves it. Press empty space →
 // draw a new highlight, exactly as before. The eraser already deletes both.
 var _mkDrag=null;   // {obj, kind:'markup'|'pen', lx, ly, moved}
+var _hlSel=null;    // {obj, kind} — highlight selected by a Hilite-tool tap;
+                    // the markup opacity slider & color swatch edit it live.
 function findMarkupObjAt(x,y){
   for(var i=markupObjs.length-1;i>=0;i--){
     var m=markupObjs[i];
@@ -2777,7 +2789,10 @@ function renderMarkupObjs(){
   // on screen even though the export put the lines on top.)
   markupObjs.forEach(function(m){
     var layer=layers[m.layerIdx]; if(layer&&!layer.visible) return;
-    drawMarkupOnCtx(shCtx, m, 1, Math.max(2,2/zoom));
+    // Full-alpha imported tints go to the multiply canvas (they carry the raw
+    // highlighter color); alpha-based user markups keep their classic render.
+    var _mc=(m._bakedHl||m.blend)?hlCtx:shCtx;
+    drawMarkupOnCtx(_mc, m, 1, Math.max(2,2/zoom));
   });
 }
 // ══════════════════════════════════════════════════════════════
@@ -4932,6 +4947,14 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
 
     var _flushAnnot=function(){
       if(!curSubs.length){ return; }
+      // Ink annotations are OWNED by the ink-import pass (penObjs from /InkList,
+      // with /CA alpha and Multiply blend). Without this skip, their appearance
+      // streams fell through to the polyline catch-all below, importing every
+      // highlighter stroke a SECOND time as a solid polyline at slightly
+      // different geometry — the "shows up twice / pulled onto the page wrong"
+      // duplicates. Popups have no drawable appearance we want either.
+      var _skipSub = curAnn && curAnn.subtype;
+      if(_skipSub==='Ink' || _skipSub==='Popup'){ curSubs=[]; return; }
       // Arrow ONLY when the annotation itself declares a non-"None" line ending.
       // The old shape heuristic (2 subpaths, one with 3 pts) misfired on 3-vertex
       // PolyLines, inventing arrowheads that don't exist in the PDF.
@@ -5703,9 +5726,9 @@ function renderPDFPage(n){
 }
 
 function resize(w,h){
-  baseCv.width=drawCv.width=gridCv.width=tCv.width=shCv.width=w;
+  baseCv.width=drawCv.width=gridCv.width=tCv.width=shCv.width=hlCv.width=w;
   if(typeof imgCv!=='undefined'){ imgCv.width=w; }
-  baseCv.height=drawCv.height=gridCv.height=tCv.height=shCv.height=h;
+  baseCv.height=drawCv.height=gridCv.height=tCv.height=shCv.height=hlCv.height=h;
   if(typeof imgCv!=='undefined'){ imgCv.height=h; }
   selCv.width=1; selCv.height=1;
   canvasWrap.style.width=w+'px'; canvasWrap.style.height=h+'px';
@@ -5751,6 +5774,7 @@ function _setAnnoRes(force){
   _annoEff = eff;
   _sizeAnnoCanvas(tCv,  tCtx,  eff);
   _sizeAnnoCanvas(shCv, shCtx, eff);
+  _sizeAnnoCanvas(hlCv, hlCtx, eff);
   if(baseLoaded){
     if(typeof renderTextObjs==='function')        renderTextObjs();
     if(typeof renderShapeAndMeasure==='function') renderShapeAndMeasure();
@@ -6436,6 +6460,7 @@ function onDown(e){
       _mkDrag={obj:(_gm||_gpen), kind:(_gm?'markup':'pen'), lx:_gp.x, ly:_gp.y, moved:false};
       return;
     }
+    _hlSel=null;   // tapped empty space → drop any highlight selection
     drawing=true;
     var p=snapPt(getPos(e).x,getPos(e).y); startX=p.x; startY=p.y;
     compositedSnap=dCtx.getImageData(0,0,drawCv.width,drawCv.height);
@@ -7008,6 +7033,21 @@ function onUp(e){
   if(_mkDrag){
     if(e.cancelable) e.preventDefault();
     var _wasMoved=_mkDrag.moved;
+    // A plain TAP (no drag) with the Hilite tool SELECTS the highlight: the
+    // markup opacity slider and color swatch now edit it directly — the way to
+    // tone down an imported Adobe highlighter stroke without redrawing it.
+    if(!_wasMoved){
+      _hlSel={obj:_mkDrag.obj, kind:_mkDrag.kind};
+      try{
+        var _o=_mkDrag.obj;
+        var _pc=Math.round(((_o.opacity==null)?1:_o.opacity)*100);
+        if(markupOpSl){ markupOpSl.value=_pc; }
+        var _ov=document.getElementById('markup-op-val'); if(_ov) _ov.textContent=_pc+'%';
+        var _sw=document.getElementById('markup-clr-swatch'); if(_sw) _sw.style.background=_o.color||'#ffff00';
+        var _ci=document.getElementById('markup-clr-input'); if(_ci) _ci.value=_o.color||'#ffff00';
+        toast('Highlight selected — opacity & color sliders now edit it','',2500);
+      }catch(ex){}
+    }
     _mkDrag=null;
     renderShapeAndMeasure(); composite();
     if(_wasMoved) pushUndo();   // a plain tap (no drag) isn't an undo step
@@ -7634,7 +7674,10 @@ function renderShapeAndMeasure(){
   var _wantW = Math.max(1, Math.round(baseCv.width*_eff));
   if(shCv.width !== _wantW){ _sizeAnnoCanvas(shCv, shCtx, _eff); }
   else { shCtx.setTransform(_eff,0,0,_eff,0,0); }
+  if(hlCv.width !== _wantW){ _sizeAnnoCanvas(hlCv, hlCtx, _eff); }
+  else { hlCtx.setTransform(_eff,0,0,_eff,0,0); }
   shCtx.clearRect(0,0,shCv.width,shCv.height);
+  hlCtx.clearRect(0,0,hlCv.width,hlCv.height);
   // Markups first → they underlie everything drawn below (matches export).
   renderMarkupObjs();
   // Shape objects
@@ -7689,7 +7732,8 @@ function renderShapeAndMeasure(){
     drawPolylineOnCtx(shCtx, pl, 1);
   });
   // Pen / Polygon / Leader / Stamp objects (live, never burned)
-  penObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawPenOnCtx(shCtx,o,1); });
+  penObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return;
+    drawPenOnCtx(o.blend?hlCtx:shCtx,o,1); });
   polygonObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawPolygonOnCtx(shCtx,o,1); });
   leaderObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; if(o===selectedLeader) return; drawLeaderOnCtx(shCtx,o,1); });
   stampObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawStampObjOnCtx(shCtx,o,1); });
@@ -11291,6 +11335,7 @@ updateToolbarForTool(tool);
 
 // Helper to switch tool programmatically (mirrors the button click logic)
 function switchTool(name){
+  _hlSel=null;   // highlight selection is a Hilite-tool mode only
   var btn=document.querySelector('.tb-btn[data-tool="'+name+'"]');
   if(btn) btn.click();
 }
@@ -11763,6 +11808,11 @@ if(markupClrInput){
   var applyMarkupClr=function(e){
     markupColor=e.target.value;
     markupClrSwatch.style.background=markupColor;
+    // A highlight selected via a Hilite-tool tap recolors live.
+    if(_hlSel && _hlSel.obj){
+      _hlSel.obj.color=markupColor;
+      renderShapeAndMeasure(); composite();
+    }
   };
   markupClrInput.addEventListener('input', applyMarkupClr);
   markupClrInput.addEventListener('change', applyMarkupClr); // iOS dismiss
@@ -11771,8 +11821,15 @@ if(markupOpSl){
   var applyMarkupOp=function(v){
     markupOpacity=Math.round(v)/100;
     markupOpValEl.textContent=Math.round(v)+'%';
+    // A highlight selected via a Hilite-tool tap re-fades live. Works for both
+    // rect markups and imported highlighter pen strokes (multiply canvas).
+    if(_hlSel && _hlSel.obj){
+      _hlSel.obj.opacity=markupOpacity;
+      renderShapeAndMeasure(); composite();
+    }
   };
   markupOpSl.addEventListener('input',function(e){ applyMarkupOp(parseInt(e.target.value)); });
+  markupOpSl.addEventListener('change',function(){ if(_hlSel) pushUndo(); });
   attachSliderTouch(markupOpSl, applyMarkupOp); // mobile Safari: native range drag is blocked
 }
 // Apply on 'input' AND 'change': iOS color sheets often fire only 'change' on
@@ -16466,10 +16523,12 @@ window.addEventListener('orientationchange', function(){
       if(getComputedStyle(c).display==='none'||getComputedStyle(c).visibility==='hidden')return;
       if(!c.width||!c.height)return;
       var r=c.getBoundingClientRect();
-      cx.globalAlpha=parseFloat(getComputedStyle(c).opacity)||1;
+      var _cs=getComputedStyle(c);
+      cx.globalAlpha=parseFloat(_cs.opacity)||1;
+      cx.globalCompositeOperation=(_cs.mixBlendMode&&_cs.mixBlendMode!=='normal')?_cs.mixBlendMode:'source-over';
       try{cx.drawImage(c,r.left-compRect.left,r.top-compRect.top,r.width,r.height)}catch(e){}
     });
-    cx.globalAlpha=1;
+    cx.globalAlpha=1;cx.globalCompositeOperation='source-over';
     return true}
 
   function pixAt(x,y){                        // screen coords -> hex or null
