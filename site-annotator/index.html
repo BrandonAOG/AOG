@@ -144,8 +144,11 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 #scene{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
 #canvas-wrap{position:relative;display:none;border-radius:3px;overflow:hidden;box-shadow:0 8px 48px rgba(0,0,0,.7)}
 #base-cv{display:block}
-#draw-cv{position:absolute;top:0;left:0;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-#grid-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;opacity:.35}
+/* draw-cv holds the LIVE preview (dCtx) + composited layer strokes. It must sit
+   ABOVE #img-cv (imported image, z-index:1) or previews are hidden until commit. */
+#draw-cv{position:absolute;top:0;left:0;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;z-index:2}
+/* grid: same level as draw-cv, later in DOM so it wins the tie and stays visible */
+#grid-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;opacity:.35;z-index:2}
 /* DROP ZONE */
 #drop-zone{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--txt2);pointer-events:none}
 #drop-zone.hidden{display:none}
@@ -282,7 +285,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .markup-btn:hover{background:var(--surf2);color:var(--txt)}
 .markup-btn.active{border-color:var(--acc);color:var(--acc2);background:rgba(108,99,255,.15)}
 /* SELECTION OVERLAY CANVAS */
-#img-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:2}
+#img-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:1}
 #hl-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:3;mix-blend-mode:multiply}
 #shapes-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:3}
 #txt-cv{position:absolute;top:0;left:0;display:block;pointer-events:none;z-index:11}
@@ -14308,6 +14311,31 @@ var IMG_HANDLE  = 10;          // handle size px (screen)
 
 var _imgEff = 0;     // effective scale currently baked into the image overlay canvas
 
+// iOS Safari decodes <img> lazily: the FIRST drawImage of a big data-URL image
+// can paint garbled/partial pixels (subsequent draws are fine once the decode
+// is cached) — the "sparkly first placement" bug on iPad. Rasterizing the image
+// into a canvas up front forces a full decode, and canvas sources always draw
+// deterministically. Returns the original img if anything fails.
+function _rasterizeImg(img){
+  try{
+    var iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
+    if(!iw||!ih) return img;
+    var c=document.createElement('canvas'); c.width=iw; c.height=ih;
+    var x=c.getContext('2d');
+    x.drawImage(img,0,0);
+    // Sanity: iOS occasionally still yields an empty first draw — verify a pixel
+    // was written anywhere; if the canvas is fully transparent, retry once.
+    try{
+      var d=x.getImageData(0,0,Math.min(iw,64),Math.min(ih,64)).data;
+      var any=false; for(var i=3;i<d.length;i+=4){ if(d[i]){ any=true; break; } }
+      if(!any){ x.clearRect(0,0,iw,ih); x.drawImage(img,0,0); }
+    }catch(e){}
+    // Some sizing code reads naturalWidth/Height off the source — mirror them.
+    c.naturalWidth=iw; c.naturalHeight=ih;
+    return c;
+  }catch(e){ return img; }
+}
+
 // Image overlays get their OWN (higher) resolution than text/shape canvases.
 // Text/shapes are vectors that re-rasterize crisply at modest eff; raster images
 // need more backing-store pixels to stay readable at high zoom (like Acrobat,
@@ -14321,7 +14349,9 @@ function _computeImgEff(){
   var devicePR = window.devicePixelRatio || 1;
   var eff = Math.max(1, devicePR * Math.max(1, zoom));
   eff = Math.min(eff, 8);                                 // higher ceiling than text/shapes (3)
-  var _CAP = (IS_IPHONE ? 8e6 : 24e6);                    // bigger budget for the single image layer
+  // Per-canvas budget. iOS Safari hard-caps a single canvas around ~16.7MP and
+  // silently corrupts/blanks anything bigger — keep iPad well under that.
+  var _CAP = (IS_IPHONE ? 8e6 : (IS_IPAD ? 12e6 : 24e6));
   if(w*h*eff*eff > _CAP) eff = Math.max(1, Math.sqrt(_CAP/(w*h)));
   // Don't exceed what the placed images' source resolution can supply.
   var maxNative = 1;
@@ -15116,7 +15146,9 @@ function addImgOverlay(file){
   var img = new Image();
   img.onload = function(){
     URL.revokeObjectURL(url);
-    _enterImgPlacementMode(img);
+    var start=function(){ _enterImgPlacementMode(_rasterizeImg(img)); };
+    if(img.decode){ img.decode().then(start).catch(start); }
+    else start();
   };
   img.onerror = function(){ toast('Could not load image','err'); };
   img.src = url;
@@ -15177,10 +15209,20 @@ var EQUIP_PRESETS=[
   function close(){ overlay.style.display='none'; picker.style.display='none'; }
   function choose(p){
     close();
-    var img=_imgCache[p.key];
-    if(img && img.complete){ _enterImgPlacementMode(img); return; }
-    img=new Image();
-    img.onload=function(){ _imgCache[p.key]=img; _enterImgPlacementMode(img); };
+    var cached=_imgCache[p.key];
+    if(cached){ _enterImgPlacementMode(cached); return; }
+    var img=new Image();
+    var start=function(){
+      // Force a full decode into a canvas BEFORE the first on-screen draw.
+      // Without this, iOS Safari's lazy decode garbles the first placement.
+      var ras=_rasterizeImg(img);
+      _imgCache[p.key]=ras;
+      _enterImgPlacementMode(ras);
+    };
+    img.onload=function(){
+      if(img.decode){ img.decode().then(start).catch(start); }
+      else start();
+    };
     img.onerror=function(){ toast('Could not load '+p.label,'err'); };
     img.src=p.src;
   }
