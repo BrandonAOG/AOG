@@ -4753,7 +4753,17 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
   var bakedHls=[];
   try{
     var m=vp.transform.slice(), stack=[], fillC=null;
-    for(var i=0;i<opList.fnArray.length;i++){
+    // Scan ONLY the page's own operators. pdf.js appends every annotation's
+    // appearance stream after the page ops (beginAnnotation…endAnnotation);
+    // an Ink-highlight annot's appearance is FILLED green blobs, so without
+    // this bound the tint scan created a second, opaque _bakedHl copy of every
+    // highlight the ink pass was already importing as a pen stroke — the same
+    // mark rendered twice, at slightly different geometry. Genuine flattened
+    // tints live in the page content stream and are still inside this range.
+    var _tintEnd=(pageOpCount!=null && pageOpCount>0)
+        ? Math.min(pageOpCount, opList.fnArray.length)
+        : opList.fnArray.length;
+    for(var i=0;i<_tintEnd;i++){
       var fn=opList.fnArray[i], a=opList.argsArray[i];
       if(fn===OPS.save){ stack.push(m.slice()); }
       else if(fn===OPS.restore){ if(stack.length) m=stack.pop(); }
@@ -4867,6 +4877,9 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
           id:Date.now()+(made++), pts:pts,
           color:col, strokeW:Math.max(2, bw*sc),
           opacity:alpha, lineStyle:'solid',
+          // Viewers composite InkHighlight with the Multiply blend mode, which is
+          // what makes a full-alpha highlighter still show the text through it.
+          blend:(isHl?'multiply':undefined),
           layerIdx:activeLayerIdx, _fromExplode:true, _inkHl:isHl,
           // Origin snapshot (first point) — the ink annot still lives in the
           // pristine PDF, so a moved stroke must force the flattened export.
@@ -7690,6 +7703,7 @@ function drawPenOnCtx(ctx,o,sc){
   if(!o.pts||o.pts.length<1) return;
   ctx.save();
   ctx.globalAlpha=o.opacity;
+  if(o.blend) ctx.globalCompositeOperation=o.blend;   // ink highlights: multiply
   ctx.strokeStyle=o.color;
   ctx.lineWidth=o.strokeW*sc;
   ctx.lineCap='round'; ctx.lineJoin='round';
@@ -13021,6 +13035,7 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
   // ── Markups: highlight (fill rect), strikeout/underline (line) ─────────────
   try{ if(typeof markupObjs!=='undefined') markupObjs.forEach(function(m){
     if(!visible(m)) return;
+    if(_rasterOnlyHl(m)) return;   // poly/rotated tints -> raster overlay
     var op=(m.opacity==null?1:m.opacity);
     var x1=Math.min(m.x1,m.x2), x2=Math.max(m.x1,m.x2);
     var y1=Math.min(m.y1,m.y2), y2=Math.max(m.y1,m.y2);
@@ -13099,6 +13114,16 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
 // Types painted as true vectors above — temporarily cleared from the arrays so
 // the raster overlay (compositeExport) doesn't draw them a second time. Returns
 // a restore() closure.
+// A highlight the flat vector rect CANNOT represent faithfully: it has a true
+// outline (poly rings with letters knocked out) or a rotation. Drawing its
+// bounding box instead paints an OPAQUE slab over the text (poly tints store
+// opacity:1 because the color itself carries the tint). These ride in the
+// transparent raster overlay, where drawMarkupOnCtx renders them exactly as on
+// screen.
+function _rasterOnlyHl(m){
+  return m.type==='highlight' &&
+    ((m.poly && m.poly.length) || Math.abs(m.angle||0)>0.001);
+}
 function _suppressVectorizedForOverlay(){
   var saved={
     shapeObjs:shapeObjs, measureObjs:measureObjs, textObjs:textObjs,
@@ -13110,7 +13135,9 @@ function _suppressVectorizedForOverlay(){
   measureObjs = [];
   textObjs = [];
   if(saved.polylineObjs!==null) polylineObjs = [];
-  if(saved.markupObjs!==null) markupObjs = [];
+  // Keep the poly/rotated highlights for the raster overlay (their vector
+  // counterpart was skipped above); everything else was vectorized.
+  if(saved.markupObjs!==null) markupObjs = markupObjs.filter(_rasterOnlyHl);
   return function restore(){
     shapeObjs=saved.shapeObjs; measureObjs=saved.measureObjs; textObjs=saved.textObjs;
     if(saved.polylineObjs!==null) polylineObjs=saved.polylineObjs;
@@ -13917,12 +13944,47 @@ function checkForSavedSession(){
   }catch(ex){ console.warn('[Save] checkForSavedSession failed:',ex); }
 }
 
+// ── Restore-scale fix ────────────────────────────────────────────────────────
+// doRestore may DOWNSCALE the backdrop to fit IOS_MAX_PX (iPhone: 3100px). The
+// saved objects are in the ORIGINAL full-res coordinate space, so without this
+// every annotation restored on a smaller-cap device lands down/right of its true
+// spot (looked like highlights "rendering twice" / "pulling on page wrong").
+// Multiply every geometric field of every restored object by the same factor the
+// backdrop was shrunk by. Mutates the parsed record (a throwaway copy).
+function _scaleRecord(rec,k){
+  if(!(k>0)||Math.abs(k-1)<1e-6) return;
+  function n(o,f){ if(o&&typeof o[f]==='number') o[f]*=k; }
+  function pts(a){ if(a&&a.length) a.forEach(function(p){ if(p){ if(typeof p.x==='number')p.x*=k; if(typeof p.y==='number')p.y*=k; } }); }
+  function geo(o){ if(!o) return;
+    ['x','y','x1','y1','x2','y2','cx','cy','w','h','tx','ty','s','strokeW',
+     '_oCx','_oCy','_oW','_oH','shoulderLen','padX','padY'].forEach(function(f){ n(o,f); });
+    pts(o.pts);
+    if(o.poly&&o.poly.length){
+      var rings=(o.poly[0]&&o.poly[0].length!=null)?o.poly:[o.poly];
+      rings.forEach(pts);
+    }
+  }
+  ['textObjs','shapeObjs','measureObjs','pathMeasureObjs','polylineObjs','penObjs',
+   'polygonObjs','leaderObjs','stampObjs','commentObjs','markupObjs','imgOverlays']
+    .forEach(function(kk){ if(rec[kk]&&rec[kk].length) rec[kk].forEach(geo); });
+  // Text: scale-locked sizes derive from pt + plan DPI, so scale the DPI once;
+  // free sizes are canvas px, scale each object.
+  if(rec.textScaleLocked){ if(typeof rec.loadedDpi==='number') rec.loadedDpi*=k; }
+  else{
+    ['textObjs','commentObjs','leaderObjs'].forEach(function(kk){
+      if(rec[kk]) rec[kk].forEach(function(o){ n(o,'fontSize'); });
+    });
+  }
+  if(typeof rec.ppu==='number') rec.ppu*=k;          // px-per-unit shrinks with the page
+  if(typeof rec.gridSize==='number') rec.gridSize*=k;
+}
 function doRestore(rec){
   _vectorBackdropOK=false; _pdfBytes=null;  // restored from a flattened project, no PDF vectors
   var img=new Image();
   img.onload=function(){
     var scale=Math.min(1,IOS_MAX_PX/Math.max(img.width,img.height));
     var w=Math.round(img.width*scale),h=Math.round(img.height*scale);
+    _scaleRecord(rec,scale);   // keep objects registered to the (possibly shrunken) backdrop
     resize(w,h);
     bCtx.drawImage(img,0,0,w,h);
 
