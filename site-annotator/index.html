@@ -16312,14 +16312,14 @@ window.addEventListener('orientationchange', function(){
 #ccp-ok{background:#3b82f6!important;border-color:#3b82f6!important;color:#fff!important}
 #ccp-drop{position:fixed;inset:0;z-index:100000;display:none;cursor:crosshair}
 #ccp-loupe{position:fixed;z-index:100001;display:none;pointer-events:none;
-  transform:translate(-50%,-50%);width:132px;height:132px}
-#ccp-loupe canvas{width:132px;height:132px;border-radius:50%;display:block;
-  border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.6),0 6px 20px rgba(0,0,0,.55);
+  transform:translate(-50%,-50%);width:66px;height:66px}
+#ccp-loupe canvas{width:66px;height:66px;border-radius:50%;display:block;
+  border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.6),0 4px 14px rgba(0,0,0,.55);
   background:#000;image-rendering:pixelated}
-#ccp-loupe .lbl{position:absolute;left:50%;bottom:-26px;transform:translateX(-50%);
+#ccp-loupe .lbl{position:absolute;left:50%;bottom:-22px;transform:translateX(-50%);
   background:#111827;border:1px solid rgba(255,255,255,.25);border-radius:6px;
-  padding:3px 8px;font:11px/1 monospace;color:#fff;letter-spacing:.5px;white-space:nowrap}
-#ccp-loupe .chip{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;
+  padding:2px 6px;font:10px/1 monospace;color:#fff;letter-spacing:.5px;white-space:nowrap}
+#ccp-loupe .chip{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:5px;
   vertical-align:-1px;border:1px solid rgba(255,255,255,.4)}
 #ccp-tip{position:fixed;z-index:100001;display:none;top:12px;left:50%;transform:translateX(-50%);
   background:#1f2430;border:1px solid #3a4152;color:#e5e7eb;padding:6px 12px;border-radius:8px;
@@ -16337,7 +16337,7 @@ window.addEventListener('orientationchange', function(){
   <div id="ccp-sw"></div>
   <div id="ccp-btns"><button id="ccp-cancel" type="button">Cancel</button><button id="ccp-ok" type="button">OK</button></div>
 </div>
-<div id="ccp-drop"></div><div id="ccp-loupe"><canvas width="132" height="132"></canvas><div class="lbl"><i class="chip"></i><b>#000000</b></div></div><div id="ccp-tip">Move over the canvas &middot; click to sample &middot; Esc to cancel</div>
+<div id="ccp-drop"></div><div id="ccp-loupe"><canvas width="66" height="66"></canvas><div class="lbl"><i class="chip"></i><b>#000000</b></div></div><div id="ccp-tip">Move over the canvas &middot; click to sample &middot; Esc to cancel</div>
 <script>
 (function(){
   var SW=['#000000','#ffffff','#9ca3af','#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#a855f7',
@@ -16432,7 +16432,7 @@ window.addEventListener('orientationchange', function(){
     for(var i=1;i<Z;i++){var o=Math.round(i*cell)+.5;
       lctx.beginPath();lctx.moveTo(o,0);lctx.lineTo(o,S);lctx.moveTo(0,o);lctx.lineTo(S,o);lctx.stroke()}
     var c0=Math.round(half*cell)+.5;
-    lctx.strokeStyle='#fff';lctx.lineWidth=2;lctx.strokeRect(c0,c0,cell,cell);
+    lctx.strokeStyle='#fff';lctx.lineWidth=1.5;lctx.strokeRect(c0,c0,cell,cell);
     lctx.strokeStyle='#000';lctx.lineWidth=1;lctx.strokeRect(c0-1,c0-1,cell+2,cell+2);
   }
 
@@ -16446,7 +16446,7 @@ window.addEventListener('orientationchange', function(){
 
   function track(e){
     var p=e.touches?e.touches[0]:e,c=pixAt(p.clientX,p.clientY);
-    loupe.style.display='block';loupe.style.left=p.clientX+'px';loupe.style.top=(p.clientY-92)+'px';
+    loupe.style.display='block';loupe.style.left=p.clientX+'px';loupe.style.top=(p.clientY-56)+'px';
     drawLoupe(p.clientX,p.clientY);
     lchip.style.background=c||'transparent';
     llbl.textContent=c?c.toUpperCase():'--';
