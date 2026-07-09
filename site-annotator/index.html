@@ -16337,7 +16337,7 @@ window.addEventListener('orientationchange', function(){
   <div id="ccp-sw"></div>
   <div id="ccp-btns"><button id="ccp-cancel" type="button">Cancel</button><button id="ccp-ok" type="button">OK</button></div>
 </div>
-<div id="ccp-drop"></div><div id="ccp-loupe"><canvas width="66" height="66"></canvas><div class="lbl"><i class="chip"></i><b>#000000</b></div></div><div id="ccp-tip">Move over the canvas &middot; click to sample &middot; Esc to cancel</div>
+<div id="ccp-drop"></div><div id="ccp-loupe"><canvas width="66" height="66"></canvas><div class="lbl"><i class="chip"></i><b>#000000</b></div></div><div id="ccp-tip">Drag to aim &middot; release to sample &middot; Esc to cancel</div>
 <script>
 (function(){
   var SW=['#000000','#ffffff','#9ca3af','#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#a855f7',
@@ -16444,17 +16444,31 @@ window.addEventListener('orientationchange', function(){
     if(!buildComposite()){pop.style.display='block';back.style.display='block';return}
     dropping=true;drop.style.display='block';tip.style.display='block'});
 
+  var lastPt=null,touched=false;
   function track(e){
-    var p=e.touches?e.touches[0]:e,c=pixAt(p.clientX,p.clientY);
-    loupe.style.display='block';loupe.style.left=p.clientX+'px';loupe.style.top=(p.clientY-56)+'px';
+    var t=!!(e.touches&&e.touches.length),p=t?e.touches[0]:e;
+    lastPt={x:p.clientX,y:p.clientY};
+    var c=pixAt(p.clientX,p.clientY);
+    // lift the loupe further clear of a fingertip than of a mouse cursor
+    loupe.style.display='block';
+    loupe.style.left=p.clientX+'px';
+    loupe.style.top=(p.clientY-(t?76:56))+'px';
     drawLoupe(p.clientX,p.clientY);
     lchip.style.background=c||'transparent';
     llbl.textContent=c?c.toUpperCase():'--';
   }
+  function take(pt){var c=pt?pixAt(pt.x,pt.y):null;endDrop();if(c){setHex(c);emit()}}
+
   drop.addEventListener('mousemove',track);
+  drop.addEventListener('click',function(e){
+    if(touched){touched=false;return}          // ignore the synthetic click after a touch
+    take({x:e.clientX,y:e.clientY})});
+
+  // Touch: aim while the finger is down, commit on lift.
+  drop.addEventListener('touchstart',function(e){e.preventDefault();touched=true;lastPt=null;track(e)},{passive:false});
   drop.addEventListener('touchmove',function(e){e.preventDefault();track(e)},{passive:false});
-  drop.addEventListener('click',function(e){var c=pixAt(e.clientX,e.clientY);
-    endDrop();if(c){setHex(c);emit()}});
+  drop.addEventListener('touchend',function(e){e.preventDefault();take(lastPt)},{passive:false});
+  drop.addEventListener('touchcancel',function(){endDrop()});
 
   g('ccp-ok').addEventListener('click',close);
   g('ccp-cancel').addEventListener('click',function(){if(target){target.value=startVal;
