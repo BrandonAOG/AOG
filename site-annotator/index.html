@@ -4982,6 +4982,23 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
     var _apA=function(m,x,y){ return {x:m[0]*x+m[2]*y+m[4], y:m[1]*x+m[3]*y+m[5]}; };
     // Colors arrive as array-like {0:r,1:g,2:b}. Op-list values are 0-255 ints;
     // annotation-dict values are 0-1 floats. Handle both.
+    // Classify a PDF dash array → false | 'dotted' | 'dashed'.
+    // Any REAL multi-value pattern (on/off pair with a positive value) is
+    // honored — the old ≥4 coarseness gate also swallowed genuine dotted/fine
+    // dashes like [1 3] or [2 2], importing them as solid. The [3]-style
+    // single-value artifact that solid annots carry stays guarded: a lone
+    // value only counts when it's coarse (≥4). Fine patterns (dash length
+    // ≤2 units) map to the app's 'dotted' style, everything else 'dashed'.
+    window._pdfDashStyle = window._pdfDashStyle || function(da){
+      try{
+        if(!da || !da.length) return false;
+        var hasPos=false;
+        for(var i=0;i<da.length;i++){ if(da[i]>0){ hasPos=true; break; } }
+        if(!hasPos) return false;
+        if(da.length<2) return (da[0]>=4) ? 'dashed' : false;
+        return (da[0]>0 && da[0]<=2) ? 'dotted' : 'dashed';
+      }catch(e){ return false; }
+    };
     var _annC=function(c,dflt){
       if(c==null) return dflt;
       try{
@@ -5031,7 +5048,7 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
         measureObjs.push({
           id:Date.now()+(made++), x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,
           color:shaft.stroke||'#000000', strokeW:Math.max(1,shaft.lw), opacity:1,
-          lineStyle:(shaft.dash?'dashed':'solid'), layerIdx:activeLayerIdx,
+          lineStyle:(shaft.dash||'solid'), layerIdx:activeLayerIdx,
           showLabel:false, isArrow:true, _editing:false, _fromExplode:true,
           _oX1:p1.x,_oY1:p1.y,_oX2:p2.x,_oY2:p2.y
         });
@@ -5044,7 +5061,7 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
           id:Date.now()+(made++),
           x1:_lp.pts[0].x, y1:_lp.pts[0].y, x2:_lp.pts[1].x, y2:_lp.pts[1].y,
           color:_lp.stroke||'#000000', strokeW:Math.max(1,_lp.lw), opacity:1,
-          lineStyle:(_lp.dash?'dashed':'solid'), layerIdx:activeLayerIdx,
+          lineStyle:(_lp.dash||'solid'), layerIdx:activeLayerIdx,
           showLabel:false, isArrow:false, _editing:false, _fromExplode:true,
           _oX1:_lp.pts[0].x,_oY1:_lp.pts[0].y,_oX2:_lp.pts[1].x,_oY2:_lp.pts[1].y
         });
@@ -5063,7 +5080,7 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
           if(sp.stroke) _stroke=sp.stroke;
           if(sp.fill)   _fill=sp.fill;
           _lw=Math.max(_lw, sp.lw||1);
-          if(sp.dash) _dash=true;
+          if(sp.dash) _dash=sp.dash;
           if(sp.painted==='fill' || sp.painted==='fillstroke') _filled=true;
         });
         if(_xs.length>=2){
@@ -5076,7 +5093,7 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
               cx:_bx0+_bw/2, cy:_by0+_bh/2, w:_bw, h:_bh, angle:0,
               color:(_stroke||'#000000'), strokeW:Math.max(1,_lw), opacity:1,
               fill:_filled, fillColor:(_fill||'#808080'), fillOpacity:(_filled?1:0),
-              lineStyle:(_dash?'dashed':'solid'), layerIdx:activeLayerIdx, _fromExplode:true,
+              lineStyle:(_dash||'solid'), layerIdx:activeLayerIdx, _fromExplode:true,
               _oCx:_bx0+_bw/2, _oCy:_by0+_bh/2, _oW:_bw, _oH:_bh
             });
             curSubs=[]; return;
@@ -5103,7 +5120,7 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
           id:Date.now()+(made++), pts:sp.pts,
           color:(useFill?(sp.fill||sp.stroke):(sp.stroke||sp.fill))||'#000000',
           strokeW:Math.max(1.5, sp.lw), opacity:1,
-          lineStyle:(sp.dash?'dashed':'solid'),
+          lineStyle:(sp.dash||'solid'),
           layerIdx:activeLayerIdx, _fromExplode:true,
           _oX:sp.pts[0].x, _oY:sp.pts[0].y
         });
@@ -5148,7 +5165,7 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
         try{
           var _bs=curAnn && curAnn.borderStyle;
           var _bd=_bs && _bs.dashArray;
-          if(_bd && _bd.length>=2 && Math.max.apply(null,_bd)>=4) curDash=true;
+          if(_bd) curDash=_pdfDashStyle(_bd);
         }catch(e){}
         continue;
       }
@@ -5164,7 +5181,7 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
         // Follow what the appearance actually draws, ignoring the [3] artifact:
         // a real coarse dash turns it on; a fine/empty array forces solid.
         var _da2=agA && agA[0];
-        curDash = !!(_da2 && _da2.length>=2 && Math.max.apply(null,_da2)>=4);
+        curDash = _pdfDashStyle(_da2);
       }
       // Record HOW the pending path is painted. These annots emit `stroke`, while
       // setFillRGBColor often carries a stale color that is never used — taking
@@ -5216,6 +5233,18 @@ function _extractVectors(opList, vp, sc, w, h){
     return '#'+h(c[0])+h(c[1])+h(c[2]);
   }
 
+  // Same guarded classifier as the annotation extractor — whichever parser
+  // runs first installs it. false | 'dotted' | 'dashed'.
+  window._pdfDashStyle = window._pdfDashStyle || function(da){
+    try{
+      if(!da || !da.length) return false;
+      var hasPos=false;
+      for(var i=0;i<da.length;i++){ if(da[i]>0){ hasPos=true; break; } }
+      if(!hasPos) return false;
+      if(da.length<2) return (da[0]>=4) ? 'dashed' : false;
+      return (da[0]>0 && da[0]<=2) ? 'dotted' : 'dashed';
+    }catch(e){ return false; }
+  };
   var strokeColor=[0,0,0], fillColorV=[0,0,0], lineW=1, dashOn=false, pendingPaths=[];
   // Collected raw subpaths in device space: {pts:[...], closed, isRect, nCurves}
   var collected=[];
@@ -5253,7 +5282,7 @@ function _extractVectors(opList, vp, sc, w, h){
       // its mere presence imported solid conduit/arrow runs as dotted. Honor only
       // a genuine multi-value pattern with a meaningful gap.
       var _da=a[0];
-      dashOn = !!(_da && _da.length>=2 && Math.max.apply(null,_da)>=4);
+      dashOn = _pdfDashStyle(_da);
     }
     else if(fn===OPS.constructPath){
       // a = [opcodes[], coords[], minMax?]
@@ -5461,7 +5490,7 @@ function _extractVectors(opList, vp, sc, w, h){
       color:(fillOnly?(r.fillColor||'#808080'):(r.color||'#000000')),
       strokeW:(fillOnly?1:Math.max(1,r.lineW)), opacity:1,
       fill:isFilled, fillColor:(isFilled?(r.fillColor||'#808080'):'#ffffff'),
-      fillOpacity:(isFilled?1:0), lineStyle:(r.dash?'dashed':'solid'),
+      fillOpacity:(isFilled?1:0), lineStyle:(r.dash||'solid'),
       layerIdx:activeLayerIdx, _fromExplode:true,
       _oCx:x0+rw/2, _oCy:y0+rh/2, _oW:rw, _oH:rh
     });
@@ -5486,7 +5515,7 @@ function _extractVectors(opList, vp, sc, w, h){
     measureObjs.push({
       id:Date.now()+count, x1:ar.x1,y1:ar.y1,x2:ar.x2,y2:ar.y2,
       color:ar.color||'#000000', strokeW:Math.max(1,ar.lineW), opacity:1,
-      lineStyle:(ar.dash?'dashed':'solid'), layerIdx:activeLayerIdx,
+      lineStyle:(ar.dash||'solid'), layerIdx:activeLayerIdx,
       showLabel:false, isArrow:true, _editing:false, _fromExplode:true,
       _oX1:ar.x1,_oY1:ar.y1,_oX2:ar.x2,_oY2:ar.y2
     });
@@ -5499,7 +5528,7 @@ function _extractVectors(opList, vp, sc, w, h){
     measureObjs.push({
       id:Date.now()+count, x1:s.a.x,y1:s.a.y,x2:s.b.x,y2:s.b.y,
       color:s.color||'#000000', strokeW:Math.max(1,s.lineW), opacity:1,
-      lineStyle:(s.dash?'dashed':'solid'), layerIdx:activeLayerIdx,
+      lineStyle:(s.dash||'solid'), layerIdx:activeLayerIdx,
       showLabel:false, isArrow:false, _editing:false, _fromExplode:true,
       _oX1:s.a.x,_oY1:s.a.y,_oX2:s.b.x,_oY2:s.b.y
     });
