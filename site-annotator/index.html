@@ -4521,12 +4521,12 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     lines.push(cur);
   });
 
-  // Emit one editable text object per merged line.
+  // Build each line's text + geometry (sorted along the reading direction).
   lines.forEach(function(line){
     var ax=line._ax || axes(line.runs[0]);
     // Sort along the READING direction (works for rotated/vertical text too).
     line.runs.sort(function(a,b){ return along(a,ax)-along(b,ax); });
-    var first=line.runs[0];
+    var first=line.runs[0], last=line.runs[line.runs.length-1];
     var text='';
     for(var i=0;i<line.runs.length;i++){
       var r=line.runs[i];
@@ -4542,6 +4542,51 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       text+=r.s;
     }
     text=text.replace(/^\s+/,'').replace(/\s+$/,'');   // trim leading + trailing space
+    line._text=text;
+    line._ax2=ax;
+    line._a0=along(first,ax);
+    line._a1=along(last,ax)+(last.w|| last.s.length*last.fpx*0.5);
+    line._c=cross(first,ax);
+    line._fpx=first.fpx;
+    line._ang=first.ang;
+    line._first=first;
+  });
+
+  // PARAGRAPH MERGE — stack vertically adjacent rows into ONE multi-line text
+  // object, so clicking to edit picks up all rows (the app's text objects fully
+  // support '\n'). A row joins the paragraph above it only when it reads like a
+  // continuation of the same block: same angle, similar font size, a baseline
+  // gap of normal line spacing (0.6–1.65× font size — real stacked callouts in
+  // these drawings sit at 1.2–1.3×, titles at 1.6×, while separate header
+  // labels like "Existing" over "Panel A" sit at 1.8×+, so 1.65 splits them
+  // cleanly), and horizontal kinship (their along-axis spans overlap, or
+  // their left edges align within one character). Side-by-side columns and
+  // far-apart labels never pass these tests, so they stay separate objects.
+  var paras=[];
+  lines.forEach(function(L){
+    if(!L._text || !L._text.trim()) return;
+    var host=null;
+    for(var pi=paras.length-1; pi>=0; pi--){
+      var P=paras[pi], B=P.lines[P.lines.length-1];     // bottom row so far
+      if(Math.abs(L._ang - B._ang) >= 0.02) continue;   // same reading direction
+      if(Math.abs(L._fpx - B._fpx) > Math.max(L._fpx,B._fpx)*0.25) continue; // same size
+      var dC = L._c - B._c;                              // baseline step (cross-axis)
+      if(dC < B._fpx*0.6 || dC > B._fpx*1.65) continue; // one normal line-height below
+      var ov = Math.min(L._a1,B._a1) - Math.max(L._a0,B._a0); // along-axis overlap
+      var leftAligned = Math.abs(L._a0 - B._a0) <= B._fpx*1.0;
+      if(ov < Math.min(L._a1-L._a0, B._a1-B._a0)*0.3 && !leftAligned) continue;
+      host=P; break;
+    }
+    if(host) host.lines.push(L);
+    else paras.push({lines:[L]});
+  });
+
+  // Emit one editable text object per paragraph (rows joined with '\n').
+  paras.forEach(function(P){
+    // Top-to-bottom by baseline so the joined text reads in order.
+    P.lines.sort(function(a,b){ return a._c - b._c; });
+    var top=P.lines[0], first=top._first;
+    var text=P.lines.map(function(L){ return L._text; }).join('\n');
     if(!text.trim()) return;
 
     var fontPt=first.fpx/sc;
@@ -4558,7 +4603,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       _oX:first.x, _oY:first.y
     });
     if(/200A\s*MB/.test(text) || text.split(/\s+/).filter(function(w){return /MB/.test(w);}).length>1){
-      dbg('text-import','emitted text obj',{text:text, x:Math.round(first.x), y:Math.round(first.y), runs:line.runs.length, ang:first.ang.toFixed(2)});
+      dbg('text-import','emitted text obj',{text:text, x:Math.round(first.x), y:Math.round(first.y), rows:P.lines.length, ang:first.ang.toFixed(2)});
     }
     txtCount++;
   });
