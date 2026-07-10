@@ -2591,7 +2591,7 @@ function commitCommentEdit(keepSize){
   fitCommentToText(c, c.text, true, keepSize ? 'grow' : 'snap');
   c.cy = _topE + c.h/2;
   if(selectedShape && selectedShape._commentObj===c){ selectedShape.cy=c.cy; selectedShape.h=c.h; }
-  textOv.style.display = 'none'; textOv.blur();
+  textOv.style.display = 'none'; textOv.blur(); _textSessionOpen=false;
   // CRITICAL: the textarea is SHARED with the Text tool. If we leave the note's
   // text inside it, the next tap with the Text tool re-shows the overlay with
   // this stale value and commits it as a new text object on the plan.
@@ -3196,7 +3196,7 @@ function undoFn(){
     } else if(snap.idx!=null&&snap.data){
       var lc=layers[snap.idx]; if(lc){ lc.ctx.clearRect(0,0,lc.canvas.width,lc.canvas.height); lc.ctx.putImageData(snap.data,0,0); }
     }
-    if(snap.textObjs!==undefined){ textObjs=snap.textObjs; renderTextObjs(); }
+    if(snap.textObjs!==undefined){ textObjs=snap.textObjs; _rebindTextRefs(); renderTextObjs(); }
     if(snap.shapeObjs!==undefined){ shapeObjs=snap.shapeObjs; renderShapeObjs(); }
     if(snap.measureObjs!==undefined){ measureObjs=snap.measureObjs; renderMeasureObjs(); }
     if(snap.pathMeasureObjs!==undefined){ pathMeasureObjs=snap.pathMeasureObjs; }
@@ -3225,7 +3225,7 @@ function redoFn(){
     } else if(snap.idx!=null&&snap.data){
       var lc=layers[snap.idx]; if(lc){ lc.ctx.clearRect(0,0,lc.canvas.width,lc.canvas.height); lc.ctx.putImageData(snap.data,0,0); }
     }
-    if(snap.textObjs!==undefined){ textObjs=snap.textObjs; renderTextObjs(); }
+    if(snap.textObjs!==undefined){ textObjs=snap.textObjs; _rebindTextRefs(); renderTextObjs(); }
     if(snap.shapeObjs!==undefined){ shapeObjs=snap.shapeObjs; renderShapeObjs(); }
     if(snap.measureObjs!==undefined){ measureObjs=snap.measureObjs; renderMeasureObjs(); }
     if(snap.pathMeasureObjs!==undefined){ pathMeasureObjs=snap.pathMeasureObjs; }
@@ -7356,7 +7356,14 @@ function onUp(e){
     // ── Text transform release: persist move/rotate/resize back to the object,
     // clear the live-drag flag, and restore the static draw at the new pose. ──
     if(selectedShape&&selectedShape.type==='text'&&selectedShape._textObj){
-      var _tt=selectedShape._textObj;
+      // Resolve against the LIVE array first. If an undo/redo/restore replaced
+      // textObjs since this text was selected, selectedShape._textObj is an
+      // orphaned clone; writing the moved pose into it left the real element
+      // sitting at its old x/y (the "old text is still there" duplicate).
+      var _tt=_liveText(selectedShape._textObj);
+      if(!_tt){ _dragText=null; selHandle=-1; selDragStart=null; selectedShape=null;
+                renderTextObjs(); renderSelection(); return; }
+      selectedShape._textObj=_tt;   // keep the selection bound to the live object
       // Write the new POSE back to the text object. The move/rotate drag only
       // updates selectedShape.cx/cy/angle (the live preview derives from those),
       // so derive obj.x/obj.y from the selection center using the SAME inverse-
@@ -8810,6 +8817,63 @@ function drawStamp(ctx,type,x,y,s){
 var textObjs   = [];       // [{id,x,y,text,color,fontSize,opacity,layerIdx}]
 var editingObj = null;     // text object currently being edited
 
+// ── TEXT EDIT SESSION FLAG ────────────────────────────────────
+// commitText() used to gate on `textOv.style.display==='none'`. That worked on
+// desktop, where the textarea is hidden unless an edit is genuinely open. It
+// does NOT work on touch: onDown must force `display='block'` + focus() inside
+// the touch handler (iOS raises the keyboard only for a synchronous focus), so
+// by the time handleText → _openTextEdit → commitText() runs, the guard is
+// already disarmed. commitText() then took its "new text" branch with a stale
+// textOv.value and the leader's textX/textY/_textAnchorRight still armed, and
+// pushed a DUPLICATE text object at the leader anchor — the doubled label.
+// This flag tracks whether a text entry/edit session is actually in progress,
+// independent of the textarea's visibility.
+var _textSessionOpen = false;
+
+// ── STALE TEXT REFERENCE RESOLUTION ───────────────────────────
+// undo(), redo() and the autosave restore do `textObjs = snap.textObjs`, where
+// the snapshot came from JSON.parse(JSON.stringify(...)). Every element is a
+// FRESH object, so any reference held elsewhere (selectedShape._textObj,
+// _dragText, _txtMoveObj, _txtRotObj, editingObj) becomes an orphan that is no
+// longer in the array.
+//
+// renderTextObjs() already guards against this on the HIDE side by matching
+// _hideText on obj.id. The WRITE-BACK side did not: onUp() persisted the moved
+// position into the orphan, so renderTextObjs() redrew the real array element
+// at its old x/y while selCv still showed the moved preview — two texts, the
+// "old text is still there" bug. _liveText() maps any (possibly orphaned)
+// reference back to the element actually living in textObjs.
+function _liveText(o){
+  if(!o) return null;
+  if(textObjs.indexOf(o) !== -1) return o;          // already live
+  if(o.id !== undefined && o.id !== null){
+    for(var i=0;i<textObjs.length;i++){
+      if(textObjs[i].id === o.id) return textObjs[i];
+    }
+  }
+  return null;                                       // genuinely deleted
+}
+
+// Re-point every held reference at the live array element. Called immediately
+// after any wholesale replacement of textObjs.
+function _rebindTextRefs(){
+  if(typeof _dragText!=='undefined' && _dragText)   _dragText   = _liveText(_dragText);
+  if(typeof _txtMoveObj!=='undefined' && _txtMoveObj) _txtMoveObj = _liveText(_txtMoveObj);
+  if(typeof _txtRotObj!=='undefined' && _txtRotObj)  _txtRotObj  = _liveText(_txtRotObj);
+  if(editingObj) editingObj = _liveText(editingObj);
+  if(typeof selectedShape!=='undefined' && selectedShape && selectedShape._textObj){
+    var _lv = _liveText(selectedShape._textObj);
+    if(_lv) selectedShape._textObj = _lv;
+    else {  // the selected text was undone out of existence — drop the selection
+      selectedShape = null;
+      if(typeof selHandle!=='undefined') selHandle = -1;
+      if(typeof selDragStart!=='undefined') selDragStart = null;
+      if(typeof _dragText!=='undefined') _dragText = null;
+    }
+  }
+  if(typeof _txtTapObj!=='undefined' && _txtTapObj) _txtTapObj = _liveText(_txtTapObj);
+}
+
 // ── Render all text objects onto txt-cv ──────────────────────
 function renderTextObjs(){
   // Same self-sync as renderShapeAndMeasure: ensure the text canvas backing +
@@ -9513,11 +9577,13 @@ function _textBorderAt(o,x,y){
 }
 // Grab the dashed border and start moving the whole label.
 function _beginTextMove(o,p){
+  o=_liveText(o)||o;   // guard against an orphaned clone from undo/restore
   captureState(false);
   if(editingObj===o){ o.text=textOv.value; }
   o._editing=false; editingObj=null;
   stopTextCursor();
   if(textOv.style.display!=='none'){ textOv.style.display='none'; textOv.blur(); textOv.value=''; }
+  _textSessionOpen=false;
   renderTextObjs();
   _txtMoveObj=o; _txtMoving=true;
   _txtMoveStart={px:p.x,py:p.y,ox:o.x,oy:o.y};
@@ -9527,6 +9593,7 @@ function _beginTextMove(o,p){
 }
 // Grab the rotate handle of the text currently being edited and start rotating.
 function _beginTextRotate(o,p){
+  o=_liveText(o)||o;   // guard against an orphaned clone from undo/restore
   // Persist any in-progress edits, close the editor, show the text on canvas so
   // it can rotate live.
   captureState(false);   // vector op — snapshot for undo (no pixel copy needed)
@@ -9534,6 +9601,7 @@ function _beginTextRotate(o,p){
   o._editing=false; editingObj=null;
   stopTextCursor();
   if(textOv.style.display!=='none'){ textOv.style.display='none'; textOv.blur(); textOv.value=''; }
+  _textSessionOpen=false;
   renderTextObjs();
   var c=_textCenter(o);
   _txtRotObj=o; _txtRotating=true;
@@ -9632,6 +9700,7 @@ function handleText(e){
 }
 
 function showTextOverlay(cx,cy){
+  _textSessionOpen = true;   // a real edit/entry session begins here
   // Store canvas coords so we can reposition when keyboard appears
   textOv._canvasCx = cx; textOv._canvasCy = cy;
   // Must set display=block BEFORE repositionTextOverlay (it returns early if none)
@@ -10038,6 +10107,15 @@ textOv.addEventListener('wheel', function(e){
 
 function commitText(){
   if(textOv.style.display==='none') return;
+  // No session open → this is a spurious call (e.g. _openTextEdit's leading
+  // commitText() on touch, where onDown force-showed the textarea to raise the
+  // iOS keyboard). Bail before the "new text" branch can push a duplicate from
+  // a stale textOv.value. The comment editor has its own session tracking.
+  if(!_textSessionOpen && !_editingComment){
+    textOv.style.display='none';
+    return;
+  }
+  _textSessionOpen = false;
   stopTextCursor();
 
   // ── COMMENT PATH: route to dedicated handler ──────────────────
@@ -10557,7 +10635,7 @@ function commitSelection(){
     if(_editingComment===c){
       c.text=textOv.value.replace(/\s+$/,'');   // strip trailing newlines
       _editingComment=null;
-      textOv.style.display='none'; textOv.blur();
+      textOv.style.display='none'; textOv.blur(); _textSessionOpen=false;
       textOv.value='';   // shared textarea — don't leak note text into the Text tool
       textOv.style.background=''; textOv.style.borderBottom='';
       textOv.style.width=''; textOv.style.height='';
@@ -10642,7 +10720,7 @@ function cancelSelection(){
     if(_editingComment===_cc){
       _cc.text=textOv.value.replace(/\s+$/,'');   // strip trailing newlines
       _editingComment=null;
-      textOv.style.display='none'; textOv.blur();
+      textOv.style.display='none'; textOv.blur(); _textSessionOpen=false;
       textOv.value='';   // shared textarea — don't leak note text into the Text tool
       textOv.style.background=''; textOv.style.borderBottom='';
       textOv.style.width=''; textOv.style.height='';
@@ -10909,6 +10987,99 @@ viewport.addEventListener('touchend',  function(){ _synthMouseBlockUntil=Date.no
     e.stopPropagation(); if(e.cancelable) e.preventDefault();
   },true);
 });
+
+// ── TOUCH GESTURE ABORT / STALE-DRAG GUARD (iOS/iPadOS) ────────
+// On desktop, mouseup ALWAYS fires, so onUp() always clears selHandle /
+// selDragStart / _mkDrag / plDrag / _txtMoving / selImgDrag. On iPadOS a
+// gesture can end WITHOUT touchend:
+//   • touchcancel — palm contact, Pencil hover/switch, a 2nd finger landing,
+//     a system edge gesture, Slide Over. There was no touchcancel listener
+//     on the canvas at all, so the drag anchor survived.
+//   • pinch — drawCv's touchend does `if(pinching) return;` before onUp(),
+//     and `pinching` is only cleared later by the document touchend.
+// Either way selDragStart kept the PREVIOUS press point. The next tap then
+// hit `if(selHandle!==-1 && selDragStart)` in onMove and applied
+// `orig.cx + (tp.x - selDragStart.x)` against a stale anchor — the object
+// teleported by the distance between the two presses. Selection state
+// (selectedShape / selImg / selectedPolyline) is intentionally preserved;
+// only the in-flight DRAG state is torn down.
+function _abortActiveDrag(){
+  var dirty = false;
+  if(typeof selHandle!=='undefined' && selHandle!==-1){ selHandle=-1; dirty=true; }
+  if(typeof selDragStart!=='undefined' && selDragStart){ selDragStart=null; dirty=true; }
+  if(typeof _dragText!=='undefined' && _dragText){ _dragText=null; dirty=true; }
+  if(typeof _dragComment!=='undefined' && _dragComment){ _dragComment=null; dirty=true; }
+  if(typeof _cmtPending!=='undefined' && _cmtPending){ _cmtPending=null; dirty=true; }
+  if(typeof _mkDrag!=='undefined' && _mkDrag){ _mkDrag=null; dirty=true; }
+  if(typeof plDrag!=='undefined' && plDrag){ plDrag=null; dirty=true; }
+  if(typeof selImgDrag!=='undefined' && selImgDrag){ selImgDrag=null; dirty=true; }
+  if(typeof selImgHandle!=='undefined') selImgHandle=-1;
+  if(typeof _txtMoving!=='undefined' && _txtMoving){ _txtMoving=false; _txtMoveObj=null; _txtMoveStart=null; dirty=true; }
+  if(typeof _txtRotating!=='undefined' && _txtRotating){ _txtRotating=false; _txtRotObj=null; dirty=true; }
+  if(typeof measureDragHandle!=='undefined' && measureDragHandle!==-1){ measureDragHandle=-1; measureDragStart=null; dirty=true; }
+  if(typeof _leaderDragPlacing!=='undefined' && _leaderDragPlacing){ _leaderDragPlacing=false; dirty=true; }
+  if(typeof drawing!=='undefined' && drawing){
+    drawing=false;
+    if(typeof compositedSnap!=='undefined' && compositedSnap){ try{ dCtx.putImageData(compositedSnap,0,0); }catch(ex){} }
+    try{ dCtx.beginPath(); }catch(ex){}
+    dirty=true;
+  }
+  if(dirty){
+    try{ if(typeof holdCancel==='function') holdCancel(); }catch(ex){}
+    // Repaint the canvases so a half-applied preview doesn't linger.
+    try{ if(typeof renderTextObjs==='function') renderTextObjs(); }catch(ex){}
+    try{ if(typeof renderShapeAndMeasure==='function') renderShapeAndMeasure(); }catch(ex){}
+    try{ if(typeof composite==='function') composite(); }catch(ex){}
+    try{ if(typeof renderSelection==='function') renderSelection(); }catch(ex){}
+  }
+  return dirty;
+}
+
+// Tracks whether a touch gesture is currently in flight. Set on the first
+// finger down, cleared when the last finger lifts or the gesture is cancelled.
+var _touchGestureLive = false;
+
+// Capture phase on #viewport: an ancestor's capture listener is guaranteed to
+// run before ANY listener on drawCv, regardless of registration order. (A
+// capture flag on drawCv itself would not outrank its earlier-registered
+// at-target listeners.) This is the same mechanism _synthMouseBlockUntil uses.
+viewport.addEventListener('touchstart', function(e){
+  // Fresh gesture (no fingers were down) but drag state survives from the
+  // last one → the previous gesture was cancelled or swallowed. Drop it now,
+  // BEFORE onDown/onMove can anchor against it.
+  if(!_touchGestureLive) _abortActiveDrag();
+  _touchGestureLive = true;
+}, {passive:true, capture:true});
+
+viewport.addEventListener('touchend', function(e){
+  if(e.touches.length === 0) _touchGestureLive = false;
+}, {passive:true, capture:true});
+
+viewport.addEventListener('touchcancel', function(e){
+  if(e.touches.length === 0){
+    _touchGestureLive = false;
+    if(typeof pinching!=='undefined') pinching = false;
+    if(typeof endPan==='function') try{ endPan(); }catch(ex){}
+    _abortActiveDrag();
+  }
+}, {passive:true, capture:true});
+
+// Safari can deliver touchcancel to window rather than the element under the
+// finger when the system claims the gesture (edge swipe, Slide Over, Pencil
+// palette). Belt-and-braces.
+window.addEventListener('touchcancel', function(e){
+  if(!e.touches || e.touches.length === 0){
+    _touchGestureLive = false;
+    if(typeof pinching!=='undefined') pinching = false;
+    _abortActiveDrag();
+  }
+}, {passive:true, capture:true});
+
+// A pinch that begins mid-drag makes drawCv's touchend do `if(pinching) return;`
+// so onUp() never runs. Kill the drag the moment the 2nd finger lands.
+viewport.addEventListener('touchstart', function(e){
+  if(e.touches.length >= 2) _abortActiveDrag();
+}, {passive:true, capture:true});
 
 // ── HOLD-TO-DELETE ─────────────────────────────────────────────
 // Press and hold 600ms on any drawn item to delete it.
@@ -13308,6 +13479,7 @@ function _suppressVectorizedForOverlay(){
   if(saved.markupObjs!==null) markupObjs = markupObjs.filter(_rasterOnlyHl);
   return function restore(){
     shapeObjs=saved.shapeObjs; measureObjs=saved.measureObjs; textObjs=saved.textObjs;
+    _rebindTextRefs();
     if(saved.polylineObjs!==null) polylineObjs=saved.polylineObjs;
     if(saved.markupObjs!==null) markupObjs=saved.markupObjs;
   };
@@ -14188,7 +14360,7 @@ function doRestore(rec){
             // the same physical size. Legacy saves (no flag) keep factor 1.0.
             _lastLoadedDpi = rec.textScaleLocked ? (rec.loadedDpi||0) : 0;
             // Restore scale
-            if(rec.textObjs){ textObjs=rec.textObjs; renderTextObjs(); }
+            if(rec.textObjs){ textObjs=rec.textObjs; _rebindTextRefs(); renderTextObjs(); }
             if(rec.shapeObjs){ shapeObjs=rec.shapeObjs; renderShapeObjs(); }
             if(rec.measureObjs){ measureObjs=rec.measureObjs; }
             if(rec.pathMeasureObjs){ pathMeasureObjs=rec.pathMeasureObjs; }
