@@ -7504,9 +7504,13 @@ function onUp(e){
     var spx=Math.hypot(p.x-startX,p.y-startY);
     if(spx>4){
       dCtx.putImageData(compositedSnap,0,0);
-      drawFinalShape(lc,startX,startY,p.x,p.y, !!(e.changedTouches&&e.changedTouches.length));
+      var _committed=drawFinalShape(lc,startX,startY,p.x,p.y, !!(e.changedTouches&&e.changedTouches.length));
       composite();
-      pushUndo();
+      // On touch, drawFinalShape → commitSelection() already ran composite() +
+      // pushUndo(). A second pushUndo() here would find _preOp consumed, fall
+      // into its "snapshot everything now" branch, and stack a no-op undo entry
+      // (undo would then need two presses to remove the shape).
+      if(!_committed) pushUndo();
     } else {
       // Tap with no drag → place nothing, leave the canvas untouched.
       if(compositedSnap) dCtx.putImageData(compositedSnap,0,0);
@@ -7523,10 +7527,15 @@ function previewShape(ctx,x1,y1,x2,y2){
   resetCtx(ctx);
 }
 
+// Returns TRUE if the shape was already committed (and its undo entry pushed),
+// so the caller must not push a second one. Returns falsy otherwise.
 function drawFinalShape(ctx,x1,y1,x2,y2,isTouch){
-  // rect/ellipse/cloud: always enter selection/transform mode after drawing.
-  // User can then move, resize, rotate, or click elsewhere to commit.
-  // Consistent on both touch and desktop — prevents disappear on re-edit.
+  // rect/ellipse/cloud: build the transform pose first.
+  //   • DESKTOP — stay in selection/transform mode. The user can move, resize,
+  //     rotate, then click elsewhere (or Enter/Esc) to commit.
+  //   • TOUCH — commit straight away on release. On a finger there is no hover
+  //     to reveal the handles, and the follow-up tap needed to commit was
+  //     landing on the canvas as a new gesture, so the shape read as unfinished.
   if(tool==='rect'||tool==='ellipse'||tool==='cloud'){
     selectedShape={
       type:tool,
@@ -7538,12 +7547,20 @@ function drawFinalShape(ctx,x1,y1,x2,y2,isTouch){
       lineStyle:lineStyle
     };
     selHandle=-1; selDragStart=null;
+    if(isTouch){
+      // commitSelection() pushes into shapeObjs, clears the selection, collapses
+      // selCv, and ends with composite() + pushUndo() — a complete commit. Tell
+      // the caller so it doesn't pushUndo() again and stack a duplicate entry.
+      commitSelection();
+      return true;
+    }
     renderSelection();
-    return; // don't commit yet — click elsewhere or press Enter/Esc to commit
+    return false; // don't commit yet — click elsewhere or press Enter/Esc to commit
   }
   setupCtx(ctx);
   drawShapeOnCtx(ctx,tool,x1,y1,x2,y2,true);
   resetCtx(ctx);
+  return false;
 }
 
 function drawShapeOnCtx(ctx,t,x1,y1,x2,y2,final){
