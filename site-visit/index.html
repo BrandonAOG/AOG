@@ -3378,7 +3378,9 @@ function _isDesktopDevice() {
 }
 
 function saveSmart() {
-  // No file-share support and not iOS → direct download (older Android/desktop).
+  // Desktop always downloads directly — no share sheet.
+  if (_isDesktopDevice()) { saveForAndroid(); return; }
+  // No file-share support and not iOS → direct download (older Android).
   if (!canShareFiles() && !isIOSDevice()) { saveForAndroid(); return; }
 
   setStatus('Rendering pages, please wait…');
