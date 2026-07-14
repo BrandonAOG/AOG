@@ -15152,10 +15152,27 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
     }
   }); }catch(e){ console.warn('[Vec] polylines',e); }
 
-  // ── Leaders (arrow + shoulder + label is drawn raster; draw the lines vector,
-  //    leave the text to raster overlay only if styled). Simpler + safe: draw the
-  //    two line segments as vectors and let the raster overlay carry the text.
-  //    To avoid double lines, leaders are fully handled in raster (skip here). ──
+  // ── Leaders → TRUE VECTORS ──────────────────────────────────────────────
+  // These used to be "fully handled in raster", which meant the arrow, main
+  // line and shoulder blurred at high zoom while every other annotation was
+  // vector-crisp. The geometry is just three line segments + two arrowhead
+  // arms — the same math as drawLeaderOnCtx — so paint them with the vector
+  // line() helper. The label is a separate text object and is already handled
+  // by the vector text pass; _suppressVectorizedForOverlay clears leaderObjs
+  // so the raster overlay doesn't draw the lines a second time.
+  try{ if(typeof leaderObjs!=='undefined') leaderObjs.forEach(function(o){
+    if(!visible(o)) return;
+    var op=(o.opacity==null?1:o.opacity);
+    // main line P1(arrow end) -> P2(elbow)
+    line(o.x1,o.y1,o.x2,o.y2,o.color,o.strokeW,op);
+    // arrowhead at P1 (same size rule as drawLeaderOnCtx)
+    var ang=Math.atan2(o.y1-o.y2,o.x1-o.x2), hw=Math.max((o.strokeW||2)*3,10);
+    line(o.x1,o.y1, o.x1-hw*Math.cos(ang-Math.PI/6), o.y1-hw*Math.sin(ang-Math.PI/6), o.color, o.strokeW, op);
+    line(o.x1,o.y1, o.x1-hw*Math.cos(ang+Math.PI/6), o.y1-hw*Math.sin(ang+Math.PI/6), o.color, o.strokeW, op);
+    // shoulder at P2 (direction may be rotated, not just horizontal)
+    var _se=leaderShoulderEnd(o);
+    line(o.x2,o.y2,_se.x,_se.y,o.color,o.strokeW,op);
+  }); }catch(e){ console.warn('[Vec] leaders',e); }
 
   // ── Markups: highlight (fill rect), strikeout/underline (line) ─────────────
   // ── NOTES / COMMENT BOXES → TRUE VECTORS ───────────────────────────────────
@@ -15516,11 +15533,16 @@ function _suppressVectorizedForOverlay(){
     shapeObjs:shapeObjs, measureObjs:measureObjs, textObjs:textObjs,
     polylineObjs:(typeof polylineObjs!=='undefined'?polylineObjs:null),
     markupObjs:(typeof markupObjs!=='undefined'?markupObjs:null),
-    commentObjs:(typeof commentObjs!=='undefined'?commentObjs:null)
+    commentObjs:(typeof commentObjs!=='undefined'?commentObjs:null),
+    leaderObjs:(typeof leaderObjs!=='undefined'?leaderObjs:null)
   };
   // Notes are painted as TRUE VECTORS now — keep them out of the raster overlay or
   // they'd be drawn twice (and the bitmap copy is the one that shifts shade on zoom).
   if(saved.commentObjs!==null) commentObjs = [];
+  // Leaders are vector now too (lines + arrowhead in the painter, label via the
+  // vector text pass) — clear them so the raster overlay doesn't double-draw
+  // a blurry copy over the crisp one.
+  if(saved.leaderObjs!==null) leaderObjs = [];
   // Keep ONLY the cloud shapes in the raster overlay (rect/ellipse are vectorized).
   shapeObjs = shapeObjs.filter(function(s){ return s.type==='cloud'; });
   measureObjs = [];
@@ -15535,6 +15557,7 @@ function _suppressVectorizedForOverlay(){
     if(saved.polylineObjs!==null) polylineObjs=saved.polylineObjs;
     if(saved.markupObjs!==null) markupObjs=saved.markupObjs;
     if(saved.commentObjs!==null) commentObjs=saved.commentObjs;
+    if(saved.leaderObjs!==null) leaderObjs=saved.leaderObjs;
   };
 }
 
