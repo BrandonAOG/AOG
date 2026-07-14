@@ -3758,8 +3758,9 @@ async function saveFillablePdf() {
     var blob = new Blob([bytes], { type: 'application/pdf' });
 
     // Share on mobile if possible, else download.
+    // Desktop always downloads directly — no share sheet.
     var didShare = false;
-    if (typeof File !== 'undefined' && navigator.canShare) {
+    if (!_isDesktopDevice() && typeof File !== 'undefined' && navigator.canShare) {
       try {
         var pdfFile = new File([blob], fname, { type: 'application/pdf' });
         if (navigator.canShare({ files: [pdfFile] })) {
