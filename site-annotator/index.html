@@ -42,10 +42,41 @@ html{position:fixed;width:100%;height:100%;overflow:hidden;overscroll-behavior:n
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;height:100%;width:100%;display:flex;flex-direction:column;overflow:hidden;overscroll-behavior:none;position:fixed;touch-action:none;-webkit-overflow-scrolling:none}
 /* TOOLBAR */
-#tb{height:68px;background:var(--surf);border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:2px;padding:0 8px;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;transform:translateZ(0);contain:layout style;position:relative;z-index:5}
+#tb{height:54px;background:var(--surf);border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:2px;padding:0 8px;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;transform:translateZ(0);contain:layout style;position:relative;z-index:5}
 #tb::-webkit-scrollbar{display:none}
+/* ── PROPERTIES ROW ────────────────────────────────────────────────────────
+   The tool buttons used to share one row with every property control, so the
+   bar was long and — worse — the TOOLS SHIFTED SIDEWAYS whenever a control
+   appeared or vanished. Now the tools hold a fixed row, and the options for
+   the active tool get their own. Empty tools (Pan, Erase) hide the row. */
+/* Sized to match #sb (the Save / Open / JPG / PDF / Print row) exactly:
+   same 42px height, same 4px gap, same 5px/10px padding — so the two bands read
+   as a matched pair rather than two near-misses. */
+#tb2{min-height:42px;height:42px;background:var(--surf2);border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;gap:4px;padding:5px 10px;flex-shrink:0;box-sizing:border-box;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;touch-action:pan-x;
+  -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;
+  contain:layout style;position:relative;z-index:4}
+#tb2::-webkit-scrollbar{display:none}
+#tb2.empty{display:none}
+#tb2 .sep{height:22px}
+#tb2 .tb-btn{height:30px;min-width:30px}
+#tb2 .tb-btn .lbl{display:none}
+#tb2-label{font-size:8px;letter-spacing:1px;color:var(--txt2);text-transform:uppercase;
+  flex-shrink:0;margin-right:6px;min-width:52px}
+/* Slides the options under whichever tool is active, so the pointer barely moves
+   between picking a tool and using its controls. Width is set from JS. */
+/* flex:0 0 0px would PIN flex-basis at 0 and silently beat any width we set from
+   JS — the spacer stayed zero-wide and the row never moved. Use flex-basis:auto so
+   the width actually applies. */
+#tb2-gap{flex:0 0 auto;width:0;height:1px;transition:width .16s ease}
+/* A little pointer up at the active tool, so the row visibly belongs to it. */
+#tb2-caret{position:absolute;top:0;width:0;height:0;
+  border-left:6px solid transparent;border-right:6px solid transparent;
+  border-top:6px solid var(--surf);transform:translateX(-50%);
+  transition:left .16s ease;pointer-events:none}
 .sep{width:1px;height:36px;background:var(--b2);margin:0 3px;flex-shrink:0}
-.tb-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:42px;height:56px;border-radius:var(--rad);border:1.5px solid transparent;background:transparent;color:var(--txt2);cursor:pointer;flex-shrink:0;transition:background-color .15s,border-color .15s,color .15s;padding:0 4px;gap:1px}
+.tb-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:42px;height:44px;border-radius:var(--rad);border:1.5px solid transparent;background:transparent;color:var(--txt2);cursor:pointer;flex-shrink:0;transition:background-color .15s,border-color .15s,color .15s;padding:0 4px;gap:1px}
 @media (hover:hover){.tb-btn:hover{background:var(--surf2);color:var(--txt)}}
 .tb-btn.active{background:rgba(108,99,255,.2);border-color:var(--acc);color:var(--acc2)}
 .tb-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;flex-shrink:0}
@@ -82,9 +113,22 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:56px;height:4px;
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--acc);cursor:pointer}
 input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--acc);cursor:pointer;border:none}
 /* SUBBAR */
-#sb{min-height:42px;background:var(--surf);border-bottom:1px solid var(--b1);display:none;align-items:center;flex-wrap:wrap;gap:4px;padding:5px 10px;flex-shrink:0}
+/* SUBBAR — single scrolling row, never wraps.
+   This was flex-wrap:wrap, so on a narrow screen the zoom/layer/export controls
+   stacked onto a second and third line and ate the plan. Same treatment as the
+   toolbar: one line, horizontal scroll, nothing shrinks (a squeezed button is an
+   unhittable button — it goes off-screen instead, where scrolling reaches it).
+   #sb is already exempt from the global passive:false touchmove preventDefault
+   and is in the fast-scroll stopPropagation zone, so momentum works on iOS. */
+#sb{min-height:42px;height:42px;background:var(--surf);border-bottom:1px solid var(--b1);
+  display:none;align-items:center;flex-wrap:nowrap;gap:4px;padding:5px 10px;flex-shrink:0;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain}
+#sb::-webkit-scrollbar{display:none}
 #sb.vis{display:flex}
-.sb-group{display:flex;align-items:center;gap:3px}
+#sb > *{flex-shrink:0}
+#sb::after{content:'';flex:0 0 10px}
+.sb-group{display:flex;align-items:center;gap:3px;flex-shrink:0}
 .ic-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--b2);background:var(--surf2);color:var(--txt);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0}
 .ic-btn:hover{background:var(--b2)}
 .ic-btn:disabled{opacity:.3;cursor:default}
@@ -220,6 +264,40 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   .tb-btn .lbl{display:block}
   #tb{height:auto;min-height:54px;align-items:center;padding:6px 6px}
   .tb-btn{height:52px;min-width:42px}
+}
+
+/* ── NARROW DEVICES (<600px): ONE SCROLLING ROW, NEVER WRAP ────────────────
+   The tools must stay on a single line and scroll horizontally. If they wrap,
+   the toolbar grows a second and third line, tool positions move every time a
+   different set is shown, and the plan loses another 60px each time.
+   flex-wrap:nowrap is the default, but it is stated EXPLICITLY here because a
+   stray `flex-wrap:wrap` anywhere up the cascade would silently reintroduce it. */
+@media(max-width:600px){
+  #tb, #tb2, #sb{
+    flex-wrap:nowrap !important;
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;      /* momentum scroll on iOS */
+    touch-action:pan-x;                     /* horizontal drag scrolls, doesn't pan the plan */
+    overscroll-behavior-x:contain;          /* don't chain to the page / trigger back-swipe */
+    /* NO scroll-behavior:smooth — on iOS it hijacks momentum: every programmatic
+       nudge cancels the fling, and the bar stutters and sticks under the finger. */
+  }
+  /* Nothing in either row may shrink — a shrunk button is an unhittable button.
+     They keep full size and go off-screen, where scrolling reaches them. */
+  #tb > *, #tb2 > *, #sb > *{flex-shrink:0 !important;}
+  #tb{gap:1px;padding:6px 4px;}
+  #tb2{gap:2px;padding:0 4px;}
+  /* The row is already anchored to the tool by scrolling, so the alignment
+     spacer would only push the controls off the right edge. */
+  #tb2-gap{display:none;}
+  #tb2-label{min-width:0;margin-right:4px;}
+  #tb2-caret{display:none;}
+  /* No sticky pseudo-element inside the scroller — position:sticky in a
+     horizontally scrolling flex row is a well-known jank/stick source on iOS
+     Safari. A plain trailing spacer gives the same "there's more" hint for free. */
+  #tb::after, #tb2::after, #sb::after{content:'';flex:0 0 10px;}
+  #sb{padding:5px 6px;}
 }
 /* labels always visible */
 
@@ -483,7 +561,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 /* Right cluster — save dot · online dot · theme toggle */
 #nav-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
 #aog-net-lbl{
-  font-family:'Share Tech Mono',monospace;font-size:9px;
+  font-family:'Share Tech Mono',monospace;font-size:11px;
   letter-spacing:1.5px;color:var(--theme-dim);text-transform:uppercase;
 }
 
@@ -504,24 +582,24 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   width:100%;
   background:var(--theme-bg-nav);
   border-bottom:1px solid var(--theme-border);
-  padding:6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left));
-  display:flex;align-items:center;justify-content:flex-start;gap:10px;
+  padding:1px max(8px, env(safe-area-inset-right)) 1px max(8px, env(safe-area-inset-left));
+  display:flex;align-items:center;justify-content:flex-start;gap:12px;
   box-sizing:border-box;
 }
 #brand-bar img{
-  width:28px;height:28px;object-fit:contain;flex-shrink:0;
+  width:36px;height:36px;object-fit:contain;flex-shrink:0;
   filter:drop-shadow(0 0 7px rgba(251,191,36,0.65));
 }
 [data-theme="light"] #brand-bar img{filter:drop-shadow(0 0 4px rgba(180,130,20,0.4));}
 #brand-bar-text{display:flex;flex-direction:column;line-height:1.2;}
 .brand-company{
-  font-family:'Orbitron',monospace;font-size:10px;font-weight:900;
+  font-family:'Orbitron',monospace;font-size:14px;font-weight:900;
   letter-spacing:2.5px;white-space:nowrap;
   background:linear-gradient(135deg,#FBBF24,#F97316);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
 }
 .brand-sub{
-  font-family:'Share Tech Mono',monospace;font-size:8px;
+  font-family:'Share Tech Mono',monospace;font-size:10px;
   letter-spacing:3px;text-transform:uppercase;color:#00D4FF;
   white-space:nowrap;margin-top:1px;
 }
@@ -530,18 +608,18 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 /* ── PERF CHIPS (MEM / GPU) — sit beside the Online dot in the brand bar ── */
 #aog-perf{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-right:4px;}
 .perf-chip{
-  display:flex;align-items:center;gap:4px;
-  padding:2px 7px;height:20px;box-sizing:border-box;
+  display:flex;align-items:center;gap:5px;
+  padding:2px 9px;height:26px;box-sizing:border-box;
   border:1px solid var(--theme-border);border-radius:3px;
   background:var(--theme-btn-bg);
   clip-path:polygon(4px 0%,100% 0%,calc(100% - 4px) 100%,0% 100%);
   font-family:'Share Tech Mono',monospace;white-space:nowrap;
 }
-.perf-k{font-size:8px;letter-spacing:1.5px;color:var(--theme-dim);text-transform:uppercase;}
-.perf-v{font-size:9px;letter-spacing:0.5px;color:#00D4FF;}
+.perf-k{font-size:10px;letter-spacing:1.5px;color:var(--theme-dim);text-transform:uppercase;}
+.perf-v{font-size:11px;letter-spacing:0.5px;color:#00D4FF;}
 [data-theme="light"] .perf-v{color:#0284C7;}
 .perf-bar{
-  width:34px;height:4px;border-radius:2px;overflow:hidden;
+  width:40px;height:5px;border-radius:2px;overflow:hidden;
   background:var(--theme-border);flex-shrink:0;
 }
 .perf-bar > i{
@@ -586,11 +664,34 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 @media print{#aog-nav,#brand-bar,#customer-bar{display:none!important;}}
 
 /* Customer bar — second row */
+/* ── HEADER WIDTH ──────────────────────────────────────────────────────────
+   The bands are width:100%, so on a wide monitor the logo was pinned hard left,
+   the status chips hard right, and a big dead gap sat between them — the header
+   read as stretched and unanchored rather than as one block.
+   Rather than restructure the DOM, grow the horizontal PADDING with the viewport:
+   the bar's background and border still span edge to edge, but its CONTENT is
+   held in a centred column no wider than --hdr-max. Below that width the max()
+   collapses to the normal 8px padding, so narrow/mobile layouts are untouched.
+   Tune --hdr-max to taste — 1500px keeps the toolbar comfortable without letting
+   the header sprawl on an ultrawide. */
+:root{ --hdr-max: 1500px; }
+#brand-bar, #customer-bar, #tb, #tb2, #sb{
+  padding-left:  max(8px, env(safe-area-inset-left),  calc((100% - var(--hdr-max)) / 2)) !important;
+  padding-right: max(8px, env(safe-area-inset-right), calc((100% - var(--hdr-max)) / 2)) !important;
+}
+@media(max-width:600px){
+  /* No centring column on phones — every pixel of width is needed for scrolling. */
+  #brand-bar, #customer-bar, #tb, #tb2, #sb{
+    padding-left:  max(6px, env(safe-area-inset-left))  !important;
+    padding-right: max(6px, env(safe-area-inset-right)) !important;
+  }
+}
+
 #customer-bar{
   flex-shrink:0;
   width:100%;
-  display:flex;align-items:center;gap:6px;
-  padding:3px max(8px, env(safe-area-inset-right)) 3px max(8px, env(safe-area-inset-left));
+  display:flex;align-items:center;gap:8px;
+  padding:9px max(8px, env(safe-area-inset-right)) 9px max(8px, env(safe-area-inset-left));
   background:var(--theme-bg-nav);
   border-bottom:1px solid var(--theme-border);
   box-sizing:border-box;
@@ -602,6 +703,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 }
 .cust-input{
   flex:1;min-width:60px;max-width:240px;
+  height:30px;                       /* was implicit + tiny — give the job fields real presence */
   background:var(--theme-input-bg);
   border:1px solid var(--theme-input-border);
   color:var(--theme-input-color);
@@ -865,6 +967,21 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
        inside the Text and Note formatting bars (U / S buttons). -->
   <!-- TEXT FORMAT GROUPS moved to the right of Pan (see TEXT FORMAT ZONE below) -->
   <!-- MARKUP TOOL: Highlight (color + opacity) -->
+  <button class="tb-btn" data-tool="image" title="Image — select, move, resize, rotate or flip an inserted picture"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.6"/><path d="M21 17l-5-5L7 20"/></svg><span class="lbl">Image</span></button>
+  <button class="tb-btn" data-tool="eraser"><svg viewBox="0 0 24 24"><path d="M20 20H7L3 16l10-10 7 7-3 3"/><path d="M6 10l8 8"/></svg><span class="lbl">Erase</span></button>
+  <button class="tb-btn" data-tool="pan"><svg viewBox="0 0 24 24"><path d="M18 11V8a2 2 0 0 0-4 0v3"/><path d="M14 11V6a2 2 0 0 0-4 0v5"/><path d="M10 11V5a2 2 0 0 0-4 0v9"/><path d="M6 14a4 4 0 0 0 3.67 4h2.5c1.74 0 3.83-.82 3.83-4v-3"/></svg><span class="lbl">Pan</span></button>
+  <div class="sep"></div>
+  <!-- TEXT FORMAT ZONE — shown for Text + Leader tools (moved right of Pan for a cleaner tool row) -->
+  <button class="tb-btn" id="btn-undo"><svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg><span class="lbl">Undo</span></button>
+  <button class="tb-btn" id="btn-redo"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.5"/></svg><span class="lbl">Redo</span></button>
+  <button class="tb-btn" id="btn-clear"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg><span class="lbl">Clear</span></button>
+</div>
+
+<!-- PROPERTIES ROW — contextual: only the controls the ACTIVE TOOL uses.
+     updateToolbarForTool() already show/hides each group; this just gives them
+     their own row so the TOOL BUTTONS never shift position as controls appear
+     and disappear. The whole row hides when the active tool has no options. -->
+<div id="tb2"><i id="tb2-caret" aria-hidden="true"></i><span id="tb2-gap" aria-hidden="true"></span><span id="tb2-label">Pan</span>
   <div id="tb-markup-grp" style="display:none;flex-shrink:0;align-items:center;gap:3px">
     <div class="sep" style="height:36px;background:var(--b2);width:1px;margin:0 2px;flex-shrink:0"></div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
@@ -886,11 +1003,6 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       <span id="markup-op-val" style="font-size:8px">45%</span>
     </div>
   </div>
-  <button class="tb-btn" data-tool="image" title="Image — select, move, resize, rotate or flip an inserted picture"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.6"/><path d="M21 17l-5-5L7 20"/></svg><span class="lbl">Image</span></button>
-  <button class="tb-btn" data-tool="eraser"><svg viewBox="0 0 24 24"><path d="M20 20H7L3 16l10-10 7 7-3 3"/><path d="M6 10l8 8"/></svg><span class="lbl">Erase</span></button>
-  <button class="tb-btn active" data-tool="pan"><svg viewBox="0 0 24 24"><path d="M18 11V8a2 2 0 0 0-4 0v3"/><path d="M14 11V6a2 2 0 0 0-4 0v5"/><path d="M10 11V5a2 2 0 0 0-4 0v9"/><path d="M6 14a4 4 0 0 0 3.67 4h2.5c1.74 0 3.83-.82 3.83-4v-3"/></svg><span class="lbl">Pan</span></button>
-  <div class="sep"></div>
-  <!-- TEXT FORMAT ZONE — shown for Text + Leader tools (moved right of Pan for a cleaner tool row) -->
   <div id="tb-textfmt-sep" class="sep" style="display:none"></div>
   <div id="tb-font-size-grp"><select id="font-size-sel" title="Font size">
     <option value="6">6</option><option value="7">7</option>
@@ -1067,9 +1179,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <span id="op-val">100%</span>
   </div>
   <div class="sep" id="tb-op-sep"></div>
-  <button class="tb-btn" id="btn-undo"><svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg><span class="lbl">Undo</span></button>
-  <button class="tb-btn" id="btn-redo"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.5"/></svg><span class="lbl">Redo</span></button>
-  <button class="tb-btn" id="btn-clear"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg><span class="lbl">Clear</span></button>
+</div>
 </div>
 
 <!-- SUBBAR -->
@@ -2992,6 +3102,9 @@ document.addEventListener('touchmove', function(e){
   if(e.target && typeof e.target.closest === 'function'){
     if(e.target.closest('.panel-body')) return; // panel vertical scroll
     if(e.target.closest('#tb')) return;          // toolbar horizontal scroll
+    if(e.target.closest('#tb2')) return;         // PROPERTIES row — same deal. Without
+                                                 // this the passive:false preventDefault()
+                                                 // below kills its scroll outright.
     if(e.target.closest('#sb')) return;          // subbar horizontal scroll
     if(e.target.closest('input[type=range]')) return;
     if(e.target.closest('#text-ov')) return;     // text input — let iOS handle it
@@ -3005,7 +3118,9 @@ document.addEventListener('touchmove', function(e){
 // Fix: intercept touchmove on scrollable zones with a passive:true listener that
 // stopPropagation()s, so the event never reaches the slow document handler.
 (function(){
-  var zones=['#tb','#sb','.panel-body','#shortcuts-box','#print-scroll'];
+  // #tb2 must be here too, or its touchmove reaches the slow passive:false document
+  // handler and momentum dies — the row scrolls, but in sticky lurches.
+  var zones=['#tb','#tb2','#sb','.panel-body','#shortcuts-box','#print-scroll'];
   function addFastScroll(selector){
     var els=document.querySelectorAll(selector);
     els.forEach(function(el){
@@ -3025,7 +3140,7 @@ document.addEventListener('touchmove', function(e){
 })();
 
 // ── APP STATE ──
-var tool='pan', color='#ef4444', strokeW=5, opacity=1, lineStyle='solid', fillShape=false;
+var tool='none', color='#ef4444', strokeW=5, opacity=1, lineStyle='solid', fillShape=false;
 // ── Per-tool stroke width memory ──
 // Each tool keeps its OWN thickness. Changing it for one tool never affects
 // another, and switching tools restores that tool's last value (or its default).
@@ -3556,20 +3671,190 @@ function updateLegend(){
 // ── ZOOM/PAN ──
 function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(typeof _setAnnoRes==='function') _setAnnoRes(false); if(typeof _setImgRes==='function') _setImgRes(false); if(_editingComment) repositionCommentEditor(_editingComment); if(typeof repositionTextOverlay==='function') repositionTextOverlay(); if(_pendingImg&&_pendingImgPos) _drawImgGhost(_pendingImgPos.x,_pendingImgPos.y); }
 
+// ── PAN LIMITS ────────────────────────────────────────────────────────────────
+// The old rule only guaranteed that 80px of canvas stayed on screen:
+//     panX = clamp(panX, 80-cw, vw-80)
+// So whenever the page was smaller than the viewport you could shove it almost
+// entirely off to either side and be left staring at a screen of black, with the
+// plan clinging to one edge. That is the "invisible barrier" — it sits far out in
+// empty space, nowhere near the drawing.
+//
+// The rule that actually matches how every map/CAD viewer behaves:
+//   • content SMALLER than the viewport → there is nothing to pan to. Lock it
+//     centred on that axis.
+//   • content LARGER than the viewport  → you may pan, but not past its edges.
+//     A little overscroll is allowed so the edge isn't glued to the frame.
+var PAN_OVERSCROLL = 0.12;   // fraction of the visible area you may drag past an edge
+
+// ── THE VISIBLE AREA IS NOT ALWAYS THE VIEWPORT ───────────────────────────────
+// On DESKTOP the side panels (layers, labels, properties) are flex SIBLINGS of
+// #viewport — they take their width out of the row, so viewport.clientWidth has
+// already excluded them. Nothing to do.
+//
+// Under 700px those same panels become position:fixed bottom SHEETS (42vh) that
+// OVERLAY the canvas. The viewport still reports full height, but the bottom
+// chunk of it is hidden behind the sheet. Centring against the full height would
+// park the drawing underneath the panel — and clamping against it would refuse to
+// let you pan it back out. (This is what the old 80px slack was really for: a
+// blunt way to always leave SOMETHING draggable. It worked, at the cost of letting
+// you fling the plan off-screen on desktop, where no panel overlays anything.)
+//
+// So: measure the area that is actually visible, and pan/centre against THAT.
+function _visibleVP(){
+  var w = viewport.clientWidth, h = viewport.clientHeight, top = 0;
+  try{
+    var vr = viewport.getBoundingClientRect();
+    var panels = document.querySelectorAll('.side-panel');
+    for(var i=0;i<panels.length;i++){
+      var p = panels[i];
+      if(p.classList.contains('collapsed')) continue;
+      var cs = getComputedStyle(p);
+      if(cs.position !== 'fixed') continue;          // in-flow panel → already excluded
+      var pr = p.getBoundingClientRect();
+      if(!pr.width || !pr.height) continue;
+      var overlap = Math.max(0, vr.bottom - pr.top); // sheet rises from the bottom
+      if(overlap > 0 && overlap < h) h -= overlap;
+    }
+  }catch(e){}
+  return {w:w, h:h, top:top};
+}
+
 function clampPan(){
-  var vw=viewport.clientWidth,vh=viewport.clientHeight;
-  var cw=baseCv.width*zoom,ch=baseCv.height*zoom;
-  panX=Math.max(Math.min(80-cw,0),Math.min(Math.max(vw-80,0),panX));
-  panY=Math.max(Math.min(80-ch,0),Math.min(Math.max(vh-80,0),panY));
+  var vp = _visibleVP();
+  var vw = vp.w, vh = vp.h;
+  var cw = baseCv.width*zoom, ch = baseCv.height*zoom;
+
+  if(cw <= vw){
+    panX = Math.round((vw - cw)/2);           // smaller than the visible area → centred
+  } else {
+    var slackX = vw * PAN_OVERSCROLL;
+    panX = Math.min(slackX, Math.max(vw - cw - slackX, panX));
+  }
+
+  if(ch <= vh){
+    panY = Math.round((vh - ch)/2);
+  } else {
+    var slackY = vh * PAN_OVERSCROLL;
+    panY = Math.min(slackY, Math.max(vh - ch - slackY, panY));
+  }
+}
+
+// ── WHERE IS THE ACTUAL DRAWING? ──────────────────────────────────────────────
+// The canvas is the PDF PAGE, and fit() centres it perfectly. But a scanned survey
+// rarely has its artwork centred on the paper — there's more blank margin on one
+// side than the other. Centring the PAGE therefore leaves the DRAWING off-centre,
+// and clampPan() then stops you at the edge of the paper rather than the edge of
+// the ink (the "invisible barrier": you're panning into blank margin).
+//
+// So find the ink. Downsample the base canvas hard (a few hundred px wide is plenty
+// — we only need a bounding box, not detail), then walk it for non-white pixels.
+// Cached per base render: this is a readback, not something to do on every fit.
+var _inkBox = null;      // {x,y,w,h} in BASE CANVAS pixels
+function _findInkBox(){
+  if(_inkBox) return _inkBox;
+  try{
+    var W = baseCv.width, H = baseCv.height;
+    if(!W || !H) return null;
+    var SW = 400, SH = Math.max(1, Math.round(H * (SW/W)));
+    var c = document.createElement('canvas'); c.width=SW; c.height=SH;
+    var x = c.getContext('2d', {willReadFrequently:true});
+    x.drawImage(baseCv, 0,0, SW,SH);
+    var d = x.getImageData(0,0,SW,SH).data;
+    var minX=SW, minY=SH, maxX=-1, maxY=-1;
+    // "Ink" = anything meaningfully darker than paper. Scans are noisy and grey,
+    // so 236 rather than a strict 255 — a hard threshold would catch JPEG speckle
+    // in the margin and defeat the whole point.
+    for(var yy=0; yy<SH; yy++){
+      for(var xx=0; xx<SW; xx++){
+        var i=(yy*SW+xx)*4;
+        if(d[i+3] < 8) continue;                     // transparent → not ink
+        if(d[i]<236 || d[i+1]<236 || d[i+2]<236){
+          if(xx<minX) minX=xx;
+          if(xx>maxX) maxX=xx;
+          if(yy<minY) minY=yy;
+          if(yy>maxY) maxY=yy;
+        }
+      }
+    }
+    if(maxX < 0) return null;                        // blank page → nothing to fit
+    var k = W/SW;                                    // back to base-canvas pixels
+    var pad = 6;                                     // a little breathing room
+    var bx = Math.max(0, (minX-pad)*k), by = Math.max(0, (minY-pad)*k);
+    var bw = Math.min(W-bx, (maxX-minX+1+pad*2)*k);
+    var bh = Math.min(H-by, (maxY-minY+1+pad*2)*k);
+    // If the ink already fills nearly the whole page there's nothing to gain —
+    // fall back to the page so behaviour is unchanged on a well-cropped plan.
+    if(bw > W*0.97 && bh > H*0.97) return null;
+    _inkBox = {x:bx, y:by, w:bw, h:bh};
+    console.warn('[AOG:fit] ink box '+Math.round(bw)+'x'+Math.round(bh)
+      +' at '+Math.round(bx)+','+Math.round(by)
+      +'  (page is '+W+'x'+H+' — fitting to the DRAWING, not the paper)');
+    return _inkBox;
+  }catch(e){ return null; }
 }
 
 function fitToVP(){
-  var vw=viewport.clientWidth-48,vh=viewport.clientHeight-48;
+  var _vp = _visibleVP();                     // not the raw viewport — see clampPan()
+  var vw=_vp.w-48, vh=_vp.h-48;
   var cw=baseCv.width,ch=baseCv.height; if(!cw||!ch) return;
+
+  // Fit the ARTWORK if we can find it; fall back to the whole page if not.
+  var box = _findInkBox();
+  if(box){
+    zoom = Math.max(0.05, Math.min(1, vw/box.w, vh/box.h));
+    panX = Math.round(_vp.w/2 - (box.x + box.w/2)*zoom);
+    panY = Math.round(_vp.h/2 - (box.y + box.h/2)*zoom);
+    applyTransform();
+    return;
+  }
+
   zoom=Math.max(0.05,Math.min(1,vw/cw,vh/ch));
-  panX=Math.round((viewport.clientWidth-cw*zoom)/2);
-  panY=Math.round((viewport.clientHeight-ch*zoom)/2);
+  panX=Math.round((_vp.w-cw*zoom)/2);
+  panY=Math.round((_vp.h-ch*zoom)/2);
   applyTransform();
+
+  // ── SELF-CORRECTING CENTRE ────────────────────────────────────────────────
+  // The maths above assumes the scene's on-screen box is exactly baseCv scaled,
+  // sitting at panX/panY inside the viewport. If ANYTHING else contributes to
+  // horizontal layout — a border, a scrollbar, a collapsed rail, a wrap that is
+  // wider than base-cv — the page lands off-centre, and no amount of arithmetic
+  // up here will notice.
+  //
+  // So don't argue with the layout: MEASURE it. Ask the browser where the page
+  // actually rendered, compare that to where the viewport's centre actually is,
+  // and shift by the difference. Self-correcting, whatever the cause.
+  requestAnimationFrame(function(){
+    try{
+      var wrap = document.getElementById('canvas-wrap') || baseCv;
+      var w = wrap.getBoundingClientRect();
+      var v = viewport.getBoundingClientRect();
+      if(!w.width || !w.height) return;
+      var dx = (v.left + v.width/2)  - (w.left + w.width/2);
+      var dy = (v.top  + v.height/2) - (w.top  + w.height/2);
+      // Report UNCONDITIONALLY (console.warn, not dbg — dbg is gated behind
+      // AOG_DEBUG, so "no log appeared" told us nothing at all).
+      // The two numbers that settle where the dead space lives:
+      //   canvas aspect vs page aspect — if the CANVAS is wider than the artwork,
+      //   then centring the canvas cannot centre what you can see, and the fix is
+      //   upstream in how the page was rasterised, not in fit().
+      var ar = (baseCv.width/baseCv.height);
+      console.warn('[AOG:fit] canvas '+baseCv.width+'x'+baseCv.height
+        +'  (aspect '+ar.toFixed(3)+')'
+        +'   viewport '+Math.round(v.width)+'x'+Math.round(v.height)
+        +'   zoom '+(zoom*100).toFixed(1)+'%'
+        +'   wrap on screen '+Math.round(w.width)+'x'+Math.round(w.height)
+        +'   off-centre by dx='+dx.toFixed(1)+' dy='+dy.toFixed(1));
+      if(Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5){
+        console.warn('[AOG:fit] The CANVAS is centred. If the drawing still looks '
+          +'off-centre, the empty margin is INSIDE the canvas — baseCv is bigger than '
+          +'the artwork — so fit() is not the bug.');
+        return;
+      }
+      panX += Math.round(dx);
+      panY += Math.round(dy);
+      applyTransform();
+    }catch(e){}
+  });
 }
 
 function zoomAt(f,cx,cy){
@@ -4027,7 +4312,15 @@ function _loadPDFRasterized(f){
   // gate cleanly (→ correct raster fallback) until the new bytes are ready; the
   // render code re-enables the vector path with the new page.
   _pdfBytes=null;
-  try{ f.arrayBuffer().then(function(b){ _pdfBytes=b; }).catch(function(){ _pdfBytes=null; }); }catch(e){ _pdfBytes=null; }
+  try{ f.arrayBuffer().then(function(b){
+        _pdfBytes=b;
+        // _pdfBytes lands ASYNCHRONOUSLY. Any autosave that fired before this point
+        // recorded "no PDF" — so cache the bytes the moment they arrive, and kick a
+        // save so the session record agrees. Without this the FIRST refresh after an
+        // import still came back raster.
+        try{ _persistPdfSource(); }catch(e){}
+        try{ if(typeof scheduleSave==='function') scheduleSave(); }catch(e){}
+      }).catch(function(){ _pdfBytes=null; }); }catch(e){ _pdfBytes=null; }
   // pdf.js 3.x REQUIRES a worker source. The original code set this in a
   // guard that executed before the library loaded, so it was never applied
   // and PDFs failed to open. Set it lazily here, once, now that pdfjsLib exists.
@@ -4089,7 +4382,15 @@ function _loadPDFExploded(f){
   if(typeof pdfjsLib==='undefined'){ toast('PDF support requires an internet connection.','warn'); return; }
   // Invalidate previous file's bytes synchronously (see _loadPDFRasterized note).
   _pdfBytes=null;
-  try{ f.arrayBuffer().then(function(b){ _pdfBytes=b; }).catch(function(){ _pdfBytes=null; }); }catch(e){ _pdfBytes=null; }
+  try{ f.arrayBuffer().then(function(b){
+        _pdfBytes=b;
+        // _pdfBytes lands ASYNCHRONOUSLY. Any autosave that fired before this point
+        // recorded "no PDF" — so cache the bytes the moment they arrive, and kick a
+        // save so the session record agrees. Without this the FIRST refresh after an
+        // import still came back raster.
+        try{ _persistPdfSource(); }catch(e){}
+        try{ if(typeof scheduleSave==='function') scheduleSave(); }catch(e){}
+      }).catch(function(){ _pdfBytes=null; }); }catch(e){ _pdfBytes=null; }
   if(pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc){
     pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
@@ -6196,9 +6497,23 @@ function _computeAnnoEff(){
   if(!w || !h) return 1;
   var devicePR = window.devicePixelRatio || 1;
   var eff = Math.max(1, devicePR * Math.max(1, zoom));   // cover device px at zoom
-  eff = Math.min(eff, 3);                                // hard ceiling
-  var _CAP = (IS_IPHONE ? 5e6 : 12e6);                  // per-canvas device-px ceiling
+  // Resolution ceiling. Desktop gets a higher cap (4×) so vector annotations
+  // (text, shapes, highlights) keep re-rendering sharp as you zoom past 300%
+  // instead of magnifying, while leaving comfortable memory headroom. iOS stays
+  // at 3× — its per-canvas budget is far tighter.
+  eff = Math.min(eff, IS_IOS ? 3 : 4);                   // hard ceiling (desktop 4, iOS 3)
+  // Per-canvas device-px AREA ceiling. Kept modest on desktop for breathing
+  // room — big enough to reach ~4× on normal pages, not so big that three anno
+  // canvases balloon total canvas memory. iPad/iPhone unchanged.
+  var _CAP = (IS_IPHONE ? 5e6 : (IS_IPAD ? 12e6 : 24e6));
   if(w*h*eff*eff > _CAP) eff = Math.max(1, Math.sqrt(_CAP/(w*h)));
+  // HARD PER-SIDE DIMENSION GUARD. Browsers refuse to allocate a canvas whose
+  // width OR height exceeds ~32767px and silently hand back a BLANK canvas —
+  // the opposite of crisp. Clamp eff so neither side of the backing store passes
+  // a safe 16384px limit even at max zoom on a large sheet.
+  var MAX_SIDE = IS_IOS ? 8192 : 16384;
+  var sideCap = Math.min(MAX_SIDE / w, MAX_SIDE / h);
+  if(eff > sideCap) eff = Math.max(1, sideCap);
   return Math.round(eff*4)/4;                            // bucket to 0.25 steps
 }
 function _sizeAnnoCanvas(cv, ctx, eff){
@@ -6283,7 +6598,8 @@ function afterLoad(){
   drawGrid();
   fitToVP();
   toast('File loaded — '+(IS_IPHONE?'iPhone cap applied':'ready to annotate'),'ok',2000);
-  clearSave(); scheduleSave(); // start fresh save for this file
+  _inkBox=null;   // new document → recompute where the drawing is
+  clearSave(); _clearPdfSource(); scheduleSave(); // start fresh save for this file
   // Auto-detect scale from title block (non-blocking)
   setTimeout(autoDetectScale, 100);
 }
@@ -6331,6 +6647,7 @@ var layerTmps=layers.map(function(l){
   });
   resize(h,w);
   bCtx.drawImage(tmp,0,0);
+  _inkBox=null;   // base canvas rotated → its ink bounding box is stale
   layers.forEach(function(l,i){
     if(!layerTmps[i]) return;   // was never allocated → leave it at 0x0
     l.canvas.width=layerTmps[i].width; l.canvas.height=layerTmps[i].height;
@@ -6691,6 +7008,9 @@ function selectShapeDirect(hit){
 
 function onDown(e){
   if(!baseLoaded||pinching) return;
+  // No tool selected (app loads in this neutral state): a press on the canvas
+  // does nothing — no draw, no pan. The user must pick a tool first.
+  if(tool==='none') return;
   if(tool==='pan'){
     // ── Tap-to-edit (Pan tool) ───────────────────────────────────────────
     // Imported PDF vectors (arrows, lines, rects, ellipses) land while the
@@ -11598,7 +11918,7 @@ var HANDLE_CURSORS=['nw-resize','n-resize','ne-resize','e-resize',
                     'grab','grab','grab','grab']; // 8-11 = rotate
 
 function updateSelCursor(x,y){
-  if(!selectedShape){ drawCv.style.cursor='crosshair'; return; }
+  if(!selectedShape){ drawCv.style.cursor = (tool==='none') ? 'default' : 'crosshair'; return; }
   var h=getHandleAt(x,y,false);
   if(h>=0){
     // Comments: side-center handles are axis-locked (top/bottom = vertical,
@@ -12332,6 +12652,146 @@ function closePolyline(){
 
 
 // ── TOOLBAR VISIBILITY PER TOOL ───────────────────────────────
+// Slide the properties row so its controls sit centred under the ACTIVE tool button.
+// Keep the ACTIVE tool on screen. On a narrow device the tool row scrolls, so the
+// tool you just picked (or restored from a saved session) can easily be off to the
+// right where you can't see what's selected. Nudge it into view — but only if it's
+// actually out of view, so we never yank a row the user is mid-scroll on.
+var _tbUserScrolling = false;
+// Once the user drags the tool row by hand, we must NOT keep yanking it back to
+// centre the active button — that's the "scroll to the front and it snaps back
+// because Pan is selected" bug. This latch is set on manual scroll and only
+// cleared when a tool is actually (re)selected, which is the one moment we DO
+// want to bring the chosen button into view.
+var _tbUserMovedManually = false;
+function _scrollActiveToolIntoView(){
+  try{
+    var tb  = document.getElementById('tb');
+    var btn = tb && tb.querySelector('.tb-btn.active');
+    if(!tb || !btn) return;
+    if(_tbUserScrolling) return;                      // hands off — the user is dragging
+    if(_tbUserMovedManually) return;                  // user chose their own scroll spot — leave it
+    if(tb.scrollWidth <= tb.clientWidth) return;      // nothing to scroll
+    var b = btn.getBoundingClientRect(), r = tb.getBoundingClientRect();
+    var pad = 12;
+    if(b.left < r.left + pad){
+      tb.scrollLeft += (b.left - r.left) - pad;
+    } else if(b.right > r.right - pad){
+      tb.scrollLeft += (b.right - r.right) + pad;
+    }
+  }catch(e){}
+}
+
+function _alignPropsRow(){
+  requestAnimationFrame(function(){
+    try{
+      var tb  = document.getElementById('tb');
+      var row = document.getElementById('tb2');
+      var gap = document.getElementById('tb2-gap');
+      var lab = document.getElementById('tb2-label');
+      var car = document.getElementById('tb2-caret');
+      var btn = tb && tb.querySelector('.tb-btn.active');
+      if(!tb || !row || !gap || !btn) return;
+
+      _scrollActiveToolIntoView();
+
+      // NARROW SCREENS: there isn't room to slide the options under the tool — doing
+      // so would just push them off the right edge. The row scrolls instead, and the
+      // CSS above hides the spacer. Reset it and leave the row alone.
+      if(window.matchMedia('(max-width:600px)').matches){
+        gap.style.width='0px'; gap.style.flexBasis='0px';
+        row.scrollLeft = 0;
+        return;
+      }
+
+      // Where the tool button sits, in the ROW's coordinate space. The tool row can
+      // be scrolled horizontally, so go through bounding rects rather than
+      // offsetLeft — offsetLeft ignores scroll and would drift once the bar scrolls.
+      var tbRect  = btn.getBoundingClientRect();
+      var rowRect = row.getBoundingClientRect();
+
+      // MEASURE FROM THE CONTENT BOX, NOT THE BORDER BOX.
+      // The header-width cap gives #tb2 a large padding-left —
+      // max(8px, (100% - --hdr-max)/2) — and getBoundingClientRect().left is the
+      // BORDER-box edge, which sits OUTSIDE that padding. The spacer, though,
+      // begins where the padding ends. Measuring against the border box therefore
+      // added the gap ON TOP OF the padding: a double offset that pushed the
+      // options to the right of their tool. And because the padding is derived from
+      // (100% - hdr-max)/2, the error scaled with viewport width — which is why it
+      // looked different at every zoom level.
+      var rowPadL = parseFloat(getComputedStyle(row).paddingLeft) || 0;
+      var rowContentLeft = rowRect.left + rowPadL;
+
+      var toolLeft   = tbRect.left - rowContentLeft + row.scrollLeft;
+      var toolCentre = toolLeft + tbRect.width/2;
+
+      // Width of everything we're centring (label + visible groups), gap excluded.
+      gap.style.width = '0px'; gap.style.flexBasis = 'auto';
+      var content = 0;
+      for(var i=0;i<row.children.length;i++){
+        var el = row.children[i];
+        if(el === gap || el === car) continue;
+        if(el.style.display === 'none') continue;
+        content += el.getBoundingClientRect().width;
+      }
+      if(!content) return;
+
+      // LEFT-ALIGN, not centre. The first control lines up flush with the tool's
+      // left edge, so the options always start exactly under the button you clicked.
+      // Centring looked tidy but moved the whole group whenever a tool had a
+      // different number of controls — the buttons never landed in the same place
+      // twice. Anchoring the left edge means the first control is always right
+      // under your cursor, and the group just grows rightward from there.
+      var want = toolLeft;
+      var rowPadR = parseFloat(getComputedStyle(row).paddingRight) || 0;
+      var avail   = row.clientWidth - rowPadL - rowPadR;      // usable content width
+      var max     = Math.max(0, avail - content);
+      var left    = Math.max(0, Math.min(want, max));
+      gap.style.width = left + 'px';
+      gap.style.flexBasis = left + 'px';   // belt and braces — flex-basis wins over width
+
+      if(car){
+        // position:absolute resolves against the padding box, so add the padding
+        // back in — the caret is not inside the content flow like the spacer is.
+        car.style.left = (toolCentre + rowPadL) + 'px';
+        car.style.opacity = '1';
+      }
+    }catch(e){ /* cosmetic only — never break the toolbar over alignment */ }
+  });
+}
+// Keep it aligned when the tool row scrolls or the window resizes — the button
+// moves, so the options must follow it.
+window.addEventListener('resize', function(){ _alignPropsRow(); });
+document.addEventListener('DOMContentLoaded', function(){
+  var tb=document.getElementById('tb');
+  if(!tb) return;
+  // ── WHY THIS IS NOT JUST _alignPropsRow ──────────────────────────────────
+  // The old handler called _alignPropsRow() on every scroll event, and that
+  // function calls _scrollActiveToolIntoView(), which WRITES scrollLeft. So on
+  // every frame of a drag the code yanked the scroll position back under the
+  // user's finger — momentum died and the bar felt like it was sticking. A
+  // scroll handler must never move the thing being scrolled.
+  //
+  // It also did getBoundingClientRect() + style writes per event: a forced
+  // synchronous reflow on every frame, which is its own source of jank on iOS.
+  //
+  // So: skip entirely on touch/narrow (where the spacer is hidden anyway), and
+  // on desktop coalesce to one rAF and only touch the SPACER, never scrollLeft.
+  // While a finger is down on the bar, no code may move it.
+  tb.addEventListener('touchstart', function(){ _tbUserScrolling=true; _tbUserMovedManually=true; }, {passive:true});
+  tb.addEventListener('touchend',   function(){
+    setTimeout(function(){ _tbUserScrolling=false; }, 350);   // let momentum finish first
+  }, {passive:true});
+
+  var pending=false;
+  tb.addEventListener('scroll', function(){
+    if(window.matchMedia('(max-width:600px)').matches) return;   // nothing to align
+    if(pending) return;
+    pending=true;
+    requestAnimationFrame(function(){ pending=false; _alignPropsRow(); });
+  }, {passive:true});
+});
+
 function updateToolbarForTool(t){
   // Element refs
   var ids = {
@@ -12420,6 +12880,55 @@ function updateToolbarForTool(t){
   if(ids.swSep) ids.swSep.style.display = (isShape || isStroke) ? '' : 'none';
   shFlex(ids.opGrp, isShape || isStroke);
   if(ids.opSep) ids.opSep.style.display = (isShape || isStroke) ? '' : 'none';
+
+  // ── PROPERTIES ROW: hide it entirely when the tool has no options ─────────
+  // Every group above has just been shown or hidden. Rather than maintain a
+  // second list of "which tools have options" (which would drift out of sync the
+  // moment a tool changes), ASK THE ROW: if nothing inside it is visible, there
+  // is nothing to show, so collapse it and give the height back to the plan.
+  try{
+    var row = document.getElementById('tb2');
+    if(row){
+      // NEVER use offsetParent here. A child of a display:none parent ALWAYS reports
+      // offsetParent === null — so the first time this row collapsed, every later
+      // check saw "nothing visible" and it could never come back. (That was the bug:
+      // pick Hilite once, and no tool showed its options again.) Ask each group for
+      // its OWN display instead, which is true regardless of whether the row is up.
+      var anyVisible = false;
+      var kids = row.children;
+      for(var i=0;i<kids.length;i++){
+        var el = kids[i];
+        if(el.id === 'tb2-label') continue;
+        if(el.classList && el.classList.contains('sep')) continue;   // separators don't count
+        var disp = el.style.display;
+        if(disp === 'none') continue;
+        if(disp === 'contents' && !el.children.length) continue;
+        anyVisible = true; break;
+      }
+      row.classList.toggle('empty', !anyVisible);
+
+      // ── ALIGN THE OPTIONS UNDER THE ACTIVE TOOL ──────────────────────────
+      // Pick a tool, and its controls slide to sit directly beneath that button.
+      // The pointer barely has to move: click Hilite, and the highlight options are
+      // right there, not 600px away at the far end of the bar.
+      //
+      // Measured AFTER the show/hide above (in a rAF, so the browser has laid the
+      // new widths out) — otherwise we'd centre against the previous tool's group.
+      if(anyVisible) _alignPropsRow();
+      else { var _c0=document.getElementById('tb2-caret'); if(_c0) _c0.style.opacity='0'; }
+
+      // Name the tool the options belong to, so the row never looks orphaned.
+      var lab = document.getElementById('tb2-label');
+      if(lab){
+        var NAMES = {pen:'Pen', line:'Line', arrow:'Arrow', polyline:'Polyline',
+          rect:'Rect', ellipse:'Ellipse', cloud:'Cloud', measure:'Measure',
+          pathmeasure:'Path dist', polygon:'Area', leader:'Leader', text:'Text',
+          comment:'Note', highlight:'Hilite', image:'Image', eraser:'Erase',
+          pan:'Pan', stamp:'Stamp'};
+        lab.textContent = NAMES[t] || t || '';
+      }
+    }
+  }catch(e){ /* row stays visible — never break the toolbar over a cosmetic */ }
 }
 // ── END TOOLBAR VISIBILITY ─────────────────────────────────────
 
@@ -12460,15 +12969,52 @@ document.querySelectorAll('.tb-btn[data-tool]').forEach(function(btn){
     }
     document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
     btn.classList.add('active');
+    // A deliberate tool selection is the one time we DO want to bring the active
+    // button into view — release the manual-scroll latch so alignment runs.
+    _tbUserMovedManually = false;
     updateToolbarForTool(tool);
-    var cur=tool==='text'?'text':tool==='eraser'?'cell':tool==='pan'?'grab':tool==='stamp'?'copy':tool==='image'?'move':'crosshair';
+    var cur=tool==='none'?'default':tool==='text'?'text':tool==='eraser'?'cell':tool==='pan'?'grab':tool==='stamp'?'copy':tool==='image'?'move':'crosshair';
     drawCv.style.cursor=cur;
     if(tool==='stamp'){ openStampPicker(); return; }
   });
 });
 
+// ── TOOL-BUTTON SCROLL FIX (iPad) ─────────────────────────────────────────
+// PROBLEM: to reach a tool at the far end of the row (or the Open/Save tools),
+// you drag across the toolbar to scroll it. But if your finger starts ON a
+// button, iOS still fires that button's `click` on release — so instead of
+// scrolling you accidentally select whatever tool you touched, and the row
+// feels like it "won't scroll past" the buttons.
+// FIX: track finger travel from touchstart. If it moved more than a few px it
+// was a SCROLL — swallow the click so nothing is selected. A near-static tap
+// selects normally. Applies to every horizontally-scrolling button row:
+// #tb (tools), #tb2 (properties), #sb (Save/Open/JPG/PDF/Print).
+(function(){
+  var _tsx=0,_tsy=0,_moved=false;
+  var TAP_SLOP=8; // px of travel allowed before a touch counts as a scroll
+  ['#tb','#tb2','#sb'].forEach(function(sel){
+    var row=document.querySelector(sel);
+    if(!row) return;
+    row.addEventListener('touchstart',function(e){
+      if(e.touches.length!==1){ _moved=true; return; }
+      _tsx=e.touches[0].clientX; _tsy=e.touches[0].clientY; _moved=false;
+    },{passive:true});
+    row.addEventListener('touchmove',function(e){
+      if(!e.touches.length) return;
+      if(Math.hypot(e.touches[0].clientX-_tsx, e.touches[0].clientY-_tsy) > TAP_SLOP) _moved=true;
+    },{passive:true});
+    // capture:true → intercept the click BEFORE the button's own handler runs.
+    row.addEventListener('click',function(e){
+      if(_moved){ e.stopPropagation(); e.preventDefault(); _moved=false; }
+    },true);
+  });
+})();
+
 // Set initial toolbar state
 updateToolbarForTool(tool);
+// App loads with NO tool selected — neutral cursor, no panning/drawing until
+// the user picks a tool from the toolbar.
+if(typeof drawCv!=='undefined' && drawCv) drawCv.style.cursor='default';
 
 // Helper to switch tool programmatically (mirrors the button click logic)
 function switchTool(name){
@@ -14598,6 +15144,32 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
         var ry0 = i*lineH;
         var rx = obj.x + rx0*ca - ry0*sa;
         var ry = obj.y + rx0*sa + ry0*ca;
+
+        // ── BACKGROUND HIGHLIGHT — ROTATED CASE ────────────────────────────────
+        // This used to be drawn ONLY in the else-branch below (the unrotated path),
+        // so a label's highlight silently vanished from the export the moment the
+        // object had any angle. And rotateCanvas folds the page rotation into EVERY
+        // text object's angle — so one canvas rotate set a!==0 on every label and
+        // dropped every text highlight from the PDF. Draw it here too, in the
+        // rotated frame, before the glyphs so it sits BEHIND them.
+        if(obj.bgOpacity && obj.bgOpacity>0){
+          var ascR=fsize*TXT_ASC_F, descR=fsize*TXT_DESC_F, padXR=2/sc, padYR=1.5/sc;
+          // Bottom-left of the bg box in the LABEL'S LOCAL frame (same offsets the
+          // unrotated branch uses), then rotated about (obj.x,obj.y) like the glyphs.
+          var bx0 = rx0 - padXR*sc;
+          var by0 = ry0 + (descR+padYR)*sc;
+          var bxr = obj.x + bx0*ca - by0*sa;
+          var byr = obj.y + bx0*sa + by0*ca;
+          var bpR = P(bxr, byr);
+          page.drawRectangle({
+            x:bpR.x, y:bpR.y,
+            width:W(tw)+padXR*2, height:(ascR+descR)+padYR*2,
+            rotate:degrees(-a*180/Math.PI + rotDeg),   // same total spin as the text
+            color:col(obj.bgColor||'#ffff00'),
+            opacity:op*obj.bgOpacity, borderWidth:0
+          });
+        }
+
         var tp=P(rx,ry);
         page.drawText(ln,{x:tp.x, y:tp.y, size:fsize, font:f, color:col(obj.color),
           opacity:op, rotate:degrees(-a*180/Math.PI + rotDeg)});
@@ -14860,13 +15432,63 @@ function _embedCustomExportFonts(pdf, fonts){
   }).catch(function(e){ console.warn('[TrueFont]', e); });
 }
 
+var _vecRetried = false;   // one cache-recovery attempt per export, never a loop
 function _buildVectorPdf(attachJson, onReady){
   try{
-    dbgReset('EXPORT (vector path)');
+    if(!_vecRetried) dbgReset('EXPORT (vector path)');
     _annotsStripped = false;
     dbg('export','_buildVectorPdf start',{vectorOK:_vectorBackdropOK, pdfBytes:(_pdfBytes?_pdfBytes.byteLength:0), hasPDFLib:(typeof window.PDFLib!=='undefined'),
       shapes:shapeObjs.length, measures:measureObjs.length, text:textObjs.length, images:imgOverlays.length});
-    if(!_vectorBackdropOK || !_pdfBytes || typeof window.PDFLib==='undefined'){ dbg('export','FALLBACK to raster — vector path unavailable',{vectorOK:_vectorBackdropOK, pdfBytes:!!_pdfBytes, pdflib:typeof window.PDFLib}); onReady(null); return; }
+    // ── SELF-HEAL: recover the source PDF at EXPORT time ──────────────────────
+    // The vector path only needs _pdfBytes. Whether they were lost to a refresh, a
+    // crash-restore, or a race between the async f.arrayBuffer() and the async
+    // IndexedDB open, the cure is identical: go get them from the cache. Doing it
+    // HERE — at the moment of use — means the export no longer depends on every
+    // restore path having remembered to re-arm the flag. One retry, then decide.
+    if((!_pdfBytes || !_vectorBackdropOK) && typeof window.PDFLib!=='undefined'
+       && typeof _loadPdfSource==='function' && !_vecRetried){
+      _vecRetried = true;
+      dbg('export','no PDF in memory → attempting recovery from the IndexedDB cache');
+      _loadPdfSource(function(ok){
+        if(ok) dbg('export','recovered → retrying the VECTOR path');
+        else   dbg('export','nothing cached → raster');
+        _buildVectorPdf(attachJson, onReady);    // re-enter, now armed (or not)
+      });
+      return;
+    }
+
+    if(!_vectorBackdropOK || !_pdfBytes || typeof window.PDFLib==='undefined'){
+      // Name the exact failing condition. "FALLBACK to raster" alone sent us chasing
+      // the wrong thing for a long time — say WHY, and what would fix it.
+      var _why=[];
+      if(!_vectorBackdropOK) _why.push('_vectorBackdropOK=false (the backdrop is not a pristine PDF page — '
+        + 'image import, blank canvas, or a restore that did not recover the source)');
+      if(!_pdfBytes)         _why.push('_pdfBytes=null (the original PDF bytes are not in memory — '
+        + 'not imported this session, and not recovered from the IndexedDB cache)');
+      if(typeof window.PDFLib==='undefined') _why.push('PDFLib failed to load');
+      console.error('[AOG:export] ✖ RASTER FALLBACK. Vector export needs the pristine source PDF.\n  '
+                  + _why.join('\n  '));
+      dbg('export','FALLBACK to raster — vector path unavailable',
+          {vectorOK:_vectorBackdropOK, pdfBytes:(_pdfBytes?_pdfBytes.byteLength:0),
+           pdflib:typeof window.PDFLib, vecPage:(typeof _vecPageNum!=='undefined'?_vecPageNum:'?'),
+           reasons:_why});
+      // Is the cache even there? This distinguishes "never written" from "not read".
+      try{
+        if(typeof _saveDb!=='undefined' && _saveDb){
+          _saveDb.transaction(SAVE_STORE,'readonly').objectStore(SAVE_STORE).get(PDFSRC_KEY)
+            .onsuccess=function(e){
+              var r=e.target.result;
+              console.error('[AOG:export]   IndexedDB PDF cache: '
+                + (r && r.bytes ? ('PRESENT ('+r.bytes.byteLength+' bytes, page '+r.pageNum+') '
+                    + '→ it was SAVED but never LOADED back into _pdfBytes. The restore path is the bug.')
+                  : 'ABSENT → it was never SAVED. The import/persist path is the bug.'));
+            };
+        } else {
+          console.error('[AOG:export]   IndexedDB not open (_saveDb is null) — cannot cache or recover the PDF.');
+        }
+      }catch(_e){ console.warn('[AOG:export] cache probe failed:', _e); }
+      onReady(null); return;
+    }
 
     // No white cover-ups. If the page is KEPT (its own content isn't reconstructed
     // from extracted objects) but the user MOVED extracted content, the pristine
@@ -15543,14 +16165,34 @@ function _buildVectorPdf(attachJson, onReady){
 // outward into adjacent fully-transparent pixels (alpha stays 0, so nothing
 // becomes visible) — interpolation then blends color-with-color. Two passes
 // cover the ~2px reach of bilinear sampling. In-place on the canvas.
-function _bleedOverlayAlpha(cnv){
+// ── HOW WIDE MUST THE BLEED BE? ──────────────────────────────────────────────
+// A canvas's transparent pixels are RGBA(0,0,0,0) — transparent, but BLACK. PDF
+// keeps colour and alpha in SEPARATE channels (a non-premultiplied /SMask), and a
+// viewer resamples them INDEPENDENTLY. Downsampling therefore averages that hidden
+// black into the edges of the paint, so annotation colours read darker — by a
+// different amount at each zoom, because each zoom uses a different kernel. This is
+// the same bug as the highlight overlay, and it hits the RASTER export path too
+// (the annotations-only transparent PNG in _layeredRasterUrls).
+//
+// We cannot simply write white under the transparent pixels: canvas 2D stores
+// PREMULTIPLIED alpha, so RGBA(255,255,255,0) collapses back to (0,0,0,0) on store.
+// The only cure available on a canvas is to DILATE the colour outward far enough
+// that the resample kernel never reaches unpainted black.
+//
+// 2 passes (the old value) is nowhere near enough: a ~5000px overlay shown at ~800px
+// is a 6:1 downsample, so the kernel spans 6+ source pixels and reaches straight past
+// a 2px skirt into the black. BLEED_PASSES is sized to cover that with margin.
+var BLEED_PASSES = 12;
+
+function _bleedOverlayAlpha(cnv, passes){
   try{
     var w=cnv.width, h=cnv.height;
     if(!w||!h) return;
-    var ctx=cnv.getContext('2d');
+    var _P = (passes|0) || BLEED_PASSES;
+    var ctx=cnv.getContext('2d', {willReadFrequently:true});
     var im=ctx.getImageData(0,0,w,h), d=im.data;
     var a32=new Uint32Array(d.buffer);           // fast alpha!=0 test via full px
-    for(var pass=0; pass<2; pass++){
+    for(var pass=0; pass<_P; pass++){
       var grew=[];                               // [idx, r,g,b] to apply after scan
       for(var y=0;y<h;y++){
         var row=y*w;
@@ -15665,6 +16307,7 @@ btnPdf.addEventListener('click',function(){
     if(handle==='cancelled'){ toast('Save cancelled'); return; }
     toast('Preparing PDF…','',0);
     // Preferred path: keep the original PDF vectors crisp, stamp annotations on top.
+    _vecRetried = false;   // fresh export → allow one recovery attempt
     _buildVectorPdf(null, function(vbytes){
       if(vbytes){
         var pdfBlob=new Blob([vbytes],{type:'application/pdf'});
@@ -15732,7 +16375,7 @@ if(btnSaveProj) btnSaveProj.addEventListener('click', function(){
     toast('Saving project…','',0);
     buildProjectRecord(0.92, function(rec){
       if(!rec){ toast('Project save failed — try again','err',4000); return; }
-      var json; try{ json=JSON.stringify(rec); }catch(ex){ toast('Project too large to serialize','err',4000); return; }
+      var json; try{ json=JSON.stringify(_recordForJson(rec)); }catch(ex){ toast('Project too large to serialize','err',4000); return; }
       var blob=new Blob([json],{type:'application/json'});
       writeToTarget(handle, blob, name).then(function(){ toast('Project saved ✓','ok',2500); });
     });
@@ -15783,8 +16426,9 @@ if(btnPdfEdit) btnPdfEdit.addEventListener('click', function(){
     // Build the editable record first; we embed it as a PDF attachment either way.
     buildProjectRecord(0.92, function(rec){
       if(!rec){ toast('Editable PDF failed — try again','err',4000); return; }
-      var json; try{ json=JSON.stringify(rec); }catch(ex){ toast('Project too large to embed','err',4000); return; }
+      var json; try{ json=JSON.stringify(_recordForJson(rec)); }catch(ex){ toast('Project too large to embed','err',4000); return; }
       // Preferred: keep original PDF vectors crisp + annotations on top + JSON attached.
+    _vecRetried = false;   // fresh export → allow one recovery attempt
       _buildVectorPdf(json, function(vbytes){
         if(vbytes){
           var outBlob=new Blob([vbytes],{type:'application/pdf'});
@@ -15957,6 +16601,64 @@ function initSaveDB(cb){
 // We never call requestPermission() here — `startIn` only needs the handle for
 // its directory, not read access — so the user sees no extra permission dialog.
 var HANDLE_KEY='last-opened-handle';
+var PDFSRC_KEY='pdf-source';   // the pristine PDF, written once per import
+var _pdfSrcCached=false;       // has it actually landed in IndexedDB for THIS file?
+
+// Persist the source PDF exactly once, so a REFRESH can still export vector.
+function _persistPdfSource(){
+  try{
+    // THE RACE THAT BROKE THIS: _pdfBytes arrives from f.arrayBuffer() asynchronously,
+    // and IndexedDB opens asynchronously too. Whichever loses the race, this used to
+    // return silently — the cache was never written, so a refresh had nothing to
+    // recover and every restored session fell back to raster. Now it reports, and
+    // doSave() retries until it actually lands (see below).
+    if(typeof _pdfBytes==='undefined' || !_pdfBytes){ return false; }
+    if(!_saveDb){
+      dbg('save','PDF cache deferred — IndexedDB not open yet; doSave() will retry');
+      return false;
+    }
+    var tx=_saveDb.transaction(SAVE_STORE,'readwrite');
+    var rq=tx.objectStore(SAVE_STORE).put({
+      id:PDFSRC_KEY, bytes:_pdfBytes.slice(0),
+      pageNum:(typeof _vecPageNum!=='undefined'?_vecPageNum:1),
+      pageRot:(typeof _pdfPageRot!=='undefined'?_pdfPageRot:0),
+      at:Date.now()
+    });
+    rq.onsuccess=function(){
+      _pdfSrcCached=true;
+      dbg('save','pristine PDF cached ('+_pdfBytes.byteLength+' bytes) → refresh/crash-restore keeps VECTOR export');
+    };
+    rq.onerror=function(e){
+      _pdfSrcCached=false;
+      console.warn('[Save] PDF cache write FAILED (quota?):', rq.error||e);
+    };
+    return true;
+  }catch(e){ console.warn('[Save] could not cache PDF source:',e); return false; }
+}
+function _clearPdfSource(){
+  _pdfSrcCached=false;
+  try{ if(_saveDb) _saveDb.transaction(SAVE_STORE,'readwrite').objectStore(SAVE_STORE).delete(PDFSRC_KEY); }catch(e){}
+}
+// Re-arm the vector path from the cached bytes after a refresh/restore.
+function _loadPdfSource(cb){
+  try{
+    if(!_saveDb){ cb&&cb(false); return; }
+    var rq=_saveDb.transaction(SAVE_STORE,'readonly').objectStore(SAVE_STORE).get(PDFSRC_KEY);
+    rq.onsuccess=function(e){
+      var r=e.target.result;
+      if(r && r.bytes && r.bytes.byteLength){
+        _pdfBytes=r.bytes;
+        _vecPageNum=r.pageNum||1;
+        if(typeof _pdfPageRot!=='undefined') _pdfPageRot=r.pageRot||0;
+        _vectorBackdropOK=true;
+        _pdfSrcCached=true;   // already in the DB — don't rewrite it on the next save
+        dbg('restore','pristine PDF recovered from cache ('+_pdfBytes.byteLength+' bytes) → export stays VECTOR');
+        cb&&cb(true);
+      } else { cb&&cb(false); }
+    };
+    rq.onerror=function(){ cb&&cb(false); };
+  }catch(e){ cb&&cb(false); }
+}
 function saveLastOpenedHandle(handle){
   try{
     if(!_saveDb || !handle) return;
@@ -15987,6 +16689,32 @@ var JPEG_QUALITY   = 0.99; // JPEG at max visual quality on screen (session save
 // canvases are encoded one at a time to avoid iOS memory spikes.
 //   quality : JPEG quality for the base image (layers always PNG for alpha)
 //   cb(record) : called with the finished record, or null on failure
+// The project record travels two very different roads:
+//   • IndexedDB  → structured clone, an ArrayBuffer survives as-is (compact).
+//   • JSON       → project file + PDF embed. An ArrayBuffer JSON.stringify()s to
+//                  `{}` — SILENTLY. Storing the raw buffer alone would quietly
+//                  corrupt every saved .aogplan file and every embedded project.
+// So: IndexedDB keeps the raw bytes, and the JSON paths get a base64 string.
+function _ab2b64(buf){
+  var b=new Uint8Array(buf), s='', CH=0x8000;
+  for(var i=0;i<b.length;i+=CH) s+=String.fromCharCode.apply(null, b.subarray(i,i+CH));
+  return btoa(s);
+}
+function _b642ab(str){
+  var bin=atob(str), n=bin.length, out=new Uint8Array(n);
+  for(var i=0;i<n;i++) out[i]=bin.charCodeAt(i);
+  return out.buffer;
+}
+// Swap the raw ArrayBuffer for base64 so the record can be JSON.stringify()d.
+function _recordForJson(rec){
+  var j={};
+  for(var k in rec) if(Object.prototype.hasOwnProperty.call(rec,k)) j[k]=rec[k];
+  try{
+    j.pdfSource = (rec.pdfSource && rec.pdfSource.byteLength) ? _ab2b64(rec.pdfSource) : null;
+    j.pdfSourceB64 = !!j.pdfSource;
+  }catch(e){ j.pdfSource=null; j.pdfSourceB64=false; }
+  return j;
+}
 function buildProjectRecord(quality, cb){
   if(!baseLoaded){ cb&&cb(null); return; }
   var q = (quality!==undefined?quality:JPEG_QUALITY);
@@ -15995,6 +16723,21 @@ function buildProjectRecord(quality, cb){
     ts:             Date.now(),
     fmt:            'aogplan-1',          // format tag for project files / PDF embed
     baseData:       null,
+    // ══ THE PRISTINE SOURCE PDF ══════════════════════════════════════════════
+    // Without this, a restored project can ONLY export raster. The vector path
+    // works by re-loading the ORIGINAL PDF and stamping annotations onto its real
+    // page — so it needs the source bytes. Previously we saved only baseData (a
+    // flattened PNG of the page), and doRestore() therefore had to set
+    // `_vectorBackdropOK=false; _pdfBytes=null`. That is why refreshing and
+    // reopening a plan you had already worked on silently downgraded every export
+    // to a flattened raster: the vectors weren't lost, the SOURCE was.
+    //
+    // IndexedDB stores structured clones, so the ArrayBuffer goes in as-is — no
+    // base64 (which would inflate it ~33%). Costs the size of the original PDF.
+    pdfSource:      (typeof _pdfBytes!=='undefined' && _pdfBytes) ? _pdfBytes.slice(0) : null,
+    pdfPageNum:     (typeof _vecPageNum!=='undefined' ? _vecPageNum : 1),
+    pdfPageRot:     (typeof _pdfPageRot!=='undefined' ? _pdfPageRot : 0),
+    userRotDeg:     (typeof _userRotDeg!=='undefined' ? _userRotDeg : 0),
     layers:         [],
     activeLayerIdx: activeLayerIdx,
     scaleSet:       scaleSet,
@@ -16068,10 +16811,29 @@ function doSave(){
   if(drawing||pinching) { scheduleSave(); return; }
   setSaveStatus('saving');
 
+  // RELIABLE CACHE POINT. Reaching here PROVES IndexedDB is open, so this is where
+  // the pristine PDF actually gets written — not in the import handler, which can
+  // (and did) fire before the DB was ready and then never retry. Written once per
+  // file; the bytes never change, so autosave doesn't rewrite megabytes on every
+  // debounce. This is what makes a refresh OR a crash-restore still export VECTOR.
+  if(!_pdfSrcCached && typeof _pdfBytes!=='undefined' && _pdfBytes){
+    _persistPdfSource();
+  }
+
   var record = {
     id:             'session',
     ts:             Date.now(),
     baseData:       null,
+    // doSave() builds its OWN record (it does NOT go through buildProjectRecord()),
+    // and this is the record a page REFRESH restores from. It needs to know the
+    // source PDF exists — but NOT carry it: doSave is debounced and fires on every
+    // change, and re-cloning a multi-megabyte ArrayBuffer into IndexedDB on each one
+    // is pure write amplification. The bytes never change, so they're written ONCE
+    // under their own key (PDFSRC_KEY) at import; the session record just records
+    // the page metadata and lets doRestore() fetch them.
+    pdfPageNum:     (typeof _vecPageNum!=='undefined' ? _vecPageNum : 1),
+    pdfPageRot:     (typeof _pdfPageRot!=='undefined' ? _pdfPageRot : 0),
+    userRotDeg:     (typeof _userRotDeg!=='undefined' ? _userRotDeg : 0),
     layers:         [],
     activeLayerIdx: activeLayerIdx,
     scaleSet:       scaleSet,
@@ -16239,7 +17001,38 @@ function _scaleRecord(rec,k){
   if(typeof rec.gridSize==='number') rec.gridSize*=k;
 }
 function doRestore(rec){
-  _vectorBackdropOK=false; _pdfBytes=null;  // restored from a flattened project, no PDF vectors
+  // Bring the pristine source PDF back, so a reopened project still exports VECTOR.
+  // Older saves (fmt before pdfSource existed) simply have no bytes — those stay on
+  // the raster path, which is correct: there is genuinely no page to stamp onto.
+  _vectorBackdropOK=false; _pdfBytes=null;
+  try{
+    var _src = rec.pdfSource;
+    if(typeof _src === 'string' && _src.length){ _src = _b642ab(_src); }   // came from JSON
+    if(_src && _src.byteLength){
+      _pdfBytes = _src;
+      _vecPageNum = rec.pdfPageNum || 1;
+      if(typeof _pdfPageRot!=='undefined') _pdfPageRot = rec.pdfPageRot || 0;
+      if(typeof _userRotDeg!=='undefined') _userRotDeg = rec.userRotDeg || 0;
+      _vectorBackdropOK = true;
+      _pdfSrcCached = false;   // came from the FILE, not the DB — cache it so a
+      try{ _persistPdfSource(); }catch(e){}   // refresh/crash after this still works
+      dbg('restore','pristine PDF restored ('+_pdfBytes.byteLength+' bytes, page '
+                  + _vecPageNum + ') → exports stay VECTOR');
+    } else if(typeof _loadPdfSource==='function'){
+      // No inline bytes (this is the refresh/autosave path — the session record
+      // deliberately doesn't carry the PDF). Pull it from the one-shot cache.
+      _loadPdfSource(function(ok){
+        if(ok){
+          if(typeof _userRotDeg!=='undefined') _userRotDeg = rec.userRotDeg || 0;
+        } else {
+          dbg('restore','no cached PDF source (older project or image import) → raster export');
+        }
+      });
+    }
+  }catch(e){
+    console.warn('[Restore] could not restore PDF source:',e);
+    _vectorBackdropOK=false; _pdfBytes=null;
+  }
   var img=new Image();
   img.onload=function(){
     var scale=Math.min(1,IOS_MAX_PX/Math.max(img.width,img.height));
@@ -16459,11 +17252,19 @@ function _computeImgEff(){
   if(!w || !h) return 1;
   var devicePR = window.devicePixelRatio || 1;
   var eff = Math.max(1, devicePR * Math.max(1, zoom));
-  eff = Math.min(eff, 8);                                 // higher ceiling than text/shapes (3)
-  // Per-canvas budget. iOS Safari hard-caps a single canvas around ~16.7MP and
-  // silently corrupts/blanks anything bigger — keep iPad well under that.
-  var _CAP = (IS_IPHONE ? 8e6 : (IS_IPAD ? 12e6 : 24e6));
+  eff = Math.min(eff, IS_IOS ? 8 : 5);                   // ceiling (desktop 5, iOS 8-then-capped)
+  // Per-canvas AREA budget. iOS Safari hard-caps a single canvas around ~16.7MP
+  // and silently corrupts/blanks anything bigger — keep iPad/iPhone well under.
+  // Desktop set to 36MP: enough to reach ~5× on normal pages while leaving
+  // memory headroom (the image canvas alone was pushing total VRAM past 1GB).
+  var _CAP = (IS_IPHONE ? 8e6 : (IS_IPAD ? 12e6 : 36e6));
   if(w*h*eff*eff > _CAP) eff = Math.max(1, Math.sqrt(_CAP/(w*h)));
+  // HARD PER-SIDE GUARD. Browsers blank a canvas whose width OR height passes
+  // ~32767px. Clamp eff so neither side of the backing store crosses a safe
+  // limit — a blank image is the opposite of crisp.
+  var MAX_SIDE = IS_IOS ? 8192 : 16384;
+  var _sideCap = Math.min(MAX_SIDE / w, MAX_SIDE / h);
+  if(eff > _sideCap) eff = Math.max(1, _sideCap);
   // Don't exceed what the placed images' source resolution can supply.
   var maxNative = 1;
   if(typeof imgOverlays!=='undefined'){
@@ -16969,6 +17770,15 @@ function handleImgPointerMove(e, sp){
     var spanW = cursorLocal.x - fx;
     var spanH = cursorLocal.y - fy;
 
+    // MINIMUM RESIZE SIZE — scale-aware.
+    // The old flat floor of 20 canvas-units blocked sizing objects (e.g. a
+    // generator that must be exactly 2ft x 4ft) whenever the scale made those
+    // real dimensions smaller than 20px. When a scale IS set, use a real-world
+    // minimum of 1 ft (converted to canvas units via ppu) — small enough for any
+    // real object, large enough to prevent an accidental shrink to nothing.
+    // With no scale set, keep the 20px screen-pixel guard.
+    var MIN_SIDE = (scaleSet && ppu > 0) ? Math.max(1, 1 / ppu) : 20;
+
     var isVEdge = (hi===1 || hi===5); // top/bottom centre → only HEIGHT changes
     var isHEdge = (hi===3 || hi===7); // left/right middle → only WIDTH changes
 
@@ -16978,13 +17788,13 @@ function handleImgPointerMove(e, sp){
       // Width is locked; the locked axis stays centred on the fixed point (fx=0),
       // so the image must NOT shift sideways.
       newW = d.w;
-      newH = Math.max(20, Math.abs(spanH));
+      newH = Math.max(MIN_SIDE, Math.abs(spanH));
       newCx_local = fx;                 // = 0 → no horizontal drift
       newCy_local = fy + spanH/2;
     } else if(isHEdge){
       // Height is locked; keep vertical position fixed → no vertical drift.
       newH = d.h;
-      newW = Math.max(20, Math.abs(spanW));
+      newW = Math.max(MIN_SIDE, Math.abs(spanW));
       newCx_local = fx + spanW/2;
       newCy_local = fy;                 // = 0 → no vertical drift
     } else {
@@ -16995,7 +17805,7 @@ function handleImgPointerMove(e, sp){
       var ar = (d.h !== 0) ? (d.w / d.h) : 1;
       var sW = Math.abs(spanW), sH = Math.abs(spanH);
       var scale = (sW / d.w > sH / d.h) ? (sW / d.w) : (sH / d.h);
-      var minScale = Math.max(20 / d.w, 20 / d.h);
+      var minScale = Math.max(MIN_SIDE / d.w, MIN_SIDE / d.h);
       if(scale < minScale) scale = minScale;
       newW = d.w * scale;
       newH = d.h * scale;
