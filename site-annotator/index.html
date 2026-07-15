@@ -5901,7 +5901,8 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
 
   _explodedMarkupCount=markupObjs.filter(function(o){return o._fromExplode;}).length;
   _explodedPenCount   =penObjs.filter(function(o){return o._fromExplode;}).length;
-  dbg('import','markup pass', {highlights:_explodedMarkupCount, penStrokes:_explodedPenCount});
+  try{ _explodedPageImgCount = imgOverlays.filter(function(o){return o._fromPdfPage;}).length; }catch(e){ _explodedPageImgCount=0; }
+  dbg('import','markup pass', {highlights:_explodedMarkupCount, penStrokes:_explodedPenCount, pageImages:_explodedPageImgCount});
   return made;
 }
 
@@ -15227,13 +15228,21 @@ function _shouldWhiteCoverPage(){
 // Count of highlight/ink objects created at import. If fewer survive at export,
 // the user erased one — and the pristine page still contains it, so the native
 // vector export must not be used.
-var _explodedMarkupCount=0, _explodedPenCount=0;
+var _explodedMarkupCount=0, _explodedPenCount=0, _explodedPageImgCount=0;
 function _explodedMarkupsDeleted(){
   try{
-    var m=0,p=0;
+    var m=0,p=0,im=0;
     if(typeof markupObjs!=='undefined') m=markupObjs.filter(function(o){return o._fromExplode;}).length;
     if(typeof penObjs!=='undefined')    p=penObjs.filter(function(o){return o._fromExplode;}).length;
-    return m<_explodedMarkupCount || p<_explodedPenCount;
+    // DELETED PAGE-NATIVE IMAGES: an extracted page image (seal, logo, photo) that
+    // the user deletes just vanishes from imgOverlays — but the ORIGINAL embed is
+    // still drawn by the pristine page the vector export reloads, so the "deleted"
+    // image reappeared in the exported PDF. Count them like markups/pens: a drop
+    // in count means a deletion, which routes the export to the clean composite
+    // (whose backdrop already reflects the deletion). Untouched/moved page images
+    // stay on the fast vector path as before.
+    if(typeof imgOverlays!=='undefined') im=imgOverlays.filter(function(o){return o._fromPdfPage;}).length;
+    return m<_explodedMarkupCount || p<_explodedPenCount || im<_explodedPageImgCount;
   }catch(e){ return false; }
 }
 
