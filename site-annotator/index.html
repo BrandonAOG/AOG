@@ -4763,6 +4763,11 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
   // dominates, keep the original page content on export. This is exact, not a
   // heuristic: when a backdrop this large exists, it IS the page.
   var _hasDominantRaster=false;
+  // Count sizable page images (>=3% of page area) seen in the content stream.
+  // If ANY of them later fails to extract into an editable overlay, the export
+  // must NOT white-cover the page — nothing would reproduce that image and the
+  // page content would export blank (markups floating on white).
+  var _sizableImgs=0, _imgUnreproduced=false;
   try{
     var _fnA=opList.fnArray, _agA=opList.argsArray;
     var _cm=vp.transform.slice(), _stk=[];
@@ -4784,6 +4789,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
         // equipment images) ARE extracted as movable overlays and reproduced, so
         // they must NOT force keep-original — otherwise annotation-based drawings
         // (whose linework IS extracted) get stuck keeping the page and ghost on move.
+        if(_pgArea>0 && (_iw*_ih) >= _pgArea*0.03) _sizableImgs++;
         if(_pgArea>0 && (_iw*_ih) >= _pgArea*0.92){ _hasDominantRaster=true; break; }
       }
     }
@@ -4900,7 +4906,14 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
             if(sw>0&&sh>0){ ic.width=sw; ic.height=sh; ic.getContext('2d').drawImage(_baseSnap.canvas, sx,sy,sw,sh, 0,0,sw,sh); drew=true; }
           }catch(e){}
         }
-        if(!drew) continue;
+        if(!drew){
+          // A sizable page image could not be captured into an editable overlay.
+          // It exists ONLY as the original embed in the page — white-covering the
+          // page would erase it with nothing to redraw it. Flag it so the export
+          // keeps the original page content instead.
+          if(rw*rh >= pageArea*0.03) _imgUnreproduced=true;
+          continue;
+        }
         imgOverlays.push({
           img:ic, cx:x0+rw/2, cy:y0+rh/2, w:rw, h:rh,
           angle:0, flipH:false, flipV:false, opacity:1, layerIdx:activeLayerIdx,
@@ -4930,6 +4943,21 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     }
   }catch(e){ console.warn('[Explode] image pass failed:',e); }
   _explodeLap('image pass ('+imgCount+' images'+(EXPLODE_IMAGES?'':' — kept in backdrop')+')');
+  // ── WHITE-COVER SAFETY GATE ────────────────────────────────────────────────
+  // _explodedFromPage=true tells the export "every piece of page content lives in
+  // an editable object, so you may white-cover the original page and redraw it".
+  // That promise is BROKEN if the page contains sizable raster images that were
+  // never extracted: either the image pass was skipped entirely (EXPLODE_IMAGES
+  // off) or _getPdfImageBitmap failed for them (_imgUnreproduced). The dominant-
+  // raster check (>=92% of page) misses scans drawn with margins — e.g. a survey
+  // at 84% of the page — which is exactly the file that exported as a blank white
+  // page with only the signature markups. If ANY sizable image is unreproduced,
+  // force keep-original: annotations still export fine, the page is never erased.
+  if(!(EXPLODE_OTHER && EXPLODE_IMAGES && !_denseDrawing) && _sizableImgs>0) _imgUnreproduced=true;
+  if(_imgUnreproduced && _explodedFromPage){
+    _explodedFromPage=false;
+    dbg('import','white-cover disabled: page has sizable raster image(s) with no extracted overlay copy — keeping original page content on export');
+  }
 
   // ── VECTOR PASS ──────────────────────────────────────────────────────────
   // Walk the operator list, decode each constructPath into device-space
