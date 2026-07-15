@@ -1218,13 +1218,10 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <button class="ic-btn" id="btn-shortcuts" title="Keyboard shortcuts (?)">?</button>
   </div>
   <div class="sb-group">
-    <button class="save-btn" id="btn-saveproj" title="Save editable project file (.aogplan) — reopen later to keep editing">💾 Save</button>
-    <button class="save-btn" id="btn-openproj" title="Open an editable project file (.aogplan)">📂 Open</button>
-    <button class="save-btn" id="btn-png">JPG</button>
+    <button class="save-btn" id="btn-png">PNG</button>
     <button class="save-btn" id="btn-pdf">PDF</button>
     <button class="save-btn" id="btn-pdfedit" title="Export a PDF that also re-opens here for editing">PDF✎</button>
     <button class="save-btn" id="btn-print">Print</button>
-    <input type="file" id="openproj-in" accept=".aogplan,application/json" style="display:none">
   </div>
 </div>
 
@@ -1750,8 +1747,6 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <div class="sc-grid">
       <div class="sc-row"><span class="sc-desc">Open image / PDF</span><span class="sc-key">＋ Open button or drag &amp; drop onto canvas</span></div>
       <div class="sc-row"><span class="sc-desc">New blank canvas</span><span class="sc-key">Tap ＋ Open → select New Canvas</span></div>
-      <div class="sc-row"><span class="sc-desc">Save editable project</span><span class="sc-key">💾 Save button → .aogplan file (keeps everything editable)</span></div>
-      <div class="sc-row"><span class="sc-desc">Open editable project</span><span class="sc-key">📂 Open button → choose a .aogplan file</span></div>
       <div class="sc-row"><span class="sc-desc">Export editable PDF</span><span class="sc-key">PDF✎ button — normal PDF that reopens here for editing</span></div>
       <div class="sc-row"><span class="sc-desc">Reopen an editable PDF</span><span class="sc-key">Open it like any PDF — annotations come back editable automatically</span></div>
       <div class="sc-row"><span class="sc-desc">Export PNG</span><span class="sc-key">PNG button (subbar)</span></div>
@@ -3052,7 +3047,7 @@ function renderMarkupObjs(){
     // showed text through but a tool-drawn one at 100% did not. Strikeout/underline
     // stay on the shapes canvas (thin lines meant to sit visibly on top).
     var _mc=(m._bakedHl||m.blend||m.type==='highlight')?hlCtx:shCtx;
-    drawMarkupOnCtx(_mc, m, 1, Math.max(2,2/zoom));
+    drawMarkupOnCtx(_mc, m, 1, 2/zoom);
   });
   // Selection outline for the highlight currently picked with the Hilite tool, so
   // the user can SEE which mark the color/opacity controls are editing.
@@ -3069,8 +3064,8 @@ function renderMarkupObjs(){
     }
     shCtx.save();
     shCtx.strokeStyle='#00d4ff';
-    shCtx.lineWidth=Math.max(1.5,1.5/zoom);
-    shCtx.setLineDash([Math.max(5,5/zoom),Math.max(4,4/zoom)]);
+    shCtx.lineWidth=1.5/zoom;
+    shCtx.setLineDash([5/zoom,4/zoom]);
     shCtx.strokeRect(bx1,by1,bx2-bx1,by2-by1);
     shCtx.restore();
   }
@@ -3709,7 +3704,7 @@ function updateLegend(){
 }
 
 // ── ZOOM/PAN ──
-function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(typeof _setAnnoRes==='function') _setAnnoRes(false); if(typeof _setImgRes==='function') _setImgRes(false); if(_editingComment) repositionCommentEditor(_editingComment); if(typeof repositionTextOverlay==='function') repositionTextOverlay(); if(_pendingImg&&_pendingImgPos) _drawImgGhost(_pendingImgPos.x,_pendingImgPos.y); }
+function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(typeof _vpUpdate==='function') _vpUpdate(); if(typeof _setAnnoRes==='function') _setAnnoRes(false); if(typeof _setImgRes==='function') _setImgRes(false); if(_editingComment) repositionCommentEditor(_editingComment); if(typeof repositionTextOverlay==='function') repositionTextOverlay(); if(_pendingImg&&_pendingImgPos) _drawImgGhost(_pendingImgPos.x,_pendingImgPos.y); }
 
 // ── PAN LIMITS ────────────────────────────────────────────────────────────────
 // The old rule only guaranteed that 80px of canvas stayed on screen:
@@ -6492,6 +6487,13 @@ function renderPDFPage(n){
 }
 
 function resize(w,h){
+  // New document / rotation → any viewport-sharp region belongs to the OLD
+  // geometry. Drop it and pull every layer back to the plan origin, otherwise
+  // a stale CSS offset displaces whole layers. _vpUpdate() at the bottom of
+  // this function re-establishes a region for the NEW page immediately, so the
+  // very first paint is already viewport-rendered (mode is always on).
+  _vpRegion=null; _annoRegionKey=''; _imgRegionKey='';
+  if(typeof _vpResetCss==='function'){ try{ _vpResetCss(); }catch(e){} }
   baseCv.width=drawCv.width=gridCv.width=tCv.width=shCv.width=hlCv.width=w;
   if(typeof imgCv!=='undefined'){ imgCv.width=w; }
   baseCv.height=drawCv.height=gridCv.height=tCv.height=shCv.height=hlCv.height=h;
@@ -6509,6 +6511,13 @@ function resize(w,h){
   // the backing stores are sized for the current zoom (see _setAnnoRes). (Export
   // re-renders these on their own canvases, and neither is read back, so nothing
   // else is affected.)
+  // Establish the viewport region for the NEW page geometry first (mode is
+  // always on), so _setAnnoRes sizes the layers to that region on the very
+  // first paint instead of doing a full-plan pass and then immediately
+  // re-rendering. If the page hasn't been laid out yet (zoom/pan not applied),
+  // _vpUpdate simply clamps the region to the whole plan — same result as the
+  // old full-plan path.
+  if(typeof _vpUpdate==='function'){ try{ _vpUpdate(); }catch(e){} }
   _setAnnoRes(true);
 }
 
@@ -6518,7 +6527,132 @@ function resize(w,h){
 // Both are display-only (never read back) and overlay at w×h via CSS, so this is
 // safe. Capped for mobile canvas-area / memory limits.
 var _annoEff = 0;     // effective scale currently baked into the anno canvases
+
+// ═════════ VIEWPORT SHARP MODE (unlimited-zoom crispness) ═══════════════════
+// Classic mode renders each annotation layer as ONE canvas covering the whole
+// plan, so its resolution is capped by canvas-size/memory limits and zoom goes
+// soft past ~3-4×. Viewport mode instead rasterizes ONLY the visible region
+// (plus margin) at full device resolution — the backing store stays roughly
+// screen-sized no matter how deep the zoom, so vector content (text, shapes,
+// measures, leaders, pen, highlights, stamps) and images re-render pixel-sharp
+// at ANY zoom level. This is how map apps / PDF viewers do infinite-zoom.
+//
+// _vpRegion == null  → classic full-plan mode (zoom ≤ where full-plan is sharp)
+// _vpRegion != null  → {x0,y0,w,h,zoomAt} plan-px window the layers now cover.
+// All renderers keep drawing in PLAN coordinates; the region offset lives in
+// the canvas CSS position + context transform, so no renderer needed changes.
+var _vpRegion = null;
+var _VP_MARGIN = 0.35;   // extra region per side, fraction of the visible size
+var _VP_GUARD  = 0.08;   // rebuild when view gets this close (×view) to an edge
+
+function _vpEffFor(r){
+  var dpr = window.devicePixelRatio || 1;
+  var eff = Math.max(1, dpr * Math.max(1, zoom));   // full device res — NO zoom ceiling
+  // Area + side budgets apply to the (small) REGION, not the plan — that's the
+  // whole trick, and why there's no zoom ceiling. Desktop Safari blanks canvases
+  // past ~16.7MP, same family of limit as iOS, so it gets its own budget.
+  var CAP = (IS_IPHONE ? 8e6 : (IS_IPAD ? 12e6 : (IS_DESKTOP_SAFARI ? 15e6 : 30e6)));
+  var MAX_SIDE = IS_IOS ? 8192 : 16384;
+  // The budget clamps used to floor at 1× ("never render below plan
+  // resolution"). That's right when zoomed IN — but at low zoom the region is
+  // large (a big sheet, or the whole plan) and 1× can ITSELF exceed the area /
+  // side budget. Flooring there hands back an over-budget canvas, which Safari
+  // and iOS silently BLANK. So the floor is only applied when 1× actually fits:
+  // otherwise the clamp wins and we go sub-1×, which is harmless because at low
+  // zoom the layer is being displayed shrunk anyway.
+  var oneXFits = (r.w*r.h <= CAP) && (r.w <= MAX_SIDE) && (r.h <= MAX_SIDE);
+  var floorAt = oneXFits ? 1 : 0.05;
+  var sideCap = Math.min(MAX_SIDE/r.w, MAX_SIDE/r.h);
+  if(r.w*r.h*eff*eff > CAP) eff = Math.max(floorAt, Math.sqrt(CAP/(r.w*r.h)));
+  if(eff > sideCap)         eff = Math.max(floorAt, sideCap);
+  // Bucket to 0.25 steps, but round DOWN — rounding up can push a
+  // budget-clamped eff back over the limit (the blank-canvas case).
+  eff = Math.max(0.05, Math.floor(eff*4)/4);
+  // Never exceed the budget after bucketing.
+  if(r.w*r.h*eff*eff > CAP) eff = Math.max(0.05, Math.floor(Math.sqrt(CAP/(r.w*r.h))*4)/4);
+  return eff;
+}
+// Backing width the anno canvases should have right now (region- or plan-wide).
+function _annoWantW(eff){
+  return Math.max(1, Math.round((_vpRegion?_vpRegion.w:baseCv.width)*eff));
+}
+// The one true draw transform: plan coords → backing px, incl. region offset.
+function _annoXf(ctx, eff){
+  if(_vpRegion) ctx.setTransform(eff,0,0,eff, -_vpRegion.x0*eff, -_vpRegion.y0*eff);
+  else          ctx.setTransform(eff,0,0,eff,0,0);
+}
+function _vpResetCss(){
+  [tCv,shCv,hlCv,(typeof imgCv!=='undefined'?imgCv:null),selCv].forEach(function(cv){
+    if(cv){ cv.style.left='0px'; cv.style.top='0px'; }
+  });
+}
+// rAF-batched re-render of every region-aware layer after the region moves.
+// Vector layers (text/shapes/highlights) redraw immediately — they're cheap at
+// region size. Images debounce ~60ms like classic _setImgRes: the progressive
+// step-down resample is the expensive part, and mid-pinch the old (correctly
+// plan-anchored) image canvas keeps displaying until zooming settles.
+var _vpRAF=false, _vpImgTimer=null;
+function _vpRerenderAll(){
+  if(_vpImgTimer){ clearTimeout(_vpImgTimer); }
+  _vpImgTimer=setTimeout(function(){
+    _vpImgTimer=null;
+    if(typeof renderImgOverlays==='function' && typeof imgOverlays!=='undefined' && imgOverlays.length) renderImgOverlays();
+    if(typeof selImg!=='undefined' && selImg && typeof renderImgSelection==='function') renderImgSelection();
+  }, 60);
+  if(_vpRAF) return; _vpRAF=true;
+  requestAnimationFrame(function(){
+    _vpRAF=false;
+    _setAnnoRes(true);   // sizes tCv/shCv/hlCv to the region + redraws text/shapes
+  });
+}
+// Called from applyTransform on every pan/zoom. Decides which mode we're in and
+// whether the region needs rebuilding (zoom changed, or view neared its edge).
+function _vpUpdate(){
+  // Guard on GEOMETRY, not baseLoaded: resize() calls this while loading a new
+  // page, before afterLoad() flips baseLoaded — and the whole point of always-on
+  // mode is that the first paint is already region-rendered.
+  if(!baseCv.width || !baseCv.height) return;
+  // ALWAYS-ON: viewport mode is the only pipeline from the moment a document
+  // loads. Zoomed out, the region clamps to the whole plan and behaves exactly
+  // like classic full-plan rendering; zoomed in, it tightens around the view
+  // and resolution tracks the screen with no ceiling. No mode switch, so no
+  // re-render "pop" as you cross a threshold — crisp the whole way through.
+  var vw = Math.max(1, viewport.clientWidth), vh = Math.max(1, viewport.clientHeight);
+  var vx = (-panX)/zoom, vy = (-panY)/zoom, vwp = vw/zoom, vhp = vh/zoom; // visible plan rect
+  if(_vpRegion){
+    var r=_vpRegion, gx=vwp*_VP_GUARD, gy=vhp*_VP_GUARD;
+    // Guards collapse at plan edges — there is nothing further to render there.
+    var gL=(r.x0>0.5)?gx:0, gT=(r.y0>0.5)?gy:0;
+    var gR=(r.x0+r.w<baseCv.width -0.5)?gx:0;
+    var gB=(r.y0+r.h<baseCv.height-0.5)?gy:0;
+    var inside = vx>=r.x0+gL-0.01 && vy>=r.y0+gT-0.01 &&
+                 (vx+vwp)<=r.x0+r.w-gR+0.01 && (vy+vhp)<=r.y0+r.h-gB+0.01;
+    // 4% zoom hysteresis ≈ one 0.25 eff bucket. With the mode always on, a
+    // tighter trigger would re-render continuously through ordinary pinches.
+    if(inside && Math.abs(zoom-r.zoomAt) <= r.zoomAt*0.04) return;  // region still good
+  }
+  var mX=vwp*_VP_MARGIN, mY=vhp*_VP_MARGIN;
+  // SNAP THE REGION TO WHOLE PLAN PIXELS. Fractional origins/sizes give every
+  // layer canvas a fractional CSS box; the compositor rounds each element to
+  // device pixels independently, and at desktop DPR 1 that half-pixel snap is
+  // a whole visible half-pixel (retina screens hide it). Integer geometry means
+  // every layer snaps identically — nothing can shift relative to the plan.
+  var x0=Math.floor(Math.max(0, vx-mX)),                y0=Math.floor(Math.max(0, vy-mY));
+  var x1=Math.ceil(Math.min(baseCv.width, vx+vwp+mX)),  y1=Math.ceil(Math.min(baseCv.height, vy+vhp+mY));
+  if(x1-x0<2 || y1-y0<2) return;
+  _vpRegion={x0:x0, y0:y0, w:x1-x0, h:y1-y0, zoomAt:zoom};
+  _vpRerenderAll();
+}
+// ═════════ end viewport sharp mode core ═════════════════════════════════════
 function _computeAnnoEff(){
+  // Viewport sharp mode: resolution derives from the small visible region, so
+  // there is no zoom ceiling — the backing store stays ~screen-sized.
+  if(_vpRegion) return _vpEffFor(_vpRegion);
+  return _computeAnnoEffFull();
+}
+// Classic full-plan formula (also used by _vpUpdate to decide when full-plan
+// rendering stops being able to deliver device resolution).
+function _computeAnnoEffFull(){
   var w = baseCv.width, h = baseCv.height;
   if(!w || !h) return 1;
   var devicePR = window.devicePixelRatio || 1;
@@ -6542,13 +6676,50 @@ function _computeAnnoEff(){
   if(eff > sideCap) eff = Math.max(1, sideCap);
   return Math.round(eff*4)/4;                            // bucket to 0.25 steps
 }
+// Wipe an ENTIRE canvas regardless of the transform currently on its context.
+//
+// Every full-clear used to be clearRect(0,0,cv.width,cv.height) — coordinates in
+// the context's transformed (plan) space, sized in BACKING pixels. That happened
+// to work when the transform was a pure scale: clearing from plan origin 0,0 for
+// planW*eff units always overshot the canvas. But the viewport region transform
+// adds a -x0,-y0 offset, so a clear anchored at plan 0,0 lands OFF the region
+// whenever the region's origin exceeds the cleared span — the canvas keeps its
+// previous frame and the live preview paints on top of it, over and over. That's
+// the smeared/repeated arrowheads, and the reason Clear appeared to do nothing
+// until a zoom forced a resize.
+//
+// Reset to identity, clear the raw backing store, restore. Always correct.
+function _clearCv(ctx, cv){
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.restore();
+}
+
 function _sizeAnnoCanvas(cv, ctx, eff){
-  var w = baseCv.width, h = baseCv.height;
-  cv.width  = Math.max(1, Math.round(w*eff));
-  cv.height = Math.max(1, Math.round(h*eff));
+  // In viewport sharp mode the canvas covers only the visible region: backing
+  // store = region×eff, CSS box = region plan-px positioned at the region
+  // origin (inside the scale(zoom)'d scene, plan-px CSS lands exactly right),
+  // and the context transform carries the -origin offset so every renderer
+  // keeps drawing in plan coordinates untouched.
+  var rx=0, ry=0, w=baseCv.width, h=baseCv.height;
+  if(_vpRegion){ rx=_vpRegion.x0; ry=_vpRegion.y0; w=_vpRegion.w; h=_vpRegion.h; }
+  var bw = Math.max(1, Math.round(w*eff));
+  var bh = Math.max(1, Math.round(h*eff));
+  cv.width  = bw;
+  cv.height = bh;
+  // CSS box = EXACTLY the (integer) region size, identical for every layer, so
+  // the compositor snaps them all the same way — at desktop DPR 1 a per-layer
+  // fractional CSS size (the old bw/eff) rounded differently per layer's eff
+  // and images drifted a sub-pixel against the plan on zoom. The backing store
+  // rounding is compensated exactly in the transform: effX/effY are the TRUE
+  // backing-px-per-plan-px ratios, so plan coords still land pixel-perfect.
+  var effX = bw/w, effY = bh/h;
   cv.style.width  = w+'px';
   cv.style.height = h+'px';
-  ctx.setTransform(eff,0,0,eff,0,0);                    // draw in plan coords, render at eff
+  cv.style.left   = rx+'px';
+  cv.style.top    = ry+'px';
+  ctx.setTransform(effX,0,0,effY, -rx*effX, -ry*effY);   // draw in plan coords, render at eff
 }
 // Size selCv 1:1 with the plan canvas for the raw-coordinate chrome paths
 // (text box/caret, measure/leader chrome). Backing = drawCv px, identity
@@ -6559,15 +6730,25 @@ function _sizeSelCvRaw(){
   if(selCv.width!==drawCv.width||selCv.height!==drawCv.height){ selCv.width=drawCv.width; selCv.height=drawCv.height; }
   selCv.style.width  = baseCv.width+'px';
   selCv.style.height = baseCv.height+'px';
+  // This raw mode is full-plan by definition — undo any viewport-region offset
+  // left on the element or the text chrome draws displaced by the region origin.
+  selCv.style.left='0px'; selCv.style.top='0px';
   selCtx.setTransform(1,0,0,1,0,0);
 }
+var _annoRegionKey = '';   // identity of the region baked into the anno canvases
 function _setAnnoRes(force){
   var w = baseCv.width, h = baseCv.height;
   if(!w || !h) return;
   var eff = _computeAnnoEff();
   // Skip needless re-rasterization (e.g. during pan, where zoom is unchanged).
-  if(!force && Math.abs(eff - _annoEff) < 0.2) return;
+  // But in viewport mode a pan can move the REGION while eff stays identical —
+  // comparing eff alone would skip the redraw and leave the layers rendering
+  // the old window (blank strips as you pan). Key on the region too.
+  var key = _vpRegion ? (Math.round(_vpRegion.x0)+','+Math.round(_vpRegion.y0)+','+
+                         Math.round(_vpRegion.w)+','+Math.round(_vpRegion.h)) : '';
+  if(!force && Math.abs(eff - _annoEff) < 0.2 && key === _annoRegionKey) return;
   _annoEff = eff;
+  _annoRegionKey = key;
   _sizeAnnoCanvas(tCv,  tCtx,  eff);
   _sizeAnnoCanvas(shCv, shCtx, eff);
   _sizeAnnoCanvas(hlCv, hlCtx, eff);
@@ -6581,8 +6762,9 @@ function _setAnnoRes(force){
 // forced it back to plan size).
 function _ensureShcvRes(){
   var eff = _annoEff || _computeAnnoEff();
-  var want = Math.max(1, Math.round(baseCv.width*eff));
+  var want = _annoWantW(eff);
   if(shCv.width !== want){ _sizeAnnoCanvas(shCv, shCtx, eff); }
+  else { _annoXf(shCtx, eff); }
 }
 
 function afterLoad(){
@@ -6613,8 +6795,8 @@ function afterLoad(){
   try{ leaderStep=0; _leaderDragPlacing=false; }catch(e){}
   try{ _hlSel=null; _mkDrag=null; plDrag=null; _dragText=null; }catch(e){}
   if(selCv.width>1){ selCv.width=1; selCv.height=1; }
-  tCtx.clearRect(0,0,tCv.width,tCv.height);
-  shCtx.clearRect(0,0,shCv.width,shCv.height);
+  _clearCv(tCtx,tCv);
+  _clearCv(shCtx,shCv);
   baseLoaded=true;
   _annotDirty=false;   // fresh document — no unsaved edits yet
   dropZone.classList.add('hidden'); document.getElementById('compass').style.display='block';
@@ -6948,7 +7130,7 @@ var layerTmps=layers.map(function(l){
   // linger at the note's old position, then redraw at the new geometry.
   try{
     if(typeof selCv!=='undefined' && selCv && selCv.width>1){
-      selCtx.clearRect(0,0,selCv.width,selCv.height);
+      _clearCv(selCtx,selCv);
     }
     if(typeof selectedShape!=='undefined' && selectedShape){
       if(_editingComment && selectedShape._commentObj===_editingComment){
@@ -7010,6 +7192,18 @@ var DRAW_STRICT={line:1,arrow:1,polyline:1,measure:1,pathmeasure:1,polygon:1,lea
 function selectShapeDirect(hit){
   if(!hit) return false;
   try{
+    // COMMIT the outgoing selection before adopting the new one. The live pose of
+    // a move/resize/rotate lives ONLY in selectedShape (a detached copy) until
+    // commitSelection() writes it back into the real object. This path used to
+    // just clear the old object's _editing flag, which threw the pending drag
+    // away — select an ellipse, move it, click another ellipse, and the first one
+    // SNAPPED BACK to where it started. (Clicking a different shape TYPE happened
+    // to survive because the tool switch routed through a branch that committed.)
+    // Skip when re-selecting the same object, and never commit the hit itself.
+    if(typeof selectedShape!=='undefined' && selectedShape &&
+       editShapeObj!==hit && typeof commitSelection==='function'){
+      commitSelection();     // writes pose back (or pushes a freshly drawn shape)
+    }
     // Clear any shape already in edit state so it doesn't stay invisible
     // (renderShapeAndMeasure skips _editing shapes). Without this, selecting a
     // second shape leaves the first one flagged editing → it "disappears".
@@ -7680,7 +7874,7 @@ function onMove(e){
     }
     renderTextObjs();
     _sizeSelCvRaw();
-    selCtx.clearRect(0,0,selCv.width,selCv.height);
+    _clearCv(selCtx,selCv);
     _drawTextChrome(_so);
     return;
   }
@@ -7692,7 +7886,7 @@ function onMove(e){
     _txtMoveObj.y=_txtMoveStart.oy+(_mp.y-_txtMoveStart.py);
     renderTextObjs();
     _sizeSelCvRaw();
-    selCtx.clearRect(0,0,selCv.width,selCv.height);
+    _clearCv(selCtx,selCv);
     _drawTextChrome(_txtMoveObj);
     return;
   }
@@ -7715,7 +7909,7 @@ function onMove(e){
     _txtRotObj.y=_txtRotStart.cy-(_lcx*_sa+_lcy*_ca);
     renderTextObjs();
     _sizeSelCvRaw();
-    selCtx.clearRect(0,0,selCv.width,selCv.height);
+    _clearCv(selCtx,selCv);
     _drawTextChrome(_txtRotObj);
     // Live degree readout (0–359°, where 0° = upright).
     var _deg=((Math.round(_na*180/Math.PI)%360)+360)%360;
@@ -7966,7 +8160,7 @@ function onMove(e){
     // note lands, so the box is visible while dragging over a photo.
     dCtx.putImageData(compositedSnap,0,0);      // keep draw-cv clean underneath
     if(typeof _ensureShcvRes==='function') _ensureShcvRes();
-    shCtx.clearRect(0,0,shCv.width,shCv.height);
+    _clearCv(shCtx,shCv);
     if(typeof renderShapeAndMeasure==='function') renderShapeAndMeasure(); // repaint committed shapes/notes
     var pw=Math.abs(x-startX), ph=Math.abs(y-startY);
     if(pw>8&&ph>20){
@@ -8025,10 +8219,10 @@ function onMove(e){
       if(typeof _ensureShcvRes==='function') _ensureShcvRes();
       // size/clear hl-cv to plan res
       var _he=_annoEff||(typeof _computeAnnoEff==='function'?_computeAnnoEff():1);
-      var _hw=Math.max(1,Math.round(baseCv.width*_he));
+      var _hw=_annoWantW(_he);
       if(hlCv.width!==_hw){ _sizeAnnoCanvas(hlCv,hlCtx,_he); }
-      else { hlCtx.setTransform(_he,0,0,_he,0,0); }
-      hlCtx.clearRect(0,0,hlCv.width,hlCv.height);
+      else { _annoXf(hlCtx,_he); }
+      _clearCv(hlCtx,hlCv);
       // repaint committed highlights so they persist during the preview
       if(typeof renderShapeAndMeasure==='function') renderShapeAndMeasure();
       hlCtx.save();
@@ -8042,7 +8236,7 @@ function onMove(e){
       // strikeout / underline: thin visible lines on top (draw-cv is fine)
       dCtx.putImageData(compositedSnap,0,0);
       dCtx.save(); dCtx.globalAlpha=markupOpacity;
-      dCtx.strokeStyle=markupColor; dCtx.lineWidth=Math.max(2,2/zoom);
+      dCtx.strokeStyle=markupColor; dCtx.lineWidth=2/zoom;
       dCtx.beginPath();
       if(tool==='strikeout'){ dCtx.moveTo(mx2,(my2+my3)/2); dCtx.lineTo(mx3,(my2+my3)/2); }
       else { dCtx.moveTo(mx2,my3); dCtx.lineTo(mx3,my3); }
@@ -8093,7 +8287,7 @@ function onUp(e){
     var _rsObj=_txtSizeObj;
     _txtSizing=false; _txtSizeObj=null; _txtSizeStart=null;
     renderTextObjs();
-    if(selCv.width>1) selCtx.clearRect(0,0,selCv.width,selCv.height);
+    if(selCv.width>1) _clearCv(selCtx,selCv);
     selCv.width=1; selCv.height=1;
     pushUndo();
     // Acrobat behaviour: the box was being edited when the side handle was
@@ -8112,7 +8306,7 @@ function onUp(e){
     if(e.cancelable) e.preventDefault();
     _txtMoving=false; _txtMoveObj=null; _txtMoveStart=null;
     renderTextObjs();
-    if(selCv.width>1) selCtx.clearRect(0,0,selCv.width,selCv.height);
+    if(selCv.width>1) _clearCv(selCtx,selCv);
     selCv.width=1; selCv.height=1;
     pushUndo();
     return;
@@ -8123,7 +8317,7 @@ function onUp(e){
     _txtRotating=false; _txtRotObj=null; _txtRotStart=null;
     renderTextObjs();
     // Clear the chrome — the rotated text is now shown committed on the canvas.
-    if(selCv.width>1) selCtx.clearRect(0,0,selCv.width,selCv.height);
+    if(selCv.width>1) _clearCv(selCtx,selCv);
     selCv.width=1; selCv.height=1;
     pushUndo();
     return;
@@ -8763,13 +8957,13 @@ function renderShapeAndMeasure(){
   // in the wrong spot" until a re-zoom re-synced the canvas. Setting it here
   // makes placement correct immediately, every time.
   var _eff = _annoEff || (typeof _computeAnnoEff==='function' ? _computeAnnoEff() : 1);
-  var _wantW = Math.max(1, Math.round(baseCv.width*_eff));
+  var _wantW = _annoWantW(_eff);
   if(shCv.width !== _wantW){ _sizeAnnoCanvas(shCv, shCtx, _eff); }
-  else { shCtx.setTransform(_eff,0,0,_eff,0,0); }
+  else { _annoXf(shCtx, _eff); }
   if(hlCv.width !== _wantW){ _sizeAnnoCanvas(hlCv, hlCtx, _eff); }
-  else { hlCtx.setTransform(_eff,0,0,_eff,0,0); }
-  shCtx.clearRect(0,0,shCv.width,shCv.height);
-  hlCtx.clearRect(0,0,hlCv.width,hlCv.height);
+  else { _annoXf(hlCtx, _eff); }
+  _clearCv(shCtx,shCv);
+  _clearCv(hlCtx,hlCv);
   // Markups first → they underlie everything drawn below (matches export).
   renderMarkupObjs();
   // Shape objects
@@ -9050,7 +9244,7 @@ function findMeasureObjAt(x,y,isTouch){
 // Determine which handle of a selected measure is near x,y:
 // returns 0 (p1), 1 (p2), -2 (body/move), or -1 (miss)
 function getMeasureHandleAt(m, x, y, isTouch){
-  var slop=isTouch?Math.max(14,20/zoom):Math.max(8,10/zoom);
+  var slop=(isTouch?20:10)/zoom;
   if(Math.hypot(x-m.x1,y-m.y1)<slop) return 0;
   if(Math.hypot(x-m.x2,y-m.y2)<slop) return 1;
   // check body
@@ -9068,13 +9262,13 @@ function getMeasureHandleAt(m, x, y, isTouch){
 function renderMeasureSelection(){
   if(!selectedMeasure){ return; }
   _sizeSelCvRaw();
-  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  _clearCv(selCtx,selCv);
   var m=selectedMeasure;
   var isPlainLine=m.showLabel===false;
   // Draw highlighted line
   drawMeasureObjOnCtx(selCtx, m, !isPlainLine);
   // Endpoint drag handles
-  var hs=Math.max(8,10/zoom);
+  var hs=10/zoom;
   if(isPlainLine){
     // Plain line: simple white square handles, no P1/P2 labels
     [[m.x1,m.y1],[m.x2,m.y2]].forEach(function(pt){
@@ -9105,7 +9299,7 @@ function renderMeasureSelection(){
       // Label: P1 / P2
       selCtx.shadowBlur=0;
       selCtx.fillStyle='#fff';
-      selCtx.font='bold '+(Math.max(9,10/zoom))+'px Arial,sans-serif';
+      selCtx.font='bold '+(10/zoom)+'px Arial,sans-serif';
       selCtx.textAlign='center'; selCtx.textBaseline='middle';
       selCtx.fillText(idx===0?'P1':'P2',pt[0],pt[1]);
       selCtx.restore();
@@ -9114,7 +9308,7 @@ function renderMeasureSelection(){
   // Commit/cancel hint
   selCtx.save();
   selCtx.fillStyle=isPlainLine?'rgba(157,151,255,0.8)':'rgba(0,212,255,0.8)';
-  selCtx.font=(Math.max(10,11/zoom))+'px Arial,sans-serif';
+  selCtx.font=(11/zoom)+'px Arial,sans-serif';
   selCtx.textAlign='center'; selCtx.textBaseline='top';
   var midX=(m.x1+m.x2)/2, midY=Math.min(m.y1,m.y2)-20/zoom;
   selCtx.fillText('Drag endpoints · Release to drop',midX,midY);
@@ -9141,7 +9335,7 @@ function cancelMeasureSelection(){
 // Returns which leader control is under (x,y): 0=arrow tip, 1=elbow,
 // 2=shoulder end, -2=on a segment (move whole), -1=none.
 function getLeaderHandleAt(o, x, y, isTouch){
-  var slop=isTouch?Math.max(14,20/zoom):Math.max(8,10/zoom);
+  var slop=(isTouch?20:10)/zoom;
   var _se=leaderShoulderEnd(o);
   var sx=_se.x, sy=_se.y; // shoulder end
   if(Math.hypot(x-o.x1,y-o.y1)<slop) return 0;   // arrow tip
@@ -9162,13 +9356,13 @@ function getLeaderHandleAt(o, x, y, isTouch){
 function renderLeaderSelection(){
   if(!selectedLeader){ return; }
   _sizeSelCvRaw();
-  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  _clearCv(selCtx,selCv);
   var o=selectedLeader;
   // Draw the leader itself live here (it's skipped on shCv while selected).
   drawLeaderOnCtx(selCtx, o, 1);
   var _se=leaderShoulderEnd(o);
   var sx=_se.x, sy=_se.y;
-  var hs=Math.max(8,10/zoom);
+  var hs=10/zoom;
   // Handles: tip (cyan), elbow (amber), shoulder end (purple)
   [[o.x1,o.y1,'#00D4FF'],[o.x2,o.y2,'#FBBF24'],[sx,sy,'#9d97ff']].forEach(function(pt){
     selCtx.save();
@@ -9186,7 +9380,7 @@ function renderLeaderSelection(){
   // Hint
   selCtx.save();
   selCtx.fillStyle='rgba(0,212,255,0.8)';
-  selCtx.font=(Math.max(10,11/zoom))+'px Arial,sans-serif';
+  selCtx.font=(11/zoom)+'px Arial,sans-serif';
   selCtx.textAlign='center'; selCtx.textBaseline='top';
   selCtx.fillText('Drag handles · change color/width in toolbar', (o.x1+sx)/2, Math.min(o.y1,o.y2)-20/zoom);
   selCtx.restore();
@@ -9387,17 +9581,18 @@ function redrawPathMeasurePreview(mouseX,mouseY){
   if(mouseX!=null){
     var liveLabel=(scaleSet?formatLength(runTotal):(Math.round(runTotal)+'px'));
     shCtx.globalAlpha=1;
-    shCtx.font='bold 13px Arial,sans-serif';
+    var _z=zoom||1;
+    shCtx.font='bold '+(13/_z)+'px Arial,sans-serif';
     shCtx.textAlign='left';
     var tw=shCtx.measureText(liveLabel).width;
     shCtx.fillStyle='rgba(0,0,0,0.7)';
-    shCtx.fillRect(mouseX+12,mouseY-18,tw+10,20);
+    shCtx.fillRect(mouseX+12/_z,mouseY-18/_z,tw+10/_z,20/_z);
     shCtx.fillStyle=color;
-    shCtx.fillText(liveLabel,mouseX+17,mouseY-3);
+    shCtx.fillText(liveLabel,mouseX+17/_z,mouseY-3/_z);
     // Hint
-    shCtx.font='10px Arial,sans-serif';
+    shCtx.font=(10/_z)+'px Arial,sans-serif';
     shCtx.fillStyle='rgba(255,255,255,0.6)';
-    shCtx.fillText('Dbl-click or Enter to finish',mouseX+12,mouseY+14);
+    shCtx.fillText('Dbl-click or Enter to finish',mouseX+12/_z,mouseY+14/_z);
   }
   shCtx.restore();
 }
@@ -9574,7 +9769,7 @@ drawCv.addEventListener('mousemove',function(e){
     // Draw live preview on shCv so it's visible above draw-cv
   _ensureShcvRes();  // keep shapes/notes canvas at hi-res (was: force to plan size)
     // Re-render committed shapes/measures, then overlay live preview
-    shCtx.clearRect(0,0,shCv.width,shCv.height);
+    _clearCv(shCtx,shCv);
     // Redraw committed shape+measure objects underneath
     shapeObjs.forEach(function(s){
       if(s._editing) return;
@@ -9731,7 +9926,7 @@ function handleLeaderClick(x,y,e){
 function handleStamp(e){
   captureState(false); // vector op — save before stamp is placed
   var p=snapPt(getPos(e).x,getPos(e).y);
-  var sz=Math.max(20,Math.min(60,40/zoom));
+  var sz=40/zoom;
   stampObjs.push({
     id:Date.now(), type:stampType, x:p.x, y:p.y, s:sz,
     color:color, strokeW:strokeW, opacity:opacity, layerIdx:activeLayerIdx
@@ -9944,10 +10139,10 @@ function renderTextObjs(){
   // transform match the current zoom before drawing, so committed text doesn't
   // land at the wrong scale/offset at certain zoom levels.
   var _eff = _annoEff || (typeof _computeAnnoEff==='function' ? _computeAnnoEff() : 1);
-  var _wantW = Math.max(1, Math.round(baseCv.width*_eff));
+  var _wantW = _annoWantW(_eff);
   if(tCv.width !== _wantW){ _sizeAnnoCanvas(tCv, tCtx, _eff); }
-  else { tCtx.setTransform(_eff,0,0,_eff,0,0); }
-  tCtx.clearRect(0,0,tCv.width,tCv.height);
+  else { _annoXf(tCtx, _eff); }
+  _clearCv(tCtx,tCv);
   // Identify the text object currently being transformed so we can hide its
   // STATIC copy while the live preview is drawn on selCv. We match by several
   // identities to be robust against reference churn (undo clones, re-selects):
@@ -10093,7 +10288,7 @@ function findTextObjAt(x,y){
     var lines=getTextLines(o,ofpx);
     var estW=measureLinesWDrawn(o,lines,ofpx);
     var estH=lines.length*ofpx*TXT_LINE_H;
-    var pad=Math.max(8,12/zoom);
+    var pad=12/zoom;
     // Rotate the click point into the label's LOCAL frame (pivot = o.x,o.y,
     // the same origin the text is drawn about). Without this, a rotated label's
     // clickable area stayed axis-aligned and the click missed — falling through
@@ -10169,8 +10364,8 @@ function drawTextCursorAt(x, y, alpha){
   // Serifs, stroke, and glow used fixed SCREEN sizes (7/zoom, 4/zoom blur) —
   // zoomed out on a phone they dwarfed both the bar and the text, reading as a
   // giant blob at the tap point. Cap them relative to the caret height.
-  var sw  = Math.min(Math.max(1.5, 2/zoom), Math.max(1, h*0.12));   // stroke width
-  var ss  = Math.min(Math.max(4, 7/zoom),  Math.max(2, h*0.45));    // serif width
+  var sw  = Math.min(2/zoom, Math.max(1, h*0.12));   // stroke width
+  var ss  = Math.min(7/zoom,  Math.max(2, h*0.45));    // serif width
   var col = color;
 
   selCtx.save();
@@ -10205,7 +10400,7 @@ function drawTextCursorAt(x, y, alpha){
 function renderTextCursorFrame(){
   // Ensure sel-cv is canvas-sized
   _sizeSelCvRaw();
-  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  _clearCv(selCtx,selCv);
   // Dashed box + rotate handle around the text being edited (redrawn every
   // blink frame so it persists with the caret).
   if(editingObj) _drawTextChrome(editingObj);
@@ -10292,7 +10487,7 @@ function _syncTextFmtFromObj(obj){
 // ── Hover indicator — faint cursor following mouse when text tool selected
 function showTextHover(x, y){
   _sizeSelCvRaw();
-  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  _clearCv(selCtx,selCv);
   var overExisting = findTextObjAt(x, y);
   if(overExisting){
     // Highlight existing text object with edit indicator
@@ -10315,7 +10510,7 @@ function showTextHover(x, y){
     selCtx.strokeRect(-pad, _topH-pad, estW+pad*2, estH+pad*2);
     // Edit pencil icon hint
     selCtx.setLineDash([]); selCtx.globalAlpha=0.8;
-    selCtx.font='bold '+(Math.max(10,11/zoom))+'px Arial,sans-serif';
+    selCtx.font='bold '+(11/zoom)+'px Arial,sans-serif';
     selCtx.fillStyle=color; selCtx.textAlign='left';
     selCtx.fillText('✎ edit', 0, _topH-8/zoom);
     selCtx.restore();
@@ -10324,7 +10519,7 @@ function showTextHover(x, y){
     drawTextCursorAt(x, y, 0.35);
     selCtx.save();
     selCtx.globalAlpha=0.45;
-    selCtx.font='bold '+(Math.max(10,11/zoom))+'px Arial,sans-serif';
+    selCtx.font='bold '+(11/zoom)+'px Arial,sans-serif';
     selCtx.fillStyle=color; selCtx.textAlign='left';
     selCtx.fillText('T', x + 8/zoom, y - ptToCanvasPx(FONT_SIZE)*1.1); // true rendered height, not points-as-px
     selCtx.restore();
@@ -10568,7 +10763,7 @@ function _drawTextChrome(o){
   // Left/right handles (and corners, which sit in the side bands) drag the wrap
   // width; the text reflows live. Drawn while the caret is still active.
   selCtx.setLineDash([]);
-  var _hr=Math.max(4.5,HANDLE_SIZE*0.62/zoom);
+  var _hr=HANDLE_SIZE*0.62/zoom;
   var _hxL=-pad, _hxR=d.w+pad, _hxC=d.w/2;
   var _hyT=d.top-pad, _hyB=d.top+d.h+pad, _hyM=d.top+d.h/2;
   var _hps=[[_hxL,_hyT],[_hxC,_hyT],[_hxR,_hyT],[_hxR,_hyM],
@@ -10586,7 +10781,7 @@ function _drawTextChrome(o){
   selCtx.setLineDash([2/zoom,2/zoom]);
   selCtx.beginPath(); selCtx.moveTo(topx,topy); selCtx.lineTo(hubx,huby); selCtx.stroke();
   selCtx.setLineDash([]);
-  var r=Math.max(7,HANDLE_SIZE/zoom)*1.15;
+  var r=(HANDLE_SIZE/zoom)*1.15;
   selCtx.fillStyle=ROT_COLOR; selCtx.strokeStyle='#fff'; selCtx.lineWidth=lw*1.5;
   selCtx.shadowColor=ROT_COLOR; selCtx.shadowBlur=6/zoom;
   selCtx.beginPath(); selCtx.arc(hubx,huby,r,0,Math.PI*2); selCtx.fill(); selCtx.stroke();
@@ -10596,14 +10791,14 @@ function _drawTextChrome(o){
   selCtx.restore();
   // Store the handle's world position for hit-testing
   var ca=Math.cos(ang), sa=Math.sin(ang);
-  o._rotHandle={x:o.x+(hubx*ca-huby*sa), y:o.y+(hubx*sa+huby*ca), r:Math.max(16,22/zoom)};
+  o._rotHandle={x:o.x+(hubx*ca-huby*sa), y:o.y+(hubx*sa+huby*ca), r:22/zoom};
 }
 function _textRotHandleAt(o,x,y){
   return !!(o&&o._rotHandle&&Math.hypot(x-o._rotHandle.x,y-o._rotHandle.y)<=o._rotHandle.r);
 }
 // Small "##°" readout drawn at a canvas position, screen-upright.
 function _drawAngleBadgeXY(ctx,x,y,deg){
-  var fs=Math.max(9,Math.min(15,12/zoom)), pad=4/zoom, lw=0.9/zoom, rad=3/zoom;
+  var fs=12/zoom, pad=4/zoom, lw=0.9/zoom, rad=3/zoom;
   var text=deg+'\u00B0';
   ctx.save();
   ctx.translate(x,y);
@@ -10650,7 +10845,7 @@ function _drawAngleBadge(o,deg){
 // but not deep inside the text. Grabbing the border drags the whole label.
 function _textBorderAt(o,x,y){
   var d=_textBoxDims(o);
-  var pad=6/zoom, band=Math.max(14,18/zoom);
+  var pad=6/zoom, band=18/zoom;
   var ang=o.angle||0, ca=Math.cos(-ang), sa=Math.sin(-ang);
   var dx=x-o.x, dy=y-o.y;
   var lx=dx*ca-dy*sa, ly=dx*sa+dy*ca;
@@ -10668,7 +10863,7 @@ function _textBorderAt(o,x,y){
 function _textSideAt(o,x,y){
   if(!o || o._fitWs || o._anchorRight) return null;
   var d=_textBoxDims(o);
-  var pad=6/zoom, band=Math.max(14,18/zoom);
+  var pad=6/zoom, band=18/zoom;
   var ang=o.angle||0, ca=Math.cos(-ang), sa=Math.sin(-ang);
   var dx=x-o.x, dy=y-o.y;
   var lx=dx*ca-dy*sa, ly=dx*sa+dy*ca;
@@ -10693,7 +10888,7 @@ function _textHandleAt(o,x,y){
   var ang=o.angle||0, ca=Math.cos(-ang), sa=Math.sin(-ang);
   var dx=x-o.x, dy=y-o.y;
   var lx=dx*ca-dy*sa, ly=dx*sa+dy*ca;
-  var pts=_textHandlePts(o), r=Math.max(12,16/zoom);
+  var pts=_textHandlePts(o), r=16/zoom;
   for(var i=0;i<8;i++){
     if(Math.hypot(lx-pts[i][0],ly-pts[i][1])<=r) return i;
   }
@@ -10730,7 +10925,7 @@ function _beginTextWrapResize(o,p,side){
     rx:o.x+d.w*Math.cos(ang), ry:o.y+d.w*Math.sin(ang)};
   drawCv.style.cursor='ew-resize';
   _sizeSelCvRaw();
-  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  _clearCv(selCtx,selCv);
   _drawTextChrome(o);
 }
 // Grab the dashed border and start moving the whole label.
@@ -10746,7 +10941,7 @@ function _beginTextMove(o,p){
   _txtMoveObj=o; _txtMoving=true;
   _txtMoveStart={px:p.x,py:p.y,ox:o.x,oy:o.y};
   _sizeSelCvRaw();
-  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  _clearCv(selCtx,selCv);
   _drawTextChrome(o);
 }
 // Grab the rotate handle of the text currently being edited and start rotating.
@@ -10765,7 +10960,7 @@ function _beginTextRotate(o,p){
   _txtRotObj=o; _txtRotating=true;
   _txtRotStart={cx:c.x, cy:c.y, off:Math.atan2(p.y-c.y,p.x-c.x)-(o.angle||0)};
   _sizeSelCvRaw();
-  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  _clearCv(selCtx,selCv);
   _drawTextChrome(o);
 }
 // (Re)open the inline editor for o — caret + dashed box + rotate handle.
@@ -11800,14 +11995,25 @@ function renderSelection(){
   // jumps when you tap edit". Setting canvas.width resets the transform, so we
   // (re)apply it every call.
   var _selEff = _annoEff || (typeof _computeAnnoEff==='function' ? _computeAnnoEff() : 1);
-  var _selBW = Math.max(1, Math.round(baseCv.width*_selEff));
-  var _selBH = Math.max(1, Math.round(baseCv.height*_selEff));
+  // Viewport sharp mode: selCv covers only the region too. Sizing the FULL plan
+  // at the region eff would blow past the canvas limits and silently blank the
+  // selection chrome at high zoom.
+  var _sRX=0, _sRY=0, _sW=baseCv.width, _sH=baseCv.height;
+  if(_vpRegion){ _sRX=_vpRegion.x0; _sRY=_vpRegion.y0; _sW=_vpRegion.w; _sH=_vpRegion.h; }
+  var _selBW = Math.max(1, Math.round(_sW*_selEff));
+  var _selBH = Math.max(1, Math.round(_sH*_selEff));
   if(selCv.width!==_selBW || selCv.height!==_selBH){
     selCv.width=_selBW; selCv.height=_selBH; _selPrevDirty=null;
   }
-  selCv.style.width  = baseCv.width+'px';
-  selCv.style.height = baseCv.height+'px';
-  selCtx.setTransform(_selEff,0,0,_selEff,0,0);
+  // CSS box = EXACTLY the (integer) region size — same rule as _sizeAnnoCanvas —
+  // so this canvas snaps to device pixels identically to every other layer.
+  // Backing-store rounding is compensated exactly per axis in the transform.
+  var _seX=_selBW/_sW, _seY=_selBH/_sH;
+  selCv.style.width  = _sW+'px';
+  selCv.style.height = _sH+'px';
+  selCv.style.left   = _sRX+'px';
+  selCv.style.top    = _sRY+'px';
+  selCtx.setTransform(_seX,0,0,_seY, -_sRX*_seX, -_sRY*_seY);
   // Keep a comment's selection chrome (dashed box + handles) locked to the note's
   // LIVE geometry. The box auto-grows to fit text while typing, snaps to fit, and
   // can be re-sized on font/import changes — any of which leaves selectedShape
@@ -11841,7 +12047,7 @@ function renderSelection(){
   } else {
     // First frame of a drag (or any non-comment-drag render): prior canvas
     // content is unknown → full clear, exactly as before. Conservative.
-    selCtx.clearRect(0,0,selCv.width,selCv.height);
+    _clearCv(selCtx,selCv);
   }
   _selPrevDirty=_dirtyNow;
 
@@ -12756,7 +12962,7 @@ function endPolylineDrag(){
 function renderPolylineSelection(){
   if(!selectedPolyline){ return; }
   _sizeSelCvRaw();
-  selCtx.clearRect(0,0,selCv.width,selCv.height);
+  _clearCv(selCtx,selCv);
   var pl=selectedPolyline;
   if(!pl.pts||pl.pts.length<2) return;
   // Glow highlight under the line
@@ -12779,7 +12985,7 @@ function renderPolylineSelection(){
   // The polyline itself (in its real color, on top)
   drawPolylineOnCtx(selCtx, pl, 1);
   // Vertex dots
-  var hs=Math.max(5,7/zoom);
+  var hs=7/zoom;
   pl.pts.forEach(function(pt){
     selCtx.save();
     selCtx.fillStyle='rgba(108,99,255,0.9)';
@@ -12834,12 +13040,13 @@ function redrawPolylinePreview(mx,my){
   // Cursor hint
   if(mx!=null){
     shCtx.globalAlpha=1;
-    shCtx.font='10px Arial,sans-serif';
+    var _z2=zoom||1;
+    shCtx.font=(10/_z2)+'px Arial,sans-serif';
     shCtx.fillStyle='rgba(255,255,255,0.7)';
     var hint=('ontouchstart' in window)
       ? '2nd finger to anchor · Dbl-tap to finish · '+plPoints.length+' pts'
       : 'Dbl-click or Enter to finish · '+plPoints.length+' pts';
-    shCtx.fillText(hint,mx+12,my+14);
+    shCtx.fillText(hint,mx+12/_z2,my+14/_z2);
   }
   shCtx.restore();
 }
@@ -14513,17 +14720,134 @@ function compositeExport(maxPx){
 }
 
 
+// Flatten a canvas onto an OPAQUE WHITE background, dropping its alpha channel.
+// This is the raster twin of the PDF exporter's _flattenOnWhite (see the
+// "ZOOM-DEPENDENT SHADE BUG" note in the PDF path). A canvas's transparent pixels
+// are RGBA(0,0,0,0) — transparent but BLACK underneath. PNG stores colour and
+// alpha separately, and image viewers resample the two channels independently at
+// each zoom; bilinear filtering then bleeds that black out of the transparent
+// regions into the edges of the paint, so the same spot reads as a DIFFERENT
+// SHADE at different zoom levels (and snaps back on a full-resolution repaint).
+// Matting onto white removes the alpha channel entirely — nothing to resample
+// separately, so there is exactly one shade at every zoom. JPEG has no alpha, so
+// callers that stay on JPEG are unaffected and skip this.
+function _exportFlattenWhite(cnv){
+  var f=document.createElement('canvas');
+  f.width=cnv.width; f.height=cnv.height;
+  var fx=f.getContext('2d');
+  fx.fillStyle='#ffffff';
+  fx.fillRect(0,0,f.width,f.height);
+  fx.drawImage(cnv,0,0);
+  return f;
+}
+// ── NO-ALPHA (24-bit truecolor) PNG ENCODER ──────────────────────────────────
+// WHY THIS EXISTS: canvas.toBlob('image/png') ALWAYS emits a 32-bit RGBA PNG — it
+// keeps an alpha channel even when every pixel is opaque. Ordinary viewers ignore
+// an all-opaque alpha channel, but ACROBAT does not: importing a PNG that carries
+// an alpha channel makes Acrobat attach an /SMask and render the image through its
+// transparency path, where the RGB and the SMask are resampled INDEPENDENTLY at
+// each zoom (the same mechanism documented in the PDF exporter). That reintroduces
+// the "different shade at different zooms" artifact — but only in Acrobat, which is
+// exactly the symptom. Flattening onto white is necessary but NOT sufficient while
+// the alpha channel is still present in the file.
+// FIX: encode a PNG with color type 2 (truecolor, NO alpha channel). Acrobat then
+// imports it as a plain DeviceRGB image with no /SMask — nothing to resample
+// separately, so one exact shade at every zoom. Uses the browser-native
+// CompressionStream (zlib/deflate, RFC 1950 — exactly what PNG IDAT wants); no CDN.
+var _PNG_CRC_TBL=(function(){
+  var t=new Uint32Array(256);
+  for(var n=0;n<256;n++){ var c=n; for(var k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; }
+  return t;
+})();
+function _pngCrc32(bytes){
+  var c=0xFFFFFFFF;
+  for(var i=0;i<bytes.length;i++) c=_PNG_CRC_TBL[(c^bytes[i])&0xFF]^(c>>>8);
+  return (c^0xFFFFFFFF)>>>0;
+}
+// Returns a Blob (image/png, no alpha) or null if unsupported/failed → caller falls
+// back to the opaque RGBA toBlob path, which is still correct in every non-Acrobat
+// viewer.
+async function _encodeOpaquePNG(canvas){
+  try{
+    if(typeof CompressionStream==='undefined') return null;   // older browser → fallback
+    var w=canvas.width, h=canvas.height;
+    if(!w||!h) return null;
+    var src=canvas.getContext('2d').getImageData(0,0,w,h).data;   // RGBA
+    // Raw image = per-scanline [filter byte 0][R G B ...]; alpha is simply dropped.
+    var stride=w*3;
+    var raw=new Uint8Array(h*(1+stride));
+    var p=0,q=0;
+    for(var y=0;y<h;y++){
+      raw[q++]=0;                                                  // filter: none
+      for(var x=0;x<w;x++){ raw[q++]=src[p]; raw[q++]=src[p+1]; raw[q++]=src[p+2]; p+=4; }
+    }
+    // zlib-compress the raw image data for IDAT.
+    var cs=new CompressionStream('deflate');
+    var wtr=cs.writable.getWriter(); wtr.write(raw); wtr.close();
+    var idat=new Uint8Array(await new Response(cs.readable).arrayBuffer());
+    var u32=function(v){ return [(v>>>24)&255,(v>>>16)&255,(v>>>8)&255,v&255]; };
+    var chunk=function(type,dataBytes){
+      var tb=[type.charCodeAt(0),type.charCodeAt(1),type.charCodeAt(2),type.charCodeAt(3)];
+      var body=new Uint8Array(4+dataBytes.length);
+      body.set(tb,0); body.set(dataBytes,4);
+      var crc=_pngCrc32(body);
+      var out=new Uint8Array(4+body.length+4);
+      out.set(u32(dataBytes.length),0); out.set(body,4); out.set(u32(crc),4+body.length);
+      return out;
+    };
+    var ihdr=new Uint8Array(13);
+    ihdr.set(u32(w),0); ihdr.set(u32(h),4);
+    ihdr[8]=8;   // bit depth
+    ihdr[9]=2;   // color type 2 = truecolor, NO alpha  ← the whole point
+    ihdr[10]=0; ihdr[11]=0; ihdr[12]=0;                 // deflate / adaptive filter / no interlace
+    var sig=new Uint8Array([137,80,78,71,13,10,26,10]);
+    var cI=chunk('IHDR',ihdr), cD=chunk('IDAT',idat), cE=chunk('IEND',new Uint8Array(0));
+    var png=new Uint8Array(sig.length+cI.length+cD.length+cE.length);
+    var o=0; png.set(sig,o); o+=sig.length; png.set(cI,o); o+=cI.length; png.set(cD,o); o+=cD.length; png.set(cE,o);
+    return new Blob([png],{type:'image/png'});
+  }catch(e){ console.warn('[Export] opaque-PNG encode failed:',e); return null; }
+}
 function exportToBlob(maxPx, mimeType, quality, cb){
   try{
     var c=compositeExport(maxPx);
     if(!c){ toast('Export failed — no canvas','err'); cb(null); return; }
+    // PNG path: flatten onto opaque white AND strip the alpha channel entirely, so
+    // the file has no /SMask for Acrobat to resample independently at each zoom.
+    if((mimeType||'')==='image/png'){
+      var pc;
+      try{ pc=_exportFlattenWhite(c); releaseCanvas(c); }
+      catch(e){ console.warn('[Export] white-flatten failed:',e); pc=c; }
+      var _pngFallback=function(){
+        // No-alpha encode unavailable/failed → opaque RGBA PNG. Still flattened on
+        // white, so it's correct in every viewer except (possibly) Acrobat's SMask
+        // path; the vast majority of browsers support CompressionStream, so this is
+        // a rare last resort.
+        try{
+          var fb=_exportFlattenWhite(compositeExport(maxPx));
+          fb.toBlob(function(b){ releaseCanvas(fb); cb(b); },'image/png');
+        }catch(e2){ toast('Export failed: '+e2.message,'err',5000); cb(null); }
+      };
+      _encodeOpaquePNG(pc).then(function(blob){
+        try{ releaseCanvas(pc); }catch(_){}
+        if(blob) cb(blob); else _pngFallback();
+      }).catch(function(err){
+        try{ releaseCanvas(pc); }catch(_){}
+        console.warn('[Export] no-alpha PNG failed, using RGBA PNG:',err);
+        _pngFallback();
+      });
+      return;
+    }
     c.toBlob(function(blob){
       releaseCanvas(c);
       if(!blob){
-        // toBlob returns null when canvas is too large / OOM — use JPEG fallback
+        // toBlob returns null when canvas is too large / OOM — use JPEG fallback.
+        // JPEG is opaque, so also flatten onto white first (its own matte is BLACK,
+        // which would re-introduce the very dark-corner artifact we just removed).
         console.warn('[Export] toBlob returned null, trying JPEG fallback');
         try{
-          var c2=compositeExport(maxPx);
+          var _src2=compositeExport(maxPx);
+          var c2=_exportFlattenWhite(_src2);
+          releaseCanvas(_src2);
           c2.toBlob(function(blob2){
             releaseCanvas(c2);
             cb(blob2);
@@ -14681,17 +15005,22 @@ function commitAllForExport(){
 btnPng.addEventListener('click',function(){
   if(!baseLoaded){ toast('Open a file first','warn'); return; }
   commitAllForExport();
-  // Export the flattened plan as an HD JPEG (q0.95) on every platform — visually
-  // lossless for a site plan and a fraction of the size of a full-res PNG.
-  var mime  = 'image/jpeg';
-  var qual  = 0.97;
-  var ext   = 'jpg';
-  var mt    = 'image/jpeg';
+  // Export the flattened plan as a VERY HIGH-RESOLUTION, lossless PNG.
+  // Supersample to 2x the base canvas (capped at 6000px on the long side so
+  // toBlob doesn't OOM) — annotations are redrawn vector-style at this scale,
+  // so text/shapes/stamps come out genuinely sharper, not stuck at import DPI.
+  // (iOS applies its own IOS_MAX_PX cap inside compositeExport for safety.)
+  var _base   = Math.max(baseCv.width||0, baseCv.height||0);
+  var target  = _base ? Math.min(_base*2, 6000) : 0;
+  var mime  = 'image/png';
+  var qual  = 1;
+  var ext   = 'png';
+  var mt    = 'image/png';
   // Open the Save-As panel FIRST (within the click gesture), then export.
   pickSaveTarget('site-plan.'+ext, mt, 'Image', ['.'+ext]).then(function(handle){
     if(handle==='cancelled'){ toast('Save cancelled'); return; }
-    toast('Saving JPEG…','',0);
-    exportToBlob(0, mime, qual, function(blob){
+    toast('Saving PNG…','',0);
+    exportToBlob(target, mime, qual, function(blob){
       if(!blob){ toast('Export failed — try again','err',4000); return; }
       writeToTarget(handle, blob, 'site-plan.'+ext).then(function(){ toast('Saved ✓','ok',2500); });
     });
@@ -17471,6 +17800,7 @@ var selImgDrag  = null;        // drag start state
 var IMG_HANDLE  = 10;          // handle size px (screen)
 
 var _imgEff = 0;     // effective scale currently baked into the image overlay canvas
+var _imgRegionKey = '';   // identity of the viewport region baked into imgCv
 
 // iOS Safari decodes <img> lazily: the FIRST drawImage of a big data-URL image
 // can paint garbled/partial pixels (subsequent draws are fine once the decode
@@ -17505,23 +17835,32 @@ function _rasterizeImg(img){
 // resolution the placed images can actually supply — going past native wastes
 // memory without adding detail.
 function _computeImgEff(){
-  var w = baseCv.width, h = baseCv.height;
+  // Viewport sharp mode: the image canvas covers only the visible region, so
+  // drop the zoom ceiling entirely — area/side caps below use region dims and
+  // the maxNative cap still stops us past the photos' real resolution.
+  var _vr=_vpRegion;
+  var w = _vr ? _vr.w : baseCv.width, h = _vr ? _vr.h : baseCv.height;
   if(!w || !h) return 1;
   var devicePR = window.devicePixelRatio || 1;
   var eff = Math.max(1, devicePR * Math.max(1, zoom));
-  eff = Math.min(eff, IS_IOS ? 8 : 5);                   // ceiling (desktop 5, iOS 8-then-capped)
+  if(!_vr) eff = Math.min(eff, IS_IOS ? 8 : 5);          // ceiling (desktop 5, iOS 8-then-capped)
   // Per-canvas AREA budget. iOS Safari hard-caps a single canvas around ~16.7MP
   // and silently corrupts/blanks anything bigger — keep iPad/iPhone well under.
   // Desktop set to 36MP: enough to reach ~5× on normal pages while leaving
   // memory headroom (the image canvas alone was pushing total VRAM past 1GB).
-  var _CAP = (IS_IPHONE ? 8e6 : (IS_IPAD ? 12e6 : 36e6));
-  if(w*h*eff*eff > _CAP) eff = Math.max(1, Math.sqrt(_CAP/(w*h)));
+  var _CAP = (IS_IPHONE ? 8e6 : (IS_IPAD ? 12e6 : (IS_DESKTOP_SAFARI ? 15e6 : 36e6)));
   // HARD PER-SIDE GUARD. Browsers blank a canvas whose width OR height passes
-  // ~32767px. Clamp eff so neither side of the backing store crosses a safe
-  // limit — a blank image is the opposite of crisp.
+  // ~32767px — a blank image is the opposite of crisp.
   var MAX_SIDE = IS_IOS ? 8192 : 16384;
+  // Same rule as _vpEffFor: only floor at 1× if 1× actually FITS the budget.
+  // At low zoom the region is large and 1× can bust the area/side limits on its
+  // own; flooring there would return an over-budget (blank) canvas. Zoomed in,
+  // the region is small, 1× fits, and images never render below plan resolution.
+  var _oneXFits = (w*h <= _CAP) && (w <= MAX_SIDE) && (h <= MAX_SIDE);
+  var _floorAt = _oneXFits ? 1 : 0.05;
   var _sideCap = Math.min(MAX_SIDE / w, MAX_SIDE / h);
-  if(eff > _sideCap) eff = Math.max(1, _sideCap);
+  if(w*h*eff*eff > _CAP) eff = Math.max(_floorAt, Math.sqrt(_CAP/(w*h)));
+  if(eff > _sideCap)     eff = Math.max(_floorAt, _sideCap);
   // Don't exceed what the placed images' source resolution can supply.
   var maxNative = 1;
   if(typeof imgOverlays!=='undefined'){
@@ -17534,20 +17873,37 @@ function _computeImgEff(){
     });
   }
   eff = Math.min(eff, Math.max(1, maxNative));
-  return Math.round(eff*4)/4;                             // bucket to 0.25 steps
+  // Bucket DOWN to 0.25 steps: rounding UP can push a budget-clamped eff back
+  // over the area limit, which is the silent blank-canvas case. The 0.05 floor
+  // stops a legitimate sub-1× eff (huge sheet, zoomed out) rounding to zero —
+  // that would be a zero-size canvas and an invisible image layer.
+  eff = Math.max(0.05, Math.floor(eff*4)/4);
+  if(w*h*eff*eff > _CAP) eff = Math.max(0.05, Math.floor(Math.sqrt(_CAP/(w*h))*4)/4);
+  return eff;
 }
 
 // Sync img-cv size whenever canvas changes
 function syncImgCv(){
-  var w=baseCv.width||1, h=baseCv.height||1;
   // Size the image overlay canvas at its own effective resolution (see
   // _computeImgEff) so images stay crisp when zoomed instead of being CSS-stretched
   // from a stale low-res backing store. Draw in plan coords via the eff transform.
+  // In viewport sharp mode the canvas covers only the visible region (see
+  // _sizeAnnoCanvas — same geometry: CSS box at the region origin, transform
+  // carries the offset), which is what removes the zoom resolution ceiling.
+  var rx=0, ry=0, w=baseCv.width||1, h=baseCv.height||1;
+  if(_vpRegion){ rx=_vpRegion.x0; ry=_vpRegion.y0; w=_vpRegion.w; h=_vpRegion.h; }
   var eff = (typeof _computeImgEff==='function') ? _computeImgEff() : 1;
   var bw=Math.max(1,Math.round(w*eff)), bh=Math.max(1,Math.round(h*eff));
   if(imgCv.width!==bw||imgCv.height!==bh){ imgCv.width=bw; imgCv.height=bh; }
+  // Same geometry rule as _sizeAnnoCanvas: CSS box = EXACTLY the (integer)
+  // region size so this canvas snaps to device pixels identically to every
+  // other layer (the old bw/eff CSS size differed per this layer's own eff —
+  // at desktop DPR 1 that per-layer rounding made ONLY the pictures shift a
+  // hair on zoom). Backing-store rounding is compensated exactly per axis.
+  var effX=bw/w, effY=bh/h;
   imgCv.style.width=w+'px'; imgCv.style.height=h+'px';
-  imgCtx.setTransform(eff,0,0,eff,0,0);
+  imgCv.style.left=rx+'px'; imgCv.style.top=ry+'px';
+  imgCtx.setTransform(effX,0,0,effY, -rx*effX, -ry*effY);
   imgCv._eff=eff;
   _imgEff=eff;
 }
@@ -17562,7 +17918,13 @@ function _setImgRes(force){
   if(!baseCv.width || !baseCv.height) return;
   if(typeof imgOverlays==='undefined' || !imgOverlays.length) return;
   var eff = _computeImgEff();
-  if(!force && Math.abs(eff - _imgEff) < 0.2) return;
+  // Same region-identity guard as _setAnnoRes: in viewport mode a pan moves the
+  // region without changing eff, and skipping on eff alone would leave the image
+  // canvas rendering the previous window.
+  var _ikey = _vpRegion ? (Math.round(_vpRegion.x0)+','+Math.round(_vpRegion.y0)+','+
+                           Math.round(_vpRegion.w)+','+Math.round(_vpRegion.h)) : '';
+  if(!force && Math.abs(eff - _imgEff) < 0.2 && _ikey === _imgRegionKey) return;
+  _imgRegionKey = _ikey;
   if(_imgResTimer){ clearTimeout(_imgResTimer); _imgResTimer=null; }
   var doRender=function(){
     _imgResTimer=null;
@@ -17576,7 +17938,7 @@ function _setImgRes(force){
 function renderImgOverlays(){
   syncImgCv();
   // clearRect in plan coords (transform is set); cover the whole plan area.
-  imgCtx.clearRect(0,0,baseCv.width,baseCv.height);
+  _clearCv(imgCtx,imgCv);
   imgOverlays.forEach(function(ov){
     if(ov===selImg) return; // selected one drawn on selCv
     var L=layers[ov.layerIdx]; if(L && !L.visible) return; // hide if its layer is hidden
@@ -17635,6 +17997,19 @@ function _imgScaledSource(ov, targetW, targetH){
       nctx.drawImage(cur,0,0,cw,ch,0,0,nw,nh);
       cur=nx; cw=nw; ch=nh;
     }
+    // FINAL EXACT-SIZE PASS. The halving loop stops when either axis is within
+    // 2× of its target, and each step rounds nw/nh independently — so the cached
+    // bitmap ends up a fraction of a pixel off target on each axis, by a DIFFERENT
+    // amount at every zoom bucket. _drawImgOv then stretches it to ov.w × ov.h,
+    // and that varying sub-pixel stretch is what made pictures shift ever so
+    // slightly on zoom. One last resample to EXACTLY targetW×targetH makes the
+    // bitmap→frame mapping identical at every zoom level: zero drift.
+    if(cw!==targetW || ch!==targetH){
+      var fx=document.createElement('canvas'); fx.width=targetW; fx.height=targetH;
+      var fctx=fx.getContext('2d'); _imgSmooth(fctx);
+      fctx.drawImage(cur,0,0,cw,ch,0,0,targetW,targetH);
+      cur=fx; cw=targetW; ch=targetH;
+    }
     cur._sw=sw; cur._sh=sh; cur._tw=targetW; cur._th=targetH;
     ov._scaledCache=cur;
     return cur;
@@ -17651,16 +18026,13 @@ function _drawImgOv(ctx, ov){
   // Figure out how many device pixels this image actually occupies (the ctx
   // transform already carries the eff/zoom scale) so we can pre-downsample to it.
   var src = ov.img;
-  // Skip the heavy step-down resample WHILE actively dragging this image — keep
-  // drags smooth with single-pass high quality; the crisp cache builds on release.
-  var dragging = (typeof selImgDrag!=='undefined' && selImgDrag && typeof selImg!=='undefined' && selImg===ov);
-  if(!dragging && ctx.getTransform){
-    try{
-      var m = ctx.getTransform();
-      var sx = Math.hypot(m.a, m.b) || 1, sy = Math.hypot(m.c, m.d) || 1;
-      src = _imgScaledSource(ov, ov.w*sx, ov.h*sy);
-    }catch(e){ src = ov.img; }
-  }
+  // ZOOM-STABLE RENDERING: always draw straight from the ORIGINAL source with
+  // high-quality smoothing. The old path routed through _imgScaledSource, which
+  // rebuilt a differently-sized shrunken bitmap at every zoom bucket and switched
+  // back to the raw source below a 2× threshold — each rebuild/switch changed the
+  // resampling grid by a sub-pixel amount, so pictures shifted ever so slightly
+  // on zoom while vector layers (redrawn from geometry) stayed put. Drawing from
+  // one fixed source makes the frame mapping identical at every zoom: zero drift.
   ctx.drawImage(src, -ov.w/2, -ov.h/2, ov.w, ov.h);
   ctx.restore();
 }
@@ -17723,11 +18095,21 @@ function renderImgSelection(){
   // same image looked the moment it was deselected.
   var eff = (typeof _computeImgEff==='function') ? _computeImgEff()
           : ((typeof _computeAnnoEff==='function') ? _computeAnnoEff() : 1);
-  var bw=Math.max(1,Math.round(drawCv.width*eff)), bh=Math.max(1,Math.round(drawCv.height*eff));
+  // Viewport sharp mode: cover only the region (full plan × region eff would
+  // exceed the canvas limits and blank the selected image at high zoom).
+  var _rX=0, _rY=0, _rW=drawCv.width, _rH=drawCv.height;
+  if(_vpRegion){ _rX=_vpRegion.x0; _rY=_vpRegion.y0; _rW=_vpRegion.w; _rH=_vpRegion.h; }
+  var bw=Math.max(1,Math.round(_rW*eff)), bh=Math.max(1,Math.round(_rH*eff));
   if(selCv.width!==bw||selCv.height!==bh){ selCv.width=bw; selCv.height=bh; }
-  selCv.style.width=drawCv.width+'px'; selCv.style.height=drawCv.height+'px';
-  selCtx.setTransform(eff,0,0,eff,0,0);
-  selCtx.clearRect(0,0,drawCv.width,drawCv.height);
+  // CSS box = EXACTLY the (integer) region size — same rule as _sizeAnnoCanvas /
+  // syncImgCv — so the selected image snaps identically to the deselected one
+  // (no sub-pixel hop on select/deselect or zoom at desktop DPR 1). Backing
+  // rounding compensated exactly per axis.
+  var _eX=bw/_rW, _eY=bh/_rH;
+  selCv.style.width=_rW+'px'; selCv.style.height=_rH+'px';
+  selCv.style.left=_rX+'px'; selCv.style.top=_rY+'px';
+  selCtx.setTransform(_eX,0,0,_eY, -_rX*_eX, -_rY*_eY);
+  _clearCv(selCtx,selCv);
   // Draw image itself
   _drawImgOv(selCtx, selImg);
   // Dashed bounding box
@@ -17817,7 +18199,7 @@ function _drawDimBadges(ctx, cx, cy, w, h, angle){
     return Math.round(px) + ' px';
   }
 
-  var fontSize = Math.max(9, Math.min(16, 12 / zoom));
+  var fontSize = 12 / zoom;          // screen-constant: NO plan-px floor (it would grow with zoom)
   var pad      = 5 / zoom;
   var radius   = 3 / zoom;
   var lw       = 0.9 / zoom;
@@ -17860,7 +18242,7 @@ function _drawTextSizeBadge(ctx, s){
   if(!s || !s._textObj) return;
   var a    = s.angle || 0;
   var cosA = Math.cos(a), sinA = Math.sin(a);
-  var fontSize = Math.max(9, Math.min(16, 12 / zoom)); // screen-constant size
+  var fontSize = 12 / zoom;                            // screen-constant size
   var pad      = 5 / zoom;
   var radius   = 3 / zoom;
   var lw       = 0.9 / zoom;
@@ -18175,17 +18557,23 @@ function _drawImgGhost(cx, cy){
     selCv.width  = _gw;
     selCv.height = _gh;
   }
-  selCv.style.width  = drawCv.width  + 'px';
-  selCv.style.height = drawCv.height + 'px';
+  // CSS from the ROUNDED backing store (same reason as _sizeAnnoCanvas): a raw
+  // drawCv.width box scales by drawCv.width/_gw rather than exactly 1/_ge, so the
+  // ghost drifted a sub-pixel against the plan and shifted again on every zoom.
+  selCv.style.width  = (_gw/_ge) + 'px';
+  selCv.style.height = (_gh/_ge) + 'px';
+  // Full-plan canvas — drop any viewport-region offset left on the element by a
+  // previous selection render, or the ghost draws displaced by the region origin.
+  selCv.style.left='0px'; selCv.style.top='0px';
   selCtx.setTransform(_ge,0,0,_ge,0,0);
-  selCtx.clearRect(0, 0, drawCv.width, drawCv.height);
+  _clearCv(selCtx,selCv);
   if(!_pendingImg) return;
   try{ selCtx.imageSmoothingEnabled=true; selCtx.imageSmoothingQuality='high'; }catch(e){}
 
   var sz  = _pendingImgCanvasSize(_pendingImg);
   var x   = cx - sz.w / 2;
   var y   = cy - sz.h / 2;
-  var lw  = Math.max(1, 1.5 / zoom);   // line stays crisp at any zoom
+  var lw  = 1.5 / zoom;                // line stays crisp at any zoom
 
   selCtx.save();
 
@@ -18241,7 +18629,7 @@ function _clearImgGhost(){
   if(selCv.width > 1){
     selCtx.save();
     selCtx.setTransform(1,0,0,1,0,0);           // clear in raw device pixels —
-    selCtx.clearRect(0, 0, selCv.width, selCv.height); // the ghost may have an eff transform
+    _clearCv(selCtx,selCv); // the ghost may have an eff transform
     selCtx.restore();
   }
 }
