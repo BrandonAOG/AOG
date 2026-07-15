@@ -16686,6 +16686,25 @@ function _buildVectorPdf(attachJson, onReady){
                   _annotsStripped = true;
                   dbg('export','full-redraw: removed '+_annCount+' page annotations (original content)');
                 }catch(e){ console.warn('[VectorExport] annot removal failed:',e); }
+                // ── REMOVE, DON'T JUST COVER ─────────────────────────────────
+                // Painting a white rectangle over the page left the ORIGINAL
+                // content stream inside the file. Acrobat renders progressively:
+                // the original operators (including any image the user deleted)
+                // draw first, THEN the white cover lands — so the old page
+                // content flashed for a split second on every open. Every piece
+                // of this content is reproduced by the extracted objects, so the
+                // original stream is pure dead weight: replace /Contents with an
+                // empty stream. The white rectangle below stays as a belt-and-
+                // braces opaque base for the blend-mode overlays.
+                try{
+                  var _empty = pdf.context.stream('');
+                  var _emptyRef = pdf.context.register(_empty);
+                  page.node.set(PDFLib.PDFName.of('Contents'), _emptyRef);
+                  // pdf-lib caches a normalized wrapper; force it to rebuild so
+                  // drawRectangle/drawText below append to the fresh empty stream.
+                  try{ page.node.normalize(); }catch(_n){}
+                  dbg('export','full-redraw: original content stream REMOVED (no progressive-render flash)');
+                }catch(e){ console.warn('[VectorExport] content stream removal failed, keeping white cover only:',e); }
                 try{ page.drawRectangle({x:0,y:0,width:PW,height:PH,color:PDFLib.rgb(1,1,1),borderWidth:0}); dbg('export','full-redraw: page covered white'); }
                 catch(e){ console.warn('[VectorExport] page cover failed:',e); }
               } else if(_FULL_REDRAW){
