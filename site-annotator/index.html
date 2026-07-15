@@ -1958,6 +1958,8 @@ window.AOG.dump=function(){
 };
 window.AOG.redraw=function(){ renderShapeAndMeasure(); composite(); };
 window.AOG.enableDebug=function(on){ AOG_DEBUG=(on!==false); try{ localStorage.setItem('AOG_DEBUG', AOG_DEBUG?'1':'0'); }catch(e){} return AOG_DEBUG; };
+// Short console shorthand: type AOGDEBUG(true) to turn debug on live, AOGDEBUG(false) off.
+window.AOGDEBUG=function(on){ AOG_DEBUG=(on!==false); try{ localStorage.setItem('AOG_DEBUG', AOG_DEBUG?'1':'0'); }catch(e){} console.log('%c[AOG] debug '+(AOG_DEBUG?'ON':'OFF'),'color:#0a0;font-weight:bold'); return AOG_DEBUG; };
 // Toggle export model: AOG.fullRedraw(true) = redraw every element as a movable
 // object (nothing memory-stuck at import position); AOG.fullRedraw(false) = keep
 // the original page pixel-perfect and only move edited elements. Re-export after.
