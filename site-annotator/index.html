@@ -4778,7 +4778,8 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       if(_f===OPS.save){ _stk.push(_cm.slice()); }
       else if(_f===OPS.restore){ if(_stk.length) _cm=_stk.pop(); }
       else if(_f===OPS.transform){ _cm=_mmul(_cm,_ag); }
-      else if(_f===OPS.paintImageXObject || _f===OPS.paintJpegXObject || _f===OPS.paintInlineImage){
+      else if(_f===OPS.paintImageXObject || _f===OPS.paintJpegXObject || _f===OPS.paintInlineImage
+              || _f===OPS.paintImageMaskXObject || _f===OPS.paintImageMaskXObjectGroup || _f===OPS.paintImageMaskXObjectRepeat){
         var _cp=[[0,0],[1,0],[1,1],[0,1]].map(function(p){return {x:_cm[0]*p[0]+_cm[2]*p[1]+_cm[4], y:_cm[1]*p[0]+_cm[3]*p[1]+_cm[5]};});
         var _cxs=_cp.map(function(p){return p.x;}), _cys=_cp.map(function(p){return p.y;});
         var _iw=Math.max.apply(null,_cxs)-Math.min.apply(null,_cxs);
@@ -4790,7 +4791,14 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
         // they must NOT force keep-original — otherwise annotation-based drawings
         // (whose linework IS extracted) get stuck keeping the page and ghost on move.
         if(_pgArea>0 && (_iw*_ih) >= _pgArea*0.03) _sizableImgs++;
-        if(_pgArea>0 && (_iw*_ih) >= _pgArea*0.92){ _hasDominantRaster=true; break; }
+        // Threshold LOWERED 0.92 → 0.50 and IMAGE MASKS now counted. Scanned
+        // documents are typically a background image + bilevel MASK stencils
+        // carrying the linework — the masks are painted by paintImageMaskXObject,
+        // which the old scan ignored entirely, and scans are often drawn with
+        // margins (e.g. a survey at 84% of the page), sailing under 0.92. Both
+        // gaps let the export white-cover a scanned page it could not reproduce.
+        // Any image or mask covering half the page is a backdrop: keep the page.
+        if(_pgArea>0 && (_iw*_ih) >= _pgArea*0.50){ _hasDominantRaster=true; break; }
       }
     }
   }catch(e){}
@@ -4844,7 +4852,13 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
         var y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
         var rw=x1-x0, rh=y1-y0;
         if(rw<4||rh<4) continue;
-        if(rw*rh >= pageArea*0.92) continue;     // skip spurious full-page clip region
+        // Skip extraction of any image covering HALF the page or more (was 0.92).
+        // Whiting out a huge footprint on the composited backdrop erases every
+        // OTHER thing painted in that region — image-mask linework, text, vectors.
+        // Scanned documents stack a background image under bilevel mask stencils;
+        // extracting the background and whiting its 84%-of-page footprint erased
+        // the whole survey. Half-page+ images are backdrops: leave them baked in.
+        if(rw*rh >= pageArea*0.50) continue;
         var key=(fn===OPS.paintInlineImage) ? null : (a && a[0]);
         var bmp=_getPdfImageBitmap(page, key, a, fn);
         var ic=document.createElement('canvas');
@@ -4913,6 +4927,35 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
           // keeps the original page content instead.
           if(rw*rh >= pageArea*0.03) _imgUnreproduced=true;
           continue;
+        }
+        // ── CAPTURE SANITY CHECK ──────────────────────────────────────────
+        // Before erasing this image from the backdrop, verify the captured copy
+        // actually contains ink. A decode-format mismatch can "succeed" while
+        // producing an empty or garbage canvas — whiting out the backdrop then
+        // leaves a blank page with nothing to show in its place. Sample a sparse
+        // grid; if essentially every sample is white or transparent, treat the
+        // capture as FAILED and keep the image baked in the backdrop instead
+        // (visually identical, just not movable — always safe).
+        if(rw*rh >= pageArea*0.03){
+          var _inkOK=false;
+          try{
+            var _sc2=ic.getContext('2d');
+            var _gw=Math.min(ic.width,64), _gh=Math.min(ic.height,64);
+            var _sd=_sc2.getImageData(0,0,ic.width,ic.height).data;
+            var _hits=0, _stepX=Math.max(1,Math.floor(ic.width/_gw)), _stepY=Math.max(1,Math.floor(ic.height/_gh));
+            for(var _sy=0;_sy<ic.height && _hits<8;_sy+=_stepY){
+              for(var _sx=0;_sx<ic.width && _hits<8;_sx+=_stepX){
+                var _si=(_sy*ic.width+_sx)*4;
+                if(_sd[_si+3]>10 && (_sd[_si]<235||_sd[_si+1]<235||_sd[_si+2]<235)) _hits++;
+              }
+            }
+            _inkOK=(_hits>=3);
+          }catch(_ie){ _inkOK=true; } // can't sample (tainted/OOM) → don't second-guess
+          if(!_inkOK){
+            _imgUnreproduced=true;
+            dbg('import','image capture came back blank — keeping it baked in the backdrop (no whiteout)');
+            continue;
+          }
         }
         imgOverlays.push({
           img:ic, cx:x0+rw/2, cy:y0+rh/2, w:rw, h:rh,
@@ -6280,8 +6323,25 @@ function _getPdfImageBitmap(page, key, args, fn){
         dst.set(src.subarray(0, dst.length));
       } else if(kind===2 || src.length===iw*ih*3){
         for(var s=0,d=0;d<dst.length;s+=3,d+=4){ dst[d]=src[s];dst[d+1]=src[s+1];dst[d+2]=src[s+2];dst[d+3]=255; }
-      } else if(kind===1 || src.length===iw*ih){
+      } else if(src.length===iw*ih){
         for(var s2=0,d2=0;d2<dst.length;s2++,d2+=4){ var v=src[s2]; dst[d2]=v;dst[d2+1]=v;dst[d2+2]=v;dst[d2+3]=255; }
+      } else if(src.length>=Math.ceil(iw/8)*ih && src.length<iw*ih){
+        // PACKED 1-BIT-PER-PIXEL (GRAYSCALE_1BPP) — bilevel CCITT G4 / JBIG2
+        // scans, the standard format for scanned surveys and site plans. pdf.js
+        // delivers these as packed bits (8 px per byte, MSB first, 1 = white).
+        // The old code fell into the byte-per-pixel gray branch via kind===1,
+        // read packed bytes as gray values, ran out of data 1/8 of the way in,
+        // and produced a garbage/blank capture — which then WHITED the real scan
+        // out of the backdrop. That is why checking "Images" on import made
+        // scanned pages load blank. Expand the bits properly instead.
+        var rowB=Math.ceil(iw/8);
+        for(var by=0;by<ih;by++){
+          for(var bx=0;bx<iw;bx++){
+            var bit=(src[by*rowB+(bx>>3)]>>(7-(bx&7)))&1;
+            var bv=bit?255:0, d3=(by*iw+bx)*4;
+            dst[d3]=bv; dst[d3+1]=bv; dst[d3+2]=bv; dst[d3+3]=255;
+          }
+        }
       } else {
         return null;
       }
