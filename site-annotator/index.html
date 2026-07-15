@@ -6910,10 +6910,6 @@ var layerTmps=layers.map(function(l){
         var vp=page.getViewport({scale:sc, rotation:_rot});
         if(Math.abs(vp.width-_rw0)>2 || Math.abs(vp.height-_rh0)>2) return;  // aspect drift → keep the resample
         if(baseCv.width!==_rw0 || baseCv.height!==_rh0) return;              // user rotated again mid-flight
-        bCtx.save();
-        bCtx.setTransform(1,0,0,1,0,0);
-        bCtx.clearRect(0,0,_rw0,_rh0);
-        bCtx.restore();
         // ANNOTATIONS OFF. The source PDF still contains the original Ink/Line/
         // Square/Circle/PolyLine annots that import extracted into editable objects
         // and WHITED OUT on the backdrop. Re-rendering the pristine page painted
@@ -6921,7 +6917,29 @@ var layerTmps=layers.map(function(l){
         // ghosting underneath the copy you were dragging. Render page content only.
         var _AM = (window.pdfjsLib && pdfjsLib.AnnotationMode && pdfjsLib.AnnotationMode.DISABLE !== undefined)
                   ? pdfjsLib.AnnotationMode.DISABLE : 0;
-        page.render({canvasContext:bCtx, viewport:vp, annotationMode:_AM}).promise.then(function(){
+        // ── RENDER OFFSCREEN, SWAP ON SUCCESS ─────────────────────────────
+        // The old code did clearRect(baseCv) FIRST and rendered into baseCv
+        // afterwards. If the render rejected (pdf.js throws "Cannot use the
+        // same canvas during multiple render() operations" whenever an earlier
+        // render task on bCtx is still registered, plus any transient render
+        // error), the catch "kept the resample" — but the resample had already
+        // been wiped. Screen went blank white with only the markup layers on
+        // top, and every export from that state produced markups on an empty
+        // page. Render into a FRESH temp canvas instead and copy it onto
+        // baseCv only after the render fully succeeds: the visible bitmap is
+        // never destroyed, and a fresh canvas can never collide with a stale
+        // pdf.js render registration on bCtx.
+        var _tmp=document.createElement('canvas');
+        _tmp.width=_rw0; _tmp.height=_rh0;
+        var _tctx=_tmp.getContext('2d');
+        page.render({canvasContext:_tctx, viewport:vp, annotationMode:_AM}).promise.then(function(){
+          // user rotated again (or loaded another file) while we rendered → discard
+          if(baseCv.width!==_rw0 || baseCv.height!==_rh0) return;
+          bCtx.save();
+          bCtx.setTransform(1,0,0,1,0,0);
+          bCtx.clearRect(0,0,_rw0,_rh0);
+          bCtx.drawImage(_tmp,0,0);
+          bCtx.restore();
           if(typeof composite==='function') composite();
           dbg('rotate','base re-rendered from PDF at '+_rot+'° (lossless, no resample blur)');
         }).catch(function(e){ console.warn('[Rotate] base re-render failed, keeping resample:',e); });
