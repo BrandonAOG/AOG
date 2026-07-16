@@ -2033,6 +2033,16 @@ var IS_IOS    = IS_IPHONE || IS_IPAD;
 var IOS_MAX_PX = IS_IPHONE ? 3100 : (IS_IPAD ? 10000 : 25000);
 // iPad undo kept at 5 — each snapshot is ~50MB+ per layer at full res.
 var MAX_UNDO   = IS_IPHONE ? 5 : (IS_IPAD ? 5 : 20);
+// ── IMPORTED LINE WEIGHT ─────────────────────────────────────────────────────
+// Scales the stroke width of line/shape/polyline annotations pulled from a PDF.
+// The source width (in plan px) is (annotation lineWidth × render scale); this
+// factor multiplies that. It was hardcoded at 0.5 (imported lines came in at HALF
+// the source PDF's weight, so the whole drawing read lighter/softer than Acrobat
+// and exported light too). 1.0 = true source weight (matches Acrobat). 0.8 is a
+// touch lighter than source but still noticeably bolder than the old 0.5. Affects
+// BOTH the on-screen view and the exported/printed PDF, and applies to files
+// imported AFTER this is set (already-open projects keep their stored weights).
+var _IMPORT_LW_SCALE = 1.0;
 
 // releaseCanvas: forces Safari to free canvas memory immediately.
 // Safari hoards canvases even after JS references are gone.
@@ -2176,10 +2186,10 @@ function wrapLinesToWidth(text, maxW, fontSize, family, bold, italic){
 }
 // Canonical "display lines" for a text object: wrapped when obj.wrapW is set,
 // else the raw hard lines. Imported width-fit labels (o._fitWs — their per-line
-// squeeze table is indexed by ORIGINAL line numbers) and right-anchored leader
-// labels never wrap, so their anchor math stays untouched.
+// squeeze table is indexed by ORIGINAL line numbers) never wrap. Right-anchored
+// leader labels DO wrap now — their anchor is re-pinned on every reflow/commit.
 function getTextLines(o, fpx){
-  if(o && o.wrapW && o.text && !o._anchorRight){
+  if(o && o.wrapW && o.text && !o._fitWs){
     return wrapLinesToWidth(o.text, ptToCanvasPx(o.wrapW), fpx,
                             o.fontFamily||'Arial', o.bold, o.italic);
   }
@@ -3191,6 +3201,19 @@ function _toolStrokeDefault(t){
   return STROKE_DEFAULT;
 }
 var _toolStroke = {};   // { toolName: lastWidth }
+// Programmatic tool switches (Set Scale, Redraw, Recalibrate) bypass the toolbar
+// button click handler, so they used to keep whatever strokeW was current —
+// meaning a freshly-loaded page drew the reference measure at 5px instead of the
+// measure tool's 1px default. This mirrors the button handler's stroke swap.
+function _swapStrokeForTool(newTool){
+  _toolStroke[tool] = (tool==='comment') ? _cBorderW : strokeW;
+  var _w = (_toolStroke[newTool]!==undefined) ? _toolStroke[newTool] : _toolStrokeDefault(newTool);
+  if(newTool!=='comment'){
+    strokeW=_w;
+    if(typeof swSl!=='undefined'&&swSl) swSl.value=strokeW;
+    if(typeof swVal!=='undefined'&&swVal) swVal.textContent=strokeW+'px';
+  }
+}
 var fillColor='#ef4444', fillOpacity=0.4; // separate fill (inner) color and opacity
 var stampType='north';
 var layers=[], activeLayerIdx=0, _soloIdx=-1;
@@ -3215,6 +3238,11 @@ var textAlign      = 'left';
 // the page. We anchor the text box's RIGHT edge at the placement point and
 // right-align it. This flag is set only for that case and cleared for all other
 // text entry.
+var _textAnchorRight = false;
+// Armed by the leader flow when it opens the label editor: the committed text
+// gets tagged _leaderLabel so its stretch handles can keep the leader-side
+// edge pinned (left-hanging AND right-hanging labels alike).
+var _textLeaderPending = false;
 var _textAnchorRight = false;
 var textBgColor    = '#00ff11';
 var textBgOpacity  = 0.9;
@@ -3711,7 +3739,77 @@ function updateLegend(){
 }
 
 // ── ZOOM/PAN ──
-function applyTransform(){ scene.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(typeof _vpUpdate==='function') _vpUpdate(); if(typeof _setAnnoRes==='function') _setAnnoRes(false); if(typeof _setImgRes==='function') _setImgRes(false); if(_editingComment) repositionCommentEditor(_editingComment); if(typeof repositionTextOverlay==='function') repositionTextOverlay(); if(_pendingImg&&_pendingImgPos) _drawImgGhost(_pendingImgPos.x,_pendingImgPos.y); }
+function applyTransform(){
+  // ── DEVICE-PIXEL SNAP ──────────────────────────────────────────────────────
+  // At 100% browser zoom devicePixelRatio is (usually) an integer, so integer
+  // CSS-px translates land exactly on device pixels. At any other browser zoom
+  // dpr is fractional (e.g. 1.25, 0.9), so an integer CSS-px translate lands
+  // BETWEEN device pixels — and as zoomAt() recomputes pan each wheel tick the
+  // sub-pixel remainder flip-flops, which reads as the image "wobbling
+  // sideways" while zooming. Fix: keep panX/panY as exact floats internally,
+  // but snap the RENDERED translate to the device-pixel grid (multiples of
+  // 1/dpr), so every frame lands on the same physical grid.
+  var _dpr=window.devicePixelRatio||1;
+  // Snap relative to where the VIEWPORT actually sits on screen. At fractional
+  // browser zoom the viewport's own left/top edge can land between device
+  // pixels (the trace showed every layer parked at exactly ±0.5 device px at
+  // 125%), so snapping the translate to multiples of 1/dpr alone still leaves
+  // the content off-grid. Fold the container's sub-device-pixel offset into
+  // the rounding so (containerEdge + translate) lands ON the device grid.
+  var _ox=0,_oy=0;
+  try{ var _pr=(scene.offsetParent||viewport).getBoundingClientRect(); _ox=_pr.left; _oy=_pr.top; }catch(e){}
+  var _tx=Math.round((_ox+panX)*_dpr)/_dpr-_ox, _ty=Math.round((_oy+panY)*_dpr)/_dpr-_oy;
+  scene.style.transform='translate('+_tx+'px,'+_ty+'px) scale('+zoom+')'; document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%'; if(typeof _vpUpdate==='function') _vpUpdate(); if(typeof _setAnnoRes==='function') _setAnnoRes(false); if(typeof _setImgRes==='function') _setImgRes(false); if(_editingComment) repositionCommentEditor(_editingComment); if(typeof repositionTextOverlay==='function') repositionTextOverlay(); if(_pendingImg&&_pendingImgPos) _drawImgGhost(_pendingImgPos.x,_pendingImgPos.y); if(AOG_DEBUG) _zoomDbgTrace(_dpr,_tx,_ty); }
+
+// ── ZOOM WOBBLE TRACER ────────────────────────────────────────────────────────
+// Turn on with ?debug in the URL or AOGDEBUG(true) in the console, then zoom at
+// different browser zoom levels. One rAF-batched line per frame, tagged
+// [zoomdbg]. Columns:
+//   dpr        devicePixelRatio (browser zoom changes this — 1.25, 0.9, …)
+//   zoom       app zoom
+//   pan        raw panX float → snapped tx actually rendered
+//   base/img/anno/draw
+//              each layer's on-screen LEFT edge in DEVICE pixels; the number
+//              in () is the sub-device-pixel fraction. If a layer wobbles, its
+//              fraction flip-flops between frames while the others hold steady.
+//   img-base   img canvas left MINUS base canvas left, in device px — should
+//              stay CONSTANT while zooming. If it oscillates, the pictures are
+//              moving relative to the plan (per-layer compositor snapping),
+//              not the whole scene.
+//   region     _vpRegion origin — if this changes on exactly the wobble frames,
+//              the region rebuild is the trigger.
+var _zoomDbgPending=false;
+function _zoomDbgTrace(dpr,tx,ty){
+  if(_zoomDbgPending) return; _zoomDbgPending=true;
+  requestAnimationFrame(function(){
+    _zoomDbgPending=false;
+    try{
+      var f=function(el){
+        if(!el) return 'n/a';
+        var r=el.getBoundingClientRect();
+        var d=r.left*dpr;
+        return d.toFixed(3)+' ('+(d-Math.round(d)).toFixed(3)+')';
+      };
+      var _iCv=(typeof imgCv!=='undefined')?imgCv:null;
+      var _sCv=(typeof shCv!=='undefined')?shCv:null;
+      var delta='n/a';
+      if(_iCv && baseCv){
+        delta=((_iCv.getBoundingClientRect().left-baseCv.getBoundingClientRect().left)*dpr).toFixed(3);
+      }
+      console.log('[zoomdbg]',
+        'dpr='+dpr,
+        'zoom='+zoom.toFixed(5),
+        'pan='+panX.toFixed(3)+'→'+tx.toFixed(3),
+        'base='+f(baseCv),
+        'img='+f(_iCv),
+        'anno='+f(_sCv),
+        'draw='+f(drawCv),
+        'img-base='+delta,
+        'region='+(_vpRegion?(_vpRegion.x0+','+_vpRegion.y0+' w'+_vpRegion.w):'null')
+      );
+    }catch(e){ console.log('[zoomdbg] trace error', e.message); }
+  });
+}
 
 // ── PAN LIMITS ────────────────────────────────────────────────────────────────
 // The old rule only guaranteed that 80px of canvas stayed on screen:
@@ -3767,14 +3865,17 @@ function clampPan(){
   var cw = baseCv.width*zoom, ch = baseCv.height*zoom;
 
   if(cw <= vw){
-    panX = Math.round((vw - cw)/2);           // smaller than the visible area → centred
+    panX = (vw - cw)/2;                       // smaller than the visible area → centred
+                                              // (no rounding — applyTransform snaps to the
+                                              // DEVICE pixel grid, and CSS-px rounding here
+                                              // fights that at non-100% browser zoom)
   } else {
     var slackX = vw * PAN_OVERSCROLL;
     panX = Math.min(slackX, Math.max(vw - cw - slackX, panX));
   }
 
   if(ch <= vh){
-    panY = Math.round((vh - ch)/2);
+    panY = (vh - ch)/2;
   } else {
     var slackY = vh * PAN_OVERSCROLL;
     panY = Math.min(slackY, Math.max(vh - ch - slackY, panY));
@@ -3882,6 +3983,26 @@ function fitToVP(){
       panY += Math.round(dy);
       applyTransform();
     }catch(e){}
+  });
+
+  // ── FIRST-PAINT CORRECTIVE REDRAW ─────────────────────────────────────────
+  // On the initial load, the viewport region is computed, THEN fitToVP changes
+  // zoom/pan (and the self-correct rAF above may nudge pan once more). The
+  // synchronous _setAnnoRes(false) inside applyTransform can run against a
+  // region that's about to move, and its skip-guard (eff+region key unchanged)
+  // can suppress the redraw that would repaint the rest — so annotations show
+  // half-drawn until a later manual zoom forces a clean rebuild. Force ONE full
+  // re-rasterization a couple frames after the fit has fully settled: clear the
+  // guard keys so nothing can be skipped, then redraw at full region resolution.
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      try{
+        if(typeof _annoRegionKey!=='undefined') _annoRegionKey='';
+        if(typeof _annoEff!=='undefined') _annoEff=0;
+        if(typeof _vpUpdate==='function') _vpUpdate();
+        if(typeof _setAnnoRes==='function') _setAnnoRes(true);
+      }catch(e){}
+    });
   });
 }
 
@@ -4447,7 +4568,13 @@ function _loadPDFExploded(f){
 // while Chrome/Firefox/Edge get the full high-res budget.
 var IS_DESKTOP_SAFARI = !IS_IOS &&
   /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent);
-var CANVAS_MAX_AREA = IS_IPHONE ? 4.2e6 : (IS_IPAD ? 8e6 : (IS_DESKTOP_SAFARI ? 16e6 : 20e6));
+// Raised desktop budgets (was 16/20 MP): large CAD plans were hitting the AREA
+// cap long before the 400-DPI target, rendering hairline linework at ~1px where
+// CSS zoom resampling makes it band light/dark. Chrome desktop 20→40 MP doubles
+// the pixels (~1.41× linear resolution) so hairlines carry more samples; Safari
+// desktop gets a smaller bump (its canvas memory handling is less forgiving).
+// Mobile budgets unchanged — memory there is the hard constraint.
+var CANVAS_MAX_AREA = IS_IPHONE ? 4.2e6 : (IS_IPAD ? 8e6 : (IS_DESKTOP_SAFARI ? 24e6 : 40e6));
 function _clampScaleToArea(scale, pw, ph){
   var area = (pw*scale) * (ph*scale);
   if(area <= CANVAS_MAX_AREA) return scale;
@@ -4471,6 +4598,17 @@ function _explodePDFPage(n){
     var sc  = _explodeScale(vp1);
     var vp  = page.getViewport({scale:sc});
     var w=Math.round(vp.width), h=Math.round(vp.height);
+    // ── DEBUG: backdrop rasterization resolution. Shows the DPI the baked page is
+    // rendered at and the resulting canvas size. If linework stays baked (see
+    // annot-vec counts) this is the ceiling on its sharpness at any zoom.
+    try{
+      dbg('backdrop-res','baked page raster', {
+        pagePts: Math.round(vp1.width)+'x'+Math.round(vp1.height),
+        scale: sc.toFixed(3),
+        effectiveDPI: Math.round(sc*72),
+        backdropPx: w+'x'+h
+      });
+    }catch(_e){}
 
     resize(w,h);
     bCtx.save(); bCtx.fillStyle='#ffffff'; bCtx.fillRect(0,0,w,h); bCtx.restore();
@@ -5868,7 +6006,7 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
       else if(fnA===OPS.transform){ m2=_mulA(m2,agA); }
       else if(fnA===OPS.setStrokeRGBColor){ curStroke=_annC(agA,'#000000'); }
       else if(fnA===OPS.setFillRGBColor){ curFill=_annC(agA,null); }
-      else if(fnA===OPS.setLineWidth){ curLW=Math.max(1,(agA||1)*sc*0.5); }
+      else if(fnA===OPS.setLineWidth){ curLW=Math.max(1,(agA||1)*sc*_IMPORT_LW_SCALE); }
       else if(fnA===OPS.setDash){
         // Follow what the appearance actually draws, ignoring the [3] artifact:
         // a real coarse dash turns it on; a fine/empty array forces solid.
@@ -5905,6 +6043,23 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
       }
     }
   }catch(e){ console.warn('[Markup] shape annot import:',e); }
+
+  // ── DEBUG: how many of the page's line/shape annotations actually became
+  // editable VECTOR objects this import (vs. staying baked in the backdrop). If
+  // these counts are ~0 while [AOG:annots] shows many Line/PolyLine/Square/Circle,
+  // the linework is raster-only and will go soft on zoom. If they're populated,
+  // the softness is a render-resolution issue, not extraction.
+  try{
+    var _dbgAnnotVec = {
+      lines:   measureObjs.filter(function(o){return o&&o._fromAnnot&&o._fromExplode&&!o.isArrow;}).length,
+      arrows:  measureObjs.filter(function(o){return o&&o._fromAnnot&&o._fromExplode&&o.isArrow;}).length,
+      shapes:  shapeObjs.filter(function(o){return o&&o._fromAnnot&&o._fromExplode;}).length,
+      polylines: polylineObjs.filter(function(o){return o&&o._fromAnnot&&o._fromExplode;}).length,
+      pen:     penObjs.filter(function(o){return o&&o._fromExplode;}).length
+    };
+    _dbgAnnotVec.totalVectors = _dbgAnnotVec.lines+_dbgAnnotVec.arrows+_dbgAnnotVec.shapes+_dbgAnnotVec.polylines;
+    dbg('annot-vec','line/shape annots → editable vectors', _dbgAnnotVec);
+  }catch(_e){ console.warn('[dbg] annot-vec count failed:', _e); }
 
   _explodedMarkupCount=markupObjs.filter(function(o){return o._fromExplode;}).length;
   _explodedPenCount   =penObjs.filter(function(o){return o._fromExplode;}).length;
@@ -6677,9 +6832,24 @@ function _annoXf(ctx, eff){
   if(_vpRegion) ctx.setTransform(eff,0,0,eff, -_vpRegion.x0*eff, -_vpRegion.y0*eff);
   else          ctx.setTransform(eff,0,0,eff,0,0);
 }
+// ── SUBPIXEL LAYER POSITIONING ───────────────────────────────────────────────
+// Region canvases used to be placed with CSS left/top = region origin (plan px)
+// INSIDE the scale(zoom)'d scene. Their screen position is therefore
+// origin×zoom — a different fractional device-pixel offset on every zoom tick —
+// and the compositor snapped each layer to the device-pixel grid independently.
+// At fractional dpr (any browser zoom ≠ 100%) that snap flip-flopped frame to
+// frame, so ONLY the pictures (and anno layers) wobbled sideways against the
+// plan, whose canvas sits at origin 0 and never re-snaps. Positioning with a
+// transform instead makes each canvas its own composited layer rendered at its
+// TRUE fractional offset (GPU subpixel compositing) — nothing snaps, nothing
+// wobbles, at any devicePixelRatio.
+function _posCv(cv, x, y){
+  cv.style.left='0px'; cv.style.top='0px';
+  cv.style.transform='translate3d('+x+'px,'+y+'px,0)';
+}
 function _vpResetCss(){
   [tCv,shCv,hlCv,(typeof imgCv!=='undefined'?imgCv:null),selCv].forEach(function(cv){
-    if(cv){ cv.style.left='0px'; cv.style.top='0px'; }
+    if(cv){ _posCv(cv,0,0); }
   });
 }
 // rAF-batched re-render of every region-aware layer after the region moves.
@@ -6813,8 +6983,7 @@ function _sizeAnnoCanvas(cv, ctx, eff){
   var effX = bw/w, effY = bh/h;
   cv.style.width  = w+'px';
   cv.style.height = h+'px';
-  cv.style.left   = rx+'px';
-  cv.style.top    = ry+'px';
+  _posCv(cv, rx, ry);
   ctx.setTransform(effX,0,0,effY, -rx*effX, -ry*effY);   // draw in plan coords, render at eff
 }
 // Size selCv 1:1 with the plan canvas for the raw-coordinate chrome paths
@@ -6828,7 +6997,7 @@ function _sizeSelCvRaw(){
   selCv.style.height = baseCv.height+'px';
   // This raw mode is full-plan by definition — undo any viewport-region offset
   // left on the element or the text chrome draws displaced by the region origin.
-  selCv.style.left='0px'; selCv.style.top='0px';
+  _posCv(selCv,0,0);
   selCtx.setTransform(1,0,0,1,0,0);
 }
 var _annoRegionKey = '';   // identity of the region baked into the anno canvases
@@ -6848,6 +7017,23 @@ function _setAnnoRes(force){
   _sizeAnnoCanvas(tCv,  tCtx,  eff);
   _sizeAnnoCanvas(shCv, shCtx, eff);
   _sizeAnnoCanvas(hlCv, hlCtx, eff);
+  // ── DEBUG: the resolution vector annotations are actually rasterized at right
+  // now. deviceScale = how many backing px per on-screen px (≥1 = crisp, <1 =
+  // upscaled/soft). If this is <1 at the zoom where lines look soft, the clamp in
+  // _vpEffFor is the culprit; if it's ≥1, the soft content is baked backdrop.
+  try{
+    if(AOG_DEBUG){
+      var _rgW = _vpRegion ? _vpRegion.w : baseCv.width;
+      var _rgH = _vpRegion ? _vpRegion.h : baseCv.height;
+      dbg('anno-res','vector layer resolution', {
+        zoom: zoom.toFixed(4),
+        eff: eff,
+        region: Math.round(_rgW)+'x'+Math.round(_rgH),
+        backingPx: tCv.width+'x'+tCv.height,
+        deviceScale: (eff/(window.devicePixelRatio||1)/Math.max(zoom,0.0001)).toFixed(2)
+      });
+    }
+  }catch(_e){}
   if(baseLoaded){
     if(typeof renderTextObjs==='function')        renderTextObjs();
     if(typeof renderShapeAndMeasure==='function') renderShapeAndMeasure();
@@ -7726,6 +7912,18 @@ function onDown(e){
   if(tool==='leader'){
     // Mid-placement (first point already set) → let the click handler place P2.
     if(leaderStep>0){ return; }
+    // Editing a label right now → its LEFT-side stretch handles work here too
+    // (same Acrobat-style wrap-resize as the text tool), so users don't have to
+    // switch tools to reflow a leader label they just typed.
+    if(editingObj){
+      var _lth=_textHandleAt(editingObj,sp.x,sp.y);
+      if(_textHandleStretches(editingObj,_lth)){
+        e.preventDefault();
+        _txtSizeReedit=true;               // caret returns on release
+        _beginTextWrapResize(editingObj,sp,_textHandleSide(_lth));
+        return;
+      }
+    }
     // Double-tap a label's TEXT with the leader tool → edit the text directly,
     // so users don't have to switch to the Text tool. Single taps fall through
     // to leader selection (handles / recolor) below.
@@ -7985,6 +8183,10 @@ function onMove(e){
       var _w2=measureLinesWDrawn(_so,_wl2,_sfpx);
       _so.x=_ss.rx-_w2*Math.cos(_ss.ang);
       _so.y=_ss.ry-_w2*Math.sin(_ss.ang);
+      // Leader label: the pinned right edge IS the leader anchor — keep the
+      // stored anchor in lock-step so the elbow/commit math agrees with the
+      // reflowed box.
+      if(_so._anchorRight){ _so._anchorX=_ss.rx; _so._anchorY=_ss.ry; }
     }
     renderTextObjs();
     _sizeSelCvRaw();
@@ -8465,6 +8667,7 @@ function onUp(e){
       textOv.value='';   // label must NEVER inherit text left over from a previous box
       // Text anchor: horizontal drags place text just past the shoulder end on
       // that side; vertical drags place it just past the shoulder end above/below.
+      _textLeaderPending=true;   // tag the label this session commits
       var _se=leaderShoulderEnd(_leaderObj);
       if(_ld.vertical){
         textX=_se.x; textY=_se.y + (_ld.sign>0 ? 2 : -2);
@@ -8673,9 +8876,13 @@ function onUp(e){
         layerIdx:activeLayerIdx,showLabel:false,_editing:false
       };
       measureObjs.push(newLine);
-      // Commit immediately — no edit mode on mouseup
-      selectedMeasure=null;
+      // Stay selected after placement so endpoints/size can be adjusted
+      // immediately — no second click needed (matches touch behaviour).
+      newLine._editing=true;
+      selectedMeasure=newLine;
+      measureDragHandle=-1; measureDragStart=null;
       renderShapeAndMeasure();
+      renderMeasureSelection();
     } else { renderShapeAndMeasure(); }
     composite(); pushUndo();
   }
@@ -8691,18 +8898,13 @@ function onUp(e){
         _editing:false
       };
       measureObjs.push(newM);
-      if(isTouch){
-        // Touch: stay in edit mode so endpoints can be dragged
-        newM._editing=true;
-        selectedMeasure=newM;
-        measureDragHandle=-1; measureDragStart=null;
-        renderShapeAndMeasure();
-        renderMeasureSelection();
-      } else {
-        // Desktop: commit immediately on mouseup — no extra click needed
-        selectedMeasure=null;
-        renderShapeAndMeasure();
-      }
+      // Stay in edit mode on BOTH touch and desktop so the endpoints can be
+      // dragged to fine-tune immediately — no extra click needed.
+      newM._editing=true;
+      selectedMeasure=newM;
+      measureDragHandle=-1; measureDragStart=null;
+      renderShapeAndMeasure();
+      renderMeasureSelection();
       if(scalingMode){
         refLinePixels=px;
         _scalingRefMeasure=newM;
@@ -8735,16 +8937,13 @@ function onUp(e){
         layerIdx:activeLayerIdx, showLabel:false, isArrow:true, _editing:false
       };
       measureObjs.push(newA);
-      if(isTouchA){
-        newA._editing=true;
-        selectedMeasure=newA;
-        measureDragHandle=-1; measureDragStart=null;
-        renderShapeAndMeasure();
-        renderMeasureSelection();
-      } else {
-        selectedMeasure=null;
-        renderShapeAndMeasure();
-      }
+      // Stay selected after placement so endpoints/size can be adjusted
+      // immediately — no second click needed.
+      newA._editing=true;
+      selectedMeasure=newA;
+      measureDragHandle=-1; measureDragStart=null;
+      renderShapeAndMeasure();
+      renderMeasureSelection();
     } else { renderShapeAndMeasure(); }
     composite(); pushUndo();
   }
@@ -8990,7 +9189,7 @@ function drawMeasureObjOnCtx(ctx, m, highlight){
   ctx.save();
   ctx.globalAlpha=m.opacity;
   ctx.strokeStyle=highlight?'#00D4FF':m.color;
-  ctx.lineWidth=m.strokeW;
+  ctx.lineWidth=_hairline(m.strokeW);
   ctx.lineCap='round'; ctx.lineJoin='round';
   if(m.lineStyle==='dashed') ctx.setLineDash([m.strokeW*4,m.strokeW*3]);
   else if(m.lineStyle==='dotted') ctx.setLineDash([m.strokeW,m.strokeW*2.5]);
@@ -9062,6 +9261,25 @@ function _prepShcvPreview(){
   return shCtx;
 }
 
+// ── HAIRLINE FLOOR ──────────────────────────────────────────────────────────
+// Thin imported vector lines (conduit runs, boxes, leaders) render at their true
+// plan-px weight, which is correct at working zoom — but when the whole 4400px
+// sheet is zoomed out to the ~13% fit view, a ~2-3px line becomes <1 screen px
+// and antialiases into faint gray, so the drawing looks washed out compared to
+// Acrobat. PDF/CAD viewers avoid this with a minimum ON-SCREEN line weight.
+// _hairline() raises the drawn width so a line never falls below ~1 screen px,
+// but ONLY during on-screen rendering (_annoScreenRender) — export runs the same
+// helpers with the flag off, so exported/printed weights are untouched. At normal
+// zoom the floor is below the real widths, so it changes nothing there.
+var _annoScreenRender = false;
+var _HAIRLINE_MIN_SCREEN_PX = 1.1;
+function _hairline(w){
+  if(!_annoScreenRender) return w;                       // export / off-screen: true weight
+  var z = (typeof zoom==='number' && zoom>1e-4) ? zoom : 1;
+  var floor = _HAIRLINE_MIN_SCREEN_PX / z;               // plan px needed for ~1 screen px
+  return w > floor ? w : floor;
+}
+
 function renderShapeAndMeasure(){
   // Guarantee the shapes/notes canvas backing store AND its draw transform match
   // the current zoom resolution before we draw. This renderer works in plan
@@ -9078,6 +9296,8 @@ function renderShapeAndMeasure(){
   else { _annoXf(hlCtx, _eff); }
   _clearCv(shCtx,shCv);
   _clearCv(hlCtx,hlCv);
+  _annoScreenRender = true;   // enable hairline floor for the committed on-screen pass
+  try{
   // Markups first → they underlie everything drawn below (matches export).
   renderMarkupObjs();
   // Shape objects
@@ -9088,7 +9308,7 @@ function renderShapeAndMeasure(){
     shCtx.save();
     shCtx.translate(s.cx,s.cy); shCtx.rotate(s.angle);
     shCtx.strokeStyle=s.color; shCtx.fillStyle=s.color;
-    shCtx.lineWidth=s.strokeW; shCtx.lineCap='round'; shCtx.lineJoin='round';
+    shCtx.lineWidth=_hairline(s.strokeW); shCtx.lineCap='round'; shCtx.lineJoin='round';
     shCtx.globalAlpha=s.opacity;
     if(s.lineStyle==='dashed') shCtx.setLineDash([s.strokeW*4,s.strokeW*3]);
     else if(s.lineStyle==='dotted') shCtx.setLineDash([s.strokeW,s.strokeW*2.5]);
@@ -9139,6 +9359,7 @@ function renderShapeAndMeasure(){
   stampObjs.forEach(function(o){ var L=layers[o.layerIdx]; if(L&&!L.visible) return; drawStampObjOnCtx(shCtx,o,1); });
   // Comment objects (sticky notes)
   renderCommentObjs(shCtx);
+  } finally { _annoScreenRender = false; }
 }
 
 // ── Draw helpers for live pen/polygon/leader/stamp ──────────────
@@ -10022,6 +10243,7 @@ function handleLeaderClick(x,y,e){
     leaderObjs.push(_lobj);
     renderShapeAndMeasure();
     composite();
+    _textLeaderPending=true;   // tag the label this session commits
     var _se=leaderShoulderEnd(_lobj);
     if(_ld.vertical){
       textX=_se.x; textY=_se.y + (_ld.sign>0 ? 2 : -2);
@@ -10561,7 +10783,10 @@ function _syncTextFmtFromObj(obj){
   textItalic     = !!obj.italic;
   textUnderline  = !!obj.underline;
   textStrike     = !!obj.strike;
-  textAlign      = obj.textAlign || 'left';
+  // A leader label's 'right' alignment is FORCED by its right-edge anchor, not
+  // a user preference — syncing it into the global made every text placed
+  // afterwards come out right-aligned. Keep the global as-is for leader labels.
+  if(!obj._anchorRight) textAlign = obj.textAlign || 'left';
   textBgColor    = obj.bgColor   || '#ffff00';
   textBgOpacity  = obj.bgOpacity || 0;
   // Update font-family select
@@ -11012,7 +11237,15 @@ function _textHandleAt(o,x,y){
 // Top/bottom-center handles and the dashed line between handles = move.
 function _textHandleStretches(o,h){
   if(h<0||h===1||h===5) return false;
-  if(!o||o._anchorRight) return false;   // leader labels keep their anchor math
+  if(!o) return false;
+  // Leader labels hang LEFT of their anchor (the leader elbow pins their right
+  // edge). Only the LEFT-side handles stretch — the right edge must stay glued
+  // to the leader, so right handles keep move behavior.
+  if(o._anchorRight) return _textHandleSide(h)==='L';
+  // Right-hanging leader label: its LEFT edge sits at the leader's shoulder end,
+  // so only the RIGHT-side handles stretch (the 'R' drag pins o.x — the arrow
+  // stays attached). Mirrors the left-hanging rule above.
+  if(o._leaderLabel) return _textHandleSide(h)==='R';
   return true;
 }
 function _textHandleSide(h){ return (h===0||h===6||h===7)?'L':'R'; }
@@ -11127,7 +11360,7 @@ function _openTextEdit(o){
   // Wrapped labels: materialize the current soft wrap into the editor so the
   // dashed edit box shows the SAME rows as the canvas. Single \n is treated as
   // a SOFT break by the wrapper, so this round-trips losslessly on commit.
-  if(o.wrapW && !o._anchorRight){
+  if(o.wrapW && !o._fitWs){
     o.text=getTextLines(o,ptToCanvasPx(o.fontSize)).join('\n');
   }
   textOv.value=o.text;
@@ -11178,6 +11411,7 @@ function _openTextEdit(o){
 
 function handleText(e){
   _textAnchorRight = false;  // normal text never uses the leader's left-hang anchor
+  _textLeaderPending = false;
   var p=getPos(e);
   // Grabbing the rotate handle of the text being edited → rotate it.
   if(editingObj && _textRotHandleAt(editingObj,p.x,p.y)){
@@ -11828,8 +12062,14 @@ function commitText(){
       // Right-anchored label (left-hanging leader): re-pin the RIGHT edge to the
       // stored anchor so edits grow/shrink leftward, not rightward off the page.
       if(_textAnchorRight && editingObj._anchorX!=null){
-        var _eln=val.split('\n');
         var _efpx=ptToCanvasPx(editingObj.fontSize);
+        // Wrapped leader label: measure the SAME rows the canvas will draw
+        // (soft-wrapped to wrapW), not the raw hard lines, or the repinned x
+        // disagrees with the rendered width and the label jumps off its anchor.
+        var _eln=editingObj.wrapW
+          ? wrapLinesToWidth(val, ptToCanvasPx(editingObj.wrapW), _efpx,
+                             editingObj.fontFamily||'Arial', editingObj.bold, editingObj.italic)
+          : val.split('\n');
         var _emw=measureLinesWFull(_eln,_efpx,editingObj.fontFamily||'Arial',editingObj.bold,editingObj.italic);
         // Keep the FAR end pinned and grow the start back along the label's own
         // direction, so a rotated label grows/shrinks in line with its glyphs
@@ -11861,10 +12101,12 @@ function commitText(){
              underline:textUnderline,strike:textStrike,textAlign:_newAlign,
              bgColor:textBgColor,bgOpacity:textBgOpacity,
              _anchorRight:_textAnchorRight, _anchorX:textX, _anchorY:textY};
+    if(_textLeaderPending) obj._leaderLabel=true;
     textObjs.push(obj); renderTextObjs(); pushUndo(); _aogRestoreTextCol();
     // (No transform box — a freshly placed text just sits there. Re-click to edit.)
   }
   _textAnchorRight = false; // reset so the next text entry starts clean
+  _textLeaderPending = false;
 }
 
 // Enter selection mode for a text object (move + rotate, no resize)
@@ -12125,8 +12367,7 @@ function renderSelection(){
   var _seX=_selBW/_sW, _seY=_selBH/_sH;
   selCv.style.width  = _sW+'px';
   selCv.style.height = _sH+'px';
-  selCv.style.left   = _sRX+'px';
-  selCv.style.top    = _sRY+'px';
+  _posCv(selCv, _sRX, _sRY);
   selCtx.setTransform(_seX,0,0,_seY, -_sRX*_seX, -_sRY*_seY);
   // Keep a comment's selection chrome (dashed box + handles) locked to the note's
   // LIVE geometry. The box auto-grows to fit text while typing, snaps to fit, and
@@ -12991,7 +13232,7 @@ function drawPolylineOnCtx(ctx, pl, sc){
   ctx.save();
   ctx.globalAlpha=pl.opacity;
   ctx.strokeStyle=pl.color;
-  ctx.lineWidth=pl.strokeW*sc;
+  ctx.lineWidth=_hairline(pl.strokeW*sc);
   ctx.lineCap='round'; ctx.lineJoin='round';
   if(pl.lineStyle==='dashed') ctx.setLineDash([pl.strokeW*4*sc,pl.strokeW*3*sc]);
   else if(pl.lineStyle==='dotted') ctx.setLineDash([pl.strokeW*sc,pl.strokeW*2.5*sc]);
@@ -13179,13 +13420,18 @@ function closePolyline(){
   }
   if(plPoints.length<2){ plPoints=[]; plActive=false; renderShapeAndMeasure(); return; }
   captureState();
-  polylineObjs.push({
+  var _newPl={
     id:Date.now(), pts:plPoints.slice(),
     color:color, strokeW:strokeW, opacity:opacity, lineStyle:lineStyle,
     layerIdx:activeLayerIdx
-  });
+  };
+  polylineObjs.push(_newPl);
   plPoints=[]; plActive=false;
   renderShapeAndMeasure(); composite(); pushUndo();
+  // Stay selected after commit so vertices can be adjusted immediately —
+  // no extra click needed.
+  selectedPolyline=_newPl;
+  renderPolylineSelection();
   toast('Polyline committed · Hold to delete','ok',2000);
 }
 
@@ -14242,7 +14488,7 @@ btnProps.addEventListener('click',function(){ propsPanel.classList.toggle('colla
 // ── SCALE ──
 btnSetScale.addEventListener('click',function(){
   scalingMode=true;
-  tool='measure';
+  _swapStrokeForTool('measure'); tool='measure';
   document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
   document.querySelector('.tb-btn[data-tool="measure"]').classList.add('active');
   drawCv.style.cursor='crosshair';
@@ -14309,7 +14555,7 @@ document.getElementById('scale-redraw').addEventListener('click',function(){
     renderShapeAndMeasure();
   }
   scalingMode=true;
-  tool='measure';
+  _swapStrokeForTool('measure'); tool='measure';
   document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
   var mb=document.querySelector('.tb-btn[data-tool="measure"]');
   if(mb) mb.classList.add('active');
@@ -14413,7 +14659,7 @@ unitIn.addEventListener('change',function(){ scaleUnit=unitIn.value.trim()||'ft'
   rcBtn.addEventListener('click',function(){
     // Trigger the same flow as btnSetScale
     scalingMode=true;
-    tool='measure';
+    _swapStrokeForTool('measure'); tool='measure';
     document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
     var mb=document.querySelector('.tb-btn[data-tool="measure"]');
     if(mb) mb.classList.add('active');
@@ -16285,7 +16531,23 @@ function _buildVectorPdf(attachJson, onReady){
       complexList= [];
     }
     var nativeList = movedAxis;
-    dbg('export','image classification',{mode:(_FULL_REDRAW?'full-redraw':'legacy'), total:fullImgs.length, keptOriginal:untouched.length, redrawn:movedAxis.length, rotated:complexList.length});
+    // ── TRACED LINE-ART → TRUE VECTOR PATHS ─────────────────────────
+    // Overlays that were traced at insert time (ov._trace) are pulled out of
+    // the raster embed list and drawn with page.drawSvgPath instead: real
+    // PDF path operators, infinitely sharp, no JPEG ringing. Only the plain
+    // case qualifies (no flip/rotate, uniform stretch, unrotated page) —
+    // anything else falls back to the proven raster embed.
+    var _totRot = (((typeof _pdfPageRot!=='undefined'?_pdfPageRot:0) + (typeof _userRotDeg!=='undefined'?_userRotDeg:0)) % 360 + 360) % 360;
+    function _traceDrawable(ov){
+      if(!ov._trace || !ov._trace.paths || !ov._trace.paths.length) return false;
+      if(_totRot !== 0) return false;
+      if((ov.angle||0) !== 0 || ov.flipH || ov.flipV) return false;
+      var sx=ov.w/ov._trace.w, sy=ov.h/ov._trace.h;
+      return Math.abs(sx-sy) <= 0.02*Math.max(sx,sy);   // near-uniform scale only
+    }
+    var tracedList = nativeList.filter(_traceDrawable);
+    if(tracedList.length) nativeList = nativeList.filter(function(ov){ return tracedList.indexOf(ov)===-1; });
+    dbg('export','image classification',{mode:(_FULL_REDRAW?'full-redraw':'legacy'), total:fullImgs.length, keptOriginal:untouched.length, redrawn:movedAxis.length, rotated:complexList.length, tracedVector:tracedList.length});
     // Page-native images the user MOVED: instead of covering the old spot with a
     // patch, we BLANK the source image XObject in the reloaded PDF so its original
     // draw renders nothing at all — a clean removal exactly like Acrobat, with no
@@ -16839,6 +17101,29 @@ function _buildVectorPdf(attachJson, onReady){
               // is transparent. (Previously the overlay was drawn first and native
               // images stamped over it, burying any note that overlapped a picture.)
               var chain=fontChain;
+              // Traced line-art first (same layer as native images: under the
+              // annotation overlay). drawSvgPath interprets path coords y-DOWN
+              // from the anchor, so anchor at the image's top-left corner.
+              tracedList.forEach(function(ov){
+                chain=chain.then(function(){
+                  var t=ov._trace;
+                  var Wp=ov.w/sc, Hp=ov.h/sc;
+                  var pScale=Wp/t.w;
+                  var tc2=v2p(ov.cx/sc, VH - ov.cy/sc);       // center, page coords
+                  var x0=tc2.x - Wp/2, y0=tc2.y + Hp/2;       // top-left anchor
+                  var op=(ov.opacity!=null?ov.opacity:1);
+                  t.paths.forEach(function(p){
+                    try{
+                      page.drawSvgPath(p.d, {
+                        x:x0, y:y0, scale:pScale,
+                        color:PDFLib.rgb(p.rgb[0],p.rgb[1],p.rgb[2]),
+                        opacity:op, borderWidth:0
+                      });
+                    }catch(pe){ console.warn('[VectorExport] traced path draw failed:',pe); }
+                  });
+                  dbg('export','traced image drawn as '+t.paths.length+' vector paths');
+                });
+              });
               natives.forEach(function(n){
                 chain=chain.then(function(){
                   return (n.png ? pdf.embedPng(n.bytes) : pdf.embedJpg(n.bytes)).then(function(im){
@@ -17942,6 +18227,9 @@ function doRestore(rec){
                 if(!od.src) return;
                 var oi=new Image();
                 oi.onload=function(){
+                  // Reopened projects lose trace data (not serialized) — re-trace
+                  // line-art so vector export quality survives a save/reopen.
+                  try{ if(typeof _traceIfBilevel==='function') setTimeout(function(){ _traceIfBilevel(oi); },0); }catch(e){}
                   imgOverlays.push({img:oi,cx:od.cx,cy:od.cy,w:od.w,h:od.h,
                     angle:od.angle||0,flipH:!!od.flipH,flipV:!!od.flipV,
                     opacity:od.opacity!==undefined?od.opacity:1,
@@ -18149,7 +18437,7 @@ function syncImgCv(){
   // hair on zoom). Backing-store rounding is compensated exactly per axis.
   var effX=bw/w, effY=bh/h;
   imgCv.style.width=w+'px'; imgCv.style.height=h+'px';
-  imgCv.style.left=rx+'px'; imgCv.style.top=ry+'px';
+  _posCv(imgCv, rx, ry);
   imgCtx.setTransform(effX,0,0,effY, -rx*effX, -ry*effY);
   imgCv._eff=eff;
   _imgEff=eff;
@@ -18354,7 +18642,7 @@ function renderImgSelection(){
   // rounding compensated exactly per axis.
   var _eX=bw/_rW, _eY=bh/_rH;
   selCv.style.width=_rW+'px'; selCv.style.height=_rH+'px';
-  selCv.style.left=_rX+'px'; selCv.style.top=_rY+'px';
+  _posCv(selCv, _rX, _rY);
   selCtx.setTransform(_eX,0,0,_eY, -_rX*_eX, -_rY*_eY);
   _clearCv(selCtx,selCv);
   // Draw image itself
@@ -18811,7 +19099,7 @@ function _drawImgGhost(cx, cy){
   selCv.style.height = (_gh/_ge) + 'px';
   // Full-plan canvas — drop any viewport-region offset left on the element by a
   // previous selection render, or the ghost draws displaced by the region origin.
-  selCv.style.left='0px'; selCv.style.top='0px';
+  _posCv(selCv,0,0);
   selCtx.setTransform(_ge,0,0,_ge,0,0);
   _clearCv(selCtx,selCv);
   if(!_pendingImg) return;
@@ -18926,6 +19214,7 @@ function _commitImgPlacement(cx, cy){
 
   captureState();
   var ov = {img:img, cx:cx, cy:cy, w:sz.w, h:sz.h, angle:0, flipH:false, flipV:false, opacity:1, layerIdx:activeLayerIdx};
+  if(img._aogTrace){ ov._trace = img._aogTrace; }   // bilevel line-art → vector paths for export
   if(_pendingOrigJpeg && _pendingOrigJpeg.length){ ov._origJpeg=_pendingOrigJpeg; }
   _pendingOrigJpeg = null;
   imgOverlays.push(ov);
@@ -18985,6 +19274,88 @@ document.addEventListener('keydown', function(e){
   if(e.key === 'Escape' && _pendingImg) _cancelImgPlacement();
 }, true);
 
+// ── BILEVEL LINE-ART → VECTOR TRACING ────────────────────────────────
+// A PNG/JPEG has no vectors to "keep" — they were destroyed the moment the
+// source was rasterized. But pure black-and-white line-art (decals, warning
+// labels, wiring diagrams) can be RECONSTRUCTED as vectors by tracing. This
+// runs once at insert time; the result rides on the overlay as ov._trace and
+// the vector exporter draws it with page.drawSvgPath → infinitely sharp,
+// instead of the fuzzy scaled JPEG that used to come out.
+// Detection is strict: ≥94% of sampled pixels must be near-black or near-white
+// and there must be SOME dark ink. Photos and gradient logos are rejected and
+// keep the existing native-resolution raster embed path.
+function _traceIfBilevel(img){
+  try{
+    if(typeof window.ImageTracer==='undefined') return;           // tracer not loaded
+    if(img._aogTrace || img._aogTraceTried) return;               // once per image
+    img._aogTraceTried = true;
+    var nw=img.naturalWidth||img.width, nh=img.naturalHeight||img.height;
+    if(!nw || !nh || nw*nh > 6e6) return;                         // cap the work
+    var c=document.createElement('canvas'); c.width=nw; c.height=nh;
+    var x=c.getContext('2d', {willReadFrequently:true});
+    x.drawImage(img,0,0);
+    var id=x.getImageData(0,0,nw,nh), d=id.data;
+    // Pass 1: classify. Sample at most ~200k pixels for speed.
+    var step=Math.max(1, Math.round((nw*nh)/200000));
+    var dark=0, light=0, mid=0, transp=0, tot=0, i, L;
+    for(i=0; i<d.length; i+=4*step){
+      tot++;
+      if(d[i+3]<128){ transp++; light++; continue; }              // transparent counts as paper
+      L=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      if(L<64) dark++; else if(L>=192) light++; else mid++;
+    }
+    if(!tot) return;
+    var midFrac=mid/tot, darkFrac=dark/tot, transpFrac=transp/tot;
+    if(midFrac>0.06 || darkFrac<0.004){
+      if(typeof dbg==='function') dbg('trace','image NOT bilevel (mid='+(midFrac*100).toFixed(1)+'% dark='+(darkFrac*100).toFixed(1)+'%) — keeping raster embed');
+      return;
+    }
+    var hasTranspBg = transpFrac > 0.01;
+    // Pass 2: hard-threshold every pixel to pure black/white so the tracer
+    // sees exactly two colors (transparent → white).
+    for(i=0; i<d.length; i+=4){
+      var v;
+      if(d[i+3]<128) v=255;
+      else{ L=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]; v = (L<128?0:255); }
+      d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+    }
+    var traced = ImageTracer.imagedataToTracedata(id, {
+      ltres:1, qtres:1, pathomit:8, rightangleenhance:true,
+      // Explicit palette: the automatic quantizer can collapse a pure 2-value
+      // image into one color (both entries end up white) — pin black + white.
+      pal:[{r:0,g:0,b:0,a:255},{r:255,g:255,b:255,a:255}],
+      numberofcolors:2, colorquantcycles:1, mincolorratio:0,
+      blurradius:0, roundcoords:2, linefilter:false, layering:0
+    });
+    var svgstr = ImageTracer.getsvgstring(traced, {roundcoords:2, viewbox:false, desc:false, scale:1, strokewidth:0, lcpr:0, qcpr:0, linefilter:false});
+    // Pull each <path> apart into {d, rgb}. ImageTracer emits
+    // fill="rgb(r,g,b)" ... opacity="a" ... d="..."; holes are extra M..Z
+    // subpaths inside the same d (wound for nonzero fill — pdf-lib compatible).
+    var paths=[], re=/<path\b([^>]*)>/g, m;
+    while((m=re.exec(svgstr))){
+      var attrs=m[1];
+      var dm=attrs.match(/\bd="([^"]+)"/);            if(!dm) continue;
+      var om=attrs.match(/\bopacity="([\d.]+)"/);     if(om && +om[1]===0) continue;
+      var fm=attrs.match(/fill="rgb\((\d+),(\d+),(\d+)\)"/);
+      var r=fm?+fm[1]:0, g=fm?+fm[2]:0, b=fm?+fm[3]:0;
+      var isWhite = (r>230 && g>230 && b>230);
+      // Transparent-background art: the "white" layer is really transparency —
+      // skip it so the traced decal stays see-through like the original.
+      if(isWhite && hasTranspBg) continue;
+      paths.push({d:dm[1], rgb:[r/255, g/255, b/255], white:isWhite});
+    }
+    if(!paths.length || paths.length>4000){
+      if(typeof dbg==='function') dbg('trace','trace rejected ('+paths.length+' paths) — keeping raster embed');
+      return;
+    }
+    img._aogTrace = {paths:paths, w:nw, h:nh};
+    // Back-fill any overlay already placed with this image (user clicked
+    // faster than the trace finished).
+    try{ if(typeof imgOverlays!=='undefined') imgOverlays.forEach(function(ov){ if(ov.img===img && !ov._trace) ov._trace=img._aogTrace; }); }catch(e){}
+    if(typeof dbg==='function') dbg('trace','bilevel line-art traced → '+paths.length+' vector paths ('+nw+'x'+nh+', transparentBg='+hasTranspBg+') — will export as TRUE VECTORS');
+  }catch(e){ console.warn('[Trace] failed (raster embed keeps working):', e); }
+}
+
 // ── Load image into overlay ──
 // If the source file is already a JPEG, keep its ORIGINAL bytes so export can
 // embed them untouched (zero recompression) instead of round-tripping through
@@ -19005,7 +19376,14 @@ function addImgOverlay(file){
   var img = new Image();
   img.onload = function(){
     URL.revokeObjectURL(url);
-    var start=function(){ _enterImgPlacementMode(_rasterizeImg(img)); };
+    var start=function(){
+      var rimg = _rasterizeImg(img);
+      _enterImgPlacementMode(rimg);
+      // Off the critical path: if this is bilevel line-art (decals, labels,
+      // diagrams), trace it into true vector paths. The vector export then
+      // draws those paths instead of embedding pixels → sharp at any zoom.
+      setTimeout(function(){ _traceIfBilevel(rimg); }, 0);
+    };
     if(img.decode){ img.decode().then(start).catch(start); }
     else start();
   };
@@ -19611,7 +19989,11 @@ function hideHint(){ panHint.classList.remove('show'); }
 
     // Reset all annotation state (same as afterLoad)
     pdfDoc = null; pgGrp(false);
-    _vectorBackdropOK=false; _pdfBytes=null;  // blank/drawn base, no PDF source
+    _vectorBackdropOK=false; _pdfBytes=null;  // re-armed below by _armBlankVectorSource
+    // A previous exploded PDF may have left these set; a fresh blank canvas has no
+    // extracted page content, so clear them or the exporter takes wrong branches.
+    try{ _explodedFromPage=false; }catch(e){}
+    try{ _pdfPageRot=0; }catch(e){}
     resize(px.w, px.h);
 
     // Fill the base canvas with chosen background
@@ -19661,7 +20043,68 @@ function hideHint(){ panHint.classList.remove('show'); }
     var wLabel = px.wIn % 1 === 0 ? px.wIn : px.wIn.toFixed(2).replace(/\.?0+$/,'');
     var hLabel = px.hIn % 1 === 0 ? px.hIn : px.hIn.toFixed(2).replace(/\.?0+$/,'');
     toast('Blank canvas ready · ' + wLabel + '×' + hLabel + '" at ' + ncDpi + ' dpi', 'ok', 3500);
+
+    // ── VECTOR SOURCE FOR BLANK CANVASES ─────────────────────────────
+    // Synthesize a pristine one-page PDF that matches this canvas exactly
+    // (size in points + the same background, with the grid drawn as TRUE
+    // vector lines). Arming _pdfBytes/_vectorBackdropOK routes every export
+    // through _buildVectorPdf: annotations become real PDF vectors, inserted
+    // images embed at native resolution (or as traced paths), and the EXPORT
+    // chip honestly reads VECTOR for from-scratch plans.
+    _armBlankVectorSource(px.wIn, px.hIn, ncBg, ncDpi);
   });
+
+  function _armBlankVectorSource(wIn, hIn, bg, dpi, _retry){
+    if(typeof window.PDFLib==='undefined'){
+      // pdf-lib loads async from CDN; retry a few times, then give up quietly
+      // (export falls back to raster exactly as before this feature existed).
+      if((_retry||0) < 20) setTimeout(function(){ _armBlankVectorSource(wIn,hIn,bg,dpi,(_retry||0)+1); }, 500);
+      else console.warn('[BlankVector] PDFLib never loaded — blank canvas stays raster');
+      return;
+    }
+    var wPt = wIn*72, hPt = hIn*72;
+    try{
+      PDFLib.PDFDocument.create().then(function(pdf){
+        var page = pdf.addPage([wPt, hPt]);
+        // Opaque white base (also the blend backdrop for multiply overlays).
+        // For 'transparent' background we still emit white — PDF pages have no
+        // transparent paper, and every viewer shows white anyway.
+        page.drawRectangle({x:0, y:0, width:wPt, height:hPt, color:PDFLib.rgb(1,1,1), borderWidth:0});
+        if(bg === 'grid'){
+          // EXACT same geometry as the raster grid painted on bCtx above:
+          // 0.25" cells clamped to [10..80]px, minor #d0d8e8, every 4th major
+          // #b0bdd0, 1px lines. Converted px→pt via the canvas dpi.
+          var cellPx = Math.max(10, Math.min(80, Math.round(dpi*0.25)));
+          var cellPt = cellPx*72/dpi, lwPt = 72/dpi;
+          var minor = PDFLib.rgb(0xd0/255, 0xd8/255, 0xe8/255);
+          var major = PDFLib.rgb(0xb0/255, 0xbd/255, 0xd0/255);
+          var gx, gy, k;
+          for(gx=cellPt; gx<wPt; gx+=cellPt)
+            page.drawLine({start:{x:gx,y:0}, end:{x:gx,y:hPt}, thickness:lwPt, color:minor});
+          // Canvas draws horizontals top-down; PDF y is up, so mirror: k-th line
+          // from the top sits at y = hPt - k*cellPt.
+          for(k=1; (gy=hPt-k*cellPt) > 0; k++)
+            page.drawLine({start:{x:0,y:gy}, end:{x:wPt,y:gy}, thickness:lwPt, color:minor});
+          var majPt = cellPt*4;
+          for(gx=majPt; gx<wPt; gx+=majPt)
+            page.drawLine({start:{x:gx,y:0}, end:{x:gx,y:hPt}, thickness:lwPt, color:major});
+          for(k=1; (gy=hPt-k*majPt) > 0; k++)
+            page.drawLine({start:{x:0,y:gy}, end:{x:wPt,y:gy}, thickness:lwPt, color:major});
+        }
+        return pdf.save();
+      }).then(function(bytes){
+        // Only arm if the user hasn't opened something else while we built this.
+        if(baseLoaded && !pdfDoc && !_pdfBytes){
+          _pdfBytes = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+          _vectorBackdropOK = true; _vecPageNum = 1;
+          try{ _pdfPageRot = 0; }catch(e){}
+          try{ _persistPdfSource(); }catch(e){}
+          try{ if(typeof scheduleSave==='function') scheduleSave(); }catch(e){}
+          try{ if(typeof dbg==='function') dbg('import','blank canvas armed with synthesized vector PDF ('+_pdfBytes.byteLength+' bytes) → exports stay VECTOR'); }catch(e){}
+        }
+      }).catch(function(e){ console.warn('[BlankVector] build failed, staying raster:', e); });
+    }catch(e){ console.warn('[BlankVector] failed:', e); }
+  }
 
   // ── Trigger button ──
   document.getElementById('new-canvas-btn').addEventListener('click', openDialog);
@@ -21716,6 +22159,1228 @@ function getImageDataFromImage(idOrElement){
 }
 
 window._jpeg444Encode = encode;
+})();
+</script>
+
+<script>
+/* ── imagetracerjs 1.2.6 (MIT, github.com/jankovicsandras/imagetracerjs) ──
+   Inlined so bilevel line-art tracing works offline. Exposes window.ImageTracer. */
+/*
+	imagetracer.js version 1.2.6
+	Simple raster image tracer and vectorizer written in JavaScript.
+	andras@jankovics.net
+*/
+
+/*
+
+The Unlicense / PUBLIC DOMAIN
+
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to http://unlicense.org/
+
+*/
+
+(function(){ 'use strict';
+
+function ImageTracer(){
+	var _this = this;
+
+	this.versionnumber = '1.2.6',
+	
+	////////////////////////////////////////////////////////////
+	//
+	//  API
+	//
+	////////////////////////////////////////////////////////////
+	
+	// Loading an image from a URL, tracing when loaded,
+	// then executing callback with the scaled svg string as argument
+	this.imageToSVG = function( url, callback, options ){
+		options = _this.checkoptions(options);
+		// loading image, tracing and callback
+		_this.loadImage(
+			url,
+			function(canvas){
+				callback(
+					_this.imagedataToSVG( _this.getImgdata(canvas), options )
+				);
+			},
+			options
+		);
+	},// End of imageToSVG()
+	
+	// Tracing imagedata, then returning the scaled svg string
+	this.imagedataToSVG = function( imgd, options ){
+		options = _this.checkoptions(options);
+		// tracing imagedata
+		var td = _this.imagedataToTracedata( imgd, options );
+		// returning SVG string
+		return _this.getsvgstring(td, options);
+	},// End of imagedataToSVG()
+	
+	// Loading an image from a URL, tracing when loaded,
+	// then executing callback with tracedata as argument
+	this.imageToTracedata = function( url, callback, options ){
+		options = _this.checkoptions(options);
+		// loading image, tracing and callback
+		_this.loadImage(
+				url,
+				function(canvas){
+					callback(
+						_this.imagedataToTracedata( _this.getImgdata(canvas), options )
+					);
+				},
+				options
+		);
+	},// End of imageToTracedata()
+	
+	// Tracing imagedata, then returning tracedata (layers with paths, palette, image size)
+	this.imagedataToTracedata = function( imgd, options ){
+		options = _this.checkoptions(options);
+		
+		// 1. Color quantization
+		var ii = _this.colorquantization( imgd, options );
+		
+		if(options.layering === 0){// Sequential layering
+			
+			// create tracedata object
+			var tracedata = {
+				layers : [],
+				palette : ii.palette,
+				width : ii.array[0].length-2,
+				height : ii.array.length-2
+			};
+			
+			// Loop to trace each color layer
+			for(var colornum=0; colornum<ii.palette.length; colornum++){
+				
+				// layeringstep -> pathscan -> internodes -> batchtracepaths
+				var tracedlayer =
+					_this.batchtracepaths(
+							
+						_this.internodes(
+								
+							_this.pathscan(
+								_this.layeringstep( ii, colornum ),
+								options.pathomit
+							),
+							
+							options
+							
+						),
+						
+						options.ltres,
+						options.qtres
+						
+					);
+				
+				// adding traced layer
+				tracedata.layers.push(tracedlayer);
+				
+			}// End of color loop
+			
+		}else{// Parallel layering
+			// 2. Layer separation and edge detection
+			var ls = _this.layering( ii );
+			
+			// Optional edge node visualization
+			if(options.layercontainerid){ _this.drawLayers( ls, _this.specpalette, options.scale, options.layercontainerid ); }
+			
+			// 3. Batch pathscan
+			var bps = _this.batchpathscan( ls, options.pathomit );
+			
+			// 4. Batch interpollation
+			var bis = _this.batchinternodes( bps, options );
+			
+			// 5. Batch tracing and creating tracedata object
+			var tracedata = {
+				layers : _this.batchtracelayers( bis, options.ltres, options.qtres ),
+				palette : ii.palette,
+				width : imgd.width,
+				height : imgd.height
+			};
+			
+		}// End of parallel layering
+		
+		// return tracedata
+		return tracedata;
+		
+	},// End of imagedataToTracedata()
+	
+	this.optionpresets = {
+		'default': {
+			
+			// Tracing
+			corsenabled : false,
+			ltres : 1,
+			qtres : 1,
+			pathomit : 8,
+			rightangleenhance : true,
+			
+			// Color quantization
+			colorsampling : 2,
+			numberofcolors : 16,
+			mincolorratio : 0,
+			colorquantcycles : 3,
+			
+			// Layering method
+			layering : 0,
+			
+			// SVG rendering
+			strokewidth : 1,
+			linefilter : false,
+			scale : 1,
+			roundcoords : 1,
+			viewbox : false,
+			desc : false,
+			lcpr : 0,
+			qcpr : 0,
+			
+			// Blur
+			blurradius : 0,
+			blurdelta : 20
+			
+		},
+		'posterized1': { colorsampling:0, numberofcolors:2 },
+		'posterized2': { numberofcolors:4, blurradius:5 },
+		'curvy': { ltres:0.01, linefilter:true, rightangleenhance:false },
+		'sharp': { qtres:0.01, linefilter:false },
+		'detailed': { pathomit:0, roundcoords:2, ltres:0.5, qtres:0.5, numberofcolors:64 },
+		'smoothed': { blurradius:5, blurdelta: 64 },
+		'grayscale': { colorsampling:0, colorquantcycles:1, numberofcolors:7 },
+		'fixedpalette': { colorsampling:0, colorquantcycles:1, numberofcolors:27 },
+		'randomsampling1': { colorsampling:1, numberofcolors:8 },
+		'randomsampling2': { colorsampling:1, numberofcolors:64 },
+		'artistic1': { colorsampling:0, colorquantcycles:1, pathomit:0, blurradius:5, blurdelta: 64, ltres:0.01, linefilter:true, numberofcolors:16, strokewidth:2 },
+		'artistic2': { qtres:0.01, colorsampling:0, colorquantcycles:1, numberofcolors:4, strokewidth:0 },
+		'artistic3': { qtres:10, ltres:10, numberofcolors:8 },
+		'artistic4': { qtres:10, ltres:10, numberofcolors:64, blurradius:5, blurdelta: 256, strokewidth:2 },
+		'posterized3': { ltres: 1, qtres: 1, pathomit: 20, rightangleenhance: true, colorsampling: 0, numberofcolors: 3,
+			mincolorratio: 0, colorquantcycles: 3, blurradius: 3, blurdelta: 20, strokewidth: 0, linefilter: false,
+			roundcoords: 1, pal: [ { r: 0, g: 0, b: 100, a: 255 }, { r: 255, g: 255, b: 255, a: 255 } ] }
+	},// End of optionpresets
+	
+	// creating options object, setting defaults for missing values
+	this.checkoptions = function(options){
+		options = options || {};
+		// Option preset
+		if(typeof options === 'string'){
+			options = options.toLowerCase();
+			if( _this.optionpresets[options] ){ options = _this.optionpresets[options]; }else{ options = {}; }
+		}
+		// Defaults
+		var ok = Object.keys(_this.optionpresets['default']);
+		for(var k=0; k<ok.length; k++){
+			if(!options.hasOwnProperty(ok[k])){ options[ok[k]] = _this.optionpresets['default'][ok[k]]; }
+		}
+		// options.pal is not defined here, the custom palette should be added externally: options.pal = [ { 'r':0, 'g':0, 'b':0, 'a':255 }, {...}, ... ];
+		// options.layercontainerid is not defined here, can be added externally: options.layercontainerid = 'mydiv'; ... <div id="mydiv"></div>
+		return options;
+	},// End of checkoptions()
+	
+	////////////////////////////////////////////////////////////
+	//
+	//  Vectorizing functions
+	//
+	////////////////////////////////////////////////////////////
+	
+	// 1. Color quantization
+	// Using a form of k-means clustering repeatead options.colorquantcycles times. http://en.wikipedia.org/wiki/Color_quantization
+	this.colorquantization = function( imgd, options ){
+		var arr = [], idx=0, cd,cdl,ci, paletteacc = [], pixelnum = imgd.width * imgd.height, i, j, k, cnt, palette;
+		
+		// imgd.data must be RGBA, not just RGB
+		if( imgd.data.length < pixelnum * 4 ){
+			var newimgddata = new Uint8ClampedArray(pixelnum * 4);
+			for(var pxcnt = 0; pxcnt < pixelnum ; pxcnt++){
+				newimgddata[pxcnt*4  ] = imgd.data[pxcnt*3  ];
+				newimgddata[pxcnt*4+1] = imgd.data[pxcnt*3+1];
+				newimgddata[pxcnt*4+2] = imgd.data[pxcnt*3+2];
+				newimgddata[pxcnt*4+3] = 255;
+			}
+			imgd.data = newimgddata;
+		}// End of RGBA imgd.data check
+		
+		// Filling arr (color index array) with -1
+		for( j=0; j<imgd.height+2; j++ ){ arr[j]=[]; for(i=0; i<imgd.width+2 ; i++){ arr[j][i] = -1; } }
+		
+		// Use custom palette if pal is defined or sample / generate custom length palette
+		if(options.pal){
+			palette = options.pal;
+		}else if(options.colorsampling === 0){
+			palette = _this.generatepalette(options.numberofcolors);
+		}else if(options.colorsampling === 1){
+			palette = _this.samplepalette( options.numberofcolors, imgd );
+		}else{
+			palette = _this.samplepalette2( options.numberofcolors, imgd );
+		}
+		
+		// Selective Gaussian blur preprocessing
+		if( options.blurradius > 0 ){ imgd = _this.blur( imgd, options.blurradius, options.blurdelta ); }
+		
+		// Repeat clustering step options.colorquantcycles times
+		for( cnt=0; cnt < options.colorquantcycles; cnt++ ){
+			
+			// Average colors from the second iteration
+			if(cnt>0){
+				// averaging paletteacc for palette
+				for( k=0; k < palette.length; k++ ){
+					
+					// averaging
+					if( paletteacc[k].n > 0 ){
+						palette[k] = {  r: Math.floor( paletteacc[k].r / paletteacc[k].n ),
+										g: Math.floor( paletteacc[k].g / paletteacc[k].n ),
+										b: Math.floor( paletteacc[k].b / paletteacc[k].n ),
+										a:  Math.floor( paletteacc[k].a / paletteacc[k].n ) };
+					}
+					
+					// Randomizing a color, if there are too few pixels and there will be a new cycle
+					if( ( paletteacc[k].n/pixelnum < options.mincolorratio ) && ( cnt < options.colorquantcycles-1 ) ){
+						palette[k] = {  r: Math.floor(Math.random()*255),
+										g: Math.floor(Math.random()*255),
+										b: Math.floor(Math.random()*255),
+										a: Math.floor(Math.random()*255) };
+					}
+					
+				}// End of palette loop
+			}// End of Average colors from the second iteration
+			
+			// Reseting palette accumulator for averaging
+			for( i=0; i < palette.length; i++ ){ paletteacc[i] = { r:0, g:0, b:0, a:0, n:0 }; }
+			
+			// loop through all pixels
+			for( j=0; j < imgd.height; j++ ){
+				for( i=0; i < imgd.width; i++ ){
+					
+					// pixel index
+					idx = (j*imgd.width+i)*4;
+					
+					// find closest color from palette by measuring (rectilinear) color distance between this pixel and all palette colors
+					ci=0; cdl = 1024; // 4 * 256 is the maximum RGBA distance
+					for( k=0; k<palette.length; k++ ){
+						
+						// In my experience, https://en.wikipedia.org/wiki/Rectilinear_distance works better than https://en.wikipedia.org/wiki/Euclidean_distance
+						cd = Math.abs(palette[k].r-imgd.data[idx]) + Math.abs(palette[k].g-imgd.data[idx+1]) + Math.abs(palette[k].b-imgd.data[idx+2]) + Math.abs(palette[k].a-imgd.data[idx+3]);
+						
+						// Remember this color if this is the closest yet
+						if(cd<cdl){ cdl = cd; ci = k; }
+						
+					}// End of palette loop
+					
+					// add to palettacc
+					paletteacc[ci].r += imgd.data[idx  ];
+					paletteacc[ci].g += imgd.data[idx+1];
+					paletteacc[ci].b += imgd.data[idx+2];
+					paletteacc[ci].a += imgd.data[idx+3];
+					paletteacc[ci].n++;
+					
+					// update the indexed color array
+					arr[j+1][i+1] = ci;
+					
+				}// End of i loop
+			}// End of j loop
+			
+		}// End of Repeat clustering step options.colorquantcycles times
+		
+		return { array:arr, palette:palette };
+		
+	},// End of colorquantization()
+	
+	// Sampling a palette from imagedata
+	this.samplepalette = function( numberofcolors, imgd ){
+		var idx, palette=[];
+		for(var i=0; i<numberofcolors; i++){
+			idx = Math.floor( Math.random() * imgd.data.length / 4 ) * 4;
+			palette.push({ r:imgd.data[idx  ], g:imgd.data[idx+1], b:imgd.data[idx+2], a:imgd.data[idx+3] });
+		}
+		return palette;
+	},// End of samplepalette()
+	
+	// Deterministic sampling a palette from imagedata: rectangular grid
+	this.samplepalette2 = function( numberofcolors, imgd ){
+		var idx, palette=[], ni = Math.ceil(Math.sqrt(numberofcolors)), nj = Math.ceil(numberofcolors/ni),
+			vx = imgd.width / (ni+1), vy = imgd.height / (nj+1);
+		for(var j=0; j<nj; j++){
+			for(var i=0; i<ni; i++){
+				if(palette.length === numberofcolors){
+					break;
+				}else{
+					idx = Math.floor( ((j+1)*vy) * imgd.width + ((i+1)*vx) ) * 4;
+					palette.push( { r:imgd.data[idx], g:imgd.data[idx+1], b:imgd.data[idx+2], a:imgd.data[idx+3] } );
+				}
+			}
+		}
+		return palette;
+	},// End of samplepalette2()
+	
+	// Generating a palette with numberofcolors
+	this.generatepalette = function(numberofcolors){
+		var palette = [], rcnt, gcnt, bcnt;
+		if(numberofcolors<8){
+			
+			// Grayscale
+			var graystep = Math.floor(255/(numberofcolors-1));
+			for(var i=0; i<numberofcolors; i++){ palette.push({ r:i*graystep, g:i*graystep, b:i*graystep, a:255 }); }
+			
+		}else{
+			
+			// RGB color cube
+			var colorqnum = Math.floor(Math.pow(numberofcolors, 1/3)), // Number of points on each edge on the RGB color cube
+				colorstep = Math.floor(255/(colorqnum-1)), // distance between points
+				rndnum = numberofcolors - colorqnum*colorqnum*colorqnum; // number of random colors
+			
+			for(rcnt=0; rcnt<colorqnum; rcnt++){
+				for(gcnt=0; gcnt<colorqnum; gcnt++){
+					for(bcnt=0; bcnt<colorqnum; bcnt++){
+						palette.push( { r:rcnt*colorstep, g:gcnt*colorstep, b:bcnt*colorstep, a:255 } );
+					}// End of blue loop
+				}// End of green loop
+			}// End of red loop
+			
+			// Rest is random
+			for(rcnt=0; rcnt<rndnum; rcnt++){ palette.push({ r:Math.floor(Math.random()*255), g:Math.floor(Math.random()*255), b:Math.floor(Math.random()*255), a:Math.floor(Math.random()*255) }); }
+
+		}// End of numberofcolors check
+		
+		return palette;
+	},// End of generatepalette()
+		
+	// 2. Layer separation and edge detection
+	// Edge node types ( ▓: this layer or 1; ░: not this layer or 0 )
+	// 12  ░░  ▓░  ░▓  ▓▓  ░░  ▓░  ░▓  ▓▓  ░░  ▓░  ░▓  ▓▓  ░░  ▓░  ░▓  ▓▓
+	// 48  ░░  ░░  ░░  ░░  ░▓  ░▓  ░▓  ░▓  ▓░  ▓░  ▓░  ▓░  ▓▓  ▓▓  ▓▓  ▓▓
+	//     0   1   2   3   4   5   6   7   8   9   10  11  12  13  14  15
+	this.layering = function(ii){
+		// Creating layers for each indexed color in arr
+		var layers = [], val=0, ah = ii.array.length, aw = ii.array[0].length, n1,n2,n3,n4,n5,n6,n7,n8, i, j, k;
+		
+		// Create layers
+		for(k=0; k<ii.palette.length; k++){
+			layers[k] = [];
+			for(j=0; j<ah; j++){
+				layers[k][j] = [];
+				for(i=0; i<aw; i++){
+					layers[k][j][i]=0;
+				}
+			}
+		}
+		
+		// Looping through all pixels and calculating edge node type
+		for(j=1; j<ah-1; j++){
+			for(i=1; i<aw-1; i++){
+				
+				// This pixel's indexed color
+				val = ii.array[j][i];
+				
+				// Are neighbor pixel colors the same?
+				n1 = ii.array[j-1][i-1]===val ? 1 : 0;
+				n2 = ii.array[j-1][i  ]===val ? 1 : 0;
+				n3 = ii.array[j-1][i+1]===val ? 1 : 0;
+				n4 = ii.array[j  ][i-1]===val ? 1 : 0;
+				n5 = ii.array[j  ][i+1]===val ? 1 : 0;
+				n6 = ii.array[j+1][i-1]===val ? 1 : 0;
+				n7 = ii.array[j+1][i  ]===val ? 1 : 0;
+				n8 = ii.array[j+1][i+1]===val ? 1 : 0;
+				
+				// this pixel's type and looking back on previous pixels
+				layers[val][j+1][i+1] = 1 + n5 * 2 + n8 * 4 + n7 * 8 ;
+				if(!n4){ layers[val][j+1][i  ] = 0 + 2 + n7 * 4 + n6 * 8 ; }
+				if(!n2){ layers[val][j  ][i+1] = 0 + n3*2 + n5 * 4 + 8 ; }
+				if(!n1){ layers[val][j  ][i  ] = 0 + n2*2 + 4 + n4 * 8 ; }
+				
+			}// End of i loop
+		}// End of j loop
+		
+		return layers;
+	},// End of layering()
+	
+	// 2. Layer separation and edge detection
+	// Edge node types ( ▓: this layer or 1; ░: not this layer or 0 )
+	// 12  ░░  ▓░  ░▓  ▓▓  ░░  ▓░  ░▓  ▓▓  ░░  ▓░  ░▓  ▓▓  ░░  ▓░  ░▓  ▓▓
+	// 48  ░░  ░░  ░░  ░░  ░▓  ░▓  ░▓  ░▓  ▓░  ▓░  ▓░  ▓░  ▓▓  ▓▓  ▓▓  ▓▓
+	//     0   1   2   3   4   5   6   7   8   9   10  11  12  13  14  15
+	this.layeringstep = function(ii,cnum){
+		// Creating layers for each indexed color in arr
+		var layer = [], val=0, ah = ii.array.length, aw = ii.array[0].length, n1,n2,n3,n4,n5,n6,n7,n8, i, j, k;
+		
+		// Create layer
+		for(j=0; j<ah; j++){
+			layer[j] = [];
+			for(i=0; i<aw; i++){
+				layer[j][i]=0;
+			}
+		}
+		
+		// Looping through all pixels and calculating edge node type
+		for(j=1; j<ah; j++){
+			for(i=1; i<aw; i++){
+				layer[j][i] =
+					( ii.array[j-1][i-1]===cnum ? 1 : 0 ) +
+					( ii.array[j-1][i]===cnum ? 2 : 0 ) +
+					( ii.array[j][i-1]===cnum ? 8 : 0 ) +
+					( ii.array[j][i]===cnum ? 4 : 0 )
+				;
+			}// End of i loop
+		}// End of j loop
+			
+		return layer;
+	},// End of layeringstep()
+	
+	// Point in polygon test
+	this.pointinpoly = function( p, pa ){
+		var isin=false;
+
+		for(var i=0,j=pa.length-1; i<pa.length; j=i++){
+			isin =
+				( ((pa[i].y > p.y) !== (pa[j].y > p.y)) && (p.x < (pa[j].x - pa[i].x) * (p.y - pa[i].y) / (pa[j].y - pa[i].y) + pa[i].x) )
+				? !isin : isin;
+		}
+
+		return isin;
+	},
+	
+	// Lookup tables for pathscan
+	// pathscan_combined_lookup[ arr[py][px] ][ dir ] = [nextarrpypx, nextdir, deltapx, deltapy];
+	this.pathscan_combined_lookup = [
+		[[-1,-1,-1,-1], [-1,-1,-1,-1], [-1,-1,-1,-1], [-1,-1,-1,-1]],// arr[py][px]===0 is invalid
+		[[ 0, 1, 0,-1], [-1,-1,-1,-1], [-1,-1,-1,-1], [ 0, 2,-1, 0]],
+		[[-1,-1,-1,-1], [-1,-1,-1,-1], [ 0, 1, 0,-1], [ 0, 0, 1, 0]],
+		[[ 0, 0, 1, 0], [-1,-1,-1,-1], [ 0, 2,-1, 0], [-1,-1,-1,-1]],
+		
+		[[-1,-1,-1,-1], [ 0, 0, 1, 0], [ 0, 3, 0, 1], [-1,-1,-1,-1]],
+		[[13, 3, 0, 1], [13, 2,-1, 0], [ 7, 1, 0,-1], [ 7, 0, 1, 0]],
+		[[-1,-1,-1,-1], [ 0, 1, 0,-1], [-1,-1,-1,-1], [ 0, 3, 0, 1]],
+		[[ 0, 3, 0, 1], [ 0, 2,-1, 0], [-1,-1,-1,-1], [-1,-1,-1,-1]],
+		
+		[[ 0, 3, 0, 1], [ 0, 2,-1, 0], [-1,-1,-1,-1], [-1,-1,-1,-1]],
+		[[-1,-1,-1,-1], [ 0, 1, 0,-1], [-1,-1,-1,-1], [ 0, 3, 0, 1]],
+		[[11, 1, 0,-1], [14, 0, 1, 0], [14, 3, 0, 1], [11, 2,-1, 0]],
+		[[-1,-1,-1,-1], [ 0, 0, 1, 0], [ 0, 3, 0, 1], [-1,-1,-1,-1]],
+		
+		[[ 0, 0, 1, 0], [-1,-1,-1,-1], [ 0, 2,-1, 0], [-1,-1,-1,-1]],
+		[[-1,-1,-1,-1], [-1,-1,-1,-1], [ 0, 1, 0,-1], [ 0, 0, 1, 0]],
+		[[ 0, 1, 0,-1], [-1,-1,-1,-1], [-1,-1,-1,-1], [ 0, 2,-1, 0]],
+		[[-1,-1,-1,-1], [-1,-1,-1,-1], [-1,-1,-1,-1], [-1,-1,-1,-1]]// arr[py][px]===15 is invalid
+	],
+
+	// 3. Walking through an edge node array, discarding edge node types 0 and 15 and creating paths from the rest.
+	// Walk directions (dir): 0 > ; 1 ^ ; 2 < ; 3 v 
+	this.pathscan = function( arr, pathomit ){
+		var paths=[], pacnt=0, pcnt=0, px=0, py=0, w = arr[0].length, h = arr.length,
+			dir=0, pathfinished=true, holepath=false, lookuprow;
+		
+		for(var j=0; j<h; j++){
+			for(var i=0; i<w; i++){
+				if( (arr[j][i] == 4) || ( arr[j][i] == 11) ){ // Other values are not valid
+					
+					// Init
+					px = i; py = j;
+					paths[pacnt] = {};
+					paths[pacnt].points = [];
+					paths[pacnt].boundingbox = [px,py,px,py];
+					paths[pacnt].holechildren = [];
+					pathfinished = false;
+					pcnt=0;
+					holepath = (arr[j][i]==11);
+					dir = 1;
+
+					// Path points loop
+					while(!pathfinished){
+						
+						// New path point
+						paths[pacnt].points[pcnt] = {};
+						paths[pacnt].points[pcnt].x = px-1;
+						paths[pacnt].points[pcnt].y = py-1;
+						paths[pacnt].points[pcnt].t = arr[py][px];
+						
+						// Bounding box
+						if( (px-1) < paths[pacnt].boundingbox[0] ){ paths[pacnt].boundingbox[0] = px-1; }
+						if( (px-1) > paths[pacnt].boundingbox[2] ){ paths[pacnt].boundingbox[2] = px-1; }
+						if( (py-1) < paths[pacnt].boundingbox[1] ){ paths[pacnt].boundingbox[1] = py-1; }
+						if( (py-1) > paths[pacnt].boundingbox[3] ){ paths[pacnt].boundingbox[3] = py-1; }
+						
+						// Next: look up the replacement, direction and coordinate changes = clear this cell, turn if required, walk forward
+						lookuprow = _this.pathscan_combined_lookup[ arr[py][px] ][ dir ];
+						arr[py][px] = lookuprow[0]; dir = lookuprow[1]; px += lookuprow[2]; py += lookuprow[3];
+
+						// Close path
+						if( (px-1 === paths[pacnt].points[0].x ) && ( py-1 === paths[pacnt].points[0].y ) ){
+							pathfinished = true;
+							
+							// Discarding paths shorter than pathomit
+							if( paths[pacnt].points.length < pathomit ){
+								paths.pop();
+							}else{
+							
+								paths[pacnt].isholepath = holepath ? true : false;
+								
+								// Finding the parent shape for this hole
+								if(holepath){
+									
+									var parentidx = 0, parentbbox = [-1,-1,w+1,h+1];
+									for(var parentcnt=0; parentcnt < pacnt; parentcnt++){
+										if( (!paths[parentcnt].isholepath) &&
+											_this.boundingboxincludes( paths[parentcnt].boundingbox , paths[pacnt].boundingbox ) &&
+											_this.boundingboxincludes( parentbbox , paths[parentcnt].boundingbox ) &&
+											_this.pointinpoly( paths[pacnt].points[0], paths[parentcnt].points )
+										){
+											parentidx = parentcnt;
+											parentbbox = paths[parentcnt].boundingbox;
+										}
+									}
+									
+									paths[parentidx].holechildren.push( pacnt );
+									
+								}// End of holepath parent finding
+								
+								pacnt++;
+							
+							}
+							
+						}// End of Close path
+						
+						pcnt++;
+						
+					}// End of Path points loop
+					
+				}// End of Follow path
+				
+			}// End of i loop
+		}// End of j loop
+		
+		return paths;
+	},// End of pathscan()
+	
+	this.boundingboxincludes = function( parentbbox, childbbox ){
+		return ( ( parentbbox[0] < childbbox[0] ) && ( parentbbox[1] < childbbox[1] ) && ( parentbbox[2] > childbbox[2] ) && ( parentbbox[3] > childbbox[3] ) );
+	},// End of boundingboxincludes()
+	
+	// 3. Batch pathscan
+	this.batchpathscan = function( layers, pathomit ){
+		var bpaths = [];
+		for(var k in layers){
+			if(!layers.hasOwnProperty(k)){ continue; }
+			bpaths[k] = _this.pathscan( layers[k], pathomit );
+		}
+		return bpaths;
+	},
+	
+	// 4. interpollating between path points for nodes with 8 directions ( East, SouthEast, S, SW, W, NW, N, NE )
+	this.internodes = function( paths, options ){
+		var ins = [], palen=0, nextidx=0, nextidx2=0, previdx=0, previdx2=0, pacnt, pcnt;
+		
+		// paths loop
+		for(pacnt=0; pacnt<paths.length; pacnt++){
+			
+			ins[pacnt] = {};
+			ins[pacnt].points = [];
+			ins[pacnt].boundingbox = paths[pacnt].boundingbox;
+			ins[pacnt].holechildren = paths[pacnt].holechildren;
+			ins[pacnt].isholepath = paths[pacnt].isholepath;
+			palen = paths[pacnt].points.length;
+			
+			// pathpoints loop
+			for(pcnt=0; pcnt<palen; pcnt++){
+			
+				// next and previous point indexes
+				nextidx = (pcnt+1)%palen; nextidx2 = (pcnt+2)%palen; previdx = (pcnt-1+palen)%palen; previdx2 = (pcnt-2+palen)%palen;
+				
+				// right angle enhance
+				if( options.rightangleenhance && _this.testrightangle( paths[pacnt], previdx2, previdx, pcnt, nextidx, nextidx2 ) ){
+					
+					// Fix previous direction
+					if(ins[pacnt].points.length > 0){
+						ins[pacnt].points[ ins[pacnt].points.length-1 ].linesegment = _this.getdirection(
+								ins[pacnt].points[ ins[pacnt].points.length-1 ].x,
+								ins[pacnt].points[ ins[pacnt].points.length-1 ].y,
+								paths[pacnt].points[pcnt].x,
+								paths[pacnt].points[pcnt].y
+							);
+					}
+					
+					// This corner point
+					ins[pacnt].points.push({
+						x : paths[pacnt].points[pcnt].x,
+						y : paths[pacnt].points[pcnt].y,
+						linesegment : _this.getdirection(
+								paths[pacnt].points[pcnt].x,
+								paths[pacnt].points[pcnt].y,
+								(( paths[pacnt].points[pcnt].x + paths[pacnt].points[nextidx].x ) /2),
+								(( paths[pacnt].points[pcnt].y + paths[pacnt].points[nextidx].y ) /2)
+							)
+					});
+					
+				}// End of right angle enhance
+				
+				// interpolate between two path points
+				ins[pacnt].points.push({
+					x : (( paths[pacnt].points[pcnt].x + paths[pacnt].points[nextidx].x ) /2),
+					y : (( paths[pacnt].points[pcnt].y + paths[pacnt].points[nextidx].y ) /2),
+					linesegment : _this.getdirection(
+							(( paths[pacnt].points[pcnt].x + paths[pacnt].points[nextidx].x ) /2),
+							(( paths[pacnt].points[pcnt].y + paths[pacnt].points[nextidx].y ) /2),
+							(( paths[pacnt].points[nextidx].x + paths[pacnt].points[nextidx2].x ) /2),
+							(( paths[pacnt].points[nextidx].y + paths[pacnt].points[nextidx2].y ) /2)
+						)
+				});
+				
+			}// End of pathpoints loop
+						
+		}// End of paths loop
+		
+		return ins;
+	},// End of internodes()
+	
+	this.testrightangle = function( path, idx1, idx2, idx3, idx4, idx5 ){
+		return ( (( path.points[idx3].x === path.points[idx1].x) &&
+				  ( path.points[idx3].x === path.points[idx2].x) &&
+				  ( path.points[idx3].y === path.points[idx4].y) &&
+				  ( path.points[idx3].y === path.points[idx5].y)
+				 ) ||
+				 (( path.points[idx3].y === path.points[idx1].y) &&
+				  ( path.points[idx3].y === path.points[idx2].y) &&
+				  ( path.points[idx3].x === path.points[idx4].x) &&
+				  ( path.points[idx3].x === path.points[idx5].x)
+				 )
+		);
+	},// End of testrightangle()
+	
+	this.getdirection = function( x1, y1, x2, y2 ){
+		var val = 8;
+		if(x1 < x2){
+			if     (y1 < y2){ val = 1; }// SouthEast
+			else if(y1 > y2){ val = 7; }// NE
+			else            { val = 0; }// E
+		}else if(x1 > x2){
+			if     (y1 < y2){ val = 3; }// SW
+			else if(y1 > y2){ val = 5; }// NW
+			else            { val = 4; }// W
+		}else{
+			if     (y1 < y2){ val = 2; }// S
+			else if(y1 > y2){ val = 6; }// N
+			else            { val = 8; }// center, this should not happen
+		}
+		return val;
+	},// End of getdirection()
+	
+	// 4. Batch interpollation
+	this.batchinternodes = function( bpaths, options ){
+		var binternodes = [];
+		for (var k in bpaths) {
+			if(!bpaths.hasOwnProperty(k)){ continue; }
+			binternodes[k] = _this.internodes(bpaths[k], options);
+		}
+		return binternodes;
+	},
+	
+	// 5. tracepath() : recursively trying to fit straight and quadratic spline segments on the 8 direction internode path
+	
+	// 5.1. Find sequences of points with only 2 segment types
+	// 5.2. Fit a straight line on the sequence
+	// 5.3. If the straight line fails (distance error > ltres), find the point with the biggest error
+	// 5.4. Fit a quadratic spline through errorpoint (project this to get controlpoint), then measure errors on every point in the sequence
+	// 5.5. If the spline fails (distance error > qtres), find the point with the biggest error, set splitpoint = fitting point
+	// 5.6. Split sequence and recursively apply 5.2. - 5.6. to startpoint-splitpoint and splitpoint-endpoint sequences
+	
+	this.tracepath = function( path, ltres, qtres ){
+		var pcnt=0, segtype1, segtype2, seqend, smp = {};
+		smp.segments = [];
+		smp.boundingbox = path.boundingbox;
+		smp.holechildren = path.holechildren;
+		smp.isholepath = path.isholepath;
+		
+		while(pcnt < path.points.length){
+			// 5.1. Find sequences of points with only 2 segment types
+			segtype1 = path.points[pcnt].linesegment; segtype2 = -1; seqend=pcnt+1;
+			while(
+				((path.points[seqend].linesegment === segtype1) || (path.points[seqend].linesegment === segtype2) || (segtype2 === -1))
+				&& (seqend < path.points.length-1) ){
+				
+				if((path.points[seqend].linesegment!==segtype1) && (segtype2===-1)){ segtype2 = path.points[seqend].linesegment; }
+				seqend++;
+				
+			}
+			if(seqend === path.points.length-1){ seqend = 0; }
+
+			// 5.2. - 5.6. Split sequence and recursively apply 5.2. - 5.6. to startpoint-splitpoint and splitpoint-endpoint sequences
+			smp.segments = smp.segments.concat( _this.fitseq(path, ltres, qtres, pcnt, seqend) );
+			
+			// forward pcnt;
+			if(seqend>0){ pcnt = seqend; }else{ pcnt = path.points.length; }
+			
+		}// End of pcnt loop
+		
+		return smp;
+	},// End of tracepath()
+		
+	// 5.2. - 5.6. recursively fitting a straight or quadratic line segment on this sequence of path nodes,
+	// called from tracepath()
+	this.fitseq = function( path, ltres, qtres, seqstart, seqend ){
+		// return if invalid seqend
+		if( (seqend>path.points.length) || (seqend<0) ){ return []; }
+		// variables
+		var errorpoint=seqstart, errorval=0, curvepass=true, px, py, dist2;
+		var tl = (seqend-seqstart); if(tl<0){ tl += path.points.length; }
+		var vx = (path.points[seqend].x-path.points[seqstart].x) / tl,
+			vy = (path.points[seqend].y-path.points[seqstart].y) / tl;
+		
+		// 5.2. Fit a straight line on the sequence
+		var pcnt = (seqstart+1) % path.points.length, pl;
+		while(pcnt != seqend){
+			pl = pcnt-seqstart; if(pl<0){ pl += path.points.length; }
+			px = path.points[seqstart].x + vx * pl; py = path.points[seqstart].y + vy * pl;
+			dist2 = (path.points[pcnt].x-px)*(path.points[pcnt].x-px) + (path.points[pcnt].y-py)*(path.points[pcnt].y-py);
+			if(dist2>ltres){curvepass=false;}
+			if(dist2>errorval){ errorpoint=pcnt; errorval=dist2; }
+			pcnt = (pcnt+1)%path.points.length;
+		}
+		// return straight line if fits
+		if(curvepass){ return [{ type:'L', x1:path.points[seqstart].x, y1:path.points[seqstart].y, x2:path.points[seqend].x, y2:path.points[seqend].y }]; }
+		
+		// 5.3. If the straight line fails (distance error>ltres), find the point with the biggest error
+		var fitpoint = errorpoint; curvepass = true; errorval = 0;
+		
+		// 5.4. Fit a quadratic spline through this point, measure errors on every point in the sequence
+		// helpers and projecting to get control point
+		var t=(fitpoint-seqstart)/tl, t1=(1-t)*(1-t), t2=2*(1-t)*t, t3=t*t;
+		var cpx = (t1*path.points[seqstart].x + t3*path.points[seqend].x - path.points[fitpoint].x)/-t2 ,
+			cpy = (t1*path.points[seqstart].y + t3*path.points[seqend].y - path.points[fitpoint].y)/-t2 ;
+		
+		// Check every point
+		pcnt = seqstart+1;
+		while(pcnt != seqend){
+			t=(pcnt-seqstart)/tl; t1=(1-t)*(1-t); t2=2*(1-t)*t; t3=t*t;
+			px = t1 * path.points[seqstart].x + t2 * cpx + t3 * path.points[seqend].x;
+			py = t1 * path.points[seqstart].y + t2 * cpy + t3 * path.points[seqend].y;
+			
+			dist2 = (path.points[pcnt].x-px)*(path.points[pcnt].x-px) + (path.points[pcnt].y-py)*(path.points[pcnt].y-py);
+			
+			if(dist2>qtres){curvepass=false;}
+			if(dist2>errorval){ errorpoint=pcnt; errorval=dist2; }
+			pcnt = (pcnt+1)%path.points.length;
+		}
+		// return spline if fits
+		if(curvepass){ return [{ type:'Q', x1:path.points[seqstart].x, y1:path.points[seqstart].y, x2:cpx, y2:cpy, x3:path.points[seqend].x, y3:path.points[seqend].y }]; }
+		// 5.5. If the spline fails (distance error>qtres), find the point with the biggest error
+		var splitpoint = fitpoint; // Earlier: Math.floor((fitpoint + errorpoint)/2);
+		
+		// 5.6. Split sequence and recursively apply 5.2. - 5.6. to startpoint-splitpoint and splitpoint-endpoint sequences
+		return _this.fitseq( path, ltres, qtres, seqstart, splitpoint ).concat(
+				_this.fitseq( path, ltres, qtres, splitpoint, seqend ) );
+		
+	},// End of fitseq()
+	
+	// 5. Batch tracing paths
+	this.batchtracepaths = function(internodepaths,ltres,qtres){
+		var btracedpaths = [];
+		for(var k in internodepaths){
+			if(!internodepaths.hasOwnProperty(k)){ continue; }
+			btracedpaths.push( _this.tracepath(internodepaths[k],ltres,qtres) );
+		}
+		return btracedpaths;
+	},
+	
+	// 5. Batch tracing layers
+	this.batchtracelayers = function(binternodes, ltres, qtres){
+		var btbis = [];
+		for(var k in binternodes){
+			if(!binternodes.hasOwnProperty(k)){ continue; }
+			btbis[k] = _this.batchtracepaths(binternodes[k], ltres, qtres);
+		}
+		return btbis;
+	},
+	
+	////////////////////////////////////////////////////////////
+	//
+	//  SVG Drawing functions
+	//
+	////////////////////////////////////////////////////////////
+	
+	// Rounding to given decimals https://stackoverflow.com/questions/11832914/round-to-at-most-2-decimal-places-in-javascript
+	this.roundtodec = function(val,places){ return +val.toFixed(places); },
+	
+	// Getting SVG path element string from a traced path
+	this.svgpathstring = function( tracedata, lnum, pathnum, options ){
+		
+		var layer = tracedata.layers[lnum], smp = layer[pathnum], str='', pcnt;
+		
+		// Line filter
+		if(options.linefilter && (smp.segments.length < 3)){ return str; }
+		
+		// Starting path element, desc contains layer and path number
+		str = '<path '+
+			( options.desc ? ('desc="l '+lnum+' p '+pathnum+'" ') : '' ) +
+			_this.tosvgcolorstr(tracedata.palette[lnum], options) +
+			'd="';
+		
+		// Creating non-hole path string
+		if( options.roundcoords === -1 ){
+			str += 'M '+ smp.segments[0].x1 * options.scale +' '+ smp.segments[0].y1 * options.scale +' ';
+			for(pcnt=0; pcnt<smp.segments.length; pcnt++){
+				str += smp.segments[pcnt].type +' '+ smp.segments[pcnt].x2 * options.scale +' '+ smp.segments[pcnt].y2 * options.scale +' ';
+				if(smp.segments[pcnt].hasOwnProperty('x3')){
+					str += smp.segments[pcnt].x3 * options.scale +' '+ smp.segments[pcnt].y3 * options.scale +' ';
+				}
+			}
+			str += 'Z ';
+		}else{
+			str += 'M '+ _this.roundtodec( smp.segments[0].x1 * options.scale, options.roundcoords ) +' '+ _this.roundtodec( smp.segments[0].y1 * options.scale, options.roundcoords ) +' ';
+			for(pcnt=0; pcnt<smp.segments.length; pcnt++){
+				str += smp.segments[pcnt].type +' '+ _this.roundtodec( smp.segments[pcnt].x2 * options.scale, options.roundcoords ) +' '+ _this.roundtodec( smp.segments[pcnt].y2 * options.scale, options.roundcoords ) +' ';
+				if(smp.segments[pcnt].hasOwnProperty('x3')){
+					str += _this.roundtodec( smp.segments[pcnt].x3 * options.scale, options.roundcoords ) +' '+ _this.roundtodec( smp.segments[pcnt].y3 * options.scale, options.roundcoords ) +' ';
+				}
+			}
+			str += 'Z ';
+		}// End of creating non-hole path string
+		
+		// Hole children
+		for( var hcnt=0; hcnt < smp.holechildren.length; hcnt++){
+			var hsmp = layer[ smp.holechildren[hcnt] ];
+			// Creating hole path string
+			if( options.roundcoords === -1 ){
+				
+				if(hsmp.segments[ hsmp.segments.length-1 ].hasOwnProperty('x3')){
+					str += 'M '+ hsmp.segments[ hsmp.segments.length-1 ].x3 * options.scale +' '+ hsmp.segments[ hsmp.segments.length-1 ].y3 * options.scale +' ';
+				}else{
+					str += 'M '+ hsmp.segments[ hsmp.segments.length-1 ].x2 * options.scale +' '+ hsmp.segments[ hsmp.segments.length-1 ].y2 * options.scale +' ';
+				}
+				
+				for(pcnt = hsmp.segments.length-1; pcnt >= 0; pcnt--){
+					str += hsmp.segments[pcnt].type +' ';
+					if(hsmp.segments[pcnt].hasOwnProperty('x3')){
+						str += hsmp.segments[pcnt].x2 * options.scale +' '+ hsmp.segments[pcnt].y2 * options.scale +' ';
+					}
+					
+					str += hsmp.segments[pcnt].x1 * options.scale +' '+ hsmp.segments[pcnt].y1 * options.scale +' ';
+				}
+				
+			}else{
+				
+				if(hsmp.segments[ hsmp.segments.length-1 ].hasOwnProperty('x3')){
+					str += 'M '+ _this.roundtodec( hsmp.segments[ hsmp.segments.length-1 ].x3 * options.scale ) +' '+ _this.roundtodec( hsmp.segments[ hsmp.segments.length-1 ].y3 * options.scale ) +' ';
+				}else{
+					str += 'M '+ _this.roundtodec( hsmp.segments[ hsmp.segments.length-1 ].x2 * options.scale ) +' '+ _this.roundtodec( hsmp.segments[ hsmp.segments.length-1 ].y2 * options.scale ) +' ';
+				}
+				
+				for(pcnt = hsmp.segments.length-1; pcnt >= 0; pcnt--){
+					str += hsmp.segments[pcnt].type +' ';
+					if(hsmp.segments[pcnt].hasOwnProperty('x3')){
+						str += _this.roundtodec( hsmp.segments[pcnt].x2 * options.scale ) +' '+ _this.roundtodec( hsmp.segments[pcnt].y2 * options.scale ) +' ';
+					}
+					str += _this.roundtodec( hsmp.segments[pcnt].x1 * options.scale ) +' '+ _this.roundtodec( hsmp.segments[pcnt].y1 * options.scale ) +' ';
+				}
+				
+				
+			}// End of creating hole path string
+			
+			str += 'Z '; // Close path
+			
+		}// End of holepath check
+		
+		// Closing path element
+		str += '" />';
+		
+		// Rendering control points
+		if(options.lcpr || options.qcpr){
+			for(pcnt=0; pcnt<smp.segments.length; pcnt++){
+				if( smp.segments[pcnt].hasOwnProperty('x3') && options.qcpr ){
+					str += '<circle cx="'+ smp.segments[pcnt].x2 * options.scale +'" cy="'+ smp.segments[pcnt].y2 * options.scale +'" r="'+ options.qcpr +'" fill="cyan" stroke-width="'+ options.qcpr * 0.2 +'" stroke="black" />';
+					str += '<circle cx="'+ smp.segments[pcnt].x3 * options.scale +'" cy="'+ smp.segments[pcnt].y3 * options.scale +'" r="'+ options.qcpr +'" fill="white" stroke-width="'+ options.qcpr * 0.2 +'" stroke="black" />';
+					str += '<line x1="'+ smp.segments[pcnt].x1 * options.scale +'" y1="'+ smp.segments[pcnt].y1 * options.scale +'" x2="'+ smp.segments[pcnt].x2 * options.scale +'" y2="'+ smp.segments[pcnt].y2 * options.scale +'" stroke-width="'+ options.qcpr * 0.2 +'" stroke="cyan" />';
+					str += '<line x1="'+ smp.segments[pcnt].x2 * options.scale +'" y1="'+ smp.segments[pcnt].y2 * options.scale +'" x2="'+ smp.segments[pcnt].x3 * options.scale +'" y2="'+ smp.segments[pcnt].y3 * options.scale +'" stroke-width="'+ options.qcpr * 0.2 +'" stroke="cyan" />';
+				}
+				if( (!smp.segments[pcnt].hasOwnProperty('x3')) && options.lcpr){
+					str += '<circle cx="'+ smp.segments[pcnt].x2 * options.scale +'" cy="'+ smp.segments[pcnt].y2 * options.scale +'" r="'+ options.lcpr +'" fill="white" stroke-width="'+ options.lcpr * 0.2 +'" stroke="black" />';
+				}
+			}
+			
+			// Hole children control points
+			for( var hcnt=0; hcnt < smp.holechildren.length; hcnt++){
+				var hsmp = layer[ smp.holechildren[hcnt] ];
+				for(pcnt=0; pcnt<hsmp.segments.length; pcnt++){
+					if( hsmp.segments[pcnt].hasOwnProperty('x3') && options.qcpr ){
+						str += '<circle cx="'+ hsmp.segments[pcnt].x2 * options.scale +'" cy="'+ hsmp.segments[pcnt].y2 * options.scale +'" r="'+ options.qcpr +'" fill="cyan" stroke-width="'+ options.qcpr * 0.2 +'" stroke="black" />';
+						str += '<circle cx="'+ hsmp.segments[pcnt].x3 * options.scale +'" cy="'+ hsmp.segments[pcnt].y3 * options.scale +'" r="'+ options.qcpr +'" fill="white" stroke-width="'+ options.qcpr * 0.2 +'" stroke="black" />';
+						str += '<line x1="'+ hsmp.segments[pcnt].x1 * options.scale +'" y1="'+ hsmp.segments[pcnt].y1 * options.scale +'" x2="'+ hsmp.segments[pcnt].x2 * options.scale +'" y2="'+ hsmp.segments[pcnt].y2 * options.scale +'" stroke-width="'+ options.qcpr * 0.2 +'" stroke="cyan" />';
+						str += '<line x1="'+ hsmp.segments[pcnt].x2 * options.scale +'" y1="'+ hsmp.segments[pcnt].y2 * options.scale +'" x2="'+ hsmp.segments[pcnt].x3 * options.scale +'" y2="'+ hsmp.segments[pcnt].y3 * options.scale +'" stroke-width="'+ options.qcpr * 0.2 +'" stroke="cyan" />';
+					}
+					if( (!hsmp.segments[pcnt].hasOwnProperty('x3')) && options.lcpr){
+						str += '<circle cx="'+ hsmp.segments[pcnt].x2 * options.scale +'" cy="'+ hsmp.segments[pcnt].y2 * options.scale +'" r="'+ options.lcpr +'" fill="white" stroke-width="'+ options.lcpr * 0.2 +'" stroke="black" />';
+					}
+				}
+			}
+		}// End of Rendering control points
+			
+		return str;
+		
+	},// End of svgpathstring()
+	
+	// Converting tracedata to an SVG string
+	this.getsvgstring = function( tracedata, options ){
+		
+		options = _this.checkoptions(options);
+		
+		var w = tracedata.width * options.scale, h = tracedata.height * options.scale;
+		
+		// SVG start
+		var svgstr = '<svg ' + (options.viewbox ? ('viewBox="0 0 '+w+' '+h+'" ') : ('width="'+w+'" height="'+h+'" ')) +
+			'version="1.1" xmlns="http://www.w3.org/2000/svg" desc="Created with imagetracer.js version '+_this.versionnumber+'" >';
+
+		// Drawing: Layers and Paths loops
+		for(var lcnt=0; lcnt < tracedata.layers.length; lcnt++){
+			for(var pcnt=0; pcnt < tracedata.layers[lcnt].length; pcnt++){
+				
+				// Adding SVG <path> string
+				if( !tracedata.layers[lcnt][pcnt].isholepath ){
+					svgstr += _this.svgpathstring( tracedata, lcnt, pcnt, options );
+				}
+					
+			}// End of paths loop
+		}// End of layers loop
+		
+		// SVG End
+		svgstr+='</svg>';
+		
+		return svgstr;
+		
+	},// End of getsvgstring()
+	
+	// Comparator for numeric Array.sort
+	this.compareNumbers = function(a,b){ return a - b; },
+	
+	// Convert color object to rgba string
+	this.torgbastr = function(c){ return 'rgba('+c.r+','+c.g+','+c.b+','+c.a+')'; },
+	
+	// Convert color object to SVG color string
+	this.tosvgcolorstr = function(c, options){
+		return 'fill="rgb('+c.r+','+c.g+','+c.b+')" stroke="rgb('+c.r+','+c.g+','+c.b+')" stroke-width="'+options.strokewidth+'" opacity="'+c.a/255.0+'" ';
+	},
+	
+	// Helper function: Appending an <svg> element to a container from an svgstring
+	this.appendSVGString = function(svgstr,parentid){
+		var div;
+		if(parentid){
+			div = document.getElementById(parentid);
+			if(!div){
+				div = document.createElement('div');
+				div.id = parentid;
+				document.body.appendChild(div);
+			}
+		}else{
+			div = document.createElement('div');
+			document.body.appendChild(div);
+		}
+		div.innerHTML += svgstr;
+	},
+	
+	////////////////////////////////////////////////////////////
+	//
+	//  Canvas functions
+	//
+	////////////////////////////////////////////////////////////
+	
+	// Gaussian kernels for blur
+	this.gks = [ [0.27901,0.44198,0.27901], [0.135336,0.228569,0.272192,0.228569,0.135336], [0.086776,0.136394,0.178908,0.195843,0.178908,0.136394,0.086776],
+	             [0.063327,0.093095,0.122589,0.144599,0.152781,0.144599,0.122589,0.093095,0.063327], [0.049692,0.069304,0.089767,0.107988,0.120651,0.125194,0.120651,0.107988,0.089767,0.069304,0.049692] ],
+	
+	// Selective Gaussian blur for preprocessing
+	this.blur = function(imgd,radius,delta){
+		var i,j,k,d,idx,racc,gacc,bacc,aacc,wacc;
+		
+		// new ImageData
+		var imgd2 = { width:imgd.width, height:imgd.height, data:[] };
+		
+		// radius and delta limits, this kernel
+		radius = Math.floor(radius); if(radius<1){ return imgd; } if(radius>5){ radius = 5; } delta = Math.abs( delta ); if(delta>1024){ delta = 1024; }
+		var thisgk = _this.gks[radius-1];
+		
+		// loop through all pixels, horizontal blur
+		for( j=0; j < imgd.height; j++ ){
+			for( i=0; i < imgd.width; i++ ){
+
+				racc = 0; gacc = 0; bacc = 0; aacc = 0; wacc = 0;
+				// gauss kernel loop
+				for( k = -radius; k < radius+1; k++){
+					// add weighted color values
+					if( (i+k > 0) && (i+k < imgd.width) ){
+						idx = (j*imgd.width+i+k)*4;
+						racc += imgd.data[idx  ] * thisgk[k+radius];
+						gacc += imgd.data[idx+1] * thisgk[k+radius];
+						bacc += imgd.data[idx+2] * thisgk[k+radius];
+						aacc += imgd.data[idx+3] * thisgk[k+radius];
+						wacc += thisgk[k+radius];
+					}
+				}
+				// The new pixel
+				idx = (j*imgd.width+i)*4;
+				imgd2.data[idx  ] = Math.floor(racc / wacc);
+				imgd2.data[idx+1] = Math.floor(gacc / wacc);
+				imgd2.data[idx+2] = Math.floor(bacc / wacc);
+				imgd2.data[idx+3] = Math.floor(aacc / wacc);
+				
+			}// End of width loop
+		}// End of horizontal blur
+		
+		// copying the half blurred imgd2
+		var himgd = new Uint8ClampedArray(imgd2.data);
+		
+		// loop through all pixels, vertical blur
+		for( j=0; j < imgd.height; j++ ){
+			for( i=0; i < imgd.width; i++ ){
+
+				racc = 0; gacc = 0; bacc = 0; aacc = 0; wacc = 0;
+				// gauss kernel loop
+				for( k = -radius; k < radius+1; k++){
+					// add weighted color values
+					if( (j+k > 0) && (j+k < imgd.height) ){
+						idx = ((j+k)*imgd.width+i)*4;
+						racc += himgd[idx  ] * thisgk[k+radius];
+						gacc += himgd[idx+1] * thisgk[k+radius];
+						bacc += himgd[idx+2] * thisgk[k+radius];
+						aacc += himgd[idx+3] * thisgk[k+radius];
+						wacc += thisgk[k+radius];
+					}
+				}
+				// The new pixel
+				idx = (j*imgd.width+i)*4;
+				imgd2.data[idx  ] = Math.floor(racc / wacc);
+				imgd2.data[idx+1] = Math.floor(gacc / wacc);
+				imgd2.data[idx+2] = Math.floor(bacc / wacc);
+				imgd2.data[idx+3] = Math.floor(aacc / wacc);
+				
+			}// End of width loop
+		}// End of vertical blur
+		
+		// Selective blur: loop through all pixels
+		for( j=0; j < imgd.height; j++ ){
+			for( i=0; i < imgd.width; i++ ){
+				
+				idx = (j*imgd.width+i)*4;
+				// d is the difference between the blurred and the original pixel
+				d = Math.abs(imgd2.data[idx  ] - imgd.data[idx  ]) + Math.abs(imgd2.data[idx+1] - imgd.data[idx+1]) +
+					Math.abs(imgd2.data[idx+2] - imgd.data[idx+2]) + Math.abs(imgd2.data[idx+3] - imgd.data[idx+3]);
+				// selective blur: if d>delta, put the original pixel back
+				if(d>delta){
+					imgd2.data[idx  ] = imgd.data[idx  ];
+					imgd2.data[idx+1] = imgd.data[idx+1];
+					imgd2.data[idx+2] = imgd.data[idx+2];
+					imgd2.data[idx+3] = imgd.data[idx+3];
+				}
+			}
+		}// End of Selective blur
+		
+		return imgd2;
+		
+	},// End of blur()
+	
+	// Helper function: loading an image from a URL, then executing callback with canvas as argument
+	this.loadImage = function(url,callback,options){
+		var img = new Image();
+		if(options && options.corsenabled){ img.crossOrigin = 'Anonymous'; }
+		img.onload = function(){
+			var canvas = document.createElement('canvas');
+			canvas.width = img.width;
+			canvas.height = img.height;
+			var context = canvas.getContext('2d');
+			context.drawImage(img,0,0);
+			callback(canvas);
+		};
+		img.src = url;
+	},
+	
+	// Helper function: getting ImageData from a canvas
+	this.getImgdata = function(canvas){
+		var context = canvas.getContext('2d');
+		return context.getImageData(0,0,canvas.width,canvas.height);
+	},
+	
+	// Special palette to use with drawlayers()
+	this.specpalette = [
+		{r:0,g:0,b:0,a:255}, {r:128,g:128,b:128,a:255}, {r:0,g:0,b:128,a:255}, {r:64,g:64,b:128,a:255},
+		{r:192,g:192,b:192,a:255}, {r:255,g:255,b:255,a:255}, {r:128,g:128,b:192,a:255}, {r:0,g:0,b:192,a:255},
+		{r:128,g:0,b:0,a:255}, {r:128,g:64,b:64,a:255}, {r:128,g:0,b:128,a:255}, {r:168,g:168,b:168,a:255},
+		{r:192,g:128,b:128,a:255}, {r:192,g:0,b:0,a:255}, {r:255,g:255,b:255,a:255}, {r:0,g:128,b:0,a:255}
+	],
+	
+	// Helper function: Drawing all edge node layers into a container
+	this.drawLayers = function(layers,palette,scale,parentid){
+		scale = scale||1;
+		var w,h,i,j,k;
+		
+		// Preparing container
+		var div;
+		if(parentid){
+			div = document.getElementById(parentid);
+			if(!div){
+				div = document.createElement('div');
+				div.id = parentid;
+				document.body.appendChild(div);
+			}
+		}else{
+			div = document.createElement('div');
+			document.body.appendChild(div);
+		}
+		
+		// Layers loop
+		for (k in layers) {
+			if(!layers.hasOwnProperty(k)){ continue; }
+			
+			// width, height
+			w=layers[k][0].length; h=layers[k].length;
+			
+			// Creating new canvas for every layer
+			var canvas = document.createElement('canvas'); canvas.width=w*scale; canvas.height=h*scale;
+			var context = canvas.getContext('2d');
+			
+			// Drawing
+			for(j=0; j<h; j++){
+				for(i=0; i<w; i++){
+					context.fillStyle = _this.torgbastr(palette[ layers[k][j][i]%palette.length ]);
+					context.fillRect(i*scale,j*scale,scale,scale);
+				}
+			}
+			
+			// Appending canvas to container
+			div.appendChild(canvas);
+		}// End of Layers loop
+	}// End of drawlayers
+	
+	;// End of function list
+	
+}// End of ImageTracer object
+
+// export as AMD module / Node module / browser or worker variable
+if(typeof define === 'function' && define.amd){
+	define(function() { return new ImageTracer(); });
+}else if(typeof module !== 'undefined'){
+	module.exports = new ImageTracer();
+}else if(typeof self !== 'undefined'){
+	self.ImageTracer = new ImageTracer();
+}else window.ImageTracer = new ImageTracer();
+
 })();
 </script>
 </body>
