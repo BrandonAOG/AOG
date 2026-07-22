@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.4.3';
+var CACHE_NAME = 'aog-forms-v2.4.4';
 var DEV_MODE   = false;
 
 // Tracks whether this SW instance has already run a precache repair pass
@@ -23,8 +23,7 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '📶 Offline upgrade: photo import (HEIC) and PDF export fonts now work with no signal — their libraries are cached like everything else.',
-  '🔧 Fixed a caching bug that quietly kept some fonts and libraries from saving for offline use.',
+  '🔧 Just a refresh, minor bug fixes throughout',
 ];
 // 
 // ============================================================
