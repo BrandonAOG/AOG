@@ -10431,15 +10431,20 @@ async function resolveCountyParcel(countyName, searchCtx){
   // require the distinctive street token(s) to be present so "652 Bougainvillea" can't match
   // "652 Broad Ave". When no street was typed, accept the bare house-number hit only if unique.
   const wantCore = new Set(streetCore(searchCtx.raw||''));
+  // Direction + suffix tokens the user actually typed (AVE/ST/S/N/...). When present, the parcel's
+  // address must contain them too — so "8th Ave S" can never match "8th St N".
+  const DIRSUF = new Set([...Object.values(DIRMAP), ...Object.values(SUFMAP)]);
+  const wantDS = streetTokens(searchCtx.raw||'').filter(t=>DIRSUF.has(t));
   const matches=[];
   for(const f of feats){
     const a=f.attributes||{}; const addr=a[cfg.addrField]; if(!addr) continue;
     if(houseNum(addr)!==searchCtx.hn) continue;
+    const toks=new Set(streetTokens(addr));
     if(wantCore.size){
-      const toks=new Set(streetTokens(addr));
       let overlap=false; wantCore.forEach(t=>{ if(toks.has(t)) overlap=true; });
       if(!overlap) continue;                       // street must match when one was typed
     }
+    if(wantDS.length && !wantDS.every(t=>toks.has(t))) continue; // typed Ave/S/etc. must match too
     const c=featCentroid(f); if(!c) continue;       // [x,y] = [lng,lat]
     matches.push({
       lat:c[1], lng:c[0],
@@ -10495,8 +10500,14 @@ async function doSearch(){
     let county=null;
     const rough=await geocodeBest(q).catch(()=>null);
     if(rough && isFinite(rough.lat) && isFinite(rough.lng)) county=await countyNameAt(rough.lat,rough.lng).catch(()=>null);
-    if(county && COUNTY_PARCEL_RESOLVERS[norm(county)]){
-      const pr=await resolveCountyParcel(county, searchCtx).catch(()=>null);
+    // If the rough geocode failed or landed somewhere without a resolver (common for short
+    // addresses like "481 8th Ave S" that exist in many cities), don't give up — try each
+    // configured county parcel layer directly. The strict house-number + street/direction/suffix
+    // match inside resolveCountyParcel keeps false hits out.
+    let tryCounties = (county && COUNTY_PARCEL_RESOLVERS[norm(county)]) ? [county] : Object.keys(COUNTY_PARCEL_RESOLVERS);
+    for(const cty of tryCounties){
+      const pr=await resolveCountyParcel(cty, searchCtx).catch(()=>null);
+      if(!pr){ continue; }
       if(pr && pr.multi && pr.candidates && pr.candidates.length){
         // Several lots share this number+street — show them rather than guess one.
         const list=pr.candidates.slice(0,8).map(c=>`<div class="sg" style="cursor:default"><span>${esc(c.label)}</span>${c.folio?`<span class="sgsrc">${esc(c.folio)}</span>`:''}</div>`).join('');
