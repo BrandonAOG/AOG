@@ -2682,6 +2682,68 @@ if(btnFlood) btnFlood.onclick=function(){
    the parcel-lines layer. The fill (PNG) still shows at z>=10; only the crisp edges wait
    for z>=13. */
 const FEMA_NFHL_QUERY = FEMA_NFHL_MS + "/28/query";
+
+/* ---------- ALL flood zones intersecting the PARCEL (not just the pin) ----------
+   The main flood lookup is a point query at the marker, so a lot that straddles a zone line
+   (very common on canal/gulf lots: VE at the seawall, AE mid-lot, X at the street) reports only
+   whichever zone the pin happens to sit in. This re-queries NFHL layer 28 with the parcel's
+   POLYGON geometry (the statewide-roll / live-feed parcel rings we already fetched, WGS84) and
+   returns every distinct zone touching the lot. POST, because parcel rings can exceed URL limits.
+   Fails soft: any error/timeout → null → the card simply omits the extra row. */
+async function queryFloodZonesOnParcel(parcelFeature){
+  const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
+  if(!rings0 || !rings0.length){ window.__floodParcelDebug={fail:'no parcel rings'}; return null; }
+  // Round to 6 decimals (~10 cm): shrinks the payload a lot, and FEMA's strict server is happier
+  // with sane coordinates than with 15-decimal doubles.
+  const rings = rings0.map(r=>r.map(p=>[+p[0].toFixed(6), +p[1].toFixed(6)]));
+  const geomStr = JSON.stringify({ rings, spatialReference:{ wkid:4326 } });
+  const common = { geometryType:'esriGeometryPolygon', inSR:'4326',
+    spatialRel:'esriSpatialRelIntersects',
+    outFields:'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF',
+    returnGeometry:'false', f:'json' };
+  const parse = j => {
+    if(!j || j.error || !j.features){ return null; }
+    const seen=new Set(), out=[];
+    for(const f of j.features){
+      const a=f.attributes||{};
+      const zone=(a.FLD_ZONE||'').trim(); if(!zone) continue;
+      const bfe=(a.STATIC_BFE!=null && Number(a.STATIC_BFE)>-9999)?Number(a.STATIC_BFE):null;
+      const key=zone+'|'+(bfe==null?'':bfe);
+      if(seen.has(key)) continue; seen.add(key);
+      out.push({ zone, bfe, sfha:(a.SFHA_TF==='T'),
+                 sub:(a.ZONE_SUBTY&&a.ZONE_SUBTY.trim())?a.ZONE_SUBTY.trim():null });
+    }
+    out.sort((x,y)=>(y.sfha-x.sfha)||((y.bfe||0)-(x.bfe||0))||x.zone.localeCompare(y.zone));
+    return out;
+  };
+  const attempt = async (opts) => {
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), FLOOD_TIMEOUT);
+    try{
+      const r=await fetch(opts.url, { method:opts.method, body:opts.body, signal:ctrl.signal });
+      clearTimeout(t);
+      if(!r.ok) return { fail:'HTTP '+r.status };
+      const j=await r.json();
+      if(j.error) return { fail:'service: '+(j.error.message||JSON.stringify(j.error).slice(0,120)) };
+      return { ok:parse(j), raw:(j.features||[]).length };
+    }catch(e){ clearTimeout(t); return { fail:String(e&&e.message||e) }; }
+  };
+  // Attempt 1: POST (handles any parcel size).
+  const body=new URLSearchParams(Object.assign({ geometry:geomStr }, common));
+  let res = await attempt({ url:FEMA_NFHL_QUERY, method:'POST', body });
+  // Attempt 2: GET with the OUTER ring only (some strict proxies mishandle POST). Skip if URL too long.
+  if(!res.ok){
+    const post_fail = res.fail;
+    const outer = JSON.stringify({ rings:[rings[0]], spatialReference:{ wkid:4326 } });
+    const qs = new URLSearchParams(Object.assign({ geometry:outer }, common)).toString();
+    if((FEMA_NFHL_QUERY+'?'+qs).length < 7500){
+      res = await attempt({ url:FEMA_NFHL_QUERY+'?'+qs, method:'GET' });
+    }
+    res.post_fail = post_fail;
+  }
+  window.__floodParcelDebug = { rings:rings.length, verts:rings[0].length,
+    rawHits:res.raw, distinct:(res.ok?res.ok.length:null), fail:res.fail||null, post_fail:res.post_fail||null };
+  return res.ok || null;
+}
 const floodEdgeLayer = L.geoJSON(null, {
   style:{ color:'#39d3ff', weight:2, opacity:.95, dashArray:'6,5',
           fill:true, fillColor:'#39d3ff', fillOpacity:0.001 } });
@@ -8509,19 +8571,28 @@ function _ptToPaths(lat,lng, paths){
    ASCE-sanctioned method, and what the Hazard Tool does. Returns {v, lo, hi, interp} or null. */
 async function queryWindSpeed(lat,lng){
   const base=WIND_LIVE.url; if(!base) return null;
-  for(const r of WIND_LIVE.radii){
+  // SPEED: fire ALL radii in parallel (was: sequential, each waiting for the last to miss) and ask the
+  // server to GENERALIZE the contour lines (maxAllowableOffset scaled to the search radius, plus
+  // geometryPrecision=5). The statewide ASCE contour polylines are enormous at full resolution —
+  // generalizing cuts each payload ~10-100× with no meaningful effect on a km-scale distance
+  // interpolation. We then take the SMALLEST radius that produced usable values, so the result is
+  // identical to the old sequential logic — just arriving in one round-trip time instead of four.
+  const attempts = WIND_LIVE.radii.map(r=>{
+    const off = Math.max(50, Math.round(r/50));   // metres of allowed simplification (~2% of radius)
     const params=`geometry=${pointGeom(lat,lng)}&geometryType=esriGeometryPoint&inSR=4326`+
       `&distance=${r}&units=esriSRUnit_Meter&spatialRel=esriSpatialRelIntersects`+
-      `&outFields=*&returnGeometry=true&outSR=4326&f=json`;
+      `&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset=${off}&geometryPrecision=5&f=json`;
     const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),ENRICH_TIMEOUT);
-    let j;
-    try{
-      const resp=await fetch(base+'?'+params,{signal:ctrl.signal}); clearTimeout(t);
-      if(!resp.ok) continue;
-      j=await resp.json(); if(j.error) continue;
-    }catch(e){ clearTimeout(t); return null; }   // CORS / network / timeout → county fallback
+    return fetch(base+'?'+params,{signal:ctrl.signal})
+      .then(resp=>{ clearTimeout(t); return resp.ok?resp.json():null; })
+      .then(j=>(j && !j.error)?j:null)
+      .catch(()=>{ clearTimeout(t); return null; });
+  });
+  const results = await Promise.all(attempts);
+  for(const j of results){                        // radii order preserved → smallest hit wins
+    if(!j) continue;
     const feats=j.features||[];
-    if(!feats.length) continue;                  // none within this radius → expand
+    if(!feats.length) continue;                  // none within this radius → try next
     const byVal={};                              // nearest distance (m) per distinct contour value
     for(const f of feats){
       const v=detectWindSpeed(f.attributes||{}); if(v==null) continue;
@@ -9565,6 +9636,11 @@ async function runLookup(lat,lng,searchCtx){
     html += renderParcelGeneric(liveRes.features[0].attributes, det);
     if(liveRes.__ngLat && marker){ try{ marker.setLatLng([liveRes.__ngLat, liveRes.__ngLng]); saveLoc(liveRes.__ngLat, liveRes.__ngLng); }catch(e){} }
     { const _a=liveRes.features[0].attributes;
+      const _siteBox = det.site?[pick(_a,det.site), (det.city?pick(_a,det.city):null)].filter(Boolean).join(', '):null;
+      // MAP-CLICK ADDRESS FILL: when the lookup came from clicking the map (no searchCtx — typed
+      // searches and suggestion clicks always pass one), reflect the clicked parcel's site address
+      // into the search box, exactly like picking it from the dropdown would.
+      if(!searchCtx && _siteBox){ try{ addrEl.value=_siteBox; STORE.set('fl_addr',_siteBox); addToHistory(_siteBox); }catch(e){} }
       drawParcel(liveRes.features[0].geometry, {
         owner: det.owner?pick(_a,det.owner):null,
         pid:   det.pid?pick(_a,det.pid):null,
@@ -9676,6 +9752,8 @@ async function runLookup(lat,lng,searchCtx){
     }
     if(lsf) html += fieldRow('Lot area', lsf+' sq ft');
     if(site)     html += fieldRow('Site address', esc(site)+(siteCity?'<br>'+esc(siteCity):''));
+    // MAP-CLICK ADDRESS FILL (roll-fallback counties): same as the live branch above.
+    if(!searchCtx && site){ try{ const _boxAddr=[site,siteCity].filter(Boolean).join(', '); addrEl.value=_boxAddr; STORE.set('fl_addr',_boxAddr); addToHistory(_boxAddr); }catch(e){} }
     if(mail)     html += fieldRow('Owner mailing', esc(mail)+(mailCity?'<br>'+esc(mailCity):''));
     if(sec||twn||rng) html += fieldRow('Sec-Twn-Rng', esc([sec,twn,rng].filter(Boolean).join(' - ')));
     if(jv)  html += fieldRow('Just (market) value'+(ay?' '+esc(ay):''), jv);
@@ -9825,6 +9903,23 @@ async function runLookup(lat,lng,searchCtx){
     html += fieldRow('Base Flood Elev.', bfe!=null?esc(bfe)+' ft (NAVD88)':'<span class="muted">none published for this zone</span>');
     if(depth!=null) html += fieldRow('Base flood depth', esc(depth)+' ft');
     if(zones.length>1) html += fieldRow('Note','Point sits on a zone boundary — '+zones.length+' zones overlap here.');
+    // --- Whole-parcel check: does the LOT cross flood-zone lines? (pin query above is point-only) ---
+    { const pFeat = (parcel && !parcel.__err && parcel.features && parcel.features[0] && parcel.features[0].geometry && parcel.features[0].geometry.rings) ? parcel.features[0]
+                  : (live && !live.__err && live.features && live.features[0] && live.features[0].geometry && live.features[0].geometry.rings) ? live.features[0] : null;
+      if(pFeat){
+        const pz = await queryFloodZonesOnParcel(pFeat);
+        if(myId!==runId) return;
+        if(pz && pz.length>1){
+          const lbls = pz.map(m=>{
+            let s='<b>'+esc(m.zone)+'</b>'; if(m.bfe!=null) s+=' '+esc(m.bfe)+' ft';
+            if(m.sfha) s+=' <span class="badge sfha" style="font-size:9px">SFHA</span>';
+            return s; });
+          html += `<div class="field"><div class="k">Zones on this parcel</div><div class="v">${lbls.join(' &nbsp;·&nbsp; ')}</div></div>`;
+          html += `<div class="note">This lot crosses a flood-zone boundary — the zone above is only where the pin sits. Insurance rating uses the <b>building's</b> zone (typically the highest-risk zone the structure touches); equipment placed elsewhere on the lot (generator pad, pool equipment) may fall in a different zone with a different required elevation. Confirm the zone line on the FIRM panel.</div>`;
+          if(window.__exportData) window.__exportData.floodZonesParcel = pz.map(m=>m.zone+(m.bfe!=null?' '+m.bfe:'')).join(', ');
+        }
+      }
+    }
     html += `<div class="note" style="padding-top:9px">Static BFE comes straight from the effective FIRM. Many zones (e.g. AE on a wide floodplain, AO, or Zone X) carry no single static BFE — confirm the precise elevation on the FIRM panel / FEMA Map Service Center.</div>`;
   } else {
     html += `<div class="field"><div class="k">Flood zone</div><div class="v zone"><span class="badge unk">Not mapped</span></div></div>`;
@@ -10711,6 +10806,10 @@ async function chooseSuggestion(it){
   // is comma-mangled ("…, Ridgeview Lakes, Naples, Collier County, Florida, 34102, United States")
   // and whose OSM coordinate is interpolated (lands on the wrong house). Prefer the typed text.
   const basis = houseNum(typed) ? typed : cleanAddress(it.label);
+  // What we DISPLAY in the search box is different from what we MATCH on: the box should always
+  // show the full picked address (cleaned of "County/United States" cruft), never the partial
+  // text the user had typed so far. searchCtx below still anchors on the typed basis.
+  const fullAddr = cleanAddress(it.label) || basis;
   const searchCtx = { raw:basis, hn:houseNum(basis), toks:new Set(streetTokens(basis)), unit:searchUnit(basis) };
   // AUTHORITATIVE COUNTY-PARCEL FIRST: if the suggestion sits in a county whose parcel layer carries
   // correct site addresses (e.g. Collier), resolve the EXACT lot there by street+number and ignore
@@ -10721,7 +10820,7 @@ async function chooseSuggestion(it){
   if(searchCtx.hn && county && COUNTY_PARCEL_RESOLVERS[norm(county)]){
     const pr=await resolveCountyParcel(county, searchCtx).catch(()=>null);
     if(pr && pr.multi && pr.candidates && pr.candidates.length){
-      addrEl.value=basis;
+      addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr);
       const list=pr.candidates.slice(0,8).map(c=>`<div class="sg" style="cursor:default"><span>${esc(c.label)}</span>${c.folio?`<span class="sgsrc">${esc(c.folio)}</span>`:''}</div>`).join('');
       results.innerHTML=setStatus('err',`Found ${pr.candidates.length} lots matching “${esc(basis)}”. Pick the exact one on the map, or add a unit/more detail.`)+`<div style="margin-top:6px">${list}</div>`;
       map.setView([pr.candidates[0].lat,pr.candidates[0].lng],18);
@@ -10741,7 +10840,7 @@ async function chooseSuggestion(it){
     // county covered but address not found in its parcel layer → fall through to the OSM coordinate.
   }
   // FALLBACK (non-resolver counties): use the suggestion's own coordinate; runLookup resolves the parcel.
-  addrEl.value=basis; STORE.set('fl_addr',basis); addToHistory(it.label);
+  addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr); addToHistory(it.label);
   results.innerHTML=setStatus('busy','Pinpointing the parcel…');
   map.setView([it.lat,it.lng], 18);
   await runLookup(it.lat,it.lng, searchCtx);
