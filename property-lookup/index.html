@@ -480,6 +480,12 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .suggest .sg .sgsrc{margin-left:auto;color:var(--faint);font-size:9.5px;flex:none;padding-top:1px}
   .suggest .sgmsg{padding:10px 12px;font-family:var(--mono);font-size:11px;color:var(--faint)}
 
+  /* ---- Our blue flood-zone labels (replace FEMA's baked-in black ones) ---- */
+  .floodlbl{ color:#39d3ff; font-family:var(--mono); font-size:11px; font-weight:700;
+    text-align:center; white-space:nowrap; line-height:1.25; pointer-events:none;
+    transform:translate(-50%,-50%);
+    text-shadow:0 0 3px #10151b,0 0 3px #10151b,1px 1px 2px #10151b,-1px -1px 2px #10151b }
+
   /* ---- Search history dropdown ---- */
   .history{position:absolute;z-index:1200;left:0;right:0;top:calc(100% + 4px);
     background:var(--input-bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;
@@ -2664,14 +2670,48 @@ const floodLayer = new ArcGISExportTiles(
   // quartering round-trips to FEMA's slow export server. Flat fill → no visible difference.
   { tileSize:512, opacity:0.45, minZoom:10, maxZoom:23, maxNativeZoom:19, zIndex:240,
     attribution:'Flood zones &copy; FEMA NFHL', updateWhenIdle:L.Browser.mobile });
+
+/* ---------- Blue zone labels ("Zone VE/ (EL 12)") on the FEMA flood layer ----------
+   FEMA's export server DOES support dynamicLayers restyling, but carrying its 9 recolored label
+   classes on every tile URL needs ~34 KB of query string — far over server URL limits, so those
+   tiles never load (verified live). Plan B, same visual result:
+     1. Tell FEMA "render zone fills but NO labels" — that dynamicLayers payload is ~200 chars.
+     2. Draw the SAME label text ourselves in blue, from the zone polygons the app already fetches
+        for the dashed edge lines (FLD_ZONE + STATIC_BFE reconstruct "Zone VE/ (EL 12)" exactly).
+   If the suppression probe fails, nothing changes: FEMA's black labels stay, ours stay off —
+   never both, never neither. */
+let ownFloodLabels=false;
+(async function blueFloodLabels(){
+  const dbg = window.__floodLabelDebug = { stage:'start', mode:'suppress+own' };
+  try{
+    const dyn=[{ id:28, source:{ type:'mapLayer', mapLayerId:28 }, drawingInfo:{ showLabels:false } }];
+    const url = FEMA_NFHL_MS + "/export?dpi=96&transparent=true&format=png32&bboxSR=3857&imageSR=3857"
+              + "&size=512,512&f=image&dynamicLayers=" + encodeURIComponent(JSON.stringify(dyn))
+              + "&bbox={bbox}";
+    dbg.urlLen = url.length;
+    // Probe with an Image() — the same way Leaflet loads tiles (plain <img>, no CORS involved).
+    const okImg = await new Promise(res=>{
+      const im=new Image(); const t=setTimeout(()=>res(false),15000);
+      im.onload=()=>{ clearTimeout(t); res(im.naturalWidth>0); };
+      im.onerror=()=>{ clearTimeout(t); res(false); };
+      im.src=url.replace('{bbox}','-9130000,3020000,-9120000,3030000');
+    });
+    dbg.probe = okImg ? 'image loaded ok' : 'image failed to load';
+    if(!okImg){ dbg.stage='abort: label-suppression tile failed — FEMA labels kept'; return; }
+    floodLayer.setUrl(url);
+    ownFloodLabels=true;                       // refreshFloodEdges now draws the blue labels
+    dbg.stage='ACTIVE — FEMA labels off, blue labels on';
+    try{ floodEdgeKey=''; refreshFloodEdges(); }catch(e){}
+  }catch(e){ dbg.stage='exception'; dbg.err=String(e&&e.message||e); }
+})();
 let floodOn=false;
 const btnFlood=document.getElementById('btnFlood');
 if(btnFlood) btnFlood.onclick=function(){
   floodOn=!floodOn; this.classList.toggle('active',floodOn);
-  if(floodOn){ floodLayer.addTo(map); floodEdgeLayer.addTo(map); floodEdgeKey='';
+  if(floodOn){ floodLayer.addTo(map); floodEdgeLayer.addTo(map); floodLblLayer.addTo(map); floodEdgeKey='';
     if(map.getZoom()<10) mapToast('Zoom in to see flood-zone shading.',2400);
     else refreshFloodEdges(); }
-  else { map.removeLayer(floodLayer); map.removeLayer(floodEdgeLayer); }
+  else { map.removeLayer(floodLayer); map.removeLayer(floodEdgeLayer); map.removeLayer(floodLblLayer); floodLblLayer.clearLayers(); }
 };
 
 /* ---------- Flood-zone BOUNDARIES (vector, on top of the PNG fill) ----------
@@ -2747,6 +2787,101 @@ async function queryFloodZonesOnParcel(parcelFeature){
 const floodEdgeLayer = L.geoJSON(null, {
   style:{ color:'#39d3ff', weight:2, opacity:.95, dashArray:'6,5',
           fill:true, fillColor:'#39d3ff', fillOpacity:0.001 } });
+const floodLblLayer = L.layerGroup();     // our blue zone labels (replaces FEMA's baked-in black ones)
+/* Short two-line label matching FEMA's own wording: "Zone VE/ (EL 12)" / "Zone AE/ (EL 9)" /
+   "Zone X" / "Zone OPEN WATER". Placed at the centroid of the polygon's vertices that are inside
+   the current view, so labels stay visible even when only part of a huge zone is on screen. */
+let lastFloodGj=null, lastFloodIdx=null;   // cached polygons + per-polygon bbox index for fast hit-tests
+/* Build a small spatial index once per fetch: [{bbox:[W,S,E,N], rings, props}] so each label
+   placement is a cheap bbox reject + one point-in-polygon test. */
+function indexFloodGj(gj){
+  const idx=[];
+  if(!gj||!gj.features) return idx;
+  for(const f of gj.features){
+    const p=f.properties||{}; const z=(p.FLD_ZONE||'').trim(); if(!z) continue;
+    const g=f.geometry; if(!g) continue;
+    const polys = g.type==='Polygon' ? [g.coordinates] : (g.type==='MultiPolygon' ? g.coordinates : []);
+    for(const rings of polys){
+      if(!rings||!rings[0]||rings[0].length<4) continue;
+      let W=1e9,S=1e9,E=-1e9,N=-1e9;
+      for(const c of rings[0]){ if(c[0]<W)W=c[0]; if(c[0]>E)E=c[0]; if(c[1]<S)S=c[1]; if(c[1]>N)N=c[1]; }
+      idx.push({ W,S,E,N, rings, props:p });
+    }
+  }
+  return idx;
+}
+function _pipRing(x,y,ring){            // ray-cast point-in-ring
+  let inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+    if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function _zoneAt(x,y){
+  // Which zone polygon contains this lng/lat? NFHL zones mostly tile, but panel seams / LOMR
+  // revisions CAN stack overlapping records — when several contain the point, the SMALLEST
+  // (most specific) polygon wins instead of whichever happened to be first in the fetch.
+  if(!lastFloodIdx) return null;
+  let best=null, bestArea=Infinity;
+  for(const e of lastFloodIdx){
+    if(x<e.W||x>e.E||y<e.S||y>e.N) continue;          // bbox reject
+    const area=(e.E-e.W)*(e.N-e.S);
+    if(area>=bestArea) continue;                      // can't beat current best
+    if(!_pipRing(x,y,e.rings[0])) continue;           // outside outer ring
+    let inHole=false;
+    for(let h=1;h<e.rings.length;h++){ if(_pipRing(x,y,e.rings[h])){ inHole=true; break; } }
+    if(!inHole){ best=e.props; bestArea=area; }
+  }
+  return best;
+}
+const _zoneKey = p => p ? ((p.FLD_ZONE||'')+'|'+((p.STATIC_BFE!=null&&p.STATIC_BFE>-9999)?p.STATIC_BFE:'')) : null;
+/* Does a label anchored at screen point (px,py) fit INSIDE one zone? Tests the four points the
+   rendered text roughly reaches (±half label width/height). Prevents a label anchored just inside
+   a narrow stripe from visually spilling across the boundary — which reads as "wrong label in
+   wrong zone" even though the anchor point itself was classified correctly. */
+function _labelFits(px,py,key){
+  const HW=46, HH=13;                                  // ~half of the rendered label box in px
+  for(const [dx,dy] of [[-HW,0],[HW,0],[0,-HH],[0,HH]]){
+    const ll=map.containerPointToLatLng([px+dx,py+dy]);
+    if(_zoneKey(_zoneAt(ll.lng,ll.lat))!==key) return false;
+  }
+  return true;
+}
+/* FEMA-style placement: repeated labels on a screen grid (~every 280px). For each grid point,
+   whichever zone polygon CONTAINS it gets a label there — so a zone that fills the whole view
+   (open water, a wide AE band) is labelled even when its boundary is far off-screen. This is the
+   case the old vertex-centroid approach missed. */
+function drawFloodLabels(gj){
+  const t0=performance.now();
+  floodLblLayer.clearLayers();
+  if(!ownFloodLabels || !lastFloodIdx || !lastFloodIdx.length) return;
+  const sz=map.getSize(), SP=280;                       // px between repeated labels
+  const nx=Math.max(1,Math.round(sz.x/SP)), ny=Math.max(1,Math.round(sz.y/SP));
+  let placed=0;
+  for(let gy=0; gy<ny && placed<80; gy++){
+    for(let gx=0; gx<nx && placed<80; gx++){
+      const cx=(gx+0.5)*sz.x/nx, cy=(gy+0.5)*sz.y/ny;   // cell centre in screen px
+      const qx=sz.x/nx/4, qy=sz.y/ny/4;                 // quarter-cell nudge distances
+      // try the centre first, then 8 nudged spots inside the cell — take the first where the
+      // WHOLE label box sits in one zone; if none fits, draw nothing (no label > wrong-looking label)
+      for(const [ox,oy] of [[0,0],[-qx,0],[qx,0],[0,-qy],[0,qy],[-qx,-qy],[qx,-qy],[-qx,qy],[qx,qy]]){
+        const px=cx+ox, py=cy+oy;
+        const ll=map.containerPointToLatLng([px,py]);
+        const p=_zoneAt(ll.lng, ll.lat);
+        if(!p) continue;
+        const z=(p.FLD_ZONE||'').trim(); if(!z) continue;
+        if(!_labelFits(px,py,_zoneKey(p))) continue;
+        const bfe=(p.STATIC_BFE!=null && p.STATIC_BFE>-9999)?p.STATIC_BFE:null;
+        const txt='Zone '+z+(bfe!=null?'/<br>(EL '+bfe+')':'');
+        L.marker(ll, { interactive:false, keyboard:false,
+          icon:L.divIcon({ className:'floodlbl', html:txt, iconSize:null }) }).addTo(floodLblLayer);
+        placed++; break;
+      }
+    }
+  }
+  window.__floodLabelMs = Math.round((performance.now()-t0)*10)/10;   // perf breadcrumb
+}
 let floodEdgeKey='', floodEdgeBusy=false;
 function floodZoneLabel(p){
   if(!p) return 'Flood zone';
@@ -2760,8 +2895,8 @@ function floodZoneLabel(p){
   return s;
 }
 async function refreshFloodEdges(){
-  if(!floodOn){ floodEdgeLayer.clearLayers(); return; }
-  if(map.getZoom() < 13){ floodEdgeLayer.clearLayers(); floodEdgeKey=''; return; }  // edges only when zoomed in
+  if(!floodOn){ floodEdgeLayer.clearLayers(); floodLblLayer.clearLayers(); return; }
+  if(map.getZoom() < 13){ floodEdgeLayer.clearLayers(); floodLblLayer.clearLayers(); floodEdgeKey=''; return; }  // edges only when zoomed in
   const b=map.getBounds();
   const key=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(n=>n.toFixed(4)).join(',');
   if(key===floodEdgeKey || floodEdgeBusy) return;
@@ -2778,6 +2913,8 @@ async function refreshFloodEdges(){
       if(gj && gj.features){
         floodEdgeLayer.clearLayers();
         floodEdgeLayer.addData(gj);
+        lastFloodGj=gj; lastFloodIdx=indexFloodGj(gj);
+        try{ drawFloodLabels(gj); }catch(e){}
         // bind hover tooltips per zone (canvas renderer still supports layer events)
         floodEdgeLayer.eachLayer(ly=>{
           const p = ly.feature && ly.feature.properties;
@@ -2791,8 +2928,12 @@ async function refreshFloodEdges(){
   finally{ floodEdgeBusy=false; }
 }
 let floodEdgeTimer=null;
-map.on('zoomstart', ()=>{ if(floodOn) floodEdgeLayer.clearLayers(); });
-map.on('moveend zoomend', ()=>{ clearTimeout(floodEdgeTimer); floodEdgeTimer=setTimeout(refreshFloodEdges,BOUNDS_DEBOUNCE); });
+map.on('zoomstart', ()=>{ if(floodOn) floodEdgeLayer.clearLayers(); });   // labels ride the zoom transform — keep them
+map.on('moveend zoomend', ()=>{
+  // labels: redraw NOW from cached polygons (~a few ms) so they never wait on the debounce+fetch;
+  // the fetch below only swaps in fresh polygons when panning into an area we haven't loaded yet.
+  if(floodOn){ if(map.getZoom()>=13){ try{ drawFloodLabels(); }catch(e){} } else floodLblLayer.clearLayers(); }
+  clearTimeout(floodEdgeTimer); floodEdgeTimer=setTimeout(refreshFloodEdges,BOUNDS_DEBOUNCE); });
 
 /* ---------- Parcel / lot-line overlay (statewide cadastral) ----------
    Same FL DOR cadastral the panel reads on click, drawn as thin lines across the view. Parcels are
