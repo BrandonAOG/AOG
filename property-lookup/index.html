@@ -2701,7 +2701,7 @@ let ownFloodLabels=false;
     floodLayer.setUrl(url);
     ownFloodLabels=true;                       // refreshFloodEdges now draws the blue labels
     dbg.stage='ACTIVE — FEMA labels off, blue labels on';
-    try{ floodEdgeKey=''; refreshFloodEdges(); }catch(e){}
+    try{ drawFloodLabels(); refreshFloodEdges(); }catch(e){}
   }catch(e){ dbg.stage='exception'; dbg.err=String(e&&e.message||e); }
 })();
 let floodOn=false;
@@ -2709,9 +2709,11 @@ const btnFlood=document.getElementById('btnFlood');
 if(btnFlood) btnFlood.onclick=function(){
   floodOn=!floodOn; this.classList.toggle('active',floodOn);
   if(floodOn){ floodLayer.addTo(map); floodEdgeLayer.addTo(map); floodLblLayer.addTo(map); floodEdgeKey='';
+    try{ if(map.getZoom()>=13 && lastFloodGj){ renderFloodEdgesFromCache(); drawFloodLabels(); } }catch(e){}
     if(map.getZoom()<10) mapToast('Zoom in to see flood-zone shading.',2400);
     else refreshFloodEdges(); }
   else { map.removeLayer(floodLayer); map.removeLayer(floodEdgeLayer); map.removeLayer(floodLblLayer); floodLblLayer.clearLayers(); }
+
 };
 
 /* ---------- Flood-zone BOUNDARIES (vector, on top of the PNG fill) ----------
@@ -2844,7 +2846,8 @@ function _labelFits(px,py,key){
   const HW=46, HH=13;                                  // ~half of the rendered label box in px
   for(const [dx,dy] of [[-HW,0],[HW,0],[0,-HH],[0,HH]]){
     const ll=map.containerPointToLatLng([px+dx,py+dy]);
-    if(_zoneKey(_zoneAt(ll.lng,ll.lat))!==key) return false;
+    const k=_zoneKey(_zoneAt(ll.lng,ll.lat));
+    if(k!==null && k!==key) return false;              // a DIFFERENT zone vetoes; missing data doesn't
   }
   return true;
 }
@@ -2894,34 +2897,50 @@ function floodZoneLabel(p){
   if(bfe) s += ' · BFE '+bfe+' ft';
   return s;
 }
+let floodEdgeEnv=null;                    // envelope (padded) the cached polygons cover
+function _viewInsideCache(){
+  if(!floodEdgeEnv || !lastFloodGj) return false;
+  const b=map.getBounds();
+  return b.getWest()>=floodEdgeEnv.W && b.getEast()<=floodEdgeEnv.E &&
+         b.getSouth()>=floodEdgeEnv.S && b.getNorth()<=floodEdgeEnv.N;
+}
+/* Instant, network-free redraw of the dashed lines from cache (used at zoomend and whenever the
+   view is still inside the padded envelope of the last fetch). */
+function renderFloodEdgesFromCache(){
+  if(!lastFloodGj) return;
+  floodEdgeLayer.clearLayers();
+  floodEdgeLayer.addData(lastFloodGj);
+  floodEdgeLayer.eachLayer(ly=>{
+    const p = ly.feature && ly.feature.properties;
+    ly.bindTooltip(floodZoneLabel(p), {sticky:true, direction:'top', className:'parcel-tip', opacity:1});
+  });
+}
 async function refreshFloodEdges(){
   if(!floodOn){ floodEdgeLayer.clearLayers(); floodLblLayer.clearLayers(); return; }
   if(map.getZoom() < 13){ floodEdgeLayer.clearLayers(); floodLblLayer.clearLayers(); floodEdgeKey=''; return; }  // edges only when zoomed in
-  const b=map.getBounds();
-  const key=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(n=>n.toFixed(4)).join(',');
-  if(key===floodEdgeKey || floodEdgeBusy) return;
+  // Still inside the padded envelope of the last fetch → nothing new to load; the instant
+  // cache redraw in the moveend handler has already repainted lines + labels. Skip the network.
+  if(_viewInsideCache() || floodEdgeBusy) return;
   floodEdgeBusy=true;
-  const env=`${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
+  const b=map.getBounds();
+  // Fetch a PADDED envelope (~half a screen extra on each side): small pans stay inside it and
+  // cost zero network — the difference between "lines pop in after a second" and "always there".
+  const padX=(b.getEast()-b.getWest())*0.4, padY=(b.getNorth()-b.getSouth())*0.4;
+  const W=b.getWest()-padX, S=b.getSouth()-padY, E=b.getEast()+padX, N=b.getNorth()+padY;
+  const env=`${W},${S},${E},${N}`;
   const url=FEMA_NFHL_QUERY+`?geometry=${encodeURIComponent(env)}&geometryType=esriGeometryEnvelope&inSR=4326`+
     `&spatialRel=esriSpatialRelIntersects&where=1%3D1`+
     `&outFields=${encodeURIComponent('FLD_ZONE,ZONE_SUBTY,STATIC_BFE')}`+
-    `&returnGeometry=true&outSR=4326&resultRecordCount=400&f=geojson`;
+    `&returnGeometry=true&outSR=4326&geometryPrecision=6&resultRecordCount=1500&f=geojson`;
   try{
     const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
     const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(t);
     if(r.ok){ const gj=await r.json();
       if(gj && gj.features){
-        floodEdgeLayer.clearLayers();
-        floodEdgeLayer.addData(gj);
         lastFloodGj=gj; lastFloodIdx=indexFloodGj(gj);
+        floodEdgeEnv={W,S,E,N};
+        renderFloodEdgesFromCache();
         try{ drawFloodLabels(gj); }catch(e){}
-        // bind hover tooltips per zone (canvas renderer still supports layer events)
-        floodEdgeLayer.eachLayer(ly=>{
-          const p = ly.feature && ly.feature.properties;
-          const lbl = floodZoneLabel(p);
-          ly.bindTooltip(lbl, {sticky:true, direction:'top', className:'parcel-tip', opacity:1});
-        });
-        floodEdgeKey=key;
       }
     }
   }catch(e){ /* keep existing edges on failure */ }
@@ -2930,9 +2949,14 @@ async function refreshFloodEdges(){
 let floodEdgeTimer=null;
 map.on('zoomstart', ()=>{ if(floodOn) floodEdgeLayer.clearLayers(); });   // labels ride the zoom transform — keep them
 map.on('moveend zoomend', ()=>{
-  // labels: redraw NOW from cached polygons (~a few ms) so they never wait on the debounce+fetch;
-  // the fetch below only swaps in fresh polygons when panning into an area we haven't loaded yet.
-  if(floodOn){ if(map.getZoom()>=13){ try{ drawFloodLabels(); }catch(e){} } else floodLblLayer.clearLayers(); }
+  // INSTANT path: repaint lines + labels synchronously from cache (~ms). The debounced fetch below
+  // only fires when the view leaves the padded envelope of the cached data.
+  if(floodOn){
+    if(map.getZoom()>=13){
+      try{ if(lastFloodGj && floodEdgeLayer.getLayers().length===0) renderFloodEdgesFromCache(); }catch(e){}
+      try{ drawFloodLabels(); }catch(e){}
+    } else { floodLblLayer.clearLayers(); }
+  }
   clearTimeout(floodEdgeTimer); floodEdgeTimer=setTimeout(refreshFloodEdges,BOUNDS_DEBOUNCE); });
 
 /* ---------- Parcel / lot-line overlay (statewide cadastral) ----------
