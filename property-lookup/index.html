@@ -1611,10 +1611,12 @@ const DOCS_CITY = {
 };
 const DOCS_COUNTY = {
   COLLIER: {
-    // Collier publishes an EC map app; this layer URL is a best guess and MUST be verified.
-    ecLayer: "https://ags2.colliercountyfl.gov/gis/rest/services/agency/ElevationCertificates/MapServer/0",
-    ecMap:   "https://www.collier.gov/County-Development/Operations-Regulatory-Management/Floodplain-Management",
-    ecNote:  "Unincorporated Collier County. Keeps historic & current ECs for structures built after Sept 14, 1979 in zones A/V. Flood hotline (239) 252-2942.",
+    // ✅ Collier's Elevation Certificates live inside the county's DFIRM 2024 Experience app
+    //    (same app as the flood-zone viewer): search the address there and open the EC record/PDF.
+    //    The old ags2 layer URL was an unverified guess — dropped so we always send users to the app.
+    ecLayer: null,
+    ecMap:   "https://experience.arcgis.com/experience/70ae02cb985c4d288556ba5d00629fc7",
+    ecNote:  "Unincorporated Collier County: Elevation Certificates are in the county's DFIRM 2024 map app — search the address, click the parcel, and open the EC record. Keeps historic & current ECs for structures built after Sept 14, 1979 in zones A/V. Flood hotline (239) 252-2942.",
     permit:  "https://cvportal.collier.gov/cityviewweb/",
     permitBy:"address"
   },
