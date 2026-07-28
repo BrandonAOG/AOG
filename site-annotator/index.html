@@ -326,6 +326,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   -webkit-appearance:none;text-align:center;
 }
 #font-size-sel:focus{border-color:var(--acc)}
+.sp-sel{background:var(--surf2);border:1.5px solid var(--b2);color:var(--txt);border-radius:6px;padding:1px 2px;font-size:10px;outline:none;cursor:pointer;height:22px;width:52px;-webkit-appearance:none;text-align:center}
+.sp-sel:focus{border-color:var(--acc)}
+.sp-lbl{font-size:8px;color:var(--txt2);letter-spacing:.5px;line-height:1;display:block;text-align:center;white-space:nowrap}
 /* FONT FAMILY SELECT */
 #font-family-sel{
   background:var(--surf2);border:1.5px solid var(--b2);color:var(--txt);
@@ -1045,6 +1048,25 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <button class="align-btn active" id="align-left" title="Align left" data-align="left"><svg viewBox="0 0 14 14"><line x1="1" y1="3" x2="13" y2="3"/><line x1="1" y1="6" x2="9" y2="6"/><line x1="1" y1="9" x2="13" y2="9"/><line x1="1" y1="12" x2="9" y2="12"/></svg></button>
     <button class="align-btn" id="align-center" title="Align center" data-align="center"><svg viewBox="0 0 14 14"><line x1="1" y1="3" x2="13" y2="3"/><line x1="3" y1="6" x2="11" y2="6"/><line x1="1" y1="9" x2="13" y2="9"/><line x1="3" y1="12" x2="11" y2="12"/></svg></button>
     <button class="align-btn" id="align-right" title="Align right" data-align="right"><svg viewBox="0 0 14 14"><line x1="1" y1="3" x2="13" y2="3"/><line x1="5" y1="6" x2="13" y2="6"/><line x1="1" y1="9" x2="13" y2="9"/><line x1="5" y1="12" x2="13" y2="12"/></svg></button>
+  </div>
+  <!-- TEXT SPACING — Adobe-style: line spacing / line gap / tracking / horizontal scale -->
+  <div id="tb-text-spacing-grp" style="display:none;flex-shrink:0;gap:3px;align-items:center">
+    <div style="display:flex;flex-direction:column;gap:1px"><span class="sp-lbl">&#8597; LINE</span>
+      <select class="sp-sel" id="line-h-sel" title="Line spacing (&times; font size)">
+        <option value="">Auto</option><option value="1">1.00</option><option value="1.1">1.10</option><option value="1.15">1.15</option><option value="1.2">1.20</option><option value="1.3">1.30</option><option value="1.5">1.50</option><option value="2">2.00</option>
+      </select></div>
+    <div style="display:flex;flex-direction:column;gap:1px"><span class="sp-lbl">&#182; GAP</span>
+      <select class="sp-sel" id="para-gap-sel" title="Extra space between lines (pt)">
+        <option value="0" selected>0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option><option value="8">8</option><option value="12">12</option>
+      </select></div>
+    <div style="display:flex;flex-direction:column;gap:1px"><span class="sp-lbl">A&#8596;V</span>
+      <select class="sp-sel" id="ltr-sp-sel" title="Letter spacing / tracking (pt)">
+        <option value="-1">-1</option><option value="-0.5">-0.5</option><option value="-0.25">-0.25</option><option value="0" selected>0</option><option value="0.25">0.25</option><option value="0.5">0.5</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
+      </select></div>
+    <div style="display:flex;flex-direction:column;gap:1px"><span class="sp-lbl">T&#8596; %</span>
+      <select class="sp-sel" id="h-scale-sel" title="Horizontal scale (%) &mdash; condense or expand">
+        <option value="50">50</option><option value="60">60</option><option value="70">70</option><option value="75">75</option><option value="80">80</option><option value="85">85</option><option value="90">90</option><option value="95">95</option><option value="100" selected>100</option><option value="110">110</option><option value="125">125</option><option value="150">150</option><option value="175">175</option><option value="200">200</option>
+      </select></div>
   </div>
   <!-- TEXT BACKGROUND — text/leader tools only -->
   <div id="tb-txt-bg-grp" style="display:none;flex-shrink:0;align-items:center;gap:3px">
@@ -2143,10 +2165,11 @@ function measureLinesW(lines, fontSize){
   tCtx.restore();
   return maxW;
 }
-function measureLinesWFull(lines, fontSize, family, bold, italic){
+function measureLinesWFull(lines, fontSize, family, bold, italic, lsPx){
   tCtx.save();
   var w_=(bold?'bold ':'')||'', s_=(italic?'italic ':'')||'';
   tCtx.font=s_+w_+fontSize+'px '+(family||'Arial')+',sans-serif';
+  try{ tCtx.letterSpacing=(lsPx||0)+'px'; }catch(e){}
   var maxW=0;
   for(var _i=0;_i<lines.length;_i++){
     var _w=tCtx.measureText(lines[_i]).width;
@@ -2230,6 +2253,27 @@ var CMT_LINE_H = 1.15;
 // identical spacing and can never drift apart. Values <1 tighten past the
 // glyph box so the highlight bars overlap (0.92 = snug, faint overlap).
 var TXT_LINE_H = 0.92;
+// Per-object line spacing. Imported multi-line paragraphs carry the SOURCE
+// PDF's real leading in o.lineH (a multiplier of font size, like TXT_LINE_H);
+// re-spacing them with the app's tight default visibly squeezed stacked labels
+// ("48kw Generator / 200A MB / 200A @ LP" collapsing into the box). App-created
+// text has no lineH and keeps the default.
+function _lineHOf(o){ if(o && o.lineH) return o.lineH; if(!o && textLineH) return textLineH; return TXT_LINE_H; }
+// ── Adobe-style spacing controls: session defaults for NEW text; per-object
+// fields (lineH / paraGap / letterSpacing / hScale) once committed.
+var textLineH=null;          // null → TXT_LINE_H default
+var textParaGap=0;           // extra pt between lines
+var textLetterSpacing=0;     // tracking, pt
+var textHScale=100;          // horizontal scale % (≤100 = condense)
+function _paraGapOf(o){ return o ? (o.paraGap||0) : (textParaGap||0); }
+function _lsOf(o){ return o ? (o.letterSpacing||0) : (textLetterSpacing||0); }
+function _hsOf(o){ return (o ? (o.hScale||100) : (textHScale||100)); }
+// Baseline-to-baseline advance (canvas px) and total block height for n lines.
+function _lineAdvOf(o,fpx){ var g=_paraGapOf(o); return fpx*_lineHOf(o)+(g?ptToCanvasPx(g):0); }
+function _textBlockH(o,fpx,n){ var g=_paraGapOf(o); return fpx*_lineHOf(o)*n+(n>1&&g?ptToCanvasPx(g)*(n-1):0); }
+function _lsCanvasPx(o){ var v=_lsOf(o); return v?ptToCanvasPx(v):0; }
+// Apply an object's tracking to a canvas 2D context (no-op where unsupported).
+function _applyCtxLS(ctx,o,scale){ try{ ctx.letterSpacing=(_lsCanvasPx(o)*(scale||1))+'px'; }catch(e){} }
 // Highlight-bar extent above/below the text baseline, as a fraction of font
 // size. FIXED (not per-glyph) so multi-line highlight bars always overlap into
 // one continuous block instead of leaving a white sliver between lines whose
@@ -2582,6 +2626,7 @@ function startCommentTextEdit(c){
   textOv.style.textAlign    = 'left';
   textOv.style.transform    = 'none';
   textOv.style.transformOrigin = 'top left';
+  textOv.style.letterSpacing = '';
   textOv.style.color        = _cTxtColor;
   textOv.style.opacity      = 1;   // note text commits at full alpha — match it live
   textOv.style.background   = 'transparent';
@@ -5356,13 +5401,25 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     if(!text.trim()) return;
 
     var fontPt=first.fpx/sc;
+    // SOURCE LEADING: real baseline-to-baseline step of this paragraph in the
+    // PDF, as a multiple of font size. The app's default TXT_LINE_H (0.92) is
+    // much tighter than typical PDF leading (1.2-1.3x), so re-spacing merged
+    // rows with the default visibly squeezed stacked labels into each other.
+    // Carry the true multiplier on the object; every renderer honors o.lineH.
+    var _srcLineH=null;
+    if(P.lines.length>1 && first.fpx>0){
+      var _stSum=0;
+      for(var _li=1; _li<P.lines.length; _li++) _stSum += (P.lines[_li]._c - P.lines[_li-1]._c);
+      var _m=(_stSum/(P.lines.length-1))/first.fpx;
+      if(_m>0.6 && _m<1.9) _srcLineH=+_m.toFixed(3);
+    }
     var bold=/bold/i.test(first.fam);
     var ital=/italic|oblique/i.test(first.fam);
     var col=_sampleTextColor(_baseSampleCtx(), first.x, first.y, first.fpx, _colPix);
     textObjs.push({
       id: Date.now()+Math.floor(Math.random()*100000)+txtCount,
       x: first.x, y: first.y, text: text, color: col, fontSize: fontPt,
-      opacity:1, layerIdx:activeLayerIdx,
+      opacity:1, layerIdx:activeLayerIdx, lineH:_srcLineH||undefined,
       bold:!!bold, italic:!!ital, underline:false, strike:false,
       fontFamily:_normalizeFamily(first.fam), textAlign:'left', angle:first.ang, bgOpacity:0,
       // TRUE per-line widths from the source PDF (plan px) + the font size they
@@ -5372,6 +5429,11 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       _fitFs:fontPt, _fitWs:P.lines.map(function(L){ return Math.max(1, L._a1 - L._a0); }),
       _oText:text,         // content snapshot: an EDIT (not just a move) must also
                            // force redraw on export, or the original words ship
+      // FORMAT snapshot: spacing/font/color edits must ALSO count as "modified"
+      // on export (wipe original + redraw), or the edited copy double-draws
+      // over the original page text.
+      _oLineH:_srcLineH||undefined,
+      _oFmt:{fs:fontPt, b:!!bold, i:!!ital, col:col, fam:_normalizeFamily(first.fam), al:'left'},
       _fromExplode:true,   // duplicates original page text; skip on vector export
       _oX:first.x, _oY:first.y
     });
@@ -5969,6 +6031,21 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
         // never appeared.
         inAnn=true; curSubs=[]; stk.push(m2.slice());
         m2=vp.transform.slice();
+        // ACROBAT LOCAL-SPACE APPEARANCES: an annotation's appearance stream is
+        // usually written in PAGE coordinates (BBox == /Rect, Matrix identity) —
+        // for those, args[2]/args[3] are identity and this compose is a no-op,
+        // which is why resetting to the plain viewport transform *looked* right.
+        // But Acrobat also produces appearances in LOCAL form space (BBox at the
+        // origin — common after a box is resized, or from other authoring tools).
+        // pdf.js hands us the form→page mapping in args[2] (transform) and the
+        // form Matrix in args[3]; dropping them threw those annots to the page
+        // corner ("rect not placed right on import"). Compose exactly like
+        // pdf.js's own canvas renderer: viewport ∘ transform ∘ matrix.
+        try{
+          var _U2=pdfjsLib.Util;
+          if(agA && agA[2] && agA[2].length===6) m2=_U2.transform(m2, agA[2]);
+          if(agA && agA[3] && agA[3].length===6) m2=_U2.transform(m2, agA[3]);
+        }catch(e){}
         curStroke='#000000'; curFill=null; curLW=1; curDash=false;
         // Match this appearance block to its annotation by rect, so we can trust
         // the dict's subtype/lineEndings instead of guessing from subpath shapes
@@ -8413,7 +8490,7 @@ function onMove(e){
           var _wl=getTextLines(_to,_wfpx);
           var _wDrawn=measureLinesWDrawn(_to,_wl,_wfpx);
           selectedShape.w=Math.max(_wDrawn,40);
-          selectedShape.h=Math.max(_wl.length*_wfpx*TXT_LINE_H,_wfpx*1.5);
+          selectedShape.h=Math.max(_textBlockH(_to,_wfpx,_wl.length),_wfpx*1.5);
           // Keep the ANCHORED edge (opposite the dragged handle) pinned now that
           // w snapped to the wrapped text instead of the raw cursor width.
           var _hwO=orig.w/2, _axL=(selHandle===3? -_hwO : _hwO); // anchor x, local
@@ -8426,7 +8503,7 @@ function onMove(e){
           _to.fontSize=newFs;
           var _tlines=getTextLines(_to,ptToCanvasPx(newFs));
           var _newTextW=measureLinesW(_tlines,newFs);
-          var _newTextH=_tlines.length*newFs*TXT_LINE_H;
+          var _newTextH=_tlines.length*newFs*_lineHOf(_to);
           selectedShape.w=Math.max(_newTextW,40);
           selectedShape.h=Math.max(_newTextH,newFs*1.5);
         }
@@ -8827,7 +8904,7 @@ function onUp(e){
       var _fpx=ptToCanvasPx(_tt.fontSize);
       var _lns=getTextLines(_tt,_fpx);
       var _ew=measureLinesWDrawn(_tt,_lns,_fpx);
-      var _eh=_lns.length*_fpx*TXT_LINE_H;
+      var _eh=_textBlockH(_tt,_fpx,_lns.length);
       var _cs=Math.cos(selectedShape.angle), _sn=Math.sin(selectedShape.angle);
       var _lcx=_ew/2, _lcy=-_fpx+_eh/2;
       _tt.x=selectedShape.cx-(_lcx*_cs-_lcy*_sn);
@@ -10456,10 +10533,69 @@ function _fitAvgRatio(o){
 // block that has fit data (including edited lines — the overlay squeezes them
 // too), so the whole block reads with one consistent letter spacing.
 function _fitLineW(obj, i, naturalW){
-  if(!obj || !obj._fitWs) return undefined;
-  var r=_fitAvgRatio(obj);
-  if(r>=0.995) return undefined;
-  return naturalW*r;
+  // Horizontal scale (Adobe "T↔"): condense AND expand. Condense renders via
+  // the fillText-maxWidth squeeze the imported width-fit uses; expansion is
+  // drawn by _fillFitLine's scale transform. Every path (screen, selection,
+  // raster export, vector export, editor scaleX) keys off this one function.
+  var hs=_hsOf(obj)/100; if(!(hs>0)) hs=1;
+  // IMPORTED width-fit squeeze: REMOVED. It compressed every imported label to
+  // the source PDF's ink width (the app's fonts are wider than e.g. Calibri),
+  // which made loaded text look scrunched — dashes touching digits, cramped
+  // letters. Imported text now always renders at its NATURAL width; the _fitWs
+  // data stays on the objects (harmless) but no longer drives rendering. If a
+  // label must fit a tight spot, the T↔ horizontal-scale control condenses it
+  // exactly — a deliberate choice instead of a hidden one. The user's own T↔
+  // scale is the ONLY width factor applied here.
+  var t=hs;
+  if(Math.abs(t-1)<0.005) return undefined;
+  return naturalW*t;
+}
+
+// Draw one text line at a TARGET width. Condense uses fillText's maxWidth;
+// canvas can't EXPAND that way, so >natural targets scale the context about
+// the anchor instead (textAlign-relative, so left/center/right all stay put).
+function _fillFitLine(c, line, x, y, fw, nat, fpx){
+  if(fw===undefined || !(nat>0)){ c.fillText(line,x,y); return; }
+  if(fw>nat){
+    // Expand: glyph scaling — Adobe's horizontal-scale semantics.
+    var s=fw/nat;
+    c.save(); c.translate(x,y); c.scale(s,1); c.fillText(line,0,0); c.restore();
+    return;
+  }
+  // Condense: uniform maxWidth squeeze. It scales glyphs AND spaces by the
+  // same factor, so word gaps keep their proportions — per-gap tracking was
+  // tried here and read as "scrunched" (a fixed px cut hits the word spaces
+  // far harder than the letters). Mild mismatches never reach this point at
+  // all (see _fitAvgRatio tolerance in _fitLineW).
+  c.fillText(line,x,y,fw);
+}
+// Editor-overlay horizontal squeeze for the CURRENT state of a text object:
+// average of per-line fit ratios (imported width-fit and/or the T↔ horizontal
+// scale, both folded in by _fitLineW). Stored on the shared textarea so
+// repositionTextOverlay applies it as scaleX. Recomputed live when the user
+// changes the spacing controls mid-edit (previously it was computed ONCE at
+// open, so a horizontal-scale change didn't preview until commit).
+function _recalcEditFitSx(o){
+  var _sxE=1;
+  try{
+    if(o){
+      var _lnsE=String(o.text||'').split('\n'), _fpxE=ptToCanvasPx(o.fontSize), _nE=0,_accE=0;
+      var _cE=(typeof _fmCtx!=='undefined'&&_fmCtx) || document.createElement('canvas').getContext('2d');
+      if(_cE.save) _cE.save();
+      _cE.font=(o.italic?'italic ':'')+(o.bold?'bold ':'')+_fpxE+'px '+(o.fontFamily||'Arial')+',sans-serif';
+      _lnsE.forEach(function(ln,i){
+        if(!ln) return;
+        var nat=_cE.measureText(ln).width;
+        var t=_fitLineW(o,i,nat);
+        if(t!==undefined && nat>0){ _accE+=t/nat; _nE++; }
+      });
+      if(_cE.restore) _cE.restore();
+      if(_nE) _sxE=Math.max(0.5, Math.min(2, _accE/_nE));
+      else { var _hsv=_hsOf(o)/100; if(_hsv>0) _sxE=Math.max(0.5,Math.min(2,_hsv)); }
+    }
+  }catch(e){}
+  textOv._fitSx=_sxE;
+  return _sxE;
 }
 
 // Width of the text block AS DRAWN. Imported lines render COMPRESSED to their
@@ -10471,9 +10607,9 @@ function measureLinesWDrawn(o, lines, fpx){
   var mw=0;
   for(var i=0;i<lines.length;i++){
     if(lines[i]==='') continue;
-    var w=measureLinesWFull([lines[i]],fpx,o.fontFamily||'Arial',o.bold,o.italic);
+    var w=measureLinesWFull([lines[i]],fpx,o.fontFamily||'Arial',o.bold,o.italic,_lsCanvasPx(o));
     var fw=_fitLineW(o,i,w);
-    if(fw!==undefined && fw<w) w=fw;
+    if(fw!==undefined) w=fw;
     if(w>mw) mw=w;
   }
   return mw;
@@ -10522,10 +10658,11 @@ function renderTextObjs(){
     var style_=(obj.italic?'italic ':'')||'';
     var fpx=ptToCanvasPx(obj.fontSize); // scale-locked: pt -> canvas px at plan DPI
     tCtx.font=style_+weight+fpx+'px '+family+',sans-serif';
+    _applyCtxLS(tCtx,obj);
     var lines=getTextLines(obj,fpx);
     var align=obj.textAlign||'left';
     tCtx.textAlign=align;
-    var maxW=measureLinesWFull(lines,fpx,family,obj.bold,obj.italic);
+    var maxW=measureLinesWFull(lines,fpx,family,obj.bold,obj.italic,_lsCanvasPx(obj));
     // Anchor x for alignment. obj.x (the label's left edge) lives in the SAME
     // coordinate space as the leader line, so text and leader scale together and
     // stay glued at any zoom/DPI. (Earlier code re-pinned right-anchored leader
@@ -10541,7 +10678,7 @@ function renderTextObjs(){
     // adjacent bars overlap into one continuous block — matching the PDF exporter.
     // Empty lines still get no highlight; a space/letter only its own width.
     if(obj.bgOpacity&&obj.bgOpacity>0){
-      var _padX=2, _padY=1.5, _lineH=fpx*TXT_LINE_H;
+      var _padX=2, _padY=1.5, _lineH=_lineAdvOf(obj,fpx);
       tCtx.save();
       tCtx.globalAlpha=obj.opacity*obj.bgOpacity;
       tCtx.fillStyle=obj.bgColor||'#ffff00';
@@ -10580,18 +10717,19 @@ function renderTextObjs(){
       tCtx.textAlign=align;
       var axOff=(align==='center'?maxW/2:align==='right'?maxW:0);
       lines.forEach(function(line,i){
-        var ly=i*fpx*TXT_LINE_H;
-        var _fw=_fitLineW(obj,i,tCtx.measureText(line).width);
-        if(_fw!==undefined) tCtx.fillText(line,axOff,ly,_fw); else tCtx.fillText(line,axOff,ly);
+        var ly=i*_lineAdvOf(obj,fpx);
+        var _nat=tCtx.measureText(line).width;
+        var _fw=_fitLineW(obj,i,_nat);
+        _fillFitLine(tCtx,line,axOff,ly,_fw,_nat,fpx);
         if(obj.underline){
-          var lw=tCtx.measureText(line).width;
+          var lw=(_fw!==undefined?_fw:tCtx.measureText(line).width);
           var lx=align==='center'?axOff-lw/2:align==='right'?axOff-lw:axOff;
           tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,fpx*0.07);
           tCtx.beginPath();tCtx.moveTo(lx,ly+fpx*0.12);tCtx.lineTo(lx+lw,ly+fpx*0.12);tCtx.stroke();
           tCtx.restore();
         }
         if(obj.strike){
-          var lw=tCtx.measureText(line).width;
+          var lw=(_fw!==undefined?_fw:tCtx.measureText(line).width);
           var lx=align==='center'?axOff-lw/2:align==='right'?axOff-lw:axOff;
           tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,fpx*0.07);
           tCtx.beginPath();tCtx.moveTo(lx,ly-fpx*0.32);tCtx.lineTo(lx+lw,ly-fpx*0.32);tCtx.stroke();
@@ -10600,18 +10738,19 @@ function renderTextObjs(){
       });
     } else {
       lines.forEach(function(line,i){
-        var ly=obj.y+i*fpx*TXT_LINE_H;
-        var _fw=_fitLineW(obj,i,tCtx.measureText(line).width);
-        if(_fw!==undefined) tCtx.fillText(line,ax,ly,_fw); else tCtx.fillText(line,ax,ly);
+        var ly=obj.y+i*_lineAdvOf(obj,fpx);
+        var _nat=tCtx.measureText(line).width;
+        var _fw=_fitLineW(obj,i,_nat);
+        _fillFitLine(tCtx,line,ax,ly,_fw,_nat,fpx);
         if(obj.underline){
-          var lw=tCtx.measureText(line).width;
+          var lw=(_fw!==undefined?_fw:tCtx.measureText(line).width);
           var lx=align==='center'?ax-lw/2:align==='right'?ax-lw:ax;
           tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,fpx*0.07);
           tCtx.beginPath();tCtx.moveTo(lx,ly+fpx*0.12);tCtx.lineTo(lx+lw,ly+fpx*0.12);tCtx.stroke();
           tCtx.restore();
         }
         if(obj.strike){
-          var lw=tCtx.measureText(line).width;
+          var lw=(_fw!==undefined?_fw:tCtx.measureText(line).width);
           var lx=align==='center'?ax-lw/2:align==='right'?ax-lw:ax;
           tCtx.save();tCtx.strokeStyle=obj.color;tCtx.lineWidth=Math.max(1,fpx*0.07);
           tCtx.beginPath();tCtx.moveTo(lx,ly-fpx*0.32);tCtx.lineTo(lx+lw,ly-fpx*0.32);tCtx.stroke();
@@ -10632,7 +10771,7 @@ function findTextObjAt(x,y){
     var ofpx=ptToCanvasPx(o.fontSize);
     var lines=getTextLines(o,ofpx);
     var estW=measureLinesWDrawn(o,lines,ofpx);
-    var estH=lines.length*ofpx*TXT_LINE_H;
+    var estH=_textBlockH(o,ofpx,lines.length);
     var pad=12/zoom;
     // Rotate the click point into the label's LOCAL frame (pivot = o.x,o.y,
     // the same origin the text is drawn about). Without this, a rotated label's
@@ -10646,7 +10785,7 @@ function findTextObjAt(x,y){
     // Local text box spans x:[0, estW], y:[top, top+estH] (baseline-origin),
     // where top is the TRUE visual top from font metrics — same geometry as the
     // dashed chrome box, so what you see is exactly what you can click.
-    var _htop=-(function(){var f=_textOvFontMetrics(ofpx,o.fontFamily||'Arial',o.bold,o.italic);return f.asc+(ofpx*TXT_LINE_H-f.asc-f.desc)/2;})();
+    var _htop=-(function(){var f=_textOvFontMetrics(ofpx,o.fontFamily||'Arial',o.bold,o.italic);return f.asc+(ofpx*_lineHOf(o)-f.asc-f.desc)/2;})();
     if(lx>=-pad&&lx<=estW+pad&&ly>=_htop-pad&&ly<=_htop+estH+pad){
       return o;
     }
@@ -10798,6 +10937,11 @@ function _syncTextFmtFromObj(obj){
   if(!obj._anchorRight) textAlign = obj.textAlign || 'left';
   textBgColor    = obj.bgColor   || '#ffff00';
   textBgOpacity  = obj.bgOpacity || 0;
+  textLineH         = obj.lineH || null;
+  textParaGap       = obj.paraGap || 0;
+  textLetterSpacing = obj.letterSpacing || 0;
+  textHScale        = obj.hScale || 100;
+  if(typeof _syncSpacingSelects==='function') _syncSpacingSelects();
   // Update font-family select
   var ffs = document.getElementById('font-family-sel');
   if(ffs) ffs.value = textFontFamily;
@@ -10843,7 +10987,7 @@ function showTextHover(x, y){
     var oefpx=ptToCanvasPx(overExisting.fontSize);
     var lines=getTextLines(overExisting,oefpx);
     var estW=measureLinesW(lines,oefpx);
-    var estH=lines.length*oefpx*TXT_LINE_H;
+    var estH=_textBlockH(overExisting,oefpx,lines.length);
     var pad=6/zoom;
     var _hang=overExisting.angle||0;   // follow the text's rotation
     selCtx.save();
@@ -10854,7 +10998,7 @@ function showTextHover(x, y){
     selCtx.strokeStyle=color; selCtx.lineWidth=1.5/zoom;
     selCtx.setLineDash([4/zoom,3/zoom]); selCtx.globalAlpha=0.7;
     var _fmH=_textOvFontMetrics(oefpx,overExisting.fontFamily||'Arial',overExisting.bold,overExisting.italic);
-    var _topH=-(_fmH.asc+(oefpx*TXT_LINE_H-_fmH.asc-_fmH.desc)/2);
+    var _topH=-(_fmH.asc+(oefpx*_lineHOf(overExisting)-_fmH.asc-_fmH.desc)/2);
     selCtx.strokeRect(-pad, _topH-pad, estW+pad*2, estH+pad*2);
     // Edit pencil icon hint
     selCtx.setLineDash([]); selCtx.globalAlpha=0.8;
@@ -11079,7 +11223,7 @@ function _textBoxDims(o){
   // As-drawn width: imported lines are compressed to their source widths, so
   // the natural measure left blank space on the right inside the dashed box.
   var w=measureLinesWDrawn(o,lines,fpx);
-  var h=lines.length*fpx*TXT_LINE_H;
+  var h=_textBlockH(o,fpx,lines.length);
   // TRUE visual top of the text block relative to the first baseline (o.y).
   // The old chrome assumed the glyphs start a full font-size above the baseline
   // (top = -fpx), but the real cap sits at -(ascent + half-leading) — noticeably
@@ -11088,7 +11232,7 @@ function _textBoxDims(o){
   // font's measured ascent/descent so the box hugs the block evenly, matching
   // the live editor's highlight.
   var fm=_textOvFontMetrics(fpx,o.fontFamily||'Arial',o.bold,o.italic);
-  var top=-(fm.asc+(fpx*TXT_LINE_H-fm.asc-fm.desc)/2);
+  var top=-(fm.asc+(fpx*_lineHOf(o)-fm.asc-fm.desc)/2);
   return {fpx:fpx,w:w,h:h,top:top};
 }
 function _textCenter(o){
@@ -11410,21 +11554,8 @@ function _openTextEdit(o){
   // the same average squeeze to the edit overlay via scaleX, so CLICKING TO
   // EDIT doesn't visually expand the text, then snap back on commit.
   try{
-    var _sxE=1;
-    if(o._fitWs){
-      var _lnsE=o.text.split('\n'), _fpxE=ptToCanvasPx(o.fontSize), _nE=0,_accE=0;
-      var _cE=(_fmCtx || document.createElement('canvas').getContext('2d'));
-      _cE.font=(o.italic?'italic ':'')+(o.bold?'bold ':'')+_fpxE+'px '+(o.fontFamily||'Arial')+',sans-serif';
-      _lnsE.forEach(function(ln,i){
-        if(!ln) return;
-        var nat=_cE.measureText(ln).width;
-        var t=_fitLineW(o,i,nat);
-        if(t!==undefined && nat>0){ _accE+=t/nat; _nE++; }
-      });
-      if(_nE) _sxE=Math.max(0.5, Math.min(1, _accE/_nE));
-    }
-    textOv._fitSx=_sxE;
-    if(_sxE<0.995 && typeof repositionTextOverlay==='function') repositionTextOverlay();
+    var _sxE=_recalcEditFitSx(o);
+    if(Math.abs(_sxE-1)>0.005 && typeof repositionTextOverlay==='function') repositionTextOverlay();
   }catch(e){}
   renderTextCursorFrame();   // draw the box + rotate handle right away
 }
@@ -11485,6 +11616,7 @@ function showTextOverlay(cx,cy){
   // Safety: ensure no leftover note rotation from a prior comment edit.
   textOv.style.transform = 'none'; textOv.style.transformOrigin = '';
   textOv._editBoxW = 0;          // new edit session — recompute wrap width
+  textOv._editBoxWZoom = 0;
   textOv._fitSx = 1;             // imported width-squeeze off until re-derived
   textOv.style.width = '';       // never inherit the previous session's box
   textOv.style.height = '';
@@ -11546,6 +11678,12 @@ function repositionTextOverlay(clampToView){
   var _renderSz0 = Math.max(16, _screenSz0);
   var _scaleV0   = _screenSz0 / _renderSz0;     // <1 when zoomed out
   if(_scaleV0 >= 0.99) _scaleV0 = 1;            // matches transform:none threshold below
+  // HORIZONTAL visual scale: the zoom-scale times the T↔ condense (scaleX).
+  // Every horizontal width/anchor term must use THIS, not _scaleV0 alone —
+  // ignoring the scaleX made the box math treat condensed text as full width,
+  // clipping the text (left side first on right-anchored labels) on zoom.
+  var _fitSx0 = (textOv._fitSx && isFinite(textOv._fitSx) && Math.abs(textOv._fitSx-1)>0.005) ? textOv._fitSx : 1;
+  var _scaleH0 = _scaleV0 * _fitSx0;
   // ── Pixel-exact overlay↔canvas alignment ─────────────────────
   // The canvas draws the committed glyph with its BASELINE at o.y and its left
   // edge at o.x. The old box placement assumed the textarea's first baseline sat
@@ -11557,9 +11695,9 @@ function repositionTextOverlay(clampToView){
   // the live glyphs sit dead on the canvas ones.
   var _padL = 4, _padT = 2;                     // matches #text-ov padding:2px 4px
   var _fm = _textOvFontMetrics(_renderSz0, textFontFamily||'Arial', textBold, textItalic);
-  var _lineHpx = TXT_LINE_H * _renderSz0;
+  var _lineHpx = (_lineHOf(editingObj) + _paraGapOf(editingObj)/((editingObj&&editingObj.fontSize)||FONT_SIZE)) * _renderSz0;
   var _blOff = _padT + (_lineHpx - (_fm.asc + _fm.desc))/2 + _fm.asc; // baseline below box top (textarea-local px)
-  var sx = sxA - _padL*_scaleV0;                // glyph left = box left + padL·scale
+  var sx = sxA - _padL*_scaleH0;                // glyph left = box left + padL·(horizontal scale)
   var sy = panY + cy*zoom - _blOff*_scaleV0;    // glyph baseline = box top + blOff·scale
   // Keep the text START (the box's left edge) anchored at the click point so
   // the I-beam and typed text land exactly where the user clicked — including
@@ -11587,7 +11725,16 @@ function repositionTextOverlay(clampToView){
   }
   // Reuse the width locked in at initial placement so the text doesn't re-wrap
   // (visually jump) when the box is repositioned during a pan/zoom.
-  if(!clampToView && textOv._editBoxW) boxW = textOv._editBoxW;
+  // SCALE IT WITH ZOOM: the lock is stored in screen px at the zoom it was
+  // taken. Reusing it verbatim while zooming IN made the box progressively
+  // narrower relative to the growing font — the live text re-wrapped into a
+  // cramped column and its edges clipped (with right-aligned/tracked labels
+  // the LEFT side of the text vanished). Scaling by the zoom ratio keeps the
+  // box the same size in DOCUMENT space, so nothing re-wraps or clips.
+  if(!clampToView && textOv._editBoxW){
+    var _bwZ = textOv._editBoxWZoom || zoom;
+    boxW = textOv._editBoxW * (zoom/_bwZ);
+  }
   var boxH = Math.max(40, Math.max(16, FONT_PX*zoom) * 2);
   if(_textAnchorRight && !_eAngPre){
     // Right-anchored (left-hanging leader label): the box's VISUAL right edge
@@ -11595,25 +11742,25 @@ function repositionTextOverlay(clampToView){
     // LEFT, so the first letter stays put just left of the line at every zoom.
     // The glyphs end padR(4px)·scale left of the box's right edge, so push the
     // box right by that so the TEXT (not the box) ends at the anchor.
-    var rightEdge = sxA + _padL*_scaleV0;        // box's visual right edge
-    sx = rightEdge - boxW*_scaleV0;              // box left edge (scaled width)
+    var rightEdge = sxA + _padL*_scaleH0;        // box's visual right edge
+    sx = rightEdge - boxW*_scaleH0;              // box left edge (scaled width)
     if(clampToView && vpW > 0){
-      if(rightEdge > vpW) { rightEdge = vpW; sx = rightEdge - boxW*_scaleV0; }
-      if(rightEdge < 40)  { rightEdge = 40;  sx = rightEdge - boxW*_scaleV0; }
-      if(sx < 0){ boxW = rightEdge/_scaleV0; sx = 0; } // shrink instead of going off-screen
+      if(rightEdge > vpW) { rightEdge = vpW; sx = rightEdge - boxW*_scaleH0; }
+      if(rightEdge < 40)  { rightEdge = 40;  sx = rightEdge - boxW*_scaleH0; }
+      if(sx < 0){ boxW = rightEdge/_scaleH0; sx = 0; } // shrink instead of going off-screen
       if(boxW < 60) boxW = 60;
     }
   } else if(clampToView && vpW > 0 && !_eAngPre){
     if(sx < 0) sx = 0;
     if(sx > vpW - 40) sx = vpW - 40;          // keep at least a sliver on-screen
-    if(sx + boxW*_scaleV0 > vpW) boxW = (vpW - sx)/_scaleV0; // shrink, don't shift
+    if(sx + boxW*_scaleH0 > vpW) boxW = (vpW - sx)/_scaleH0; // shrink, don't shift
     if(boxW < 60) boxW = 60;                   // minimum usable width
   }
   if(clampToView && vpH > 0){
     if(sy + boxH > vpH) sy = vpH - boxH;
     if(sy < 0) sy = 0;
   }
-  if(clampToView) textOv._editBoxW = boxW; // lock wrap width for this edit session
+  if(clampToView){ textOv._editBoxW = boxW; textOv._editBoxWZoom = zoom; } // lock wrap width (+its zoom) for this edit session
   textOv.style.display  = 'block';
   textOv.style.left     = sx+'px';
   textOv.style.top      = sy+'px';
@@ -11623,8 +11770,10 @@ function repositionTextOverlay(clampToView){
   var renderSz = Math.max(16, screenSz);
   var scaleV   = screenSz / renderSz;
   textOv.style.fontSize  = renderSz+'px';
-  textOv.style.lineHeight = String(TXT_LINE_H);
-  var _fitSxT=(textOv._fitSx && textOv._fitSx<0.995)?(' scaleX('+textOv._fitSx.toFixed(4)+')'):'';
+  textOv.style.lineHeight = String(_lineHOf(editingObj) + _paraGapOf(editingObj)/((editingObj&&editingObj.fontSize)||FONT_SIZE));
+  // Tracking in the live editor — relative to the render size so transform:scale keeps it exact.
+  textOv.style.letterSpacing = ((_lsOf(editingObj)/((editingObj&&editingObj.fontSize)||FONT_SIZE))*renderSz)+'px';
+  var _fitSxT=(textOv._fitSx && Math.abs(textOv._fitSx-1)>0.005)?(' scaleX('+textOv._fitSx.toFixed(4)+')'):'';
   textOv.style.transform = (scaleV<0.99 ? 'scale('+scaleV.toFixed(3)+')' : '') + _fitSxT || 'none';
   textOv.style.transformOrigin='top left';
   // ── Rotated editing (type sideways, Adobe-style) ──────────────
@@ -11649,7 +11798,7 @@ function repositionTextOverlay(clampToView){
     textOv.style.top  = (panY + _gy*zoom) + 'px';
     textOv.style.transform = 'rotate(' + _eAng + 'rad)' +
       (scaleV < 0.99 ? (' scale(' + scaleV.toFixed(3) + ')') : '') +
-      ((textOv._fitSx && textOv._fitSx<0.995) ? (' scaleX(' + textOv._fitSx.toFixed(4) + ')') : '');
+      ((textOv._fitSx && Math.abs(textOv._fitSx-1)>0.005) ? (' scaleX(' + textOv._fitSx.toFixed(4) + ')') : '');
     textOv.style.transformOrigin = 'top left';
     // Grow from the start when rotated; right-align would offset the text inside a
     // wider box and detach it from the pivot.
@@ -11696,15 +11845,22 @@ function repositionTextOverlay(clampToView){
     if(_textAnchorRight){
       // Right-anchored: the caret/first-letter sits at the box's VISUAL right
       // edge (after scaling) just left of the leader line, growing leftward.
-      _caretScreenX = (sx + boxW*_scaleV0) - _padL*_scaleV0;
+      _caretScreenX = (sx + boxW*_scaleH0) - _padL*_scaleH0;
     } else {
-      _caretScreenX = sx + _padL*_scaleV0;
+      _caretScreenX = sx + _padL*_scaleH0;
     }
     var _caretScreenY = sy + _blOff*_scaleV0; // first line's true baseline
     _txtCursorX = (_caretScreenX - panX) / zoom;
     _txtCursorY = (_caretScreenY - panY) / zoom;
     renderTextCursorFrame();
   }
+  // PAN/ZOOM reposition (not the initial placement): the font just changed
+  // size, so the textarea may have auto-scrolled to keep the caret in view —
+  // which slides the START of the text out of the box (reported as "the left
+  // side of the text disappears when I zoom in while editing", most visible
+  // with negative tracking). Zoom is never mid-keystroke: snap back to showing
+  // the text from its start.
+  if(!clampToView){ textOv.scrollLeft=0; textOv.scrollTop=0; }
 }
 
 // Auto-size the TEXT-tool overlay to its content so multi-line and long pasted
@@ -11739,6 +11895,7 @@ function _fitTextOv(){
     // edge is left + width*scale. Pin that visual edge and grow leftward.
     var _trS = textOv.style.transform || '', _siS = _trS.indexOf('scale(');
     var _scaleR = (_siS>=0) ? (parseFloat(_trS.slice(_siS+6))||1) : 1;
+    _scaleR *= (textOv._fitSx && isFinite(textOv._fitSx)) ? textOv._fitSx : 1;
     var _curLeft  = parseFloat(textOv.style.left) || 0;
     var _curW     = parseFloat(textOv.style.width) || (oneCh + pad);
     var _rightEdge= _curLeft + _curW*_scaleR;    // pinned visual anchor (screen-x)
@@ -11768,6 +11925,10 @@ function _fitTextOv(){
     var vpW    = viewport.clientWidth || 0;
     var scaleV = 1, _tr = textOv.style.transform || '', _si = _tr.indexOf('scale(');
     if(_si >= 0) scaleV = parseFloat(_tr.slice(_si + 6)) || 1;
+    // Include the T↔ condense (scaleX) — the visual footprint is scale·scaleX,
+    // so a condensed box may be WIDER in CSS px before it really hits the edge.
+    var _fxF = (textOv._fitSx && isFinite(textOv._fitSx)) ? textOv._fitSx : 1;
+    scaleV = (scaleV||1) * _fxF;
     var maxW = vpW > 0 ? Math.max(oneCh + pad, (vpW - sx) / (scaleV || 1) - 4) : contentW;
     textOv.style.width = Math.min(maxW, Math.max(oneCh + pad, contentW)) + 'px';
   }
@@ -12046,6 +12207,7 @@ function commitText(){
   // sliced the NEXT session's content into fragments ("200A non se").
   try{
     textOv.scrollLeft=0; textOv.scrollTop=0;
+    textOv.style.letterSpacing='';
     textOv._editBoxW=0; textOv._fitSx=1;
     textOv.style.width=''; textOv.style.height='';
     textOv.style.minWidth=''; textOv.style.maxWidth='';   // right-anchored label pins these
@@ -12080,6 +12242,9 @@ function commitText(){
       editingObj.italic=textItalic; editingObj.underline=textUnderline;
       editingObj.strike=textStrike; editingObj.textAlign=_textAnchorRight?'right':textAlign;
       editingObj.bgColor=textBgColor; editingObj.bgOpacity=textBgOpacity;
+      editingObj.lineH=textLineH||undefined; editingObj.paraGap=textParaGap||undefined;
+      editingObj.letterSpacing=textLetterSpacing||undefined;
+      editingObj.hScale=(textHScale&&textHScale!==100)?textHScale:undefined;
       // Right-anchored label (left-hanging leader): re-pin the RIGHT edge to the
       // stored anchor so edits grow/shrink leftward, not rightward off the page.
       if(_textAnchorRight && editingObj._anchorX!=null){
@@ -12121,6 +12286,9 @@ function commitText(){
              fontFamily:textFontFamily,bold:textBold,italic:textItalic,
              underline:textUnderline,strike:textStrike,textAlign:_newAlign,
              bgColor:textBgColor,bgOpacity:textBgOpacity,
+             lineH:textLineH||undefined, paraGap:textParaGap||undefined,
+             letterSpacing:textLetterSpacing||undefined,
+             hScale:(textHScale&&textHScale!==100)?textHScale:undefined,
              _anchorRight:_textAnchorRight, _anchorX:textX, _anchorY:textY};
     if(_textLeaderPending) obj._leaderLabel=true;
     textObjs.push(obj); renderTextObjs(); pushUndo(); _aogRestoreTextCol();
@@ -12148,7 +12316,7 @@ function enterTextTransformMode(obj){
   // rectangular text box (not an oval), so it should hug the glyphs. Imported
   // text draws compressed to its source widths, so measure AS DRAWN.
   var textW=measureLinesWDrawn(obj,lines,tmfpx);
-  var textH=lines.length*tmfpx*TXT_LINE_H;
+  var textH=_textBlockH(obj,tmfpx,lines.length);
   var estW=textW;
   var estH=textH;
   // The text is drawn rotated about its origin (obj.x, obj.y). Compute the box
@@ -12470,13 +12638,14 @@ function renderSelection(){
       selCtx.globalAlpha=to.opacity;
       selCtx.fillStyle=to.color;
       selCtx.font=tst+twt+tofpx+'px '+tfam+',sans-serif';
+      _applyCtxLS(selCtx,to);
       var talign=to.textAlign||'left';
       selCtx.textAlign=talign;
       var tlines=getTextLines(to,tofpx);
       // AS-DRAWN width (imported lines are compressed to source widths) — must
       // match enterTextTransformMode/commitSelection or the label shifts.
       var tmaxW=measureLinesWDrawn(to,tlines,tofpx);
-      var tH=tlines.length*tofpx*TXT_LINE_H;
+      var tH=_textBlockH(to,tofpx,tlines.length);
       // local center offset (matches enterTextTransformMode): (textW/2, -fpx+textH/2)
       var lcx=tmaxW/2, lcy=-tofpx+tH/2;
       var ca=Math.cos(s.angle), sa=Math.sin(s.angle);
@@ -12490,8 +12659,7 @@ function renderSelection(){
         // matches the committed glyphs exactly.
         var _nw=selCtx.measureText(line).width;
         var _fw=_fitLineW(to,i,_nw);
-        if(_fw!==undefined) selCtx.fillText(line,taxOff,i*tofpx*TXT_LINE_H,_fw);
-        else selCtx.fillText(line,taxOff,i*tofpx*TXT_LINE_H);
+        _fillFitLine(selCtx,line,taxOff,i*_lineAdvOf(to,tofpx),_fw,_nw,tofpx);
       });
     }
   }
@@ -12629,7 +12797,7 @@ function commitSelection(){
     // matching convention everywhere is what stops the label from shifting /
     // doubling when you re-select it after committing.
     var estW=measureLinesWDrawn(obj,lines,cmfpx);
-    var estH=lines.length*cmfpx*TXT_LINE_H;
+    var estH=_textBlockH(obj,cmfpx,lines.length);
     var cos=Math.cos(s.angle), sin=Math.sin(s.angle);
     var tLocalX=estW/2, tLocalY=-cmfpx+estH/2;
     obj.x=s.cx - (tLocalX*cos - tLocalY*sin);
@@ -13607,6 +13775,7 @@ function updateToolbarForTool(t){
     fontFamilyGrp:document.getElementById('tb-font-family-grp'),
     textFmtGrp  : document.getElementById('tb-text-fmt-grp'),
     textAlignGrp: document.getElementById('tb-text-align-grp'),
+    textSpaceGrp: document.getElementById('tb-text-spacing-grp'),
     txtBgGrp    : document.getElementById('tb-txt-bg-grp'),
     textFmtSep  : document.getElementById('tb-textfmt-sep'),
     markupGrp   : document.getElementById('tb-markup-grp'),
@@ -13662,6 +13831,7 @@ function updateToolbarForTool(t){
   shFlex(ids.fontFamilyGrp, showTextFmt);
   shFlex(ids.textFmtGrp, showTextFmt);
   shFlex(ids.textAlignGrp, showTextFmt);
+  shFlex(ids.textSpaceGrp, showTextFmt);
   shFlex(ids.txtBgGrp, showTextFmt);
   if(ids.textFmtSep) ids.textFmtSep.style.display = showTextFmt ? '' : 'none';
 
@@ -14291,6 +14461,73 @@ if(txtBgOpSl){
 }
 
 // ── MARKUP TOOL COLOR/OPACITY ─────────────────────────────────
+// ── TEXT SPACING CONTROLS (Adobe-style) ─────────────────────────
+function _setSelVal(sel, v, fmt){
+  if(!sel) return;
+  var s=(v==null||v==='')?'':String(v);
+  var found=false;
+  for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===s){ found=true; break; } }
+  if(!found && s!==''){
+    var op=document.createElement('option'); op.value=s;
+    op.textContent=fmt?fmt(v):s; sel.appendChild(op);
+  }
+  sel.value=s;
+}
+function _syncSpacingSelects(){
+  _setSelVal(document.getElementById('line-h-sel'), textLineH?textLineH:'', function(v){ return (+v).toFixed(2); });
+  _setSelVal(document.getElementById('para-gap-sel'), textParaGap||0);
+  _setSelVal(document.getElementById('ltr-sp-sel'), textLetterSpacing||0);
+  _setSelVal(document.getElementById('h-scale-sel'), textHScale||100);
+}
+(function(){
+  var lhSel=document.getElementById('line-h-sel');
+  var pgSel=document.getElementById('para-gap-sel');
+  var lsSel=document.getElementById('ltr-sp-sel');
+  var hsSel=document.getElementById('h-scale-sel');
+  // Like the font-size picker: interacting with a select can blur the editor and
+  // clear editingObj before 'change' fires — snapshot it on pointer-down.
+  var _spEditRef=null;
+  function _spSave(){ _spEditRef=editingObj; }
+  [lhSel,pgSel,lsSel,hsSel].forEach(function(s){
+    if(!s) return;
+    s.addEventListener('mousedown',_spSave);
+    s.addEventListener('touchstart',_spSave,{passive:true});
+  });
+  function _applySpacing(){
+    // Apply to whichever text the user is working on: the one open in the
+    // editor, the snapshot from before the select stole focus, or a text
+    // that's merely SELECTED (transform box via another tool).
+    var ref=editingObj||_spEditRef||
+            (typeof selectedShape!=='undefined'&&selectedShape&&selectedShape.type==='text'?selectedShape._textObj:null);
+    if(ref){
+      ref.lineH=textLineH||undefined;
+      ref.paraGap=textParaGap||undefined;
+      ref.letterSpacing=textLetterSpacing||undefined;
+      ref.hScale=(textHScale&&textHScale!==100)?textHScale:undefined;
+      renderTextObjs();
+      // Selected (not editing) → rebuild the selection box around the new extents.
+      if(typeof selectedShape!=='undefined'&&selectedShape&&selectedShape._textObj===ref&&!editingObj){
+        try{ enterTextTransformMode(ref); }catch(e){}
+      }
+    }
+    // Live editor session → refresh line-height/tracking, box size AND the
+    // dashed chrome so the edit box tracks the new spacing immediately.
+    if(textOv.style.display!=='none' && !_editingComment){
+      try{ if(typeof _recalcEditFitSx==='function' && ref) _recalcEditFitSx(ref); }catch(e){}
+      try{ if(typeof repositionTextOverlay==='function') repositionTextOverlay(); }catch(e){}
+      try{ if(typeof _fitTextOv==='function') _fitTextOv(); }catch(e){}
+      try{ if(typeof renderTextCursorFrame==='function') renderTextCursorFrame(); }catch(e){}
+      // Desktop: hand focus straight back to the editor (same as font size) so
+      // typing continues without an extra click.
+      if(!('ontouchstart' in window)){ try{ textOv.focus(); }catch(e){} }
+    }
+  }
+  if(lhSel) lhSel.addEventListener('change',function(e){ var v=parseFloat(e.target.value); textLineH=(isFinite(v)&&v>0)?v:null; _applySpacing(); });
+  if(pgSel) pgSel.addEventListener('change',function(e){ var v=parseFloat(e.target.value); textParaGap=isFinite(v)?Math.max(0,v):0; _applySpacing(); });
+  if(lsSel) lsSel.addEventListener('change',function(e){ var v=parseFloat(e.target.value); textLetterSpacing=isFinite(v)?v:0; _applySpacing(); });
+  if(hsSel) hsSel.addEventListener('change',function(e){ var v=parseFloat(e.target.value); textHScale=(isFinite(v)&&v>=10)?Math.min(200,v):100; _applySpacing(); });
+})();
+
 var markupClrInput=document.getElementById('markup-clr-input');
 var markupClrSwatch=document.getElementById('markup-clr-swatch');
 var markupOpSl=document.getElementById('markup-op-sl');
@@ -14952,10 +15189,11 @@ function compositeExport(maxPx){
       var itl=obj.italic?'italic ':'';
       var efpx=ptToCanvasPx(obj.fontSize); // scale-locked canvas px
       ctx.font=itl+bld+Math.round(efpx*scale)+'px '+fam+',sans-serif';
+      _applyCtxLS(ctx,obj,scale);
       var lines_=getTextLines(obj,efpx); // wrap measured at screen size → same breaks
       var align_=obj.textAlign||'left';
       ctx.textAlign=align_;
-      var maxW_=measureLinesWFull(lines_,Math.round(efpx*scale),fam,obj.bold,obj.italic);
+      var maxW_=measureLinesWFull(lines_,Math.round(efpx*scale),fam,obj.bold,obj.italic,_lsCanvasPx(obj)*scale);
       var ax_;
       // Use obj.x (left edge) — same coordinate space as the leader line, so both
       // scale by `scale` together and stay aligned at any export DPI. Do NOT re-pin
@@ -14967,7 +15205,7 @@ function compositeExport(maxPx){
       if(obj.bgOpacity&&obj.bgOpacity>0){
         ctx.save(); ctx.globalAlpha=obj.opacity*obj.bgOpacity; ctx.fillStyle=obj.bgColor||'#ffff00';
         var _efs=efpx*scale;
-        var _padX_=2*scale, _padY_=1.5*scale, _lineH_=_efs*TXT_LINE_H;
+        var _padX_=2*scale, _padY_=1.5*scale, _lineH_=_lineAdvOf(obj,efpx)*scale;
         var _bgLine_=function(line, lineLeftX, baseY){
           var m=ctx.measureText(line);
           var lw_=m.width; if(lw_<=0) return;
@@ -14986,7 +15224,7 @@ function compositeExport(maxPx){
           lines_.forEach(function(line,i){
             var lw_=ctx.measureText(line).width;
             var lx_=ax_-(align_==='center'?lw_/2:align_==='right'?lw_:0);
-            _bgLine_(line, lx_, Math.round((obj.y+i*efpx*TXT_LINE_H)*scale));
+            _bgLine_(line, lx_, Math.round((obj.y+i*_lineAdvOf(obj,efpx))*scale));
           });
         }
         ctx.restore();
@@ -14997,19 +15235,21 @@ function compositeExport(maxPx){
         ctx.rotate(obj.angle);
         var axOff_=align_==='center'?maxW_/2:align_==='right'?maxW_:0;
         lines_.forEach(function(line,i){
-          var ly_=Math.round(i*efpx*TXT_LINE_H*scale);
-          var _fw=_fitLineW(obj,i,ctx.measureText(line).width/scale);
-          if(_fw!==undefined) ctx.fillText(line,axOff_,ly_,_fw*scale); else ctx.fillText(line,axOff_,ly_);
-          if(obj.underline){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?axOff_-lw_/2:align_==='right'?axOff_-lw_:axOff_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_+efpx*scale*0.12);ctx.lineTo(lx_+lw_,ly_+efpx*scale*0.12);ctx.stroke();ctx.restore();}
-          if(obj.strike){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?axOff_-lw_/2:align_==='right'?axOff_-lw_:axOff_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_-efpx*scale*0.32);ctx.lineTo(lx_+lw_,ly_-efpx*scale*0.32);ctx.stroke();ctx.restore();}
+          var ly_=Math.round(i*_lineAdvOf(obj,efpx)*scale);
+          var _natE=ctx.measureText(line).width;
+          var _fw=_fitLineW(obj,i,_natE/scale);
+          _fillFitLine(ctx,line,axOff_,ly_,(_fw!==undefined?_fw*scale:undefined),_natE,Math.round(efpx*scale));
+          if(obj.underline){var lw_=(_fw!==undefined?_fw*scale:ctx.measureText(line).width);var lx_=align_==='center'?axOff_-lw_/2:align_==='right'?axOff_-lw_:axOff_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_+efpx*scale*0.12);ctx.lineTo(lx_+lw_,ly_+efpx*scale*0.12);ctx.stroke();ctx.restore();}
+          if(obj.strike){var lw_=(_fw!==undefined?_fw*scale:ctx.measureText(line).width);var lx_=align_==='center'?axOff_-lw_/2:align_==='right'?axOff_-lw_:axOff_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_-efpx*scale*0.32);ctx.lineTo(lx_+lw_,ly_-efpx*scale*0.32);ctx.stroke();ctx.restore();}
         });
       } else {
         lines_.forEach(function(line,i){
-          var ly_=Math.round((obj.y+i*efpx*TXT_LINE_H)*scale);
-          var _fw=_fitLineW(obj,i,ctx.measureText(line).width/scale);
-          if(_fw!==undefined) ctx.fillText(line,ax_,ly_,_fw*scale); else ctx.fillText(line,ax_,ly_);
-          if(obj.underline){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?ax_-lw_/2:align_==='right'?ax_-lw_:ax_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_+efpx*scale*0.12);ctx.lineTo(lx_+lw_,ly_+efpx*scale*0.12);ctx.stroke();ctx.restore();}
-          if(obj.strike){var lw_=ctx.measureText(line).width;var lx_=align_==='center'?ax_-lw_/2:align_==='right'?ax_-lw_:ax_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_-efpx*scale*0.32);ctx.lineTo(lx_+lw_,ly_-efpx*scale*0.32);ctx.stroke();ctx.restore();}
+          var ly_=Math.round((obj.y+i*_lineAdvOf(obj,efpx))*scale);
+          var _natE=ctx.measureText(line).width;
+          var _fw=_fitLineW(obj,i,_natE/scale);
+          _fillFitLine(ctx,line,ax_,ly_,(_fw!==undefined?_fw*scale:undefined),_natE,Math.round(efpx*scale));
+          if(obj.underline){var lw_=(_fw!==undefined?_fw*scale:ctx.measureText(line).width);var lx_=align_==='center'?ax_-lw_/2:align_==='right'?ax_-lw_:ax_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_+efpx*scale*0.12);ctx.lineTo(lx_+lw_,ly_+efpx*scale*0.12);ctx.stroke();ctx.restore();}
+          if(obj.strike){var lw_=(_fw!==undefined?_fw*scale:ctx.measureText(line).width);var lx_=align_==='center'?ax_-lw_/2:align_==='right'?ax_-lw_:ax_;ctx.save();ctx.strokeStyle=obj.color;ctx.lineWidth=Math.max(1,efpx*scale*0.07);ctx.beginPath();ctx.moveTo(lx_,ly_-efpx*scale*0.32);ctx.lineTo(lx_+lw_,ly_-efpx*scale*0.32);ctx.stroke();ctx.restore();}
         });
       }
       ctx.restore();
@@ -15459,6 +15699,22 @@ function _movedExplodeObj(o){
   // Text CONTENT edits count as moved: the export must patch out the original
   // words and draw the edited copy — position alone misses in-place rewording.
   if(o._oText!=null && o.text!==undefined && String(o.text)!==String(o._oText)) return true;
+  // Spacing / format edits on an imported TEXT object: the original glyphs are
+  // baked in the kept page, so any visual change must patch + redraw.
+  if(o._oText!=null){
+    if(Math.abs((o.lineH||0)-(o._oLineH||0))>0.001) return true;
+    if((o.paraGap||0)!==0 || (o.letterSpacing||0)!==0 || ((o.hScale||100)!==100)) return true;
+    var F=o._oFmt;
+    if(F){
+      if(Math.abs((o.fontSize||0)-(F.fs||0))>0.01) return true;
+      if(!!o.bold!==!!F.b || !!o.italic!==!!F.i) return true;
+      if(o.underline || o.strike) return true;
+      if((o.color||'')!==(F.col||'')) return true;
+      if((o.fontFamily||'')!==(F.fam||'')) return true;
+      if((o.textAlign||'left')!==(F.al||'left')) return true;
+      if((o.bgOpacity||0)>0) return true;
+    }
+  }
   // Pen strokes have no x/y — their position lives in pts[]. Compare the first
   // point against the origin snapshot taken at import.
   if(o.pts && o._oX!=null){
@@ -15661,7 +15917,7 @@ function _stampBackdropPatches(pdf, page, sz, sc, v2p, rot){
         var efpx=ptToCanvasPx(t.fontSize)||12;
         var lines=String(t.text||'').split('\n');
         var maxw=0; lines.forEach(function(ln){ maxw=Math.max(maxw, ln.length*efpx*0.62); });
-        var th=lines.length*efpx*TXT_LINE_H;
+        var th=_textBlockH(t,efpx,lines.length);
         var x0=t._oX-4, y0=t._oY-efpx-4, x1=t._oX+maxw+4, y1=t._oY-efpx+th+4;
         pushPatch(x0,y0,x1,y1,function(ctx,ox,oy){
           ctx.save(); ctx.fillStyle='#ffffff';
@@ -15778,9 +16034,18 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
     // The overlay owns highlights exclusively — never double-paint them.
     if(typeof _rasterOnlyHl==='function' && _rasterOnlyHl(o)){ _dbgCnt.skippedExplode++; return false; }
 
-    var _keepOriginal = !_shouldWhiteCoverPage() && !_annotsStripped;
+    // Whether THIS object's original is still sitting in the kept page.
+    // Stripping the extracted markup ANNOTATIONS from /Annots removes only
+    // annotation-derived originals (Square/Line/Ink/…): the page's own CONTENT
+    // stream — where extracted TEXT and linework come from — is untouched by
+    // that strip. Treating the strip as "every original is gone" made the
+    // painter redraw every unmoved content-derived text on top of the kept
+    // page copy: DOUBLED text on kept-page exports. (The old width squeeze
+    // aligned the two copies almost perfectly, so it merely looked bold;
+    // natural-width rendering made it obvious.)
     if(o._fromExplode){
-      if(_keepOriginal && !movedExplode(o)){ _dbgCnt.skippedExplode++; return false; }
+      var _origGone = _shouldWhiteCoverPage() || (_annotsStripped && o._fromAnnot);
+      if(!_origGone && !movedExplode(o)){ _dbgCnt.skippedExplode++; return false; }
       if(movedExplode(o)) _dbgCnt.movedDrawn++;
     }
     var L=layers[o.layerIdx]; var vis=!(L && !L.visible); if(vis)_dbgCnt.drawn++; return vis;
@@ -16060,7 +16325,7 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
     var align=obj.textAlign||'left';
     var op=(obj.opacity==null?1:obj.opacity);
     var a=(obj.angle||0);
-    var lineH=efpx*TXT_LINE_H;
+    var lineH=_lineAdvOf(obj,efpx);
     // Block width (widest line) so right/center alignment is measured from obj.x
     // as the LEFT edge — identical to the screen/raster paths. Anchoring on obj.x
     // (same coord space as the leader line) keeps the label glued to its leader at
@@ -16080,6 +16345,7 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
       try{
         tCtx.save();
         tCtx.font=(obj.italic?'italic ':'')+(obj.bold?'bold ':'')+efpx+'px '+(obj.fontFamily||'Arial')+',sans-serif';
+        _applyCtxLS(tCtx,obj);
         var w_=tCtx.measureText(ln).width;
         tCtx.restore();
         return w_;
@@ -16132,8 +16398,39 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
         }
 
         var tp=P(rx,ry);
-        page.drawText(ln,{x:tp.x, y:tp.y, size:fsize, font:f, color:col(obj.color),
-          opacity:op, rotate:degrees(-a*180/Math.PI + rotDeg)});
+        // Width reconciliation for ROTATED labels — same idea as the unrotated
+        // branch: hit the exact on-screen line width (which already includes
+        // tracking + horizontal scale via the canvas measure and _fitLineW) by
+        // distributing the difference across the glyph gaps with PDF character
+        // spacing (Tc). Tc composes cleanly with the rotate option, so rotated
+        // labels keep their spacing in the vector export instead of falling
+        // back to plain Helvetica metrics.
+        var _fwR=_fitLineW(obj,i,tw);
+        var _tgtR=(_fwR!==undefined? _fwR : tw);
+        var _twHR=f.widthOfTextAtSize(ln,fsize)*sc;
+        var _nGR=ln.length;
+        var _csR=(_nGR>1)? ((_tgtR-_twHR)/sc)/(_nGR-1) : 0;
+        var _csMaxR=fsize*0.6;   // wider cap: no matrix fallback under rotation
+        if(_csR> _csMaxR) _csR= _csMaxR;
+        if(_csR<-_csMaxR) _csR=-_csMaxR;
+        var _useCSR = Math.abs(_tgtR-_twHR)>0.5 && _nGR>1 &&
+                      typeof page.pushOperators==='function' &&
+                      typeof PDFLib.setCharacterSpacing==='function';
+        if(_useCSR){
+          try{
+            page.pushOperators(PDFLib.setCharacterSpacing(_csR));
+            page.drawText(ln,{x:tp.x, y:tp.y, size:fsize, font:f, color:col(obj.color),
+              opacity:op, rotate:degrees(-a*180/Math.PI + rotDeg)});
+            page.pushOperators(PDFLib.setCharacterSpacing(0));
+          }catch(_ce){
+            try{ page.pushOperators(PDFLib.setCharacterSpacing(0)); }catch(_){}
+            page.drawText(ln,{x:tp.x, y:tp.y, size:fsize, font:f, color:col(obj.color),
+              opacity:op, rotate:degrees(-a*180/Math.PI + rotDeg)});
+          }
+        } else {
+          page.drawText(ln,{x:tp.x, y:tp.y, size:fsize, font:f, color:col(obj.color),
+            opacity:op, rotate:degrees(-a*180/Math.PI + rotDeg)});
+        }
       } else {
         // optional background highlight behind the line
         if(obj.bgOpacity && obj.bgOpacity>0){
@@ -16155,19 +16452,24 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
         // like tracking — so the line still starts AND ends where it does on
         // screen, but every letter keeps its true shape.
         var _fwV=_fitLineW(obj,i,tw);
-        var _target=(_fwV!==undefined? Math.min(_fwV,tw) : tw);
+        var _target=(_fwV!==undefined? _fwV : tw);
         var tw2=_target;
         var _nG=ln.length;
-        var _csPt=(_nG>1)? ((_target-twH)/sc)/(_nG-1) : 0;
-        // keep tracking subtle: never more than ±35% of the font size per gap
+        var _csRaw=(_nG>1)? ((_target-twH)/sc)/(_nG-1) : 0;
+        // keep tracking subtle: never more than ±35% of the font size per gap.
+        // If the required spacing EXCEEDS that cap (big condense/expand), Tc
+        // can't hit the exact width — fall through to the matrix-scale branch,
+        // which is width-exact (at the cost of stretched letterforms).
         var _csMax=fsize*0.35;
+        var _csClip=(_csRaw>_csMax||_csRaw<-_csMax);
+        var _csPt=_csRaw;
         if(_csPt> _csMax) _csPt= _csMax;
         if(_csPt<-_csMax) _csPt=-_csMax;
         // NOTE: pushOperators is a method on the PAGE, not on the PDFLib
         // namespace — the old check (PDFLib.pushOperators) was always undefined,
         // which silently disabled the squeeze and shipped every line at natural
         // Helvetica width (text ran farther right on export than on screen).
-        var _useCS = Math.abs(_target-twH)>0.5 && _nG>1 &&
+        var _useCS = Math.abs(_target-twH)>0.5 && _nG>1 && !_csClip &&
                      typeof page.pushOperators==='function' &&
                      typeof PDFLib.setCharacterSpacing==='function';
         if(_useCS){
@@ -18202,7 +18504,7 @@ function _scaleRecord(rec,k){
   if(rec.textScaleLocked){ if(typeof rec.loadedDpi==='number') rec.loadedDpi*=k; }
   else{
     ['textObjs','commentObjs','leaderObjs'].forEach(function(kk){
-      if(rec[kk]) rec[kk].forEach(function(o){ n(o,'fontSize'); });
+      if(rec[kk]) rec[kk].forEach(function(o){ n(o,'fontSize'); n(o,'paraGap'); n(o,'letterSpacing'); });
     });
   }
   if(typeof rec.ppu==='number') rec.ppu*=k;          // px-per-unit shrinks with the page
