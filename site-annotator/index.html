@@ -16566,7 +16566,10 @@ function _buildVectorPdf(attachJson, onReady){
     var _totRot = (((typeof _pdfPageRot!=='undefined'?_pdfPageRot:0) + (typeof _userRotDeg!=='undefined'?_userRotDeg:0)) % 360 + 360) % 360;
     function _traceDrawable(ov){
       if(!ov._trace || !ov._trace.paths || !ov._trace.paths.length) return false;
-      if(_totRot !== 0) return false;
+      // Rotated pages (/Rotate 90 etc.) are now supported: the trace draw wraps
+      // drawSvgPath in a graphics-state rotation about the image center. Only
+      // require the operator helpers to exist (they do in pdf-lib 1.17.1).
+      if(_totRot !== 0 && !(window.PDFLib && PDFLib.pushGraphicsState && PDFLib.popGraphicsState && PDFLib.concatTransformationMatrix)) return false;
       if((ov.angle||0) !== 0 || ov.flipH || ov.flipV) return false;
       var sx=ov.w/ov._trace.w, sy=ov.h/ov._trace.h;
       return Math.abs(sx-sy) <= 0.02*Math.max(sx,sy);   // near-uniform scale only
@@ -16757,6 +16760,46 @@ function _buildVectorPdf(attachJson, onReady){
     //       shift on saturated stamps/stickers that toBlob's subsampling caused.
     //    c) toBlob('image/jpeg', 0.99): the old path, as a safety net.
     //    JPEG has no alpha, so re-encodes matte transparency onto white first.
+    // EXIF orientation of a raw JPEG (1 = upright, 0 = none/unreadable).
+    // Phone photos are often stored sideways with an orientation tag; the
+    // BROWSER auto-rotates them on screen (image-orientation:from-image), but
+    // a PDF viewer ignores EXIF on embedded images — so passing the original
+    // bytes through untouched exported those photos sideways. Any value >1
+    // must take the canvas re-encode path (drawImage bakes the rotation in).
+    function _jpegExifOrientation(b){
+      try{
+        if(!b || b.length<4 || b[0]!==0xFF || b[1]!==0xD8) return 0;
+        var i=2;
+        while(i+4<=b.length){
+          if(b[i]!==0xFF) break;
+          var marker=b[i+1];
+          if(marker===0x01||(marker>=0xD0&&marker<=0xD7)){ i+=2; continue; }
+          if(marker===0xDA||marker===0xD9) break;          // image data — no EXIF past here
+          var len=(b[i+2]<<8)|b[i+3];
+          if(len<2) break;
+          if(marker===0xE1 && i+10<=b.length &&
+             b[i+4]===0x45&&b[i+5]===0x78&&b[i+6]===0x69&&b[i+7]===0x66&&b[i+8]===0&&b[i+9]===0){
+            var t=i+10;                                    // TIFF header start
+            if(t+8>b.length) break;
+            var le=(b[t]===0x49&&b[t+1]===0x49);           // 'II' = little-endian
+            var rd16=function(o){ return le ? (b[o]|(b[o+1]<<8)) : ((b[o]<<8)|b[o+1]); };
+            var rd32=function(o){ return le ? ((b[o]|(b[o+1]<<8)|(b[o+2]<<16)|(b[o+3]<<24))>>>0)
+                                            : (((b[o]<<24)|(b[o+1]<<16)|(b[o+2]<<8)|b[o+3])>>>0); };
+            var ifd=t+rd32(t+4);
+            if(ifd+2>b.length) break;
+            var n=rd16(ifd);
+            for(var k=0;k<n;k++){
+              var en=ifd+2+k*12;
+              if(en+12>b.length) break;
+              if(rd16(en)===0x0112) return rd16(en+8);
+            }
+            return 0;
+          }
+          i+=2+len;
+        }
+      }catch(e){}
+      return 0;
+    }
     function _nativeBytes(ov){
       return new Promise(function(res,rej){
         try{
@@ -16776,7 +16819,13 @@ function _buildVectorPdf(attachJson, onReady){
           // Pass-through only for reasonably-sized originals (≤4MB). HEIC→JPEG
           // conversions and big phone photos can be 15-30MB apiece — embedding
           // those verbatim is what blew exports up 10×.
-          if(ov._origJpeg && ov._origJpeg.length && ov._origJpeg.length<=4*1024*1024 && !ov.flipH && !ov.flipV){
+          // Pass-through is only safe when the JPEG is stored upright (EXIF
+          // orientation absent or 1). A phone photo stored sideways LOOKS right
+          // on canvas (the browser applies EXIF) but embeds sideways in the PDF
+          // (viewers ignore EXIF on embedded images) — those re-encode below,
+          // where drawImage(ov.img) bakes the upright orientation into the pixels.
+          if(ov._origJpeg && ov._origJpeg.length && ov._origJpeg.length<=4*1024*1024 && !ov.flipH && !ov.flipV
+             && _jpegExifOrientation(ov._origJpeg)<=1){
             res({ov:ov, bytes:ov._origJpeg});
             return;
           }
@@ -17138,16 +17187,37 @@ function _buildVectorPdf(attachJson, onReady){
                   var tc2=v2p(ov.cx/sc, VH - ov.cy/sc);       // center, page coords
                   var x0=tc2.x - Wp/2, y0=tc2.y + Hp/2;       // top-left anchor
                   var op=(ov.opacity!=null?ov.opacity:1);
-                  t.paths.forEach(function(p){
-                    try{
-                      page.drawSvgPath(p.d, {
-                        x:x0, y:y0, scale:pScale,
-                        color:PDFLib.rgb(p.rgb[0],p.rgb[1],p.rgb[2]),
-                        opacity:op, borderWidth:0
-                      });
-                    }catch(pe){ console.warn('[VectorExport] traced path draw failed:',pe); }
-                  });
-                  dbg('export','traced image drawn as '+t.paths.length+' vector paths');
+                  // Rotated page (/Rotate 90 etc.): the traced paths are in VISUAL
+                  // orientation, but drawSvgPath has no rotate option — wrap the
+                  // whole drawing in a graphics-state rotation of +rot CCW about
+                  // the image CENTER in unrotated page space (the same net turn
+                  // the native-image embed applies), so the trace lands upright
+                  // after the viewer applies the page /Rotate. Verified to place
+                  // pixel-identically to the raster embed on /Rotate 90 pages.
+                  var _gsOn=false;
+                  if(rot!==0){
+                    var _tr=rot*Math.PI/180, _tct=Math.cos(_tr), _tst=Math.sin(_tr);
+                    page.pushOperators(
+                      PDFLib.pushGraphicsState(),
+                      PDFLib.concatTransformationMatrix(_tct, _tst, -_tst, _tct,
+                        tc2.x - _tct*tc2.x + _tst*tc2.y,
+                        tc2.y - _tst*tc2.x - _tct*tc2.y));
+                    _gsOn=true;
+                  }
+                  try{
+                    t.paths.forEach(function(p){
+                      try{
+                        page.drawSvgPath(p.d, {
+                          x:x0, y:y0, scale:pScale,
+                          color:PDFLib.rgb(p.rgb[0],p.rgb[1],p.rgb[2]),
+                          opacity:op, borderWidth:0
+                        });
+                      }catch(pe){ console.warn('[VectorExport] traced path draw failed:',pe); }
+                    });
+                  } finally {
+                    if(_gsOn){ try{ page.pushOperators(PDFLib.popGraphicsState()); }catch(ge){ console.warn('[VectorExport] trace popGraphicsState failed:',ge); } }
+                  }
+                  dbg('export','traced image drawn as '+t.paths.length+' vector paths'+(rot?(' (page rot '+rot+'° via GS transform)'):''));
                 });
               });
               natives.forEach(function(n){
