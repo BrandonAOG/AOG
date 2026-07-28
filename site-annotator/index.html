@@ -11371,6 +11371,17 @@ function _openTextEdit(o){
   // (wrong squeeze / dropped squeeze after edits). Remap compares against this.
   o._fitBaseText=o.text;
   _syncTextFmtFromObj(o);
+  // Clicking into an EXISTING text must not recolor it: commitText stamps the
+  // GLOBAL tool color onto the object, so adopt the object's own color into
+  // the global (and swatch/picker) for this edit session, remembering the tool
+  // color so _aogRestoreTextCol puts it back on commit — the next drawing/text
+  // then starts from the user's own color, not this label's.
+  if(o.color && o.color!==color){
+    if(_aogTextColRestore===null) _aogTextColRestore=color;
+    color=o.color;
+    if(typeof clrSwatch!=='undefined' && clrSwatch) clrSwatch.style.background=color;
+    if(typeof clrInput!=='undefined'  && clrInput)  clrInput.value=color;
+  }
   startTextCursor(o.x, o.y);
   showTextOverlay(_ovX, _ovY);
   _fitTextOv();              // size to the loaded content (all lines visible)
@@ -12005,6 +12016,7 @@ function _aogRestoreTextCol(){
   if(_aogTextColRestore!==null){
     color=_aogTextColRestore; _aogTextColRestore=null;
     if(typeof clrSwatch!=='undefined' && clrSwatch) clrSwatch.style.background=color;
+    if(typeof clrInput!=='undefined'  && clrInput)  clrInput.value=color;
   }
 }
 function commitText(){
@@ -14331,6 +14343,11 @@ function _snapStrokeTargets(){
 }
 function applyStrokeColor(v){
   color=v; clrSwatch.style.background=color;
+  // An EXPLICIT pick defines the user's new tool color — cancel any pending
+  // "put the old color back after this text commits" restore (set when an edit
+  // session adopted an existing label's color, or a paste matched one), or the
+  // commit would silently undo the user's choice.
+  _aogTextColRestore=null;
   var snap=(Date.now()-_clrSnapAt<30000) ? _clrSnap : null;
   // Live text-tool typing: recolor the overlay as you pick, before commit.
   if(textOv.style.display!=='none' && !_editingComment){
