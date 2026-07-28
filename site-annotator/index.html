@@ -9578,6 +9578,15 @@ function findMeasureObjAt(x,y,isTouch){
 
 // Determine which handle of a selected measure is near x,y:
 // returns 0 (p1), 1 (p2), -2 (body/move), or -1 (miss)
+// Endpoint/vertex dot radius in canvas units. The dots are a fixed SCREEN size
+// (base px), but at low zoom that fixed size dwarfs the zoomed-out drawing —
+// so below 100% zoom the on-screen size shrinks with the view, floored at half
+// size so the dots stay visible. Grab targets are separate (getMeasureHandleAt
+// etc.) and unchanged, so shrunken dots are no harder to hit.
+function _endDotR(base){
+  return base*Math.max(0.5, Math.min(1, zoom))/zoom;
+}
+
 function getMeasureHandleAt(m, x, y, isTouch){
   var slop=(isTouch?20:10)/zoom;
   if(Math.hypot(x-m.x1,y-m.y1)<slop) return 0;
@@ -9602,8 +9611,8 @@ function renderMeasureSelection(){
   var isPlainLine=m.showLabel===false;
   // Draw highlighted line
   drawMeasureObjOnCtx(selCtx, m, !isPlainLine);
-  // Endpoint drag handles
-  var hs=10/zoom;
+  // Endpoint drag handles (screen-fixed, but shrink with zoom below 100%)
+  var hs=_endDotR(10);
   if(isPlainLine){
     // Plain line: simple white square handles, no P1/P2 labels
     [[m.x1,m.y1],[m.x2,m.y2]].forEach(function(pt){
@@ -9612,7 +9621,7 @@ function renderMeasureSelection(){
       selCtx.strokeStyle='#fff';
       selCtx.lineWidth=1.5/zoom;
       selCtx.shadowColor='rgba(108,99,255,0.7)';
-      selCtx.shadowBlur=6/zoom;
+      selCtx.shadowBlur=_endDotR(6);
       selCtx.setLineDash([]);
       selCtx.beginPath();
       selCtx.arc(pt[0],pt[1],hs,0,Math.PI*2);
@@ -9626,15 +9635,15 @@ function renderMeasureSelection(){
       selCtx.strokeStyle='#fff';
       selCtx.lineWidth=1.5/zoom;
       selCtx.shadowColor=pt[2];
-      selCtx.shadowBlur=6/zoom;
+      selCtx.shadowBlur=_endDotR(6);
       selCtx.setLineDash([]);
       selCtx.beginPath();
       selCtx.arc(pt[0],pt[1],hs,0,Math.PI*2);
       selCtx.fill(); selCtx.stroke();
-      // Label: P1 / P2
+      // Label: P1 / P2 — font tracks the (possibly shrunken) dot size
       selCtx.shadowBlur=0;
       selCtx.fillStyle='#fff';
-      selCtx.font='bold '+(10/zoom)+'px Arial,sans-serif';
+      selCtx.font='bold '+hs+'px Arial,sans-serif';
       selCtx.textAlign='center'; selCtx.textBaseline='middle';
       selCtx.fillText(idx===0?'P1':'P2',pt[0],pt[1]);
       selCtx.restore();
@@ -9697,7 +9706,7 @@ function renderLeaderSelection(){
   drawLeaderOnCtx(selCtx, o, 1);
   var _se=leaderShoulderEnd(o);
   var sx=_se.x, sy=_se.y;
-  var hs=10/zoom;
+  var hs=_endDotR(10);
   // Handles: tip (cyan), elbow (amber), shoulder end (purple)
   [[o.x1,o.y1,'#00D4FF'],[o.x2,o.y2,'#FBBF24'],[sx,sy,'#9d97ff']].forEach(function(pt){
     selCtx.save();
@@ -9705,7 +9714,7 @@ function renderLeaderSelection(){
     selCtx.strokeStyle='#fff';
     selCtx.lineWidth=1.5/zoom;
     selCtx.shadowColor=pt[2];
-    selCtx.shadowBlur=6/zoom;
+    selCtx.shadowBlur=_endDotR(6);
     selCtx.setLineDash([]);
     selCtx.beginPath();
     selCtx.arc(pt[0],pt[1],hs,0,Math.PI*2);
@@ -13351,8 +13360,8 @@ function renderPolylineSelection(){
   selCtx.restore();
   // The polyline itself (in its real color, on top)
   drawPolylineOnCtx(selCtx, pl, 1);
-  // Vertex dots
-  var hs=7/zoom;
+  // Vertex dots (screen-fixed, but shrink with zoom below 100%)
+  var hs=_endDotR(7);
   pl.pts.forEach(function(pt){
     selCtx.save();
     selCtx.fillStyle='rgba(108,99,255,0.9)';
