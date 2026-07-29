@@ -2667,7 +2667,7 @@ function startCommentTextEdit(c){
     _cmtAutoGrow(c);
   }, 0);
 
-  if(document.activeElement !== textOv) textOv.focus();
+  if(document.activeElement !== textOv) textOv.focus({preventScroll:true});
 }
 
 // Grow a note box in BOTH dimensions to fit `text`, choosing a width that
@@ -5276,6 +5276,30 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       fam:(styles[it.fontName] && styles[it.fontName].fontFamily) || 'Arial'
     });
   });
+  // TRUE FONT NAMES. pdf.js's styles table only carries a GENERIC family
+  // ('sans-serif'/'serif'), so every imported label normalized to Arial even
+  // when the source was Calibri — and Arial's wider metrics made the text feel
+  // subtly off. The REAL base font name ('ABCDEF+Calibri-Bold', …) lives in the
+  // page's font objects (commonObjs, populated by the backdrop render). Resolve
+  // each run's internal font id to its real name so _normalizeFamily can map it
+  // to the matching app font (Calibri/Times/Courier/…) — and so Bold/Italic
+  // baked into the font name get detected too.
+  try{
+    var _fnCache={};
+    runs.forEach(function(r){
+      if(!r.font) return;
+      if(_fnCache[r.font]===undefined){
+        var _nm=null;
+        try{
+          var _fo=page.commonObjs.get(r.font);
+          _nm=(_fo && (_fo.name||_fo.loadedName)) || null;
+          if(_nm) _nm=String(_nm).replace(/^[A-Z]{6}\+/,'');
+        }catch(_fe){ _nm=null; }
+        _fnCache[r.font]=_nm;
+      }
+      if(_fnCache[r.font]) r.fam=_fnCache[r.font];
+    });
+  }catch(_fne){}
 
   // Group into lines — DIRECTION-AWARE. Text on a rotated PDF page runs along a
   // non-horizontal axis (e.g. vertically for /Rotate 90). We project each run's
@@ -5383,9 +5407,14 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       if(Math.abs(L._fpx - B._fpx) > Math.max(L._fpx,B._fpx)*0.25) continue; // same size
       var dC = L._c - B._c;                              // baseline step (cross-axis)
       if(dC < B._fpx*0.6 || dC > B._fpx*1.65) continue; // one normal line-height below
-      var ov = Math.min(L._a1,B._a1) - Math.max(L._a0,B._a0); // along-axis overlap
+      // ONLY rows sharing the LEFT edge merge. The old overlap rule also
+      // swallowed CENTERED rows (e.g. a subtitle centered under a title) and
+      // re-drew them left-aligned to the first row — shifting them left of
+      // their true position. A row that isn't left-aligned with the block now
+      // stays its OWN object at its exact source x/y, which is position-exact
+      // under any font-width difference.
       var leftAligned = Math.abs(L._a0 - B._a0) <= B._fpx*1.0;
-      if(ov < Math.min(L._a1-L._a0, B._a1-B._a0)*0.3 && !leftAligned) continue;
+      if(!leftAligned) continue;
       host=P; break;
     }
     if(host) host.lines.push(L);
@@ -5413,15 +5442,18 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       var _m=(_stSum/(P.lines.length-1))/first.fpx;
       if(_m>0.6 && _m<1.9) _srcLineH=+_m.toFixed(3);
     }
+    // Merged blocks are strictly left-aligned by construction (see the merge
+    // rule above), so anchoring at the first row's left edge is position-exact.
+    var _srcAlign='left', _emitX=first.x;
     var bold=/bold/i.test(first.fam);
     var ital=/italic|oblique/i.test(first.fam);
     var col=_sampleTextColor(_baseSampleCtx(), first.x, first.y, first.fpx, _colPix);
     textObjs.push({
       id: Date.now()+Math.floor(Math.random()*100000)+txtCount,
-      x: first.x, y: first.y, text: text, color: col, fontSize: fontPt,
+      x: _emitX, y: first.y, text: text, color: col, fontSize: fontPt,
       opacity:1, layerIdx:activeLayerIdx, lineH:_srcLineH||undefined,
       bold:!!bold, italic:!!ital, underline:false, strike:false,
-      fontFamily:_normalizeFamily(first.fam), textAlign:'left', angle:first.ang, bgOpacity:0,
+      fontFamily:_normalizeFamily(first.fam), textAlign:_srcAlign, angle:first.ang, bgOpacity:0,
       // TRUE per-line widths from the source PDF (plan px) + the font size they
       // were captured at. Renderers compress lines that overflow these widths —
       // the app's available fonts (and the export's Helvetica) are metrically
@@ -5433,9 +5465,9 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       // on export (wipe original + redraw), or the edited copy double-draws
       // over the original page text.
       _oLineH:_srcLineH||undefined,
-      _oFmt:{fs:fontPt, b:!!bold, i:!!ital, col:col, fam:_normalizeFamily(first.fam), al:'left'},
+      _oFmt:{fs:fontPt, b:!!bold, i:!!ital, col:col, fam:_normalizeFamily(first.fam), al:_srcAlign},
       _fromExplode:true,   // duplicates original page text; skip on vector export
-      _oX:first.x, _oY:first.y
+      _oX:_emitX, _oY:first.y
     });
     if(/200A\s*MB/.test(text) || text.split(/\s+/).filter(function(w){return /MB/.test(w);}).length>1){
       dbg('text-import','emitted text obj',{text:text, x:Math.round(first.x), y:Math.round(first.y), rows:P.lines.length, ang:first.ang.toFixed(2)});
@@ -7645,7 +7677,7 @@ function onDown(e){
   // Also blur textOv if switching away from text tool so keys go to document.
   if(tool==='text' && baseLoaded && e.touches && e.touches.length){
     textOv.style.display='block';
-    textOv.focus();
+    textOv.focus({preventScroll:true});
   } else if(tool!=='text' && tool!=='comment' && document.activeElement===textOv){
     // COMMIT the open overlay instead of raw blur+hide. The old code threw the
     // typed text away while LEAVING it inside the hidden textarea — the next
@@ -8014,7 +8046,7 @@ function onDown(e){
         if(selectedLeader) commitLeaderSelection();
         // iOS needs focus() synchronously inside the touch handler for the
         // keyboard to appear — prime the textarea before opening the editor.
-        if(e.touches && e.touches.length){ textOv.value=''; textOv.style.display='block'; textOv.focus(); }
+        if(e.touches && e.touches.length){ textOv.value=''; textOv.style.display='block'; textOv.focus({preventScroll:true}); }
         _openTextEdit(_ldTxt);   // guarded opener (no doubling on iPad)
         return;
       }
@@ -11133,7 +11165,7 @@ function handleCommentDown(e, sp, isTouch){
         // Already editing — place the text cursor at the click/tap position.
         // drawCv captures all pointer events so we must forward manually.
         e.preventDefault();
-        textOv.focus();
+        textOv.focus({preventScroll:true});
         var cx2 = e.clientX !== undefined ? e.clientX
                 : (e.touches && e.touches[0] ? e.touches[0].clientX : undefined);
         var cy2 = e.clientY !== undefined ? e.clientY
@@ -11629,8 +11661,8 @@ function showTextOverlay(cx,cy){
   repositionTextOverlay(true);   // clamp on-screen ONLY for the initial placement
   // iOS: focus already called in onDown. Desktop + double-tap edit path: focus here.
   if(document.activeElement!==textOv){
-    textOv.focus();
-    setTimeout(function(){ if(document.activeElement!==textOv) textOv.focus(); }, 0);
+    textOv.focus({preventScroll:true});
+    setTimeout(function(){ if(document.activeElement!==textOv) textOv.focus({preventScroll:true}); }, 0);
   }
 }
 
@@ -11761,6 +11793,13 @@ function repositionTextOverlay(clampToView){
     if(sy < 0) sy = 0;
   }
   if(clampToView){ textOv._editBoxW = boxW; textOv._editBoxWZoom = zoom; } // lock wrap width (+its zoom) for this edit session
+  // A focused textarea taller/wider than the window makes the browser scroll
+  // the (overflow:hidden!) #viewport container to reveal it — the canvases
+  // visually shift while panX/panY stay put, so the whole edit session appears
+  // OFFSET from the text ("clicking into text zoomed in doesn't select right").
+  // preventScroll on focus stops most of it; force the container back to 0,0
+  // as well in case the caret logic scrolls it later.
+  try{ if(viewport.scrollLeft||viewport.scrollTop){ viewport.scrollLeft=0; viewport.scrollTop=0; } }catch(e){}
   textOv.style.display  = 'block';
   textOv.style.left     = sx+'px';
   textOv.style.top      = sy+'px';
@@ -14047,7 +14086,7 @@ function closeStampPicker(){
   function refocus(){
     if(_editingComment && textOv.style.display!=='none'){
       // Restore focus immediately — delay loses any text selection
-      textOv.focus();
+      textOv.focus({preventScroll:true});
     }
   }
 
@@ -14220,7 +14259,7 @@ function closeStampPicker(){
       // Desktop: restore focus + cursor position (safe; skipped silently on iOS)
       if(!('ontouchstart' in window)){
         try{
-          textOv.focus();
+          textOv.focus({preventScroll:true});
           textOv.setSelectionRange(_savedSelStart, _savedSelEnd);
         }catch(ex){}
       }
@@ -14344,7 +14383,7 @@ fontSizeSel.addEventListener('change',function(e){
     // Desktop only: restore focus + cursor (silently fails on iOS, that's fine)
     if(!('ontouchstart' in window)){
       try{
-        textOv.focus();
+        textOv.focus({preventScroll:true});
         textOv.setSelectionRange(_fsSavedSS, _fsSavedSE);
       }catch(ex){}
     }
@@ -14519,7 +14558,7 @@ function _syncSpacingSelects(){
       try{ if(typeof renderTextCursorFrame==='function') renderTextCursorFrame(); }catch(e){}
       // Desktop: hand focus straight back to the editor (same as font size) so
       // typing continues without an extra click.
-      if(!('ontouchstart' in window)){ try{ textOv.focus(); }catch(e){} }
+      if(!('ontouchstart' in window)){ try{ textOv.focus({preventScroll:true}); }catch(e){} }
     }
   }
   if(lhSel) lhSel.addEventListener('change',function(e){ var v=parseFloat(e.target.value); textLineH=(isFinite(v)&&v>0)?v:null; _applySpacing(); });
@@ -16657,12 +16696,15 @@ function _loadFontBytes(k){
 // given pdf-lib document. Populates fonts.custom[key] = {regular,bold,italic,
 // boldItalic} (missing variants fall back within the family). Never rejects.
 function _embedCustomExportFonts(pdf, fonts){
-  var need={};
+  var need={};          // family key → {regular:true, bold:true, …} actually used
   try{
     textObjs.forEach(function(o){
       if(!o.text) return;
       var k=_customFamilyKey(o.fontFamily);
-      if(k && _CUSTOM_FONT_SRC[k]) need[k]=true;
+      if(k && _CUSTOM_FONT_SRC[k]){
+        var v=o.bold?(o.italic?'boldItalic':'bold'):(o.italic?'italic':'regular');
+        (need[k]=need[k]||{})[v]=true;
+      }
     });
   }catch(e){}
   var keys=Object.keys(need);
@@ -16677,10 +16719,20 @@ function _embedCustomExportFonts(pdf, fonts){
         return _loadFontBytes(k).then(function(vs){
           if(!vs) return;
           var set={}, c2=Promise.resolve();
+          // Embed ONLY the variants the document actually uses (full-font embeds
+          // are ~300-800KB each — skipping unused italic/boldItalic keeps the
+          // exported file lean). Missing variants fall back to regular below.
+          var _used=need[k]||{regular:true};
           ['regular','bold','italic','boldItalic'].forEach(function(v){
             c2=c2.then(function(){
               if(!vs[v]) return;
-              return pdf.embedFont(vs[v],{subset:true}).then(
+              if(!_used[v] && v!=='regular') return;
+              // subset:false — fontkit's SUBSETTER emits fonts missing the
+              // cmap/name/post/OS2 tables; Acrobat refuses those ("Cannot
+              // extract the embedded font 'Carlito-Regular-…'") and drops most
+              // characters. Embedding the FULL font (~300-600KB/variant, only
+              // for variants actually used) is Acrobat-clean.
+              return pdf.embedFont(vs[v],{subset:false}).then(
                 function(f){ set[v]=f; },
                 function(e){ console.warn('[TrueFont] embed '+k+'/'+v+' failed', e); });
             });
