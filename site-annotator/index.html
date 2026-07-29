@@ -1985,6 +1985,30 @@ window.AOGDEBUG=function(on){ AOG_DEBUG=(on!==false); try{ localStorage.setItem(
 // Toggle export model: AOG.fullRedraw(true) = redraw every element as a movable
 // object (nothing memory-stuck at import position); AOG.fullRedraw(false) = keep
 // the original page pixel-perfect and only move edited elements. Re-export after.
+// ── TEXT DIAGNOSTIC ─────────────────────────────────────────────────────────
+// Run AOG.textDiag() in the browser console (F12) on a session showing mid-word
+// gaps. For every label containing suspicious text it prints the EXACT
+// characters (with Unicode codepoints), where the object came from, and its
+// repair/redraw flags — everything needed to pinpoint a gap's origin.
+window.AOG.textDiag=function(filter){
+  var re=filter?new RegExp(filter,'i'):/xis|tili|instru|editi|\u08A2|ti\s+ng|ti\s+on/i;
+  var out=[];
+  try{
+    textObjs.forEach(function(t,i){
+      var s=String(t.text||'');
+      if(!re.test(s)) return;
+      out.push({
+        idx:i, text:s.slice(0,60),
+        codepoints:Array.from(s.slice(0,40)).map(function(ch){ var c=ch.codePointAt(0); return c>126?('U+'+c.toString(16).toUpperCase()):ch; }).join(' '),
+        fontFamily:t.fontFamily, fromExplode:!!t._fromExplode,
+        ligRepaired:!!t._ligRepaired, oText:(t._oText!=null?String(t._oText).slice(0,40):null),
+        moved:(typeof _movedExplodeObj==='function'?_movedExplodeObj(t):null)
+      });
+    });
+  }catch(e){ return 'error: '+e; }
+  console.table(out);
+  return out.length+' matching label(s) — screenshot or copy this table';
+};
 window.AOG.fullRedraw=function(on){ _FULL_REDRAW=(on!==false); try{ localStorage.setItem('AOG_FULLREDRAW', _FULL_REDRAW?'1':'0'); }catch(e){} return _FULL_REDRAW; };
 window.AOG.debugState=function(){
   return {
@@ -2257,6 +2281,26 @@ var TXT_LINE_H = 0.92;
 // at U+08A2 with no usable ToUnicode. The char has no glyph in the app/export
 // fonts and shows as a mid-word GAP ("Exis ng"). Applied at import AND when
 // restoring saved projects that already carry the artifact.
+// Is the CURRENTLY loaded source PDF one of this app's own exports? Our
+// exports embed Carlito; originals never do. Matters for ligature repair: in a
+// TRUE original the baked page text renders its ligature correctly (keep it!),
+// but in an old AOG export the baked copy has a BLANK glyph — the repaired
+// object must replace it or the gap ships forever.
+var _srcAogCache={key:null,val:false};
+function _srcIsAogExport(){
+  try{
+    if(typeof _pdfBytes==='undefined' || !_pdfBytes) return false;
+    var key=_pdfBytes.byteLength;
+    if(_srcAogCache.key===key) return _srcAogCache.val;
+    var u=new Uint8Array(_pdfBytes.buffer||_pdfBytes), n=u.length, found=false;
+    // search for ASCII 'Carlito'
+    for(var i=0;i<n-6;i++){
+      if(u[i]===67&&u[i+1]===97&&u[i+2]===114&&u[i+3]===108&&u[i+4]===105&&u[i+5]===116&&u[i+6]===111){ found=true; break; }
+    }
+    _srcAogCache={key:key,val:found};
+    return found;
+  }catch(e){ return false; }
+}
 function _repairLigArtifacts(s){
   if(!s || typeof s!=='string') return s;
   return s.indexOf('\u08A2')===-1 ? s : s.replace(/\u08A2/g,'ti');
@@ -5269,6 +5313,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
 
   // Build a normalized run list first.
   var runs=[];
+  var _srcAogByFonts=false;   // set during font resolution: source embeds our export fonts
   (tc.items||[]).forEach(function(it){
     var s=(it.str||'');
     // LIGATURE ARTIFACT REPAIR. Some producers encode Calibri's 'ti' ligature
@@ -5278,8 +5323,11 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     // ("Exis ng", "Uti lity"). Map the known artifact back to 'ti', and log any
     // OTHER exotic codepoint sandwiched between Latin letters so future
     // artifacts are easy to identify.
+    var _lrFlag=false;
     if(/[\u0530-\u08FF\uE000-\uF8FF]/.test(s)){
+      var _s0=s;
       s=_repairLigArtifacts(s);
+      if(s!==_s0) _lrFlag=true;
       var _left=s.match(/[A-Za-z][\u0530-\u08FF\uE000-\uF8FF][A-Za-z]/);
       if(_left) console.warn('[Import] unknown ligature artifact in "'+s.slice(0,40)+'" — char U+'+_left[0].codePointAt(1).toString(16).toUpperCase());
     }
@@ -5291,7 +5339,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     if(mg>0.0001 && (sk/mg)>0.09){ ang=Math.atan2(m[1],m[0]); }
     var wRun=(it.width||0)*sc;
     runs.push({
-      s:s, x:m[4], y:m[5], fpx:fpx, w:wRun, ang:ang,
+      s:s, x:m[4], y:m[5], fpx:fpx, w:wRun, ang:ang, _lr:_lrFlag,
       font:it.fontName||'', hasEOL:!!it.hasEOL,
       fam:(styles[it.fontName] && styles[it.fontName].fontFamily) || 'Arial'
     });
@@ -5317,7 +5365,14 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
         }catch(_fe){ _nm=null; }
         _fnCache[r.font]=_nm;
       }
-      if(_fnCache[r.font]) r.fam=_fnCache[r.font];
+      if(_fnCache[r.font]){
+        r.fam=_fnCache[r.font];
+        // Carlito/Tinos/Cousine are OUR export embeds — their presence means
+        // this source is one of this app's own exports (originals use
+        // Calibri/Times/Courier). Needed sync at import time (the raw-bytes
+        // check races: _pdfBytes lands async after the text pass).
+        if(/Carlito|Tinos|Cousine/i.test(_fnCache[r.font])) _srcAogByFonts=true;
+      }
     });
   }catch(_fne){}
 
@@ -5398,6 +5453,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
     }
     text=text.replace(/^\s+/,'').replace(/\s+$/,'');   // trim leading + trailing space
     line._text=text;
+    line._lr=line.runs.some(function(r){ return r._lr; });
     line._ax2=ax;
     line._a0=along(first,ax);
     line._a1=along(last,ax)+(last.w|| last.s.length*last.fpx*0.5);
@@ -5484,6 +5540,12 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       // FORMAT snapshot: spacing/font/color edits must ALSO count as "modified"
       // on export (wipe original + redraw), or the edited copy double-draws
       // over the original page text.
+      // The page's baked copy of a repaired label is DEFECTIVE when the source
+      // is one of this app's own old exports (the artifact glyph is blank there
+      // — the visible mid-word gap). Flag it so the export replaces the baked
+      // copy instead of "keeping the original" gap. True originals render their
+      // ligature fine, so they are NOT flagged and stay pristine vector.
+      _ligRepaired:(P.lines.some(function(L){ return L._lr; }) && (_srcAogByFonts || _srcIsAogExport()))||undefined,
       _oLineH:_srcLineH||undefined,
       _oFmt:{fs:fontPt, b:!!bold, i:!!ital, col:col, fam:_normalizeFamily(first.fam), al:_srcAlign},
       _fromExplode:true,   // duplicates original page text; skip on vector export
@@ -15765,6 +15827,7 @@ function _movedExplodeObj(o){
   // Text CONTENT edits count as moved: the export must patch out the original
   // words and draw the edited copy — position alone misses in-place rewording.
   if(o._oText!=null && o.text!==undefined && String(o.text)!==String(o._oText)) return true;
+  if(o._ligRepaired) return true;   // baked page copy has a blank ligature glyph — must be replaced
   // Spacing / format edits on an imported TEXT object: the original glyphs are
   // baked in the kept page, so any visual change must patch + redraw.
   if(o._oText!=null){
@@ -15883,7 +15946,7 @@ function _anyMovedExtracted(){
     if(typeof polylineObjs!=='undefined' && polylineObjs.some(_ghostRisk)) return true;
     if(typeof imgOverlays!=='undefined' && imgOverlays.some(function(ov){
       if(!ov._fromPdfPage || ov._origCx==null) return false;
-      var e=0.75;
+      var e=2.5;   // match _isUntouchedPageImg — micro-nudges don't force raster
       return Math.abs(ov.cx-ov._origCx)>e||Math.abs(ov.cy-ov._origCy)>e||
              Math.abs(ov.w-ov._origW)>e||Math.abs(ov.h-ov._origH)>e||
              _angMoved(ov.angle, ov._origAngle)||ov.flipH||ov.flipV;
@@ -16708,6 +16771,49 @@ function _ensureFontkit(){
   });
   return _fontkitLoading;
 }
+// Strip the GSUB (glyph substitution) table from a TTF before embedding.
+// WHY: pdf-lib's text layout applies the font's LIGATURES — 'ti' in Carlito
+// becomes a single ligature glyph. That glyph then gets NO entry in the PDF's
+// glyph-width table (and no ToUnicode), so Acrobat advances a full default em
+// after it: a visible mid-word GAP after every 'ti' ("Existi ng", "Uti lity"),
+// and broken text extraction. With no GSUB the layout is strictly one glyph
+// per character — complete widths, complete ToUnicode, gap impossible.
+function _stripGsub(ab){
+  try{
+    var src=new DataView(ab);
+    if(src.getUint32(0)!==0x00010000 && src.getUint32(0)!==0x74727565) return ab; // not TTF
+    var num=src.getUint16(4);
+    var recs=[];
+    for(var i=0;i<num;i++){
+      var o=12+i*16;
+      recs.push({tag:String.fromCharCode(src.getUint8(o),src.getUint8(o+1),src.getUint8(o+2),src.getUint8(o+3)),
+                 cs:src.getUint32(o+4), off:src.getUint32(o+8), len:src.getUint32(o+12)});
+    }
+    var keep=recs.filter(function(r){ return r.tag!=='GSUB'; });
+    if(keep.length===recs.length) return ab;   // no GSUB — nothing to do
+    // Rebuild: header + directory + 4-byte-aligned table data.
+    var n=keep.length;
+    var dirSize=12+n*16;
+    var total=dirSize;
+    keep.forEach(function(r){ r.newOff=total; total+=(r.len+3)&~3; });
+    var out=new Uint8Array(total);
+    var dv=new DataView(out.buffer);
+    dv.setUint32(0, src.getUint32(0));
+    dv.setUint16(4, n);
+    var pow=1, sel=0; while(pow*2<=n){ pow*=2; sel++; }
+    dv.setUint16(6, pow*16); dv.setUint16(8, sel); dv.setUint16(10, n*16-pow*16);
+    var u8=new Uint8Array(ab);
+    keep.forEach(function(r,i2){
+      var o2=12+i2*16;
+      for(var c=0;c<4;c++) out[o2+c]=r.tag.charCodeAt(c);
+      dv.setUint32(o2+4, r.cs);
+      dv.setUint32(o2+8, r.newOff);
+      dv.setUint32(o2+12, r.len);
+      out.set(u8.subarray(r.off, r.off+r.len), r.newOff);
+    });
+    return out.buffer;
+  }catch(e){ console.warn('[TrueFont] GSUB strip failed — embedding font as-is:', e); return ab; }
+}
 function _loadFontBytes(k){
   if(_customFontBytes[k]) return Promise.resolve(_customFontBytes[k]);
   var src=_CUSTOM_FONT_SRC[k]; if(!src) return Promise.resolve(null);
@@ -16716,7 +16822,7 @@ function _loadFontBytes(k){
     chain=chain.then(function(){
       return fetch(src.base+src.files[v])
         .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.arrayBuffer(); })
-        .then(function(ab){ out[v]=ab; any=true; },
+        .then(function(ab){ out[v]=_stripGsub(ab); any=true; },
               function(e){ console.warn('[TrueFont] fetch failed '+k+'/'+v, e); });
     });
   });
@@ -16952,7 +17058,9 @@ function _buildVectorPdf(attachJson, onReady){
       if(!ov._fromPdfPage) return false;
       if((ov.angle||0)!==0 || ov.flipH || ov.flipV) return false;
       if((ov.opacity==null?1:ov.opacity)!==1) return false;
-      var eps=0.75; // sub-pixel tolerance
+      // ~2.5 canvas px ≈ under half a point on paper — invisible. A tighter
+      // tolerance let click-jitter micro-nudges permanently rasterize exports.
+      var eps=2.5;
       return Math.abs(ov.cx-ov._origCx)<eps && Math.abs(ov.cy-ov._origCy)<eps &&
              Math.abs(ov.w -ov._origW )<eps && Math.abs(ov.h -ov._origH )<eps;
     }
@@ -18256,6 +18364,19 @@ function _persistPdfSource(){
     rq.onsuccess=function(){
       _pdfSrcCached=true;
       dbg('save','pristine PDF cached ('+_pdfBytes.byteLength+' bytes) → refresh/crash-restore keeps VECTOR export');
+      // VERIFY the write actually landed (quota errors can surface as a
+      // successful put with an evicted record). A failed read-back re-arms the
+      // doSave retry instead of silently losing vector export on next refresh.
+      try{
+        var vq=_saveDb.transaction(SAVE_STORE,'readonly').objectStore(SAVE_STORE).get(PDFSRC_KEY);
+        vq.onsuccess=function(e2){
+          var r2=e2.target.result;
+          if(!r2 || !r2.bytes || !r2.bytes.byteLength){
+            _pdfSrcCached=false;
+            console.warn('[Save] PDF cache read-back EMPTY — will retry (vector export after refresh at risk)');
+          }
+        };
+      }catch(e){}
     };
     rq.onerror=function(e){
       _pdfSrcCached=false;
@@ -18744,6 +18865,14 @@ function doRestore(rec){
           if(typeof _userRotDeg!=='undefined') _userRotDeg = rec.userRotDeg || 0;
         } else {
           dbg('restore','no cached PDF source (older project or image import) → raster export');
+          // Don't leave the user to discover a blurry export later: say it now,
+          // with the remedy. Re-opening the original (or the editable PDF✎ file)
+          // re-arms the vector path AND re-caches the source for future refreshes.
+          setTimeout(function(){
+            if(typeof _pdfBytes==='undefined' || !_pdfBytes){
+              toast('Vector source not found after refresh — PDF exports would be flattened. Open your original or editable PDF once to restore sharp vector exports.','warn',9000);
+            }
+          }, 3500);
         }
       });
     }
@@ -19533,7 +19662,18 @@ function handleImgPointerMove(e, sp){
   var hi=d.hi;
 
   if(hi===-1){
-    // Move: simple delta from drag start
+    // Move: simple delta from drag start — with a CLICK DEADBAND. A plain click
+    // to select carries 1-2px of mouse jitter between press and release; at
+    // fit zoom that's several CANVAS px, which silently nudged the picture,
+    // marked a pristine page image as "moved", and flipped the next PDF export
+    // to the flattened raster path ("clicked a picture → EXPORT RASTER").
+    // No movement is applied until intent is clear (≥3 screen px of travel);
+    // after that the image follows the cursor from its true start, no jump.
+    if(!d._live){
+      var _trav=Math.hypot(sp.x-d.startX, sp.y-d.startY)*zoom;   // screen px
+      if(_trav < 3) return true;                                  // still a click
+      d._live=true;
+    }
     selImg.cx = d.cx + (sp.x - d.startX);
     selImg.cy = d.cy + (sp.y - d.startY);
 
