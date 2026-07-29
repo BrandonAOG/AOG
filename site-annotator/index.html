@@ -2253,6 +2253,14 @@ var CMT_LINE_H = 1.15;
 // identical spacing and can never drift apart. Values <1 tighten past the
 // glyph box so the highlight bars overlap (0.92 = snug, faint overlap).
 var TXT_LINE_H = 0.92;
+// Repair ligature artifacts: some PDF producers encode Calibri's 'ti' ligature
+// at U+08A2 with no usable ToUnicode. The char has no glyph in the app/export
+// fonts and shows as a mid-word GAP ("Exis ng"). Applied at import AND when
+// restoring saved projects that already carry the artifact.
+function _repairLigArtifacts(s){
+  if(!s || typeof s!=='string') return s;
+  return s.indexOf('\u08A2')===-1 ? s : s.replace(/\u08A2/g,'ti');
+}
 // Per-object line spacing. Imported multi-line paragraphs carry the SOURCE
 // PDF's real leading in o.lineH (a multiplier of font size, like TXT_LINE_H);
 // re-spacing them with the app's tight default visibly squeezed stacked labels
@@ -5263,6 +5271,18 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
   var runs=[];
   (tc.items||[]).forEach(function(it){
     var s=(it.str||'');
+    // LIGATURE ARTIFACT REPAIR. Some producers encode Calibri's 'ti' ligature
+    // glyph at a bogus codepoint (observed: U+08A2, an Arabic letter) with no
+    // usable ToUnicode entry. pdf.js passes it through, the app font has no
+    // sensible glyph for it, and the label shows/export s a GAP mid-word
+    // ("Exis ng", "Uti lity"). Map the known artifact back to 'ti', and log any
+    // OTHER exotic codepoint sandwiched between Latin letters so future
+    // artifacts are easy to identify.
+    if(/[\u0530-\u08FF\uE000-\uF8FF]/.test(s)){
+      s=_repairLigArtifacts(s);
+      var _left=s.match(/[A-Za-z][\u0530-\u08FF\uE000-\uF8FF][A-Za-z]/);
+      if(_left) console.warn('[Import] unknown ligature artifact in "'+s.slice(0,40)+'" — char U+'+_left[0].codePointAt(1).toString(16).toUpperCase());
+    }
     if(s==='') return;                 // keep spaces, drop truly empty
     if(/200A/.test(s)){ dbg('text-raw','pdf.js item',{str:s, width:(it.width||0).toFixed(1), tf:(it.transform||[]).map(function(v){return Math.round(v);})}); }
     var m=U.transform(vp.transform, it.transform);
@@ -11776,19 +11796,26 @@ function repositionTextOverlay(clampToView){
     // box right by that so the TEXT (not the box) ends at the anchor.
     var rightEdge = sxA + _padL*_scaleH0;        // box's visual right edge
     sx = rightEdge - boxW*_scaleH0;              // box left edge (scaled width)
-    if(clampToView && vpW > 0){
+    if(clampToView && !editingObj && vpW > 0){
       if(rightEdge > vpW) { rightEdge = vpW; sx = rightEdge - boxW*_scaleH0; }
       if(rightEdge < 40)  { rightEdge = 40;  sx = rightEdge - boxW*_scaleH0; }
       if(sx < 0){ boxW = rightEdge/_scaleH0; sx = 0; } // shrink instead of going off-screen
       if(boxW < 60) boxW = 60;
     }
-  } else if(clampToView && vpW > 0 && !_eAngPre){
+  } else if(clampToView && !editingObj && vpW > 0 && !_eAngPre){
+    // NEW text entry only: keep the empty box reachable on-screen.
     if(sx < 0) sx = 0;
     if(sx > vpW - 40) sx = vpW - 40;          // keep at least a sliver on-screen
     if(sx + boxW*_scaleH0 > vpW) boxW = (vpW - sx)/_scaleH0; // shrink, don't shift
     if(boxW < 60) boxW = 60;                   // minimum usable width
   }
-  if(clampToView && vpH > 0){
+  if(clampToView && !editingObj && vpH > 0){
+    // EXISTING labels are exempt from BOTH clamps: pulling the box on-screen
+    // at open detached it from the glyphs — the reported "click into text
+    // while zoomed in and the edit box is offset". (Zoom-in AFTER opening was
+    // fine because those repositions never clamp.) The box now always sits on
+    // the text, even if that leaves part of it off-screen — same as any
+    // canvas object at high zoom.
     if(sy + boxH > vpH) sy = vpH - boxH;
     if(sy < 0) sy = 0;
   }
@@ -16361,6 +16388,9 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
     var efpx=ptToCanvasPx(obj.fontSize);          // canvas px per line
     var fsize=efpx/sc;                             // pt
     var lines=getTextLines(obj,efpx);   // same wrap breaks as the screen render
+    // Final safety net: strip ligature artifacts right before PDF drawing, so
+    // even a session that still carries the bogus char in memory exports clean.
+    lines=lines.map(function(l){ return _repairLigArtifacts(l); });
     var align=obj.textAlign||'left';
     var op=(obj.opacity==null?1:obj.opacity);
     var a=(obj.angle||0);
@@ -16753,6 +16783,40 @@ function _embedCustomExportFonts(pdf, fonts){
   }).catch(function(e){ console.warn('[TrueFont]', e); });
 }
 
+// ── Acrobat compliance post-pass ────────────────────────────────────────────
+// pdf-lib writes embedded font programs WITHOUT the /Length1 key (uncompressed
+// TrueType size) that the PDF spec requires on FontFile2 streams — one of the
+// things strict Acrobat checks before it will "extract" an embedded font.
+// After save, reload and stamp Length1 onto any font-program stream missing it.
+function _fixFontLength1(bytes){
+  try{
+    if(!window.PDFLib || !PDFLib.PDFRawStream || !PDFLib.decodePDFRawStream) return Promise.resolve(bytes);
+  }catch(e){ return Promise.resolve(bytes); }
+  return PDFLib.PDFDocument.load(bytes).then(function(doc){
+    var changed=false;
+    doc.context.enumerateIndirectObjects().forEach(function(pair){
+      var obj=pair[1];
+      if(!(obj instanceof PDFLib.PDFRawStream)) return;
+      var d=obj.dict;
+      try{
+        if(d.get(PDFLib.PDFName.of('Length1'))) return;      // already compliant
+        if(d.get(PDFLib.PDFName.of('Subtype'))) return;       // images etc.
+        if(d.get(PDFLib.PDFName.of('Type'))) return;          // XObjects/metadata
+        var u=PDFLib.decodePDFRawStream(obj).decode();
+        if(!u || u.length<4) return;
+        var isFont=(u[0]===0&&u[1]===1&&u[2]===0&&u[3]===0) ||               // TrueType
+                   (u[0]===0x74&&u[1]===0x72&&u[2]===0x75&&u[3]===0x65) ||   // 'true'
+                   (u[0]===0x4F&&u[1]===0x54&&u[2]===0x54&&u[3]===0x4F);     // 'OTTO'
+        if(!isFont) return;
+        d.set(PDFLib.PDFName.of('Length1'), PDFLib.PDFNumber.of(u.length));
+        changed=true;
+      }catch(e){}
+    });
+    if(changed){ dbg('export','Length1 stamped on embedded font stream(s) — Acrobat-strict'); return doc.save(); }
+    return bytes;
+  }).catch(function(e){ console.warn('[Export] Length1 post-pass skipped:',e); return bytes; });
+}
+
 var _vecRetried = false;   // one cache-recovery attempt per export, never a loop
 function _buildVectorPdf(attachJson, onReady){
   try{
@@ -16900,8 +16964,12 @@ function _buildVectorPdf(attachJson, onReady){
     // exported noticeably blurrier ("foggy") than its un-rotated neighbours.
     // pdf-lib's drawImage supports arbitrary rotation, so we now embed rotated
     // images natively too and compute the rotated bottom-left anchor below.
-    if(_FULL_REDRAW){
-      // Redraw every image at its current position; nothing kept as baked original.
+    if(_FULL_REDRAW && _shouldWhiteCoverPage()){
+      // WHITE-COVERED page: the originals are erased, so redraw every image at
+      // its current position; nothing kept as baked original.
+      // (Gating on _shouldWhiteCoverPage is essential: with the flag alone, a
+      // KEPT page re-embedded every untouched page image ON TOP of its intact
+      // original — doubled stickers/pictures offset by record rounding.)
       untouched  = [];
       movedAxis  = fullImgs.filter(function(ov){ return _layerVisible(ov); });
       complexList= [];
@@ -17657,9 +17725,9 @@ function _buildVectorPdf(attachJson, onReady){
                     mimeType:'application/json',
                     description:'AOG editable annotation data',
                     creationDate:new Date(), modificationDate:new Date()
-                  }).then(function(){ return pdf.save(); });
+                  }).then(function(){ return pdf.save(); }).then(_fixFontLength1);
                 }
-                return pdf.save();
+                return pdf.save().then(_fixFontLength1);
               });
             });
           }).then(function(bytes){ _xlap('EXIT: vector PDF assembled'); _xdump(); if(bytes) done(bytes); })
@@ -17851,6 +17919,10 @@ btnPdf.addEventListener('click',function(){
     toast('Preparing PDF…','',0);
     // Preferred path: keep the original PDF vectors crisp, stamp annotations on top.
     _vecRetried = false;   // fresh export → allow one recovery attempt
+    // Legacy projects: make sure page-image provenance is re-derived BEFORE
+    // classification, or an untouched page image can race into a re-embed
+    // (doubled image in the export).
+    Promise.resolve(typeof _rederivePageImgProvenance==='function'?_rederivePageImgProvenance():null).then(function(){
     _buildVectorPdf(null, function(vbytes){
       if(vbytes){
         var pdfBlob=new Blob([vbytes],{type:'application/pdf'});
@@ -17885,6 +17957,7 @@ btnPdf.addEventListener('click',function(){
       writeToTarget(handle, pdfBlob, _pdfFn).then(function(){ toast('Saved as PDF ✓','ok',2500); });
     };
     reader.readAsDataURL(blob);
+    });
     });
     });
   });
@@ -17983,6 +18056,7 @@ if(btnPdfEdit) btnPdfEdit.addEventListener('click', function(){
       var json; try{ json=JSON.stringify(_recordForJson(rec)); }catch(ex){ toast('Project too large to embed','err',4000); return; }
       // Preferred: keep original PDF vectors crisp + annotations on top + JSON attached.
     _vecRetried = false;   // fresh export → allow one recovery attempt
+      Promise.resolve(typeof _rederivePageImgProvenance==='function'?_rederivePageImgProvenance():null).then(function(){
       _buildVectorPdf(json, function(vbytes){
         if(vbytes){
           var outBlob=new Blob([vbytes],{type:'application/pdf'});
@@ -18027,6 +18101,7 @@ if(btnPdfEdit) btnPdfEdit.addEventListener('click', function(){
           };
           reader.readAsDataURL(blob);
         });
+      });
       });
     });
   });
@@ -18339,7 +18414,16 @@ function buildProjectRecord(quality, cb){
         url=tc.toDataURL('image/png');
       }catch(ex){ url=''; }
       return {src:url,cx:ov.cx,cy:ov.cy,w:ov.w,h:ov.h,angle:ov.angle||0,
-              flipH:!!ov.flipH,flipV:!!ov.flipV,opacity:ov.opacity!==undefined?ov.opacity:1,layerIdx:ov.layerIdx};
+              flipH:!!ov.flipH,flipV:!!ov.flipV,opacity:ov.opacity!==undefined?ov.opacity:1,layerIdx:ov.layerIdx,
+              // PAGE-IMAGE PROVENANCE. Losing these on save/reopen made the
+              // export treat every extracted page image as a user-added picture
+              // and re-embed it ON TOP of the original still in the kept page —
+              // doubled images (e.g. the EMERGENCY DISCONNECT sticker) offset by
+              // any DPI drift. Persist them so untouched page images keep their
+              // pristine original on export after any number of save cycles.
+              _fromPdfPage:!!ov._fromPdfPage,
+              _origCx:ov._origCx, _origCy:ov._origCy, _origW:ov._origW, _origH:ov._origH,
+              _origAngle:ov._origAngle, _srcW:ov._srcW, _srcH:ov._srcH};
     })
   };
   // Encode base image, then layers sequentially.
@@ -18436,7 +18520,16 @@ function doSave(){
         url=tc.toDataURL('image/png');
       }catch(ex){ url=''; }
       return {src:url,cx:ov.cx,cy:ov.cy,w:ov.w,h:ov.h,angle:ov.angle||0,
-              flipH:!!ov.flipH,flipV:!!ov.flipV,opacity:ov.opacity!==undefined?ov.opacity:1,layerIdx:ov.layerIdx};
+              flipH:!!ov.flipH,flipV:!!ov.flipV,opacity:ov.opacity!==undefined?ov.opacity:1,layerIdx:ov.layerIdx,
+              // PAGE-IMAGE PROVENANCE. Losing these on save/reopen made the
+              // export treat every extracted page image as a user-added picture
+              // and re-embed it ON TOP of the original still in the kept page —
+              // doubled images (e.g. the EMERGENCY DISCONNECT sticker) offset by
+              // any DPI drift. Persist them so untouched page images keep their
+              // pristine original on export after any number of save cycles.
+              _fromPdfPage:!!ov._fromPdfPage,
+              _origCx:ov._origCx, _origCy:ov._origCy, _origW:ov._origW, _origH:ov._origH,
+              _origAngle:ov._origAngle, _srcW:ov._srcW, _srcH:ov._srcH};
     })
   };
 
@@ -18526,6 +18619,69 @@ function checkForSavedSession(){
       dlg.style.display='block';
     };
   }catch(ex){ console.warn('[Save] checkForSavedSession failed:',ex); }
+}
+
+// ── Legacy-record migration: re-derive page-image provenance ────────────────
+// Projects saved before provenance was persisted have imgOverlays with no
+// _fromPdfPage/_orig* fields. On export those overlays are treated as user
+// pictures and re-embedded over the originals still in the kept page — doubled
+// images. Re-derive: walk the pristine PDF's operator list, collect each page
+// image's placement in canvas coords, and re-tag any UNTOUCHED overlay that
+// sits exactly on one. (A legacy overlay the user moved can't be matched — it
+// stays user-like; only untouched ones need this to keep their original.)
+function _rederivePageImgProvenance(){
+  try{
+    if(typeof imgOverlays==='undefined' || !imgOverlays.length) return Promise.resolve();
+    var needs=imgOverlays.filter(function(o){ return !o._fromPdfPage; });
+    if(!needs.length) return Promise.resolve();
+    if(typeof _pdfBytes==='undefined' || !_pdfBytes || typeof pdfjsLib==='undefined') return Promise.resolve();
+    return pdfjsLib.getDocument({data:_pdfBytes.slice(0)}).promise.then(function(doc){
+      return doc.getPage((typeof _vecPageNum!=='undefined'&&_vecPageNum)||1).then(function(page){
+        var rot=((page.rotate||0)%360+360)%360;
+        var vw=(rot===90||rot===270)? (page.view[3]-page.view[1]) : (page.view[2]-page.view[0]);
+        var scale=baseCv.width/vw;
+        var vp=page.getViewport({scale:scale, rotation:page.rotate});
+        return page.getOperatorList().then(function(op){
+          var OPS=pdfjsLib.OPS, U=pdfjsLib.Util;
+          var m=[1,0,0,1,0,0], stk=[], rects=[];
+          for(var i=0;i<op.fnArray.length;i++){
+            var f=op.fnArray[i], a=op.argsArray[i];
+            if(f===OPS.save) stk.push(m.slice());
+            else if(f===OPS.restore) m=stk.pop()||[1,0,0,1,0,0];
+            else if(f===OPS.transform) m=U.transform(m,a);
+            else if(f===OPS.paintImageXObject||f===OPS.paintJpegXObject||f===OPS.paintInlineImage){
+              var t=U.transform(vp.transform,m);
+              var c1=U.applyTransform([0,0],t), c2=U.applyTransform([1,1],t);
+              rects.push({x0:Math.min(c1[0],c2[0]),y0:Math.min(c1[1],c2[1]),
+                          x1:Math.max(c1[0],c2[0]),y1:Math.max(c1[1],c2[1])});
+            }
+          }
+          var tol=Math.max(4, baseCv.width*0.004), fixed=0, claimed={};
+          needs.forEach(function(ov){
+            if((ov.angle||0)!==0||ov.flipH||ov.flipV) return;   // touched → can't be "untouched page image"
+            for(var ri=0;ri<rects.length;ri++){
+              if(claimed[ri]) continue;
+              var r=rects[ri];
+              var rcx=(r.x0+r.x1)/2, rcy=(r.y0+r.y1)/2, rw=r.x1-r.x0, rh=r.y1-r.y0;
+              if(Math.abs(rcx-ov.cx)<=tol && Math.abs(rcy-ov.cy)<=tol &&
+                 Math.abs(rw-ov.w)<=tol*2 && Math.abs(rh-ov.h)<=tol*2){
+                claimed[ri]=1; fixed++;
+                ov._fromPdfPage=true;
+                // Anchor the origin to the overlay's CURRENT geometry, not the
+                // page-derived rect: they can differ by a few record-rounding px,
+                // and the untouched check uses a sub-pixel tolerance — writing the
+                // page rect made a never-moved image classify as "moved" and
+                // re-embed over its original anyway.
+                ov._origCx=ov.cx; ov._origCy=ov.cy; ov._origW=ov.w; ov._origH=ov.h;
+                break;
+              }
+            }
+          });
+          if(fixed) dbg('restore','page-image provenance re-derived for '+fixed+' overlay(s) — originals stay pristine on export');
+        });
+      });
+    }).catch(function(e){ console.warn('[Restore] provenance re-derive failed:',e); });
+  }catch(e){ return Promise.resolve(); }
 }
 
 // ── Restore-scale fix ────────────────────────────────────────────────────────
@@ -18655,6 +18811,10 @@ function doRestore(rec){
             // Restore scale
             if(rec.textObjs){
               textObjs=rec.textObjs;
+              textObjs.forEach(function(o){
+                if(o && typeof o.text==='string'){ o.text=_repairLigArtifacts(o.text); }
+                if(o && typeof o._oText==='string'){ o._oText=_repairLigArtifacts(o._oText); }
+              });
               // Older autosaves may carry _editing:true from a label that was
               // open when the save fired — clear it or the label never renders.
               textObjs.forEach(function(o){ o._editing=false; });
@@ -18683,7 +18843,11 @@ function doRestore(rec){
                   imgOverlays.push({img:oi,cx:od.cx,cy:od.cy,w:od.w,h:od.h,
                     angle:od.angle||0,flipH:!!od.flipH,flipV:!!od.flipV,
                     opacity:od.opacity!==undefined?od.opacity:1,
-                    layerIdx:od.layerIdx!==undefined?od.layerIdx:0});
+                    layerIdx:od.layerIdx!==undefined?od.layerIdx:0,
+                    _fromPdfPage:!!od._fromPdfPage,
+                    _origCx:od._origCx, _origCy:od._origCy,
+                    _origW:od._origW, _origH:od._origH,
+                    _origAngle:od._origAngle, _srcW:od._srcW, _srcH:od._srcH});
                   if(typeof renderImgOverlays==='function') renderImgOverlays();
                   composite();
                 };
@@ -18722,6 +18886,10 @@ function doRestore(rec){
             drawGrid(); renderLayers(); composite(); fitToVP();
             setSaveStatus('saved');
             toast('Session restored ✓','ok',3000);
+            // Legacy records: image overlays finish loading async — re-derive
+            // page-image provenance once they've landed.
+            setTimeout(_rederivePageImgProvenance, 2000);
+            setTimeout(_rederivePageImgProvenance, 6000);
           }
         };
         li.onerror=function(){
