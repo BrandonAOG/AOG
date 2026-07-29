@@ -18596,18 +18596,9 @@ function buildProjectRecord(quality, cb){
     markupObjs:     JSON.parse(JSON.stringify(markupObjs)),
     loadedDpi:      _lastLoadedDpi,
     textScaleLocked: true,
+    annImgsExtracted:(typeof _annImgsExtracted!=='undefined'?_annImgsExtracted:0),
     imgOverlays:    (typeof imgOverlays!=='undefined'?imgOverlays:[]).map(function(ov){
-      var url='';
-      try{
-        var tc=document.createElement('canvas');
-        // FULL native resolution. Extraction canvases have .width (no
-        // naturalWidth); the old ov.w fallback captured at DISPLAY size and
-        // quietly degraded every picture a bit more on each save cycle.
-        tc.width=Math.max(1,Math.round(ov.img.naturalWidth||ov.img.width||ov.w));
-        tc.height=Math.max(1,Math.round(ov.img.naturalHeight||ov.img.height||ov.h));
-        tc.getContext('2d').drawImage(ov.img,0,0,tc.width,tc.height);
-        url=tc.toDataURL('image/png');
-      }catch(ex){ url=''; }
+      var url=_encodeOvSrc(ov);
       return {src:url,cx:ov.cx,cy:ov.cy,w:ov.w,h:ov.h,angle:ov.angle||0,
               flipH:!!ov.flipH,flipV:!!ov.flipV,opacity:ov.opacity!==undefined?ov.opacity:1,layerIdx:ov.layerIdx,
               // PAGE-IMAGE PROVENANCE. Losing these on save/reopen made the
@@ -18708,18 +18699,9 @@ function doSave(){
     markupObjs:     JSON.parse(JSON.stringify(markupObjs)),
     loadedDpi:      _lastLoadedDpi,
     textScaleLocked: true,
+    annImgsExtracted:(typeof _annImgsExtracted!=='undefined'?_annImgsExtracted:0),
     imgOverlays:    (typeof imgOverlays!=='undefined'?imgOverlays:[]).map(function(ov){
-      var url='';
-      try{
-        var tc=document.createElement('canvas');
-        // FULL native resolution. Extraction canvases have .width (no
-        // naturalWidth); the old ov.w fallback captured at DISPLAY size and
-        // quietly degraded every picture a bit more on each save cycle.
-        tc.width=Math.max(1,Math.round(ov.img.naturalWidth||ov.img.width||ov.w));
-        tc.height=Math.max(1,Math.round(ov.img.naturalHeight||ov.img.height||ov.h));
-        tc.getContext('2d').drawImage(ov.img,0,0,tc.width,tc.height);
-        url=tc.toDataURL('image/png');
-      }catch(ex){ url=''; }
+      var url=_encodeOvSrc(ov);
       return {src:url,cx:ov.cx,cy:ov.cy,w:ov.w,h:ov.h,angle:ov.angle||0,
               flipH:!!ov.flipH,flipV:!!ov.flipV,opacity:ov.opacity!==undefined?ov.opacity:1,layerIdx:ov.layerIdx,
               // PAGE-IMAGE PROVENANCE. Losing these on save/reopen made the
@@ -18922,7 +18904,55 @@ function _scaleRecord(rec,k){
   if(typeof rec.ppu==='number') rec.ppu*=k;          // px-per-unit shrinks with the page
   if(typeof rec.gridSize==='number') rec.gridSize*=k;
 }
+// ── Overlay bitmap → data URL for project records ──────────────────────────
+// Size-aware encoding. PNG was used unconditionally, which stored photo-like
+// pictures (decals, stickers, badges) at 5-10× the bytes JPEG needs — the bulk
+// of the "PDF✎ is twice the size" gap after the pristine source itself.
+//  • A rehydrated overlay already carries the exact string from the previous
+//    save — reuse it verbatim (fast, and zero generational loss).
+//  • Transparent pictures must stay PNG (JPEG has no alpha).
+//  • Opaque pictures are encoded both ways; JPEG wins only when it is clearly
+//    smaller (line art compresses better as PNG and stays pixel-exact).
+function _encodeOvSrc(ov){
+  try{
+    // Lossy format from a previous save: reuse verbatim — re-encoding every
+    // save cycle would compound loss. (A PNG src falls through and gets the
+    // size check below, so older PNG-fat saves shrink on their next save.)
+    if(ov.img && ov.img.src && /^data:image\/(jpe?g|webp)/.test(ov.img.src)) return ov.img.src;
+    var tc=document.createElement('canvas');
+    // FULL native resolution. Extraction canvases have .width (no
+    // naturalWidth); an ov.w fallback would capture at DISPLAY size and
+    // quietly degrade every picture a bit more on each save cycle.
+    tc.width =Math.max(1,Math.round(ov.img.naturalWidth ||ov.img.width ||ov.w));
+    tc.height=Math.max(1,Math.round(ov.img.naturalHeight||ov.img.height||ov.h));
+    var cx=tc.getContext('2d',{willReadFrequently:true});
+    cx.drawImage(ov.img,0,0,tc.width,tc.height);
+    var hasAlpha=false;
+    try{
+      var d=cx.getImageData(0,0,tc.width,tc.height).data;
+      var px=tc.width*tc.height, step=Math.max(1,Math.floor(px/20000));
+      for(var i=0;i<px;i+=step){ if(d[i*4+3]<250){ hasAlpha=true; break; } }
+    }catch(e){ hasAlpha=true; }   // can't sample → assume alpha, keep PNG
+    var png=tc.toDataURL('image/png');
+    var best=png;
+    // WebP keeps alpha AND compresses photo-like art ~10× better than PNG —
+    // the transparent badge stamp alone was 2.3MB as PNG. Safari without WebP
+    // encode support silently returns PNG from this call; the prefix check
+    // makes that fall through harmlessly.
+    try{
+      var webp=tc.toDataURL('image/webp',0.92);
+      if(/^data:image\/webp/.test(webp) && webp.length<best.length*0.7) best=webp;
+    }catch(e){}
+    if(hasAlpha) return best;
+    var jpg=tc.toDataURL('image/jpeg',0.92);
+    return (jpg.length<best.length*0.7)?jpg:best;
+  }catch(ex){ return ''; }
+}
 function doRestore(rec){
+  // Image-stamp bookkeeping must survive save/reopen: the pristine source still
+  // carries the Stamp annotation, and the export only strips it when it knows
+  // an overlay reproduces it — otherwise a reopened kept-page export doubles it.
+  try{ _annImgsExtracted = rec.annImgsExtracted||0; }catch(e){}
   // Bring the pristine source PDF back, so a reopened project still exports VECTOR.
   // Older saves (fmt before pdfSource existed) simply have no bytes — those stay on
   // the raster path, which is correct: there is genuinely no page to stamp onto.
