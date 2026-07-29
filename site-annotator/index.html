@@ -5214,6 +5214,12 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
           _srcW:(bmp&&(bmp.width||bmp.naturalWidth))||0,
           _srcH:(bmp&&(bmp.height||bmp.naturalHeight))||0
         });
+        // VECTOR-TRACE page-native line art (async, off the import critical
+        // path). Black-and-white drawings (cabinets, meter sockets, generators)
+        // then export as TRUE vector paths when moved/edited — same treatment
+        // the Img-button uploads get. Photos/colored decals fail the bilevel
+        // test inside the tracer and stay raster, as they should.
+        try{ if(typeof _traceIfBilevel==='function'){ (function(_icRef){ setTimeout(function(){ _traceIfBilevel(_icRef); },0); })(ic); } }catch(_te){}
         // White-out the image's footprint on the backdrop. Cover the FULL
         // footprint (rounded outward to whole pixels) — the previous 1px inset
         // left the image's own frame/border baked into the background, which
@@ -15944,13 +15950,10 @@ function _anyMovedExtracted(){
     // Imported PolyLine/Polygon annots live in polylineObjs — a moved/vertex-edited
     // one leaves its original in the pristine PDF, so it must trip this check too.
     if(typeof polylineObjs!=='undefined' && polylineObjs.some(_ghostRisk)) return true;
-    if(typeof imgOverlays!=='undefined' && imgOverlays.some(function(ov){
-      if(!ov._fromPdfPage || ov._origCx==null) return false;
-      var e=2.5;   // match _isUntouchedPageImg — micro-nudges don't force raster
-      return Math.abs(ov.cx-ov._origCx)>e||Math.abs(ov.cy-ov._origCy)>e||
-             Math.abs(ov.w-ov._origW)>e||Math.abs(ov.h-ov._origH)>e||
-             _angMoved(ov.angle, ov._origAngle)||ov.flipH||ov.flipV;
-    })) return true;
+    // MOVED PAGE IMAGES no longer force the flattened composite: the vector
+    // export now covers the moved image's ORIGINAL footprint with white and
+    // re-embeds the image at its new spot — page linework and text stay
+    // vector. (Previously any nudged picture flattened the whole sheet.)
   }catch(e){}
   return false;
 }
@@ -17709,6 +17712,26 @@ function _buildVectorPdf(attachJson, onReady){
               // Traced line-art first (same layer as native images: under the
               // annotation overlay). drawSvgPath interprets path coords y-DOWN
               // from the anchor, so anchor at the image's top-left corner.
+              // MOVED page-native images: the content stream still draws the
+              // original at its old spot. Cover that footprint with white FIRST
+              // (before traced vectors and re-embeds draw), so it can't ghost
+              // behind the moved copy. These diagrams sit on white, so the cover
+              // is invisible — and it's what lets a moved picture keep the WHOLE
+              // export vector instead of forcing the flattened composite.
+              chain=chain.then(function(){
+                try{
+                  imgOverlays.forEach(function(ov){
+                    if(!ov._fromPdfPage || ov._origCx==null) return;
+                    if(!_layerVisible(ov)) return;
+                    if(_isUntouchedPageImg(ov)) return;
+                    var _pw=ov._origW/sc+1, _ph=ov._origH/sc+1;
+                    var _bl=v2p((ov._origCx-ov._origW/2-0.5)/sc, VH-(ov._origCy+ov._origH/2+0.5)/sc);
+                    page.drawRectangle({x:_bl.x, y:_bl.y, width:_pw, height:_ph,
+                      rotate:PDFLib.degrees(rot), color:PDFLib.rgb(1,1,1), borderWidth:0});
+                    dbg('export','moved page image: original footprint covered white at ('+Math.round(ov._origCx)+','+Math.round(ov._origCy)+')');
+                  });
+                }catch(_mw){ console.warn('[VectorExport] moved-image whiteout failed:',_mw); }
+              });
               tracedList.forEach(function(ov){
                 chain=chain.then(function(){
                   var t=ov._trace;
@@ -18529,8 +18552,11 @@ function buildProjectRecord(quality, cb){
       var url='';
       try{
         var tc=document.createElement('canvas');
-        tc.width=Math.max(1,Math.round(ov.img.naturalWidth||ov.w));
-        tc.height=Math.max(1,Math.round(ov.img.naturalHeight||ov.h));
+        // FULL native resolution. Extraction canvases have .width (no
+        // naturalWidth); the old ov.w fallback captured at DISPLAY size and
+        // quietly degraded every picture a bit more on each save cycle.
+        tc.width=Math.max(1,Math.round(ov.img.naturalWidth||ov.img.width||ov.w));
+        tc.height=Math.max(1,Math.round(ov.img.naturalHeight||ov.img.height||ov.h));
         tc.getContext('2d').drawImage(ov.img,0,0,tc.width,tc.height);
         url=tc.toDataURL('image/png');
       }catch(ex){ url=''; }
@@ -18544,7 +18570,10 @@ function buildProjectRecord(quality, cb){
               // pristine original on export after any number of save cycles.
               _fromPdfPage:!!ov._fromPdfPage,
               _origCx:ov._origCx, _origCy:ov._origCy, _origW:ov._origW, _origH:ov._origH,
-              _origAngle:ov._origAngle, _srcW:ov._srcW, _srcH:ov._srcH};
+              _origAngle:ov._origAngle, _srcW:ov._srcW, _srcH:ov._srcH,
+              // Persist the vector TRACE: reopened projects keep true-vector
+              // pictures instead of gambling on a re-trace of a stored bitmap.
+              trace:(ov._trace&&ov._trace.paths&&ov._trace.paths.length)?ov._trace:undefined};
     })
   };
   // Encode base image, then layers sequentially.
@@ -18635,8 +18664,11 @@ function doSave(){
       var url='';
       try{
         var tc=document.createElement('canvas');
-        tc.width=Math.max(1,Math.round(ov.img.naturalWidth||ov.w));
-        tc.height=Math.max(1,Math.round(ov.img.naturalHeight||ov.h));
+        // FULL native resolution. Extraction canvases have .width (no
+        // naturalWidth); the old ov.w fallback captured at DISPLAY size and
+        // quietly degraded every picture a bit more on each save cycle.
+        tc.width=Math.max(1,Math.round(ov.img.naturalWidth||ov.img.width||ov.w));
+        tc.height=Math.max(1,Math.round(ov.img.naturalHeight||ov.img.height||ov.h));
         tc.getContext('2d').drawImage(ov.img,0,0,tc.width,tc.height);
         url=tc.toDataURL('image/png');
       }catch(ex){ url=''; }
@@ -18650,7 +18682,10 @@ function doSave(){
               // pristine original on export after any number of save cycles.
               _fromPdfPage:!!ov._fromPdfPage,
               _origCx:ov._origCx, _origCy:ov._origCy, _origW:ov._origW, _origH:ov._origH,
-              _origAngle:ov._origAngle, _srcW:ov._srcW, _srcH:ov._srcH};
+              _origAngle:ov._origAngle, _srcW:ov._srcW, _srcH:ov._srcH,
+              // Persist the vector TRACE: reopened projects keep true-vector
+              // pictures instead of gambling on a re-trace of a stored bitmap.
+              trace:(ov._trace&&ov._trace.paths&&ov._trace.paths.length)?ov._trace:undefined};
     })
   };
 
@@ -18976,7 +19011,8 @@ function doRestore(rec){
                     _fromPdfPage:!!od._fromPdfPage,
                     _origCx:od._origCx, _origCy:od._origCy,
                     _origW:od._origW, _origH:od._origH,
-                    _origAngle:od._origAngle, _srcW:od._srcW, _srcH:od._srcH});
+                    _origAngle:od._origAngle, _srcW:od._srcW, _srcH:od._srcH,
+                    _trace:(od.trace&&od.trace.paths&&od.trace.paths.length)?od.trace:undefined});
                   if(typeof renderImgOverlays==='function') renderImgOverlays();
                   composite();
                 };
