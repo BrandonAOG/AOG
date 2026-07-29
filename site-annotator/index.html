@@ -17808,10 +17808,20 @@ function _buildVectorPdf(attachJson, onReady){
                   try{
                     t.paths.forEach(function(p){
                       try{
+                        var _pc=PDFLib.rgb(p.rgb[0],p.rgb[1],p.rgb[2]);
+                        // HAIRLINE STROKE on ink paths (same color as the fill).
+                        // Acrobat's "Enhance thin lines" only widens STROKES, so
+                        // pure fills fade to invisible when zoomed out — the
+                        // stroke keeps the linework ≥1px at any zoom, and at
+                        // 0.2pt it adds only ~0.1pt of edge at print size.
+                        // White/paper paths stay stroke-free: widening those
+                        // would erode the black linework they sit on top of.
                         page.drawSvgPath(p.d, {
                           x:x0, y:y0, scale:pScale,
-                          color:PDFLib.rgb(p.rgb[0],p.rgb[1],p.rgb[2]),
-                          opacity:op, borderWidth:0
+                          color:_pc, opacity:op,
+                          borderColor:(p.white?undefined:_pc),
+                          borderOpacity:op,
+                          borderWidth:(p.white?0:0.2)
                         });
                       }catch(pe){ console.warn('[VectorExport] traced path draw failed:',pe); }
                     });
@@ -18597,6 +18607,10 @@ function buildProjectRecord(quality, cb){
     loadedDpi:      _lastLoadedDpi,
     textScaleLocked: true,
     annImgsExtracted:(typeof _annImgsExtracted!=='undefined'?_annImgsExtracted:0),
+    // Whether THIS session exploded the page into editable objects. Without it a
+    // reopened project exported down the kept-page path, and the pristine source
+    // brought every DELETED picture/text back from the dead.
+    explodedFromPage:(typeof _explodedFromPage!=='undefined'?!!_explodedFromPage:false),
     imgOverlays:    (typeof imgOverlays!=='undefined'?imgOverlays:[]).map(function(ov){
       var url=_encodeOvSrc(ov);
       return {src:url,cx:ov.cx,cy:ov.cy,w:ov.w,h:ov.h,angle:ov.angle||0,
@@ -18700,6 +18714,10 @@ function doSave(){
     loadedDpi:      _lastLoadedDpi,
     textScaleLocked: true,
     annImgsExtracted:(typeof _annImgsExtracted!=='undefined'?_annImgsExtracted:0),
+    // Whether THIS session exploded the page into editable objects. Without it a
+    // reopened project exported down the kept-page path, and the pristine source
+    // brought every DELETED picture/text back from the dead.
+    explodedFromPage:(typeof _explodedFromPage!=='undefined'?!!_explodedFromPage:false),
     imgOverlays:    (typeof imgOverlays!=='undefined'?imgOverlays:[]).map(function(ov){
       var url=_encodeOvSrc(ov);
       return {src:url,cx:ov.cx,cy:ov.cy,w:ov.w,h:ov.h,angle:ov.angle||0,
@@ -18953,6 +18971,24 @@ function doRestore(rec){
   // carries the Stamp annotation, and the export only strips it when it knows
   // an overlay reproduces it — otherwise a reopened kept-page export doubles it.
   try{ _annImgsExtracted = rec.annImgsExtracted||0; }catch(e){}
+  // Restore the "page was exploded into editable objects" flag. It decides the
+  // export path: exploded pages white-cover the original and redraw everything
+  // from objects — which is what makes DELETIONS stick. Losing it sent reopened
+  // projects down the kept-page path, where the pristine source resurrected
+  // every picture/text the user had deleted. Older saves predate the field:
+  // infer it from the objects themselves (extracted objects only exist if the
+  // page actually exploded), which is exactly what _shouldWhiteCoverPage
+  // re-verifies via _explodedGraphicsExist() before any white-cover happens.
+  try{
+    if(rec.explodedFromPage!==undefined) _explodedFromPage = !!rec.explodedFromPage;
+    else{
+      var _infExp=false;
+      ['shapeObjs','measureObjs','textObjs','polylineObjs','leaderObjs','markupObjs'].forEach(function(_k){
+        try{ if((rec[_k]||[]).some(function(o){ return o && o._fromExplode; })) _infExp=true; }catch(_e2){}
+      });
+      _explodedFromPage = _infExp;
+    }
+  }catch(e){}
   // Bring the pristine source PDF back, so a reopened project still exports VECTOR.
   // Older saves (fmt before pdfSource existed) simply have no bytes — those stay on
   // the raster path, which is correct: there is genuinely no page to stamp onto.
