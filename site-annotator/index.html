@@ -4780,7 +4780,7 @@ function _explodePDFPage(n){
       if(!_renderOK){
         // Backdrop render failed → plain flatten so the user still sees the page.
         page.render({canvasContext:bCtx, viewport:vp}).promise.then(function(){
-          _lastLoadedDpi=Math.round(sc*72); afterLoad(); imgOverlays=[]; textObjs=[];
+          _lastLoadedDpi=Math.round(sc*72); afterLoad(); imgOverlays=[]; _annImgsExtracted=0; textObjs=[];
           _vectorBackdropOK=true; _vecPageNum=n; try{ _pdfPageRot=((page.rotate||0)%360+360)%360; }catch(e){ _pdfPageRot=0; }  // pristine page → vectors exportable
           _finishExplode(n,w,h,sc,true);
         });
@@ -4971,7 +4971,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
   var U=pdfjsLib.Util;
   _lastLoadedDpi=Math.round(sc*72);
   afterLoad();
-  imgOverlays=[]; textObjs=[];
+  imgOverlays=[]; _annImgsExtracted=0; textObjs=[];
 
   // ── Drawing-heavy detection ───────────────────────────────────────────────
   // Simple decals/diagrams have a handful of paths. CAD exports and surveys have
@@ -6221,6 +6221,50 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
       }
       else if(fnA===OPS.fillStroke || fnA===OPS.eoFillStroke){
         if(curSubs.length) curSubs[curSubs.length-1].painted='fillstroke';
+      }
+      else if(fnA===OPS.paintImageXObject || fnA===OPS.paintJpegXObject || fnA===OPS.paintInlineImage){
+        // IMAGE-BEARING ANNOTATION (e.g. an Acrobat Stamp with a company badge).
+        // The page image pass walks the page-only operator list and the backdrop
+        // renders with annotations disabled, so without this branch a stamped
+        // image existed NOWHERE after import — invisible on screen, and deleted
+        // forever by the export's annotation strip. Capture it as a movable
+        // image overlay, exactly like a page-native picture.
+        try{
+          var _icp=[[0,0],[1,0],[1,1],[0,1]].map(function(p){ return _apA(m2,p[0],p[1]); });
+          var _icxs=_icp.map(function(p){return p.x;}), _icys=_icp.map(function(p){return p.y;});
+          var _ix0=Math.min.apply(null,_icxs), _ix1=Math.max.apply(null,_icxs);
+          var _iy0=Math.min.apply(null,_icys), _iy1=Math.max.apply(null,_icys);
+          var _irw=_ix1-_ix0, _irh=_iy1-_iy0;
+          if(_irw>=4 && _irh>=4){
+            var _ikey=(fnA===OPS.paintInlineImage)?null:(agA&&agA[0]);
+            var _ibmp=_getPdfImageBitmap(page,_ikey,agA,fnA);
+            if(_ibmp){
+              var _iw2=_ibmp.width||_ibmp.naturalWidth||1, _ih2=_ibmp.height||_ibmp.naturalHeight||1;
+              // Oriented, native-resolution capture (same math as the page pass):
+              // unit square → device via m2, bitmap row 0 at the TOP (y-flip).
+              var _la=m2[0],_lb=m2[1],_lc=m2[2],_ld=m2[3],_le=m2[4]-_ix0,_lf=m2[5]-_iy0;
+              var _ua=_la/_iw2, _ub=_lb/_iw2, _uc=-_lc/_ih2, _ud=-_ld/_ih2, _ue=_lc+_le, _uf=_ld+_lf;
+              var _q=1, _dx=Math.hypot(_la,_lb), _dy=Math.hypot(_lc,_ld);
+              if(_dx>0&&_dy>0) _q=Math.max(1, Math.min(8, Math.max(_iw2/_dx,_ih2/_dy)));
+              var _ar2=(_irw*_q)*(_irh*_q); if(_ar2>12e6) _q=Math.max(1,_q*Math.sqrt(12e6/_ar2));
+              var _icv=document.createElement('canvas');
+              _icv.width=Math.max(1,Math.round(_irw*_q)); _icv.height=Math.max(1,Math.round(_irh*_q));
+              var _ictx2=_icv.getContext('2d');
+              try{ if(typeof _imgSmooth==='function') _imgSmooth(_ictx2); }catch(_s){}
+              _ictx2.setTransform(_ua*_q,_ub*_q,_uc*_q,_ud*_q,_ue*_q,_uf*_q);
+              _ictx2.drawImage(_ibmp,0,0);
+              imgOverlays.push({
+                img:_icv, cx:_ix0+_irw/2, cy:_iy0+_irh/2, w:_irw, h:_irh,
+                angle:0, flipH:false, flipV:false, opacity:1, layerIdx:activeLayerIdx,
+                _fromAnnot:true
+              });
+              _annImgsExtracted++;
+              made++;
+              try{ if(typeof _traceIfBilevel==='function'){ (function(_r){ setTimeout(function(){ _traceIfBilevel(_r); },0); })(_icv); } }catch(_te){}
+              try{ dbg('import','annotation image (stamp) extracted as movable overlay '+Math.round(_irw)+'x'+Math.round(_irh)+'px'); }catch(_d){}
+            }
+          }
+        }catch(_ie){ console.warn('[Markup] annot image import:',_ie); }
       }
       else if(fnA===OPS.constructPath){
         var ops=agA[0], co=agA[1], k=0, pts=[];
@@ -17664,7 +17708,11 @@ function _buildVectorPdf(attachJson, onReady){
                     // behind. Strip every extracted subtype; links etc. are kept.
                     // PDFName instances are interned singletons — identity compare
                     // is the reliable test (string forms vary across versions).
-                    var _dropNames=['Ink','FreeText','PolyLine','Polygon','Line','Square','Circle'].map(function(n){ return PDFLib.PDFName.of(n); });
+                    var _dropSubs=['Ink','FreeText','PolyLine','Polygon','Line','Square','Circle'];
+                    // Image stamps extracted into overlays this load are redrawn
+                    // by the overlay pass — keeping the original too would double.
+                    if(_annImgsExtracted>0) _dropSubs.push('Stamp');
+                    var _dropNames=_dropSubs.map(function(n){ return PDFLib.PDFName.of(n); });
                     for(var _ai=0; _ai<_annsArr.size(); _ai++){
                       var _ref=_annsArr.get(_ai), _dict=null;
                       try{ _dict=pdf.context.lookup(_ref); }catch(e){ _dict=null; }
@@ -19112,6 +19160,10 @@ initSaveDB(checkForSavedSession);
 var imgCv  = document.getElementById('img-cv');
 var imgCtx = imgCv.getContext('2d');
 var imgOverlays = [];          // [{img,cx,cy,w,h,angle,flipH,flipV,opacity}, ...]
+// How many image overlays were extracted from ANNOTATION appearances (Acrobat
+// image stamps) this load. When >0, the kept-page export must also strip Stamp
+// annotations — the overlay reproduces them, keeping both would double-draw.
+var _annImgsExtracted = 0;
 var selImg      = null;        // currently selected overlay
 var selImgHandle= -1;          // which handle is being dragged
 var selImgDrag  = null;        // drag start state
@@ -20091,17 +20143,26 @@ function _traceIfBilevel(img){
     var id=x.getImageData(0,0,nw,nh), d=id.data;
     // Pass 1: classify. Sample at most ~200k pixels for speed.
     var step=Math.max(1, Math.round((nw*nh)/200000));
-    var dark=0, light=0, mid=0, transp=0, tot=0, i, L;
+    var dark=0, light=0, mid=0, transp=0, colored=0, tot=0, i, L, mx, mn;
     for(i=0; i<d.length; i+=4*step){
       tot++;
       if(d[i+3]<128){ transp++; light++; continue; }              // transparent counts as paper
       L=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      // Chroma: any genuinely colored pixel (red button, yellow ring, blue
+      // label…) means this is NOT black-and-white line art. Tracing it would
+      // hard-threshold the colors away and export the art in black.
+      mx=Math.max(d[i],d[i+1],d[i+2]); mn=Math.min(d[i],d[i+1],d[i+2]);
+      if(mx-mn>48) colored++;
       if(L<64) dark++; else if(L>=192) light++; else mid++;
     }
     if(!tot) return;
-    var midFrac=mid/tot, darkFrac=dark/tot, transpFrac=transp/tot;
-    if(midFrac>0.06 || darkFrac<0.004){
-      if(typeof dbg==='function') dbg('trace','image NOT bilevel (mid='+(midFrac*100).toFixed(1)+'% dark='+(darkFrac*100).toFixed(1)+'%) — keeping raster embed');
+    var midFrac=mid/tot, darkFrac=dark/tot, transpFrac=transp/tot, colFrac=colored/tot;
+    if(midFrac>0.06 || darkFrac<0.004 || colFrac>0.02){
+      if(typeof dbg==='function') dbg('trace','image NOT bilevel (mid='+(midFrac*100).toFixed(1)+'% dark='+(darkFrac*100).toFixed(1)+'% color='+(colFrac*100).toFixed(1)+'%) — keeping raster embed');
+      // Heal stale traces: a project saved before the color check may carry a
+      // black-and-white trace of colored art (e.g. a red stop button). Drop it
+      // so the export uses the true-color raster instead.
+      try{ if(typeof imgOverlays!=='undefined') imgOverlays.forEach(function(ov){ if(ov.img===img && ov._trace) ov._trace=undefined; }); }catch(e){}
       return;
     }
     var hasTranspBg = transpFrac > 0.01;
