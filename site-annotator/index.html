@@ -18421,6 +18421,32 @@ function initSaveDB(cb){
 var HANDLE_KEY='last-opened-handle';
 var PDFSRC_KEY='pdf-source';   // the pristine PDF, written once per import
 var _pdfSrcCached=false;       // has it actually landed in IndexedDB for THIS file?
+// ── DOCUMENT FINGERPRINT ────────────────────────────────────────────────────
+// The cache above is ONE global slot. Without an identity check, restoring a
+// project that carries no inline source "recovered" whatever PDF the slot held
+// from a PREVIOUS session — a site plan's markups exported onto the riser
+// diagram opened the day before. Every cache write and project record now
+// carries a fingerprint of the source bytes; restore only accepts the cached
+// PDF when the fingerprints match.
+var _docKey=null, _docKeyFor=null;   // cached fingerprint of the current _pdfBytes
+var _expectDocKey=null;              // fingerprint this session is allowed to load
+function _calcDocKey(bytes){
+  try{
+    var u8=(bytes instanceof Uint8Array)?bytes:new Uint8Array(bytes);
+    var h=2166136261>>>0, n=u8.length;
+    var step=Math.max(1,Math.floor(n/64));
+    for(var i=0;i<n;i+=step){ h=((h^u8[i])*16777619)>>>0; }
+    return 'k'+n+'-'+h.toString(36);
+  }catch(e){ return null; }
+}
+function _getDocKey(){
+  try{
+    if(typeof _pdfBytes==='undefined' || !_pdfBytes) return null;
+    if(_docKeyFor===_pdfBytes && _docKey) return _docKey;
+    _docKey=_calcDocKey(_pdfBytes); _docKeyFor=_pdfBytes;
+    return _docKey;
+  }catch(e){ return null; }
+}
 
 // Persist the source PDF exactly once, so a REFRESH can still export vector.
 function _persistPdfSource(){
@@ -18436,8 +18462,10 @@ function _persistPdfSource(){
       return false;
     }
     var tx=_saveDb.transaction(SAVE_STORE,'readwrite');
+    _expectDocKey=_getDocKey();   // this session owns the cache slot now
     var rq=tx.objectStore(SAVE_STORE).put({
       id:PDFSRC_KEY, bytes:_pdfBytes.slice(0),
+      docKey:_expectDocKey,
       pageNum:(typeof _vecPageNum!=='undefined'?_vecPageNum:1),
       pageRot:(typeof _pdfPageRot!=='undefined'?_pdfPageRot:0),
       at:Date.now()
@@ -18477,6 +18505,14 @@ function _loadPdfSource(cb){
     var rq=_saveDb.transaction(SAVE_STORE,'readonly').objectStore(SAVE_STORE).get(PDFSRC_KEY);
     rq.onsuccess=function(e){
       var r=e.target.result;
+      // Identity gate: only accept the cached PDF when it is provably the
+      // source of THIS project. A missing fingerprint on either side means we
+      // cannot verify — refuse, and let the export use the flattened backdrop
+      // (always correct) rather than stamping onto the wrong document.
+      if(r && r.bytes && r.bytes.byteLength && (!r.docKey || !_expectDocKey || r.docKey!==_expectDocKey)){
+        dbg('restore','cached PDF fingerprint mismatch (cache '+(r.docKey||'none')+' vs project '+(_expectDocKey||'none')+') — refusing stale source, raster path');
+        cb&&cb(false); return;
+      }
       if(r && r.bytes && r.bytes.byteLength){
         _pdfBytes=r.bytes;
         _vecPageNum=r.pageNum||1;
@@ -18607,6 +18643,9 @@ function buildProjectRecord(quality, cb){
     loadedDpi:      _lastLoadedDpi,
     textScaleLocked: true,
     annImgsExtracted:(typeof _annImgsExtracted!=='undefined'?_annImgsExtracted:0),
+    // Fingerprint of the source PDF this project was built from — lets restore
+    // verify the cached pristine PDF belongs to THIS project before using it.
+    docKey:(typeof _getDocKey==='function'?_getDocKey():null),
     // Whether THIS session exploded the page into editable objects. Without it a
     // reopened project exported down the kept-page path, and the pristine source
     // brought every DELETED picture/text back from the dead.
@@ -18714,6 +18753,9 @@ function doSave(){
     loadedDpi:      _lastLoadedDpi,
     textScaleLocked: true,
     annImgsExtracted:(typeof _annImgsExtracted!=='undefined'?_annImgsExtracted:0),
+    // Fingerprint of the source PDF this project was built from — lets restore
+    // verify the cached pristine PDF belongs to THIS project before using it.
+    docKey:(typeof _getDocKey==='function'?_getDocKey():null),
     // Whether THIS session exploded the page into editable objects. Without it a
     // reopened project exported down the kept-page path, and the pristine source
     // brought every DELETED picture/text back from the dead.
@@ -18982,9 +19024,13 @@ function doRestore(rec){
   try{
     if(rec.explodedFromPage!==undefined) _explodedFromPage = !!rec.explodedFromPage;
     else{
+      // Only objects exploded from PAGE CONTENT prove the page was rebuilt.
+      // Annotation-derived markups (_fromAnnot) exist even on scanned/dense
+      // plans whose page was NEVER exploded — counting those white-covered a
+      // site plan into "markups floating on blank white".
       var _infExp=false;
       ['shapeObjs','measureObjs','textObjs','polylineObjs','leaderObjs','markupObjs'].forEach(function(_k){
-        try{ if((rec[_k]||[]).some(function(o){ return o && o._fromExplode; })) _infExp=true; }catch(_e2){}
+        try{ if((rec[_k]||[]).some(function(o){ return o && o._fromExplode && !o._fromAnnot; })) _infExp=true; }catch(_e2){}
       });
       _explodedFromPage = _infExp;
     }
@@ -18998,6 +19044,7 @@ function doRestore(rec){
     if(typeof _src === 'string' && _src.length){ _src = _b642ab(_src); }   // came from JSON
     if(_src && _src.byteLength){
       _pdfBytes = _src;
+      _docKey=null; _docKeyFor=null; _expectDocKey=_getDocKey();
       _vecPageNum = rec.pdfPageNum || 1;
       if(typeof _pdfPageRot!=='undefined') _pdfPageRot = rec.pdfPageRot || 0;
       if(typeof _userRotDeg!=='undefined') _userRotDeg = rec.userRotDeg || 0;
@@ -19008,7 +19055,9 @@ function doRestore(rec){
                   + _vecPageNum + ') → exports stay VECTOR');
     } else if(typeof _loadPdfSource==='function'){
       // No inline bytes (this is the refresh/autosave path — the session record
-      // deliberately doesn't carry the PDF). Pull it from the one-shot cache.
+      // deliberately doesn't carry the PDF). Pull it from the one-shot cache —
+      // but ONLY if it fingerprint-matches this project (see _loadPdfSource).
+      _expectDocKey = rec.docKey || null;
       _loadPdfSource(function(ok){
         if(ok){
           if(typeof _userRotDeg!=='undefined') _userRotDeg = rec.userRotDeg || 0;
