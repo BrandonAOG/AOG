@@ -8329,7 +8329,10 @@ async function snapToParcelByAddress(q, lat, lng){
     if(best && (best.overlap>0 || (d<=0.012 && feats.filter(f=>houseNum((f.attributes||{}).PHY_ADDR1)===hn).length===1))){
       return best;
     }
-    if(best && d>=0.03) return best;                // last resort: best nearest exact-number match
+    // Widest box, last resort: only trust it if the STREET matched. A bare same-house-number hit on a
+    // DIFFERENT street across a 3km box is worse than leaving the geocoder pin alone, so we return null
+    // in that case and let the caller keep its original point.
+    if(best && best.overlap>0 && d>=0.03) return best;
   }
   return null;
 }
@@ -10667,6 +10670,18 @@ const COUNTY_PARCEL_RESOLVERS = {
     zipField:  "SiteZipCode",
     folioField:"Folio",
     ownerField:"OwnerLine1"
+  },
+  // Charlotte County's own live parcel layer (the same layer that draws the correct per-parcel
+  // address labels on the map). Site address = FullPropertyAddress, parcel id = ACCOUNT,
+  // owner = ownersname. This layer has NO separate city/zip field — the address is a single
+  // combined string — so cityField/zipField are omitted and the resolver just uses the address.
+  // Routing the suggestion through here (instead of the interpolated OSM/Census pin) is what stops
+  // "22519 Aster Ave" landing on 22501 two lots west.
+  CHARLOTTE: {
+    url: "https://agis.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGIS_Web_Layers2022/MapServer/17/query",
+    addrField: "FullPropertyAddress",
+    folioField:"ACCOUNT",
+    ownerField:"ownersname"
   }
 };
 /* Suffix/abbreviation folding so "Rd"/"Road", "Ct"/"Court", "Dr"/"Drive" etc. all compare equal,
@@ -10812,9 +10827,25 @@ async function doSearch(){
   if(!g){ results.innerHTML=setStatus('err','Could not geocode that address. Try adding city/ZIP, or just click the spot on the map.'); return; }
   addToHistory(g.label || q);
   results.innerHTML=setStatus('busy','Pinpointing the parcel…');
-  map.setView([g.lat,g.lng], 18);
-  await runLookup(g.lat,g.lng, searchCtx);
-  const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(g.src)}): <b style="color:var(--ink)">${esc(g.label)}</b> — parcel resolved below; confirm the marker is on the right lot.</div>`;
+  // UNIVERSAL ROOFTOP SNAP (every county): the geocoder point is INTERPOLATED along the street's
+  // house-number range and routinely lands a lot or two off — sometimes on a vacant neighbour. Before
+  // running point-in-polygon from that drifted pin, re-query the statewide parcel roll around it and
+  // snap to the parcel whose SITE ADDRESS actually matches the typed house number + street. Runs for
+  // ALL 67 counties (the roll is statewide); counties with a wired live layer were already handled
+  // authoritatively above, so this only ever improves the geocoder-fallback cases.
+  let sLat=g.lat, sLng=g.lng, snapSrc=g.src, snapLabel=g.label;
+  if(searchCtx.hn && g.src!=='FL parcel roll'){
+    try{
+      const snap=await snapToParcelByAddress(q, g.lat, g.lng);
+      if(snap && isFinite(snap.lat) && isFinite(snap.lng)){
+        sLat=snap.lat; sLng=snap.lng;
+        if(snap.matched){ snapLabel=snap.matched; snapSrc=(g.src||'geocoder')+' + parcel-roll snap'; }
+      }
+    }catch(e){}
+  }
+  map.setView([sLat,sLng], 18);
+  await runLookup(sLat,sLng, searchCtx);
+  const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(snapSrc)}): <b style="color:var(--ink)">${esc(snapLabel)}</b> — parcel resolved below; confirm the marker is on the right lot.</div>`;
   results.insertAdjacentHTML('afterbegin',conf);
 }
 document.getElementById('go').onclick=doSearch;
@@ -11007,9 +11038,25 @@ async function chooseSuggestion(it){
   // FALLBACK (non-resolver counties): use the suggestion's own coordinate; runLookup resolves the parcel.
   addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr); addToHistory(it.label);
   results.innerHTML=setStatus('busy','Pinpointing the parcel…');
-  map.setView([it.lat,it.lng], 18);
-  await runLookup(it.lat,it.lng, searchCtx);
-  const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched: <b style="color:var(--ink)">${esc(it.label)}</b> — parcel resolved below; confirm the marker is on the right lot.</div>`;
+  // ROOFTOP SNAP (counties without an authoritative resolver, or where the resolver found nothing):
+  // the suggestion's OSM/Census coordinate is INTERPOLATED and routinely lands a lot or two off —
+  // often on a vacant neighbouring parcel. Before doing point-in-polygon from that drifted pin,
+  // re-query the statewide parcel roll around it and snap to the parcel whose SITE ADDRESS actually
+  // matches the typed house number + street. If found, drive runLookup from the corrected point so
+  // the polygon, marker and details all land on the right house.
+  let qLat=it.lat, qLng=it.lng, snapNote='';
+  if(searchCtx.hn){
+    try{
+      const snap=await snapToParcelByAddress(basis, it.lat, it.lng);
+      if(snap && isFinite(snap.lat) && isFinite(snap.lng)){
+        qLat=snap.lat; qLng=snap.lng;
+        if(snap.matched) snapNote=` · snapped to ${esc(snap.matched)}`;
+      }
+    }catch(e){}
+  }
+  map.setView([qLat,qLng], 18);
+  await runLookup(qLat,qLng, searchCtx);
+  const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched: <b style="color:var(--ink)">${esc(it.label)}</b>${snapNote} — parcel resolved below; confirm the marker is on the right lot.</div>`;
   results.insertAdjacentHTML('afterbegin',conf);
 }
 
