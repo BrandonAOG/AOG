@@ -8881,6 +8881,10 @@ function drawParcel(g, info){
       let acres=Infinity;
       try{ const _d=parcelDimensions(g); if(_d&&_d.acres>0) acres=_d.acres; }catch(e){}
       const oversized = acres>MAX_HOME_LOT_ACRES;
+      // Remember this lot's polygon so same-lot gap-fill labels can be suppressed — but ONLY for a
+      // normal home lot. Inside an oversized shared tract (condo/mobile park) the gap-fill is exactly
+      // how the individual unit numbers get drawn, so we must NOT suppress points there.
+      setSubjectRings(oversized ? null : g);
       const latlngs=g.rings.map(r=>r.map(p=>[p[1],p[0]]));
       // Shared tract → ORANGE dashed outline (context). Normal home lot → solid BLUE.
       const col = oversized ? '#ff8c1a' : '#39d3ff';
@@ -8943,6 +8947,9 @@ async function drawHomeWithinTract(lat, lng, tractAcres, info){
       if(a<bestA){ bestA=a; best=f; }
     }
     if(!best) return;
+    // This is the individual home lot resolved inside a shared tract — treat it as the subject for
+    // same-lot gap-fill suppression (a home here can still carry a second street frontage).
+    setSubjectRings(best.geometry);
     const latlngs=best.geometry.rings.map(rr=>rr.map(p=>[p[1],p[0]]));
     homeParcelLayer=L.polygon(latlngs,{renderer:canvasRenderer,color:'#39d3ff',weight:2.5,
       fillColor:'#39d3ff',fillOpacity:.14,opacity:1}).addTo(map);
@@ -8966,6 +8973,18 @@ async function drawHomeWithinTract(lat, lng, tractAcres, info){
    any failure, and skipped when zoomed out too far to be readable. */
 const nbrNumLayer = L.layerGroup();
 let nbrNumOn = true;   // labels follow the parcel view by default; tied to the parcel result
+// Rings ([[ [lng,lat], ... ]]) of the SUBJECT parcel currently highlighted, in WGS84. Set when a
+// parcel is drawn and used to suppress gap-fill address points that fall on the SAME lot — a deep
+// through-lot / corner lot can carry a second street address (e.g. 22519 Aster Ave also addressed
+// 3605 Idlewild St), and without this the gap-fill would draw that second address as if it were a
+// separate home. Cleared on each new draw so a stale polygon never suppresses real neighbours.
+let _subjRings = null;
+function setSubjectRings(geometry){
+  try{
+    const rings = geometry && geometry.rings;
+    _subjRings = (rings && rings.length) ? rings : null;
+  }catch(e){ _subjRings = null; }
+}
 function clearNeighborNumbers(){ try{ nbrNumLayer.clearLayers(); if(map.hasLayer(nbrNumLayer)) map.removeLayer(nbrNumLayer); }catch(e){} }
 /* Clicking a neighbour label runs a FULL lookup of that address — identical to typing
    it in the search box. We drop any "#unit" suffix and a trailing ", City" so the
@@ -9029,6 +9048,12 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
             if(!hn) continue;
             const g=f.geometry; const cx=g?(g.x!=null?g.x:g.X):null, cy=g?(g.y!=null?g.y:g.Y):null;
             if(cx==null||cy==null) continue;
+            // SAME-LOT SUPPRESSION (file path): a deep through-lot / corner lot can carry a SECOND
+            // street address (e.g. 22519 Aster Ave also has a 3605 Idlewild St point). The compact
+            // file lists both, so without this we'd draw two addresses on one house. Drop any point
+            // that falls INSIDE the subject parcel whose house number ISN'T the subject's — the
+            // subject's own point (same hn) is always kept so its label never disappears.
+            if(_subjRings && (want==null || hn!==String(want).trim()) && pointInPolygon(cx, cy, _subjRings)) continue;
             // dedup on full address + exact coord so stacked condo units collapse only if identical
             const key=txt+'@'+cx.toFixed(6)+','+cy.toFixed(6);
             if(seen.has(key)) continue; seen.add(key);
@@ -9258,6 +9283,13 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
             if(pnum==null||String(pnum).trim()===''){ const m=String(formatAddrPoint(a)).match(/^\s*(\d+)/); pnum=m?m[1]:null; }
             const hn = pnum!=null ? houseNum(String(pnum)) : null;
             if(!hn) continue;
+            // SAME-LOT SUPPRESSION: if this point falls inside the SUBJECT parcel polygon, it's a
+            // second street address on the very same lot (deep through-lot / corner lot — e.g.
+            // 22519 Aster Ave also carrying a 3605 Idlewild St point). The lot already shows its
+            // subject label, so drawing this too would look like two addresses on one house. Skip it.
+            // (Only set for normal home lots, never for oversized shared tracts, so unit gap-fill
+            // inside a condo/mobile park is unaffected.)
+            if(_subjRings && pointInPolygon(gx, gy, _subjRings)) continue;
             // already have a parcel label for this spot? skip (avoids duplicating outside numbers).
             let dup=false;
             for(const L0 of labels){ const ddx=L0.lng-gx, ddy=L0.lat-gy; if(ddx*ddx+ddy*ddy < NEAR2){ dup=true; break; } }
@@ -9408,6 +9440,7 @@ async function runLookup(lat,lng,searchCtx){
   if(parcelLayer){ map.removeLayer(parcelLayer); parcelLayer=null; }
   if(homeParcelLayer){ map.removeLayer(homeParcelLayer); homeParcelLayer=null; }
   clearNeighborNumbers(); _nbrCtx=null;
+  _subjRings=null;   // reset per lookup; drawParcel re-sets it only for a normal home lot
   saveLoc(lat,lng);
   document.getElementById('coordReadout').textContent=`lat ${lat.toFixed(5)}   lng ${lng.toFixed(5)}`;
 
