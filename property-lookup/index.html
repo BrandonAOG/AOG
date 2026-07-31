@@ -1516,17 +1516,17 @@ const COUNTY_FOOTPRINTS = {
    to nothing on any miss/error. These are DEVELOPMENT-project polygons (often subdivision-sized),
    not per-house permits — so the badge means "this lot is in an active project," not one specific
    building. Coordinates requested as 4326; source layers may be state-plane. */
-const COUNTY_PROJECTS = {
-  // Collier CityViewProjects → "Projects" (layer 4). Status ∈ {Complete, Under Construction, Under
-  // Review}; ProjectName/ProjectType describe it; PortalLink deep-links into the CityView portal.
-  COLLIER: {
-    url:        "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/CityViewProjects/FeatureServer/4/query",
-    statusField:"Status",
-    nameField:  "ProjectName",
-    typeField:  "ProjectType",
-    linkField:  "PortalLink"
-  }
-};
+/* Development-project (build status) layers — DISABLED. Collier's only published GIS projects layer
+   (CityViewProjects/4) is a stale snapshot (last edited Nov 2025), so it would wrongly show finished
+   projects as "Under Construction" and miss anything newer — worse than showing nothing. Collier's
+   live permit/project data only lives in the CityView portal (cvportal.colliercountyfl.gov), which is
+   an address-searched web app, not a queryable GIS layer. Leaving this map EMPTY disables the badge,
+   the query, and the diagnostic line everywhere (all call sites guard on COUNTY_PROJECTS[county]).
+   To re-enable, add a county entry with a fresh { url, statusField, nameField, typeField, linkField }.
+   Previous Collier config (re-add only if a current layer is confirmed):
+     COLLIER: { url:"https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/CityViewProjects/FeatureServer/4/query",
+                statusField:"Status", nameField:"ProjectName", typeField:"ProjectType", linkField:"PortalLink" } */
+const COUNTY_PROJECTS = {};
 
 /* ---------- Forerunner resident portals (flood zone + Elevation Certificate by address) ----------
    Forerunner is a commercial floodplain platform, NOT an ArcGIS REST feed — it has no public
