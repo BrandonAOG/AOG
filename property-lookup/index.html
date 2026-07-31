@@ -41,6 +41,9 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="preconnect" href="https://basemap.nationalmap.gov" crossorigin>   <!-- USGS Topo basemap tiles -->
 <link rel="preconnect" href="https://mapservices.weather.noaa.gov" crossorigin> <!-- NWS warnings / NOAA overlays -->
 <link rel="preconnect" href="https://tiledimageservices2.arcgis.com" crossorigin> <!-- Collier 2026 LERC tiles -->
+<link rel="preconnect" href="https://services2.arcgis.com" crossorigin>       <!-- Collier hosted org: parcels, address points, EC, projects — the busiest data host -->
+<link rel="dns-prefetch" href="https://gismapserver.leegov.com">              <!-- Lee parcels + building footprints -->
+<link rel="dns-prefetch" href="https://agis3.charlottecountyfl.gov">           <!-- Charlotte parcels + footprints -->
 <link rel="dns-prefetch" href="https://ags.colliergov.net">                  <!-- county flood cross-check queries -->
 <link rel="dns-prefetch" href="https://unpkg.com">
 <link rel="dns-prefetch" href="https://tile.openstreetmap.org">
@@ -9719,8 +9722,13 @@ async function runLookup(lat,lng,searchCtx){
     ? arcQuery(_utilUrl, lat, lng, '*', false).catch(e=>({__err:e.message}))
     : Promise.resolve(null);
 
-  let [parcel,flood,city,county,live,util] = await Promise.all([pParcel,pFlood,pCity,pCounty,pLive,pUtil]);
+  // Gate the render on the FAST core queries only (parcel, city, county, live feed). Flood and utility
+  // are the slow ones (flood has a 9-14s timeout) and their cards appear lower in the panel — so we
+  // await them individually right where they're consumed instead of holding the whole panel behind
+  // them. This lets parcel/owner/jurisdiction paint as soon as they're ready.
+  let [parcel,city,county,live] = await Promise.all([pParcel,pCity,pCounty,pLive]);
   if(myId!==runId) return; // a newer query superseded this one
+  let flood, util;   // resolved later, at their card
 
   let html='';
   let parcelYearBuilt=null;   // captured from whichever parcel source answers; used for Naples § 56-41 generator gating
@@ -10399,7 +10407,21 @@ async function runLookup(lat,lng,searchCtx){
     html += `</div></div>`;
   }
 
+  /* ---- EARLY PAINT (pre-flood) ----------------------------------------------------------
+     Jurisdiction, parcel/owner, live-feed and HOA cards are fully built now from the fast-core
+     queries. Paint them immediately with a loading tail, BEFORE awaiting the slow flood query
+     (9-14s timeout). The full render further below replaces this once flood + enrichment resolve —
+     no data is lost, the user just sees their parcel/owner result in ~1s instead of waiting on flood. */
+  if(myId===runId && html){
+    results.innerHTML = '<div class="cardflow">' + html
+      + '<div class="card noprint"><div class="cb"><div class="freshline">'
+      + '<span class="badge live">● LOADING</span> pulling flood, wind, zoning, permits &amp; utilities…'
+      + '</div></div></div></div>';
+    document.body.classList.add('has-results');
+  }
+
   /* ---- Flood ---- */
+  flood = await pFlood; if(myId!==runId) return;   // deferred: awaited here, not in the fast-core batch
   /* Both the FEMA Flood Hazard card and the Elevation Certificate card now live in the Flood tab,
      and for some cities (Naples) the resident portal and the EC lookup are the SAME URL. Record
      whatever portal this card links so the EC card below can reference it instead of re-linking. */
@@ -10736,6 +10758,7 @@ async function runLookup(lat,lng,searchCtx){
      Source order: (1) local territory GeoJSON via in-browser point-in-polygon, (2) a live REST
      /query override the user supplies. Real provider, or an honest "no data" + a loader. */
   const localProps = findUtilityAt(lat,lng);                       // local data first (offline, reliable)
+  util = await pUtil; if(myId!==runId) return;                     // deferred: awaited here, not in the fast-core batch
   const restHit    = (util && !util.__err && util.features && util.features[0]) ? util.features[0].attributes : null;
   const utilHit    = localProps || restHit;
   const hitSource  = localProps ? 'local' : (restHit ? 'rest' : null);
