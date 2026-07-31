@@ -1073,8 +1073,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
       <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">TXT BG</span>
       <div class="clr-wrap" style="position:relative;width:30px;height:30px">
-        <div id="txt-bg-swatch" style="background:#00ff11;border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer;background-size:8px 8px;background-position:center"></div>
-        <input type="text" data-color readonly tabindex="0" inputmode="none" id="txt-bg-input" value="#00ff11" style="position:absolute;inset:0;opacity:0.01;width:100%;height:100%;border:none;padding:0;margin:0;cursor:pointer;-webkit-appearance:none;border-radius:50%;">
+        <div id="txt-bg-swatch" style="background:#ffffff;border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer;background-size:8px 8px;background-position:center"></div>
+        <input type="text" data-color readonly tabindex="0" inputmode="none" id="txt-bg-input" value="#ffffff" style="position:absolute;inset:0;opacity:0.01;width:100%;height:100%;border:none;padding:0;margin:0;cursor:pointer;-webkit-appearance:none;border-radius:50%;">
       </div>
     </div>
     <div class="sl-wrap" style="min-width:44px">
@@ -1088,8 +1088,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
     <div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0">
       <span style="font-size:8px;color:var(--txt2);letter-spacing:.5px">BOX</span>
       <div class="clr-wrap">
-        <div id="cmt-bg-swatch" style="background:#00ff11;border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer"></div>
-        <input type="text" data-color readonly tabindex="0" inputmode="none" id="cmt-bg-input" value="#00ff11">
+        <div id="cmt-bg-swatch" style="background:#ffffff;border-radius:50%;width:30px;height:30px;border:2.5px solid var(--b2);cursor:pointer"></div>
+        <input type="text" data-color readonly tabindex="0" inputmode="none" id="cmt-bg-input" value="#ffffff">
       </div>
     </div>
     <div class="sl-wrap" style="min-width:44px">
@@ -2254,8 +2254,8 @@ var TEXT_ELLIPSE_K = 1.5;
 // Drag to draw, click to edit text, separate box/text color pickers.
 // ══════════════════════════════════════════════════════════════
 var commentObjs     = [];
-var _cBgColor       = '#00ff11';
-var _cBgOpacity     = 0.9;
+var _cBgColor       = '#ffffff';
+var _cBgOpacity     = 1;
 var _cBorderColor   = '#4B5563';
 var _cBorderW       = 10;         // note border stroke width — notes start at 10pt
 var _cTxtColor      = '#1a1a2e';
@@ -2435,7 +2435,7 @@ function drawCommentBox(ctx, c, sc, skipText, onScreen){
   // New notes always store borderColor, so fallback only applies to legacy objects.
   var bdCol=c.borderColor||darkenHex(bgCol,0.35);
   // Fill opacity: only the background, not the border
-  var fillAlpha=(c.bgOpacity!==undefined?c.bgOpacity:0.9);
+  var fillAlpha=(c.bgOpacity!==undefined?c.bgOpacity:1);
 
   // ── Filled background (with opacity) ──
   ctx.globalAlpha=fillAlpha;
@@ -2575,7 +2575,7 @@ var _dragText    = null;  // text obj currently being moved/rotated/resized (dra
 // ── Helper: sync all comment toolbar controls to a note's values ──
 function _syncCommentPickers(c){
   _cBgColor    = c.bgColor    || '#FBBF24';
-  _cBgOpacity  = c.bgOpacity  !== undefined ? c.bgOpacity : 0.9;
+  _cBgOpacity  = c.bgOpacity  !== undefined ? c.bgOpacity : 1;
   _cBorderColor= c.borderColor|| '#4B5563';
   _cBorderW    = c.borderStrokeW !== undefined ? c.borderStrokeW : 2;
   _cTxtColor   = c.textColor  || '#1a1a2e';
@@ -3341,8 +3341,8 @@ var _textAnchorRight = false;
 // edge pinned (left-hanging AND right-hanging labels alike).
 var _textLeaderPending = false;
 var _textAnchorRight = false;
-var textBgColor    = '#00ff11';
-var textBgOpacity  = 0.9;
+var textBgColor    = '#ffffff';
+var textBgOpacity  = 1;
 // ── MARKUP OBJECTS (highlight / strikethrough / underline markup) ──
 var markupObjs = []; // [{id,type,x1,y1,x2,y2,color,opacity,layerIdx}]
 var markupColor   = '#ffff00';
@@ -16357,7 +16357,7 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
     if(!(cw>0 && ch>0)) return;
     var bgCol=c.bgColor||'#FBBF24';
     var bdCol=c.borderColor||darkenHex(bgCol,0.35);
-    var fillA=(c.bgOpacity!==undefined?c.bgOpacity:0.9);
+    var fillA=(c.bgOpacity!==undefined?c.bgOpacity:1);
     var noteA=(c.opacity==null?1:c.opacity);
 
     // Page-space rotation: page rotation plus the note's own angle (canvas is
