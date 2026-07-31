@@ -4417,6 +4417,22 @@ function syncWeatherBtn(){ if(btnWeather) btnWeather.classList.toggle('active', 
 
 /* ---------- Helpers ---------- */
 const results = document.getElementById('results');
+// Delegated handler: "Copy" buttons injected into result cards (e.g. copy a parcel folio to paste
+// into a permit portal). Uses the async clipboard API with a legacy fallback, and briefly confirms.
+if(results) results.addEventListener('click', async (e)=>{
+  const btn = e.target && e.target.closest ? e.target.closest('.copyfolio') : null;
+  if(!btn) return;
+  e.preventDefault();
+  const val = btn.getAttribute('data-folio') || '';
+  if(!val) return;
+  let ok=false;
+  try{ if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(val); ok=true; } }catch(_){}
+  if(!ok){ try{ const ta=document.createElement('textarea'); ta.value=val; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); ok=document.execCommand('copy'); document.body.removeChild(ta); }catch(_){}
+  }
+  const prev = btn.textContent;
+  btn.textContent = ok ? 'Copied ✓' : 'Copy failed';
+  setTimeout(()=>{ btn.textContent = prev; }, 1400);
+});
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 function pointGeom(lat,lng){ return encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}})); }
@@ -10699,6 +10715,18 @@ async function runLookup(lat,lng,searchCtx){
   html += `<div class="note warnbox" style="margin-top:10px"><b>Surveys &amp; site plans aren't a public map layer.</b> They live in <b>${esc(docJur)}</b>'s building-permit file and are retrieved from its permitting portal by ${docCfg&&docCfg.permitBy==='permit'?'permit record number':'address or parcel/STRAP number'}${strap?` (this parcel: <b style="color:var(--ink)">${esc(strap)}</b>)`:''}. Not every record is digitized.</div>`;
   if(portal){
     html += `<a class="palink" href="${esc(portal)}" target="_blank" rel="noopener" style="margin-top:8px">↗ ${esc(docJur)} permitting portal (survey / site plan / permits)</a>`;
+    // Prominent "check permits for THIS parcel" action. The CityView / permit portals are POST-search
+    // pages (no reliable address-in-URL prefill), so we open the search page AND surface the parcel's
+    // folio/address with a one-tap Copy so the user pastes it straight into the portal's search box.
+    if(strap){
+      const copyVal = esc(String(strap));
+      html += `<div class="note" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">`
+        + `<b>Check active permits for this parcel:</b> paste this folio into the portal's <i>Search for a Property</i> box `
+        + `<span style="display:inline-flex;align-items:center;gap:6px">`
+        + `<code style="color:var(--ink);background:var(--unk-bg);padding:1px 6px;border-radius:4px">${copyVal}</code>`
+        + `<button type="button" class="copyfolio" data-folio="${copyVal}" style="font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:5px;border:1px solid var(--unk-line);background:var(--unk-bg);color:var(--dim);cursor:pointer">Copy</button>`
+        + `</span></div>`;
+    }
   } else if(countyName){
     html += `<a class="palink" href="https://www.google.com/search?q=${encodeURIComponent(titleCase(countyName)+' County Florida building permit portal search by address')}" target="_blank" rel="noopener" style="margin-top:8px">↗ Find ${esc(titleCase(countyName))} County permitting portal</a>`;
   }
