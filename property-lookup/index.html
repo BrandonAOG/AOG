@@ -9130,6 +9130,36 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
     if(subjIdx<0 && want && !haveAnchor){   // no anchor — first same-number match
       for(let i=0;i<labels.length;i++){ if(labels[i].hn===want){ subjIdx=i; break; } }
     }
+    // LIVE-ADDRESS OVERRIDE: the compact file / GIS point layer can be STALE for the selected lot —
+    // a parcel re-addressed 1215 → 1209 Forest Ave still shows the old number as its map label even
+    // though the live Property Appraiser feed (already fetched into __parcelMeta) has the new one.
+    // For the SUBJECT label only, replace the stale text with the live site address so the selected
+    // lot relabels to the authoritative number the moment it resolves.
+    //
+    // SAFETY: __parcelMeta holds the LAST parcel rendered, which — on a through-lot / corner-lot
+    // ambiguity — can be a NEIGHBOUR the live query wrongly resolved to (e.g. searched 1209 Forest but
+    // the live layer returned 1201 9th Ave N). Blindly trusting it would stamp the wrong address onto
+    // the map. So we ONLY override when the live site address's house number matches the number the
+    // USER actually searched (`want`). If they disagree, the live result is for a different lot than
+    // the user asked about — leave the map's own label alone rather than propagate the wrong address.
+    try{
+      const liveSite = (window.__parcelMeta && window.__parcelMeta.site) ? String(window.__parcelMeta.site).trim() : '';
+      if(subjIdx>=0 && liveSite){
+        const liveStreet = liveSite.split(',')[0].trim();        // "1209 FOREST AVE" (drop city/zip)
+        const liveHn = houseNum(liveStreet);
+        const curTxt = String(labels[subjIdx].txt||'').trim();
+        // House number the user searched (falls back to the subject label's own number for map clicks).
+        const wantHn = (want!=null && String(want).trim()!=='') ? String(want).trim() : (labels[subjIdx].hn||null);
+        const numsAgree = !wantHn || !liveHn || (String(liveHn)===String(wantHn));
+        // Only override when (a) the live address differs from what's shown, AND (b) its house number
+        // agrees with what the user searched — so a wrong-parcel live result can't hijack the label.
+        if(liveStreet && numsAgree && liveStreet.toUpperCase()!==curTxt.toUpperCase()){
+          labels[subjIdx].txt = liveStreet;
+          if(liveHn) labels[subjIdx].hn = liveHn;
+          labels[subjIdx].liveOverride = true;
+        }
+      }
+    }catch(e){}
     // GROUP labels by coordinate. Condo/tower units all share ONE coordinate, so a group with
     // 2+ members is a stack. Singletons render as normal labels. Stacks render as a single
     // collapsed badge ("⊞ N units") that FANS OUT its individual unit labels on hover and
@@ -9668,6 +9698,24 @@ async function runLookup(lat,lng,searchCtx){
     const cl = await pCountyLive;
     if(myId!==runId) return;
     if(cl){ liveRes=cl.res; liveMeta=cl.meta; liveErr=cl.err; }
+  }
+  // FOLIO PIN: when the search was resolved authoritatively to a specific parcel (folioHint from
+  // resolveCountyParcel), the coordinate-based live/parcel queries above can still land on the wrong
+  // lot on a through-lot / corner lot — the matched address point sits on the boundary and point-in-
+  // polygon picks the neighbour (searched 1209 Forest Ave → resolved 1201 9th Ave N). Re-fetch the
+  // EXACT parcel by its folio and use that as the live record, so the outline, marker, owner and
+  // address all agree with the folio shown in the "Matched" banner. Falls back silently on any error.
+  if(searchCtx && searchCtx.folioHint){
+    try{
+      const _pin = await fetchCountyParcelFeatureByFolio(searchCtx.countyHint||countyName, searchCtx.folioHint);
+      if(myId!==runId) return;
+      if(_pin && _pin.features && _pin.features[0]){
+        liveRes = _pin; liveErr = null;
+        if(!liveMeta) liveMeta = {};
+        // Recenter marker on the true parcel centroid so the pin sits on the right lot.
+        try{ const _c=featCentroid(_pin.features[0]); if(_c){ liveRes.__ngLng=_c[0]; liveRes.__ngLat=_c[1]; } }catch(e){}
+      }
+    }catch(e){}
   }
   // RE-ANCHOR THE STATEWIDE ROLL: the statewide parcel (`parcel`) was queried at the raw geocoded
   // point, which can land on the NEIGHBOUR's lot (the off-by-one geocoder drift). When the live-feed
@@ -10783,6 +10831,23 @@ async function resolveCountyParcel(countyName, searchCtx){
    right parcel/owner but the WRONG site address & living area (those come from the poisoned
    address-point layer). Keyed by the exact folio the resolver already matched, so it can't drift.
    Returns { addr, city, zip, folio, owner } or null. */
+// Like lookupCountyParcelByFolio, but returns the FULL feature (geometry + all attributes) in the
+// same shape as a live-feed query result, so runLookup can drop it in as `liveRes`. Used to pin the
+// exact matched parcel on through-lots / corner lots where a coordinate query hits the neighbour.
+async function fetchCountyParcelFeatureByFolio(countyName, folio){
+  const cfg = countyName ? COUNTY_PARCEL_RESOLVERS[norm(countyName)] : null;
+  if(!cfg || !folio) return null;
+  const fol=String(folio).replace(/'/g,"''");
+  const where = `${cfg.folioField}='${fol}'`;
+  const params = `where=${encodeURIComponent(where)}&outFields=*&returnGeometry=true&outSR=4326&f=json`;
+  try{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),10000);
+    const r=await fetch(cfg.url+'?'+params,{signal:ctrl.signal}); clearTimeout(t);
+    if(!r.ok) return null; const j=await r.json(); if(j.error) return null;
+    const f=(j.features||[])[0]; if(!f) return null;
+    return { features:[f], __authByFolio:true, __byFolioPin:true };
+  }catch(e){ return null; }
+}
 async function lookupCountyParcelByFolio(countyName, folio){
   const cfg = countyName ? COUNTY_PARCEL_RESOLVERS[norm(countyName)] : null;
   if(!cfg || !folio) return null;
@@ -10837,7 +10902,12 @@ async function doSearch(){
         addToHistory(pr.label || q);
         results.innerHTML=setStatus('busy','Pinpointing the parcel…');
         map.setView([pr.lat,pr.lng], 18);
-        await runLookup(pr.lat, pr.lng, searchCtx);
+        // Pass the authoritatively-matched folio + county down to runLookup. On a through-lot / corner
+        // lot the coordinate alone can sit on the boundary and make the point-in-polygon parcel query
+        // resolve to the NEIGHBOUR (e.g. 1209 Forest's address point lands on 1201 9th Ave N). The
+        // folio lets runLookup fetch the EXACT parcel that was matched instead of re-guessing by point.
+        const _ctx = Object.assign({}, searchCtx, { folioHint: pr.folio||null, countyHint: cty });
+        await runLookup(pr.lat, pr.lng, _ctx);
         const fol = pr.folio ? ` · Folio ${esc(pr.folio)}` : '';
         const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(pr.src)}): <b style="color:var(--ink)">${esc(pr.label)}</b>${fol} — authoritative county parcel; confirm the marker is on the right lot.</div>`;
         results.insertAdjacentHTML('afterbegin',conf);
