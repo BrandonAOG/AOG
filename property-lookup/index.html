@@ -436,6 +436,14 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   /* neighbor labels are hoverable for their own address tooltip, and clickable to look up that address */
   .leaflet-marker-icon.nbr-hit{pointer-events:auto!important;cursor:pointer}
   .nbr-hit .nbr-num{pointer-events:auto;cursor:pointer}
+  /* Elevation-Certificate 📝 note marker on the map */
+  .ec-note-wrap{pointer-events:none}
+  .ec-note{pointer-events:auto;cursor:pointer;width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+    font-size:14px;line-height:1;background:rgba(10,16,22,.82);border:1px solid #ffb000;border-radius:6px;
+    box-shadow:0 1px 6px rgba(0,0,0,.45);transition:transform .12s ease}
+  .ec-note:hover{transform:scale(1.25)}
+  /* thin stem connecting the raised note down to its point, so it's clear which structure it marks */
+  .ec-note-stem{width:2px;height:16px;margin:0 auto;background:linear-gradient(to bottom, #ffb000, rgba(255,176,0,0));pointer-events:none}
   .crosshair{position:absolute;z-index:999;bottom:18px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:10.5px;color:var(--dim);background:var(--crosshair-bg);border:1px solid var(--line);padding:5px 12px;border-radius:20px;pointer-events:none}
 
   .empty{text-align:center;color:var(--faint);font-family:var(--mono);font-size:12px;padding:26px 10px;line-height:1.6}
@@ -4715,7 +4723,11 @@ async function queryEC(ecLayerUrl, lat, lng){
     let bfe=null;
     if(det.bfe){ const b=pick(f0.attributes,det.bfe); if(b!=null && b!=='' && isFinite(Number(b))) bfe=Number(b); }
     const ecAddr=det.addr?pick(f0.attributes,det.addr):null;
-    return { features:feats, docs, det, oid, date, bfe, ecAddr, ecDistM, hasAtt };
+    // EC point's own coordinates (WGS84, outSR=4326) — used to drop the 📝 note marker on the map.
+    let ecLat=null, ecLng=null;
+    try{ const g0=f0.geometry; const gx=g0?(g0.x!=null?g0.x:g0.X):null, gy=g0?(g0.y!=null?g0.y:g0.Y):null;
+         if(gx!=null && gy!=null){ ecLng=Number(gx); ecLat=Number(gy); } }catch(e){}
+    return { features:feats, docs, det, oid, date, bfe, ecAddr, ecDistM, hasAtt, ecLat, ecLng };
   }catch(e){ clearTimeout(t); return { err:e.message }; }
 }
 
@@ -9146,6 +9158,82 @@ async function drawHomeWithinTract(lat, lng, tractAcres, info){
    an address field + geometry. The subject parcel's number is highlighted. Best-effort: silent on
    any failure, and skipped when zoomed out too far to be readable. */
 const nbrNumLayer = L.layerGroup();
+
+/* ---------- Elevation Certificate 📝 note marker ----------
+   When a live EC record is found (e.g. Collier's Elevation_Certificates_view layer), drop a small
+   note symbol on the map at the certificate point. Clicking it opens the EC PDF directly (first
+   doc link — Collier's `Certificate` field is a direct apps4.collier.gov PDF URL). If the record
+   has no downloadable file, the click shows a small popup explaining that instead. Cleared on
+   every new lookup so a stale note never lingers on the wrong property. */
+const ecNoteLayer = L.layerGroup();
+function clearEcNote(){ try{ ecNoteLayer.clearLayers(); if(map.hasLayer(ecNoteLayer)) map.removeLayer(ecNoteLayer); }catch(e){} }
+function _ecMakeNote(latN, lngN, pdf){
+  const tip = pdf ? 'Elevation Certificate on file — click to open the PDF'
+                  : 'Elevation Certificate record here (no PDF attached — see the EC card)';
+  /* iconAnchor pushes the note ABOVE the point (with a small stem) so it never sits on top of the
+     address-number label, which renders AT the point. */
+  const icon = L.divIcon({ className:'ec-note-wrap',
+    html:`<div class="ec-note" title="${esc(tip)}">📝</div><div class="ec-note-stem"></div>`,
+    iconSize:null, iconAnchor:[11,40] });
+  const mk = L.marker([latN, lngN], { icon, interactive:true, keyboard:false, zIndexOffset:1200 });
+  if(pdf){
+    mk.on('click', ()=>{ try{ window.open(pdf, '_blank', 'noopener'); }catch(e){} });
+  } else {
+    mk.bindPopup(`<div style="font:12px/1.4 system-ui;max-width:220px">An Elevation Certificate record exists at this point, but no PDF is attached to it. Open the county EC map (linked in the Elevation Certificate card) to view it.</div>`);
+  }
+  return mk;
+}
+function addEcNoteMarker(ec){
+  try{
+    if(!ec || ec.err || ec.ecLat==null || ec.ecLng==null || !isFinite(ec.ecLat) || !isFinite(ec.ecLng)) return;
+    const pdf = (ec.docs && ec.docs.length) ? ec.docs[0].url : null;
+    _ecMakeNote(ec.ecLat, ec.ecLng, pdf).addTo(ecNoteLayer);
+    if(!map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map);
+  }catch(e){/* best-effort — never break the lookup */}
+}
+
+/* ---- Neighborhood EC notes: when zoomed to a street/neighborhood level, query the wired EC layer
+   for ALL certificate points in the visible extent and drop a 📝 note on each — so zooming out
+   shows which neighbors also have an Elevation Certificate on file. Each note opens its own PDF.
+   Active only after a lookup wired an EC layer (window.__ecAreaUrl). Debounced, capped, and keyed
+   by extent so panning slightly doesn't refire identical queries. */
+const EC_AREA_MINZOOM = 14;          // below this the notes would be unreadable clutter
+const EC_AREA_MAX     = 200;         // cap features per view
+let _ecAreaKey='', _ecAreaBusy=false, _ecAreaTimer=null;
+async function refreshEcAreaNotes(){
+  const url = window.__ecAreaUrl;
+  if(!url) return;
+  if(map.getZoom() < EC_AREA_MINZOOM){ return; }   // keep the subject note; just don't add area notes
+  const b=map.getBounds();
+  const key=[b.getWest().toFixed(4),b.getSouth().toFixed(4),b.getEast().toFixed(4),b.getNorth().toFixed(4),map.getZoom()>=EC_AREA_MINZOOM].join('|');
+  if(key===_ecAreaKey || _ecAreaBusy) return;
+  _ecAreaBusy=true;
+  try{
+    const root=ecLayerRoot(url);
+    const geom=encodeURIComponent(JSON.stringify({xmin:b.getWest(),ymin:b.getSouth(),xmax:b.getEast(),ymax:b.getNorth(),spatialReference:{wkid:4326}}));
+    const params=`geometry=${geom}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects`+
+      `&outFields=*&returnGeometry=true&outSR=4326&resultRecordCount=${EC_AREA_MAX}&f=json`;
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
+    const j=await (await fetch(root+'/query?'+params,{signal:ctrl.signal})).json();
+    clearTimeout(t);
+    if(j.error) throw new Error(j.error.message||'service error');
+    const feats=j.features||[];
+    // Detect the PDF-link field once from the first feature's attribute names.
+    const det = feats.length ? ecDetect(Object.keys(feats[0].attributes)) : null;
+    ecNoteLayer.clearLayers();
+    for(const f of feats){
+      const g=f.geometry; const gx=g?(g.x!=null?g.x:g.X):null, gy=g?(g.y!=null?g.y:g.Y):null;
+      if(gx==null||gy==null) continue;
+      let pdf=null;
+      if(det && det.link){ const u=pick(f.attributes,det.link); if(u && /^https?:/i.test(u)) pdf=u; }
+      _ecMakeNote(Number(gy), Number(gx), pdf).addTo(ecNoteLayer);
+    }
+    if(feats.length && !map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map);
+    _ecAreaKey=key;
+  }catch(e){/* best-effort; try again on next move */}
+  finally{ _ecAreaBusy=false; }
+}
+map.on('moveend zoomend', ()=>{ clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 350); });
 let nbrNumOn = true;   // labels follow the parcel view by default; tied to the parcel result
 // Rings ([[ [lng,lat], ... ]]) of the SUBJECT parcel currently highlighted, in WGS84. Set when a
 // parcel is drawn and used to suppress gap-fill address points that fall on the SAME lot — a deep
@@ -9704,6 +9792,7 @@ async function runLookup(lat,lng,searchCtx){
   if(parcelLayer){ map.removeLayer(parcelLayer); parcelLayer=null; }
   if(homeParcelLayer){ map.removeLayer(homeParcelLayer); homeParcelLayer=null; }
   clearNeighborNumbers(); _nbrCtx=null;
+  clearEcNote();   // remove any 📝 EC note from a previous property
   _subjRings=null;   // reset per lookup; drawParcel re-sets it only for a normal home lot
   saveLoc(lat,lng);
   document.getElementById('coordReadout').textContent=`lat ${lat.toFixed(5)}   lng ${lng.toFixed(5)}`;
@@ -9902,6 +9991,10 @@ async function runLookup(lat,lng,searchCtx){
   const pEC = _ecLayerUrl
     ? queryEC(_ecLayerUrl, lat, lng).catch(e=>({err:e.message}))
     : Promise.resolve(null);
+  // Remember the layer for the neighborhood 📝 notes (moveend refresh); reset the extent key so
+  // the current view re-queries under the new layer/property.
+  window.__ecAreaUrl = _ecLayerUrl || null; _ecAreaKey='';
+  if(_ecLayerUrl){ clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 900); }
 
   /* ---- Aerial & Street View: scout the property first (keyless deep-links + Esri aerial) ---- */
   html += renderAerialScout(lat, lng);
@@ -10685,7 +10778,8 @@ async function runLookup(lat,lng,searchCtx){
     const ec = await pEC;
     if(myId!==runId) return;
     if(ec && !ec.err && ec.features && ec.features.length){
-      html += `<div class="freshline"><span class="badge live">● LIVE</span> elevation certificate on file at this point</div>`;
+      addEcNoteMarker(ec);   // 📝 note on the map at the EC point — click opens the PDF
+      html += `<div class="freshline"><span class="badge live">● LIVE</span> elevation certificate on file at this point <span class="muted" style="font-size:11px">(📝 marked on the map — click it to open the PDF)</span></div>`;
       if(ec.ecDistM!=null && ec.ecDistM>25){
         html += `<div class="note">⚠ Nearest certificate is ~${ec.ecDistM} m away — it may belong to an adjacent property. Check the certificate address below before relying on it.</div>`;
       }
