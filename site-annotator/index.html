@@ -2683,7 +2683,11 @@ function startCommentTextEdit(c){
   textOv.style.transform    = 'none';
   textOv.style.transformOrigin = 'top left';
   textOv.style.letterSpacing = '';
-  textOv.style.color        = _cTxtColor;
+  // Use the NOTE'S OWN color, not the global picker value: on the first
+  // click-into-edit of an imported/copied note the pickers may not have been
+  // synced yet, so _cTxtColor still held the default — the editor showed
+  // default-colored text until commit repainted it with c.textColor.
+  textOv.style.color        = c.textColor || _cTxtColor;
   textOv.style.opacity      = 1;   // note text commits at full alpha — match it live
   textOv.style.background   = 'transparent';
   textOv.style.borderBottom = 'none';
@@ -19541,7 +19545,12 @@ function renderImgOverlays(){
   // clearRect in plan coords (transform is set); cover the whole plan area.
   _clearCv(imgCtx,imgCv);
   imgOverlays.forEach(function(ov){
-    if(ov===selImg) return; // selected one drawn on selCv
+    // Skip the selected image ONLY while it is actively being dragged/resized
+    // (its live preview is on selCv then). When merely selected, keep it here:
+    // selCv is SHARED with shape/text/note chrome and several tool paths clear
+    // or resize it — with the image living only on selCv, any of those wiped
+    // the picture off screen ("click the image and it disappears").
+    if(ov===selImg && (typeof selImgDrag!=='undefined') && selImgDrag) return;
     var L=layers[ov.layerIdx]; if(L && !L.visible) return; // hide if its layer is hidden
     _drawImgOv(imgCtx, ov);
   });
@@ -19711,8 +19720,10 @@ function renderImgSelection(){
   _posCv(selCv, _rX, _rY);
   selCtx.setTransform(_eX,0,0,_eY, -_rX*_eX, -_rY*_eY);
   _clearCv(selCtx,selCv);
-  // Draw image itself
-  _drawImgOv(selCtx, selImg);
+  // Draw the image itself ONLY during an active drag/resize (imgCv skips it
+  // then). When just selected, imgCv already shows it — drawing it here too
+  // would double-composite semi-transparent images and darken them on select.
+  if((typeof selImgDrag!=='undefined') && selImgDrag) _drawImgOv(selCtx, selImg);
   // Dashed bounding box
   var lw=1.5/zoom, ov=selImg, a=ov.angle||0;
   selCtx.save();
