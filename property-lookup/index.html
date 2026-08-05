@@ -490,6 +490,14 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .suggest .sg .pin{color:var(--faint);flex:none}
   .suggest .sg .sgsrc{margin-left:auto;color:var(--faint);font-size:9.5px;flex:none;padding-top:1px}
   .suggest .sgmsg{padding:10px 12px;font-family:var(--mono);font-size:11px;color:var(--faint)}
+  /* clickable disambiguation rows shown inside #results (outside .suggest, so restyle here) */
+  .sg.lotpick{padding:10px 12px;font-family:var(--mono);font-size:12px;color:var(--ink);
+    border-bottom:1px solid var(--drop-line);line-height:1.4;display:flex;gap:8px;align-items:flex-start;
+    border-radius:6px;transition:background .12s,color .12s}
+  .sg.lotpick:hover,.sg.lotpick:focus{background:var(--search-bg);color:var(--signal);outline:none}
+  .sg.lotpick:last-child{border-bottom:none}
+  .sg.lotpick .sgsrc{margin-left:auto;color:var(--faint);font-size:9.5px;flex:none;padding-top:1px}
+  @media (max-width:640px){ .sg.lotpick{padding:13px 12px;font-size:13px} }
 
   /* ---- Our blue flood-zone labels (replace FEMA's baked-in black ones) ---- */
   .floodlbl{ color:#39d3ff; font-family:var(--mono); font-size:11px; font-weight:700;
@@ -4428,6 +4436,28 @@ function syncWeatherBtn(){ if(btnWeather) btnWeather.classList.toggle('active', 
 
 /* ---------- Helpers ---------- */
 const results = document.getElementById('results');
+/* When the address search finds several lots sharing one number+street, doSearch() renders each
+   as a .sg.lotpick row carrying its coords + authoritative folio. Clicking a row resolves THAT
+   exact lot — same deterministic path as a single hit (center map, runLookup with folioHint so the
+   correct parcel is fetched rather than re-guessed from the point). Delegated so it covers rows from
+   both the FIND button and the suggestion-click search paths. */
+results.addEventListener('click', async (e)=>{
+  const row=e.target.closest('.sg.lotpick'); if(!row) return;
+  const lat=parseFloat(row.dataset.lat), lng=parseFloat(row.dataset.lng);
+  if(!isFinite(lat)||!isFinite(lng)) return;
+  const folio=row.dataset.folio||null, cty=row.dataset.cty||null, label=row.dataset.label||'';
+  [...results.querySelectorAll('.sg.lotpick')].forEach(r=>r.style.opacity=r===row?'1':'.45');
+  addToHistory(label);
+  const addrEl=document.getElementById('addr'); if(addrEl && label) addrEl.value=label;
+  results.insertAdjacentHTML('afterbegin', setStatus('busy','Pinpointing the parcel…'));
+  map.setView([lat,lng],18);
+  const baseCtx={ raw:label, hn:houseNum(label), toks:new Set(streetTokens(label)), unit:searchUnit(label) };
+  const _ctx=Object.assign({}, baseCtx, { folioHint:folio||null, countyHint:cty });
+  await runLookup(lat,lng,_ctx);
+  const fol=folio?` · Folio ${esc(folio)}`:'';
+  const conf=`<div class="note matchconf noprint" style="padding:2px 2px 4px">Selected: <b style="color:var(--ink)">${esc(label)}</b>${fol} — authoritative county parcel; confirm the marker is on the right lot.</div>`;
+  results.insertAdjacentHTML('afterbegin',conf);
+});
 // Delegated handler: "Copy" buttons injected into result cards (e.g. copy a parcel folio to paste
 // into a permit portal). Uses the async clipboard API with a legacy fallback, and briefly confirms.
 if(results) results.addEventListener('click', async (e)=>{
@@ -11385,8 +11415,8 @@ async function doSearch(){
       if(!pr){ continue; }
       if(pr && pr.multi && pr.candidates && pr.candidates.length){
         // Several lots share this number+street — show them rather than guess one.
-        const list=pr.candidates.slice(0,8).map(c=>`<div class="sg" style="cursor:default"><span>${esc(c.label)}</span>${c.folio?`<span class="sgsrc">${esc(c.folio)}</span>`:''}</div>`).join('');
-        results.innerHTML=setStatus('err',`Found ${pr.candidates.length} lots matching “${esc(q)}”. Pick the exact one on the map, or add a unit/more detail.`)+`<div style="margin-top:6px">${list}</div>`;
+        const list=pr.candidates.slice(0,8).map(c=>`<div class="sg lotpick" style="cursor:pointer" data-lat="${c.lat}" data-lng="${c.lng}" data-folio="${esc(c.folio||'')}" data-cty="${esc(cty)}" data-label="${esc(c.label)}"><span>${esc(c.label)}</span>${c.folio?`<span class="sgsrc">${esc(c.folio)}</span>`:''}</div>`).join('');
+        results.innerHTML=setStatus('err',`Found ${pr.candidates.length} lots matching “${esc(q)}”. Click one below (or pick it on the map), or add a unit/more detail.`)+`<div style="margin-top:6px">${list}</div>`;
         // Still center the map on the first candidate so the user sees the area.
         map.setView([pr.candidates[0].lat,pr.candidates[0].lng],18);
         return;
@@ -11613,8 +11643,8 @@ async function chooseSuggestion(it){
     const pr=await resolveCountyParcel(county, searchCtx).catch(()=>null);
     if(pr && pr.multi && pr.candidates && pr.candidates.length){
       addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr);
-      const list=pr.candidates.slice(0,8).map(c=>`<div class="sg" style="cursor:default"><span>${esc(c.label)}</span>${c.folio?`<span class="sgsrc">${esc(c.folio)}</span>`:''}</div>`).join('');
-      results.innerHTML=setStatus('err',`Found ${pr.candidates.length} lots matching “${esc(basis)}”. Pick the exact one on the map, or add a unit/more detail.`)+`<div style="margin-top:6px">${list}</div>`;
+      const list=pr.candidates.slice(0,8).map(c=>`<div class="sg lotpick" style="cursor:pointer" data-lat="${c.lat}" data-lng="${c.lng}" data-folio="${esc(c.folio||'')}" data-cty="${esc(county)}" data-label="${esc(c.label)}"><span>${esc(c.label)}</span>${c.folio?`<span class="sgsrc">${esc(c.folio)}</span>`:''}</div>`).join('');
+      results.innerHTML=setStatus('err',`Found ${pr.candidates.length} lots matching “${esc(basis)}”. Click one below (or pick it on the map), or add a unit/more detail.`)+`<div style="margin-top:6px">${list}</div>`;
       map.setView([pr.candidates[0].lat,pr.candidates[0].lng],18);
       return;
     }
