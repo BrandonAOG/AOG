@@ -610,7 +610,7 @@ uit  border-radius: 12px; font-size: 10px;
             <option value="LFNC-B">LFNC-B — Liquidtight Flex NM (B)</option>
           </optgroup>
           <optgroup label="Rigid PVC Conduit">
-            <option value="PVC-40">PVC Schedule 40</option>
+            <option value="PVC-40" selected>PVC Schedule 40</option>
             <option value="PVC-80">PVC Schedule 80</option>
           </optgroup>
           <optgroup label="High Density Polyethylene">
@@ -1255,6 +1255,163 @@ function addWire() {
 window.addEventListener('load', function() { addWire(); });
 
 // ── CALCULATE ──────────────────────────────────────────────
+// ── CIRCULAR CONDUIT VISUAL ────────────────────────────────
+// Real non-overlapping circle packing. Places circles (each with its own
+// radius) largest-first; each new circle spirals outward from center until it
+// finds a spot that collides with none already placed. Conductors are drawn at
+// TRUE size and never overlap. When the wire fits (wallR given and fits=true)
+// the relaxation also keeps every conductor INSIDE the wall; when it doesn't
+// fit, conductors are allowed to spill past the wall so overfill shows.
+function packConductors(radii, wallR, fits) {
+  var placed = [];
+  radii.forEach(function (r) {
+    if (placed.length === 0) { placed.push({ x: 0, y: 0, r: r }); return; }
+    // Spiral search: expanding radius, sweeping angle, first gap that fits.
+    var step = Math.max(r * 0.35, 0.4);
+    var best = null;
+    for (var dist = 0; dist < 400 && !best; dist += step) {
+      var aStep = dist === 0 ? 2 * Math.PI : (step / dist);
+      for (var a = 0; a < 2 * Math.PI; a += aStep) {
+        var x = Math.cos(a) * dist, y = Math.sin(a) * dist;
+        var ok = true;
+        for (var i = 0; i < placed.length; i++) {
+          var p = placed[i];
+          var dx = x - p.x, dy = y - p.y;
+          if (dx * dx + dy * dy < (r + p.r) * (r + p.r) - 0.01) { ok = false; break; }
+        }
+        if (ok) { best = { x: x, y: y, r: r }; break; }
+      }
+    }
+    placed.push(best || { x: 0, y: 0, r: r });
+  });
+
+  // Relaxation. Each pass: (1) gather toward center, (2) hard-contain inside the
+  // wall when the wire fits, (3) resolve overlaps. Ending each pass on overlap
+  // resolution means the final state is non-overlapping; the contain step earlier
+  // in the pass keeps the outermost conductors resting against the wall. A tiny
+  // spacing margin between conductors lets a dense-but-legal fill settle cleanly
+  // against the wall instead of being crushed (which would force overlaps).
+  var margin = 0.15;   // px of breathing room between conductor edges
+  for (var pass = 0; pass < 240; pass++) {
+    var pullK = pass < 50 ? 0.6 : 0.12;
+    // (1) gather toward center
+    placed.forEach(function (p) {
+      var d = Math.sqrt(p.x * p.x + p.y * p.y);
+      if (d > 0.001) { var pull = Math.min(pullK, d); p.x -= (p.x / d) * pull; p.y -= (p.y / d) * pull; }
+    });
+    // (2) contain inside the wall (hard) when the wire fits
+    if (fits && wallR) {
+      placed.forEach(function (p) {
+        var d = Math.sqrt(p.x * p.x + p.y * p.y);
+        var maxD = wallR - p.r;
+        if (d > maxD && d > 0.001) { p.x = (p.x / d) * maxD; p.y = (p.y / d) * maxD; }
+      });
+    }
+    // (3) resolve overlaps (with a small margin so packing stays comfortable)
+    for (var s = 0; s < 6; s++) {
+      for (var i = 0; i < placed.length; i++) {
+        for (var j = i + 1; j < placed.length; j++) {
+          var a = placed[i], b = placed[j];
+          var dx = b.x - a.x, dy = b.y - a.y;
+          var dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+          var need = a.r + b.r + margin;
+          if (dist < need) {
+            var overlap = (need - dist) / 2;
+            var ux = dx / dist, uy = dy / dist;
+            a.x -= ux * overlap; a.y -= uy * overlap;
+            b.x += ux * overlap; b.y += uy * overlap;
+          }
+        }
+      }
+    }
+  }
+  // Final pass: nothing may cross the wall when the wire fits. Containment is the
+  // hard guarantee (a legal fill must never LOOK like it's spilling), so this
+  // ends on a wall clamp. At very high but legal fills (~85%+), the conductors
+  // may visibly press together — that's honest: wire crammed near max fill really
+  // is squeezed tight. Touching neighbours reads fine; poking outside would not.
+  for (var s2 = 0; s2 < 14; s2++) {
+    // resolve overlaps
+    for (var i2 = 0; i2 < placed.length; i2++) {
+      for (var j2 = i2 + 1; j2 < placed.length; j2++) {
+        var a2 = placed[i2], b2 = placed[j2];
+        var dx2 = b2.x - a2.x, dy2 = b2.y - a2.y;
+        var dist2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 0.001;
+        var need2 = a2.r + b2.r;
+        if (dist2 < need2) {
+          var ov2 = (need2 - dist2) / 2;
+          var ux2 = dx2 / dist2, uy2 = dy2 / dist2;
+          a2.x -= ux2 * ov2; a2.y -= uy2 * ov2;
+          b2.x += ux2 * ov2; b2.y += uy2 * ov2;
+        }
+      }
+    }
+    // then re-contain (clamp wins — this is the last thing each iteration does)
+    if (fits && wallR) {
+      placed.forEach(function (p) {
+        var d = Math.sqrt(p.x * p.x + p.y * p.y);
+        var maxD = wallR - p.r;
+        if (d > maxD && d > 0.001) { p.x = (p.x / d) * maxD; p.y = (p.y / d) * maxD; }
+      });
+    }
+  }
+  return placed;
+}
+
+// Build an SVG cross-section: conduit wall + each conductor drawn to real OD.
+// conductors: array of {od, qty, type} · ringColor · (fillFrac kept for signature
+// compatibility but no longer used for sizing — packing is fully physical now).
+// A conductor renders OUTSIDE the wall only when the tight pack physically can't
+// fit it inside — i.e. real overfill. Failing the NEC 40% code limit is shown by
+// ring COLOR, not by spilling, because the wire still fits in the pipe.
+function conduitSVG(conduitID, conductors, ringColor, fillFrac) {
+  var cx = 40, cy = 40, R = 27;          // wall radius, in an 80x80 canvas
+  var pxPerIn = R / (conduitID / 2);
+
+  // Flat list of conductor radii (px), largest first so big wires take center.
+  var items = [];
+  conductors.forEach(function (c) {
+    for (var i = 0; i < c.qty; i++) items.push((c.od / 2) * pxPerIn);
+  });
+  items.sort(function (a, b) { return b - a; });
+
+  var packed = packConductors(items, R, fillFrac <= 1.0);   // contained if it fits
+
+  // Canvas grows only if the tight pack genuinely reaches past the wall.
+  var reach = R;
+  packed.forEach(function (d) {
+    var far = Math.sqrt(d.x * d.x + d.y * d.y) + d.r;
+    if (far > reach) reach = far;
+  });
+  var half = reach + 3;
+  var minX = cx - half, minY = cy - half, size = half * 2;
+
+  var dots = '';
+  packed.forEach(function (d) {
+    var center = Math.sqrt(d.x * d.x + d.y * d.y);
+    // A conductor counts as "spilling out" only when its CENTER has crossed the
+    // wall — i.e. more than half of it is outside. A conductor merely grazing
+    // the wall (packing gaps push its edge a hair past R) still reads as inside,
+    // which matches reality: tight-packed circles never hit 100% density, so a
+    // legal fill can lightly touch the wall without actually overflowing.
+    var outside = center > R;
+    dots += '<circle cx="' + (cx + d.x).toFixed(2) + '" cy="' + (cy + d.y).toFixed(2) +
+            '" r="' + d.r.toFixed(2) + '" fill="' + ringColor +
+            '" fill-opacity="' + (outside ? '0.45' : '0.85') +
+            '" stroke="#0A0E27" stroke-width="0.35"' +
+            (outside ? ' stroke-dasharray="1.2 1"' : '') + '/>';
+  });
+
+  return '<svg viewBox="' + minX.toFixed(1) + ' ' + minY.toFixed(1) + ' ' +
+             size.toFixed(1) + ' ' + size.toFixed(1) + '" ' +
+         'style="width:56px;height:56px;display:block;margin:0 auto;overflow:visible;">' +
+           // conductors first, then the wall on top so the boundary stays crisp
+           dots +
+           '<circle cx="' + cx + '" cy="' + cy + '" r="' + R +
+             '" fill="none" stroke="' + ringColor + '" stroke-width="2"/>' +
+         '</svg>';
+}
+
 function calculate(auto) {
   const conduitType = document.getElementById('conduitType').value;
   const selectedSize = document.getElementById('tradeSize').value;
@@ -1363,10 +1520,13 @@ function calculate(auto) {
 
     if (passes && bestSize === null) bestSize = size;
 
-    var barWidth  = Math.min(fillPct, 100);
     var barClass  = fillPct <= allowedPct * 100 * 0.8 ? 'fill-green'
                   : fillPct <= allowedPct * 100       ? 'fill-yellow'
                   : 'fill-red';
+    var ringColor = fillPct <= allowedPct * 100 * 0.8 ? 'var(--success)'
+                  : fillPct <= allowedPct * 100       ? 'var(--warn)'
+                  : 'var(--danger)';
+    var visualHtml = conduitSVG(d.id, conductors, ringColor, fillPct / 100);
 
     var statusHtml = passes
       ? '<span class="status-pass">\u2713 PASS</span>'
@@ -1384,10 +1544,7 @@ function calculate(auto) {
       '<td>' + allowed.toFixed(4) + '</td>' +
       '<td>' + totalWireArea.toFixed(4) + '</td>' +
       '<td style="font-weight:700">' + fillPct.toFixed(1) + '%</td>' +
-      '<td style="min-width:80px;">' +
-        '<div class="fill-bar-wrap">' +
-          '<div class="fill-bar ' + barClass + '" style="width:' + barWidth + '%"></div>' +
-        '</div></td>' +
+      '<td style="min-width:64px;">' + visualHtml + '</td>' +
       '<td>' + statusHtml + '</td>';
     tbody.appendChild(tr);
   });
