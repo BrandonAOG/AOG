@@ -2839,7 +2839,7 @@ function captureAndShare() {
         var fname = buildFilename('jpg', idx + 1, pages.length);
         var restoreFill = fitPageToSheet(page);
         var capH = measureFullHeight(page);
-        return _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } }), 45000, 'Page ' + (idx + 1) + ' render')
+        return _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, onclone: _sanitizeCloneForCapture, ignoreElements: function(el){ return !!(el.classList && el.classList.contains("tbl-clear-btn")); } }), 45000, 'Page ' + (idx + 1) + ' render')
           .then(function (canvas) {
             restoreFill();
             _updateRenderOverlay('Page ' + (idx + 1) + ' of ' + pages.length + ' rendered…');
@@ -2996,7 +2996,7 @@ function saveForAndroid() {
       seq = seq.then(function () {
         const restoreFill = fitPageToSheet(page);
         const capH = measureFullHeight(page);
-        return _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } }), 45000, 'Page ' + (idx + 1) + ' render')
+        return _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, onclone: _sanitizeCloneForCapture, ignoreElements: function(el){ return !!(el.classList && el.classList.contains("tbl-clear-btn")); } }), 45000, 'Page ' + (idx + 1) + ' render')
           .then(function (canvas) {
             restoreFill();
             _updateRenderOverlay('Page ' + (idx + 1) + ' of ' + pages.length + ' rendered…');
@@ -3235,6 +3235,50 @@ function _editPdfFilename() {
   return 'AOG Electrical Checklist - RESUMABLE.pdf';
 }
 
+// Runs on html2canvas's CLONED document right before it rasterizes. Some
+// mobile browsers (seen on Android 10 / Chrome WebView) throw
+// "Error parsing CSS component value, unexpected EOF" while html2canvas
+// re-parses stylesheet text — most often the external Google Fonts sheet
+// (modern @font-face / unicode-range syntax) or any declaration that
+// computes to an empty or unbalanced value on that device. We can't rely on
+// catching the exact culprit per device, so we defensively strip web-font
+// stylesheets and font links from the CLONE (captured text uses Arial in the
+// mirrors, so appearance is unaffected) and clear any inline style value with
+// unbalanced parens. This never touches the live page — only the throwaway clone.
+function _sanitizeCloneForCapture(clonedDoc) {
+  try {
+    // 1) Remove external font <link>s and any <style>/@import that pulls fonts.
+    var links = clonedDoc.querySelectorAll('link[rel="stylesheet"], link[rel="preload"][as="font"], link[href*="fonts.googleapis"], link[href*="fonts.gstatic"]');
+    Array.prototype.forEach.call(links, function (l) {
+      var href = l.getAttribute('href') || '';
+      if (/fonts\.(googleapis|gstatic)\.com/i.test(href)) { l.parentNode && l.parentNode.removeChild(l); }
+    });
+    // 2) Drop @font-face / @import rules from clone stylesheets that html2canvas would re-parse.
+    Array.prototype.forEach.call(clonedDoc.querySelectorAll('style'), function (styleEl) {
+      var txt = styleEl.textContent || '';
+      if (/@font-face|@import|fonts\.(googleapis|gstatic)/i.test(txt)) {
+        styleEl.textContent = txt
+          .replace(/@font-face\s*\{[^}]*\}/gi, '')
+          .replace(/@import[^;]*;/gi, '');
+      }
+    });
+    // 3) Clear any inline style value with unbalanced parens (the actual EOF trigger).
+    var balanced = function (v) { var d = 0; for (var i = 0; i < v.length; i++) { var c = v[i]; if (c === '(') d++; else if (c === ')') { d--; if (d < 0) return false; } } return d === 0; };
+    var all = clonedDoc.querySelectorAll('[style]');
+    Array.prototype.forEach.call(all, function (el) {
+      var s = el.getAttribute('style') || '';
+      if (s.indexOf('(') !== -1 && !balanced(s)) {
+        // Rebuild the style string, dropping only the malformed declarations.
+        var kept = s.split(';').filter(function (decl) {
+          if (!decl.trim()) return false;
+          return balanced(decl);
+        });
+        el.setAttribute('style', kept.join(';'));
+      }
+    });
+  } catch (e) { /* never let sanitation abort the capture */ }
+}
+
 async function saveFillablePdf() {
   if (typeof PDFLib === 'undefined') {
     setStatus('PDF library not loaded — try refreshing.');
@@ -3291,7 +3335,7 @@ async function saveFillablePdf() {
     var jobs = Array.prototype.map.call(pages, function (page, jIdx) {
       var restoreFill = (typeof fitPageToSheet === 'function') ? fitPageToSheet(page) : function(){};
       var capH = (typeof measureFullHeight === 'function') ? measureFullHeight(page) : page.scrollHeight;
-      return _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } }), 45000, 'Page ' + (jIdx + 1) + ' render')
+      return _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, windowHeight: capH, scrollX: 0, scrollY: 0, onclone: _sanitizeCloneForCapture, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } }), 45000, 'Page ' + (jIdx + 1) + ' render')
         .then(function (canvas) {
           restoreFill();
           _updateRenderOverlay('Page ' + (jIdx + 1) + ' of ' + pages.length + ' rendered…');
