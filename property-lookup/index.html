@@ -488,16 +488,15 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .suggest .sg:last-child{border-bottom:none}
   .suggest .sg:hover,.suggest .sg.active{background:var(--search-bg);color:var(--signal)}
   .suggest .sg .pin{color:var(--faint);flex:none}
+  /* Clickable "several lots match" candidate rows shown in the results panel */
+  .pcand{padding:11px 12px;margin-top:6px;font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    cursor:pointer;border:1px solid var(--drop-line);border-radius:8px;line-height:1.4;
+    display:flex;gap:10px;align-items:center;justify-content:space-between;transition:background .12s,border-color .12s}
+  .pcand:hover,.pcand:focus{background:var(--search-bg);border-color:var(--signal);color:var(--signal);outline:none}
+  .pcand .pcarrow{color:var(--signal);flex:none;font-size:13px}
+  .pcand .pcfolio{color:var(--faint);font-size:11px;flex:none}
   .suggest .sg .sgsrc{margin-left:auto;color:var(--faint);font-size:9.5px;flex:none;padding-top:1px}
   .suggest .sgmsg{padding:10px 12px;font-family:var(--mono);font-size:11px;color:var(--faint)}
-  /* clickable disambiguation rows shown inside #results (outside .suggest, so restyle here) */
-  .sg.lotpick{padding:10px 12px;font-family:var(--mono);font-size:12px;color:var(--ink);
-    border-bottom:1px solid var(--drop-line);line-height:1.4;display:flex;gap:8px;align-items:flex-start;
-    border-radius:6px;transition:background .12s,color .12s}
-  .sg.lotpick:hover,.sg.lotpick:focus{background:var(--search-bg);color:var(--signal);outline:none}
-  .sg.lotpick:last-child{border-bottom:none}
-  .sg.lotpick .sgsrc{margin-left:auto;color:var(--faint);font-size:9.5px;flex:none;padding-top:1px}
-  @media (max-width:640px){ .sg.lotpick{padding:13px 12px;font-size:13px} }
 
   /* ---- Our blue flood-zone labels (replace FEMA's baked-in black ones) ---- */
   .floodlbl{ color:#39d3ff; font-family:var(--mono); font-size:11px; font-weight:700;
@@ -4436,28 +4435,6 @@ function syncWeatherBtn(){ if(btnWeather) btnWeather.classList.toggle('active', 
 
 /* ---------- Helpers ---------- */
 const results = document.getElementById('results');
-/* When the address search finds several lots sharing one number+street, doSearch() renders each
-   as a .sg.lotpick row carrying its coords + authoritative folio. Clicking a row resolves THAT
-   exact lot — same deterministic path as a single hit (center map, runLookup with folioHint so the
-   correct parcel is fetched rather than re-guessed from the point). Delegated so it covers rows from
-   both the FIND button and the suggestion-click search paths. */
-results.addEventListener('click', async (e)=>{
-  const row=e.target.closest('.sg.lotpick'); if(!row) return;
-  const lat=parseFloat(row.dataset.lat), lng=parseFloat(row.dataset.lng);
-  if(!isFinite(lat)||!isFinite(lng)) return;
-  const folio=row.dataset.folio||null, cty=row.dataset.cty||null, label=row.dataset.label||'';
-  [...results.querySelectorAll('.sg.lotpick')].forEach(r=>r.style.opacity=r===row?'1':'.45');
-  addToHistory(label);
-  const addrEl=document.getElementById('addr'); if(addrEl && label) addrEl.value=label;
-  results.insertAdjacentHTML('afterbegin', setStatus('busy','Pinpointing the parcel…'));
-  map.setView([lat,lng],18);
-  const baseCtx={ raw:label, hn:houseNum(label), toks:new Set(streetTokens(label)), unit:searchUnit(label) };
-  const _ctx=Object.assign({}, baseCtx, { folioHint:folio||null, countyHint:cty });
-  await runLookup(lat,lng,_ctx);
-  const fol=folio?` · Folio ${esc(folio)}`:'';
-  const conf=`<div class="note matchconf noprint" style="padding:2px 2px 4px">Selected: <b style="color:var(--ink)">${esc(label)}</b>${fol} — authoritative county parcel; confirm the marker is on the right lot.</div>`;
-  results.insertAdjacentHTML('afterbegin',conf);
-});
 // Delegated handler: "Copy" buttons injected into result cards (e.g. copy a parcel folio to paste
 // into a permit portal). Uses the async clipboard API with a legacy fallback, and briefly confirms.
 if(results) results.addEventListener('click', async (e)=>{
@@ -9227,35 +9204,46 @@ function addEcNoteMarker(ec){
    shows which neighbors also have an Elevation Certificate on file. Each note opens its own PDF.
    Active only after a lookup wired an EC layer (window.__ecAreaUrl). Debounced, capped, and keyed
    by extent so panning slightly doesn't refire identical queries. */
-const EC_AREA_MINZOOM = 14;          // below this the notes would be unreadable clutter
-const EC_AREA_MAX     = 200;         // cap features per view
+const EC_AREA_MINZOOM = 15;          // below this the notes would be unreadable clutter
+const EC_AREA_MAX     = 120;         // cap features per view
 let _ecAreaKey='', _ecAreaBusy=false, _ecAreaTimer=null;
+const _ecLinkFieldCache = Object.create(null);   // layer root -> PDF-link field name (or '')
 async function refreshEcAreaNotes(){
   const url = window.__ecAreaUrl;
   if(!url) return;
-  if(map.getZoom() < EC_AREA_MINZOOM){ return; }   // keep the subject note; just don't add area notes
+  if(map.getZoom() < EC_AREA_MINZOOM) return;   // keep the subject note; just don't add area notes
   const b=map.getBounds();
-  const key=[b.getWest().toFixed(4),b.getSouth().toFixed(4),b.getEast().toFixed(4),b.getNorth().toFixed(4),map.getZoom()>=EC_AREA_MINZOOM].join('|');
+  const key=[b.getWest().toFixed(4),b.getSouth().toFixed(4),b.getEast().toFixed(4),b.getNorth().toFixed(4)].join('|');
   if(key===_ecAreaKey || _ecAreaBusy) return;
   _ecAreaBusy=true;
   try{
     const root=ecLayerRoot(url);
+    // After the first sweep we know which field holds the PDF link, so ask for THAT field only
+    // instead of `*` — the EC layer carries dozens of attributes per point, and pulling them all
+    // for 100+ neighbours was the bulk of the payload.
+    const cached=_ecLinkFieldCache[root];
+    const outF = (cached===undefined) ? '*' : (cached ? encodeURIComponent(cached) : 'OBJECTID');
     const geom=encodeURIComponent(JSON.stringify({xmin:b.getWest(),ymin:b.getSouth(),xmax:b.getEast(),ymax:b.getNorth(),spatialReference:{wkid:4326}}));
     const params=`geometry=${geom}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects`+
-      `&outFields=*&returnGeometry=true&outSR=4326&resultRecordCount=${EC_AREA_MAX}&f=json`;
+      `&outFields=${outF}&returnGeometry=true&outSR=4326&resultRecordCount=${EC_AREA_MAX}&f=json`;
     const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
     const j=await (await fetch(root+'/query?'+params,{signal:ctrl.signal})).json();
     clearTimeout(t);
     if(j.error) throw new Error(j.error.message||'service error');
     const feats=j.features||[];
-    // Detect the PDF-link field once from the first feature's attribute names.
-    const det = feats.length ? ecDetect(Object.keys(feats[0].attributes)) : null;
+    // Detect (and remember) the PDF-link field from the first feature's attribute names.
+    let linkField = cached;
+    if(linkField===undefined){
+      const det = feats.length ? ecDetect(Object.keys(feats[0].attributes)) : null;
+      linkField = (det && det.link) ? det.link : '';
+      if(feats.length) _ecLinkFieldCache[root]=linkField;
+    }
     ecNoteLayer.clearLayers();
     for(const f of feats){
       const g=f.geometry; const gx=g?(g.x!=null?g.x:g.X):null, gy=g?(g.y!=null?g.y:g.Y):null;
       if(gx==null||gy==null) continue;
       let pdf=null;
-      if(det && det.link){ const u=pick(f.attributes,det.link); if(u && /^https?:/i.test(u)) pdf=u; }
+      if(linkField && f.attributes){ const u=f.attributes[linkField]; if(u && /^https?:/i.test(u)) pdf=u; }
       _ecMakeNote(Number(gy), Number(gx), pdf).addTo(ecNoteLayer);
     }
     if(feats.length && !map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map);
@@ -9263,7 +9251,7 @@ async function refreshEcAreaNotes(){
   }catch(e){/* best-effort; try again on next move */}
   finally{ _ecAreaBusy=false; }
 }
-map.on('moveend zoomend', ()=>{ clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 350); });
+map.on('moveend zoomend', ()=>{ clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 800); });
 let nbrNumOn = true;   // labels follow the parcel view by default; tied to the parcel result
 // Rings ([[ [lng,lat], ... ]]) of the SUBJECT parcel currently highlighted, in WGS84. Set when a
 // parcel is drawn and used to suppress gap-fill address points that fall on the SAME lot — a deep
@@ -10021,10 +10009,9 @@ async function runLookup(lat,lng,searchCtx){
   const pEC = _ecLayerUrl
     ? queryEC(_ecLayerUrl, lat, lng).catch(e=>({err:e.message}))
     : Promise.resolve(null);
-  // Remember the layer for the neighborhood 📝 notes (moveend refresh); reset the extent key so
-  // the current view re-queries under the new layer/property.
-  window.__ecAreaUrl = _ecLayerUrl || null; _ecAreaKey='';
-  if(_ecLayerUrl){ clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 900); }
+  // Neighborhood 📝 notes are wired AFTER the main cards render (see the EC card below) so their
+  // extra query never competes with the search's own requests to the same GIS host.
+  window.__ecAreaUrl = null; _ecAreaKey=''; clearTimeout(_ecAreaTimer);
 
   /* ---- Aerial & Street View: scout the property first (keyless deep-links + Esri aerial) ---- */
   html += renderAerialScout(lat, lng);
@@ -10809,6 +10796,10 @@ async function runLookup(lat,lng,searchCtx){
     if(myId!==runId) return;
     if(ec && !ec.err && ec.features && ec.features.length){
       addEcNoteMarker(ec);   // 📝 note on the map at the EC point — click opens the PDF
+      // Only now (main data already resolved) arm the neighborhood sweep, and let it idle a moment
+      // so the remaining enrichment calls finish first.
+      window.__ecAreaUrl=_ecLayerUrl; _ecAreaKey='';
+      clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 2500);
       html += `<div class="freshline"><span class="badge live">● LIVE</span> elevation certificate on file at this point <span class="muted" style="font-size:11px">(📝 marked on the map — click it to open the PDF)</span></div>`;
       if(ec.ecDistM!=null && ec.ecDistM>25){
         html += `<div class="note">⚠ Nearest certificate is ~${ec.ecDistM} m away — it may belong to an adjacent property. Check the certificate address below before relying on it.</div>`;
@@ -11389,6 +11380,47 @@ async function lookupCountyParcelByFolio(countyName, folio){
              folio:a[cfg.folioField]||folio, owner:a[cfg.ownerField]||null };
   }catch(e){ return null; }
 }
+/* ---------- "Several lots match" candidate picker ----------
+   When a house number + street matches more than one lot (e.g. 5730 on four different Oaks Lanes),
+   render the candidates as CLICKABLE rows: clicking one runs the full lookup on that exact parcel.
+   Rows are also keyboard-reachable (Enter/Space) for accessibility. */
+window.__pcCands=null;
+function renderParcelCandidates(cands, basisText){
+  window.__pcCands = cands.slice(0,8);
+  const list = window.__pcCands.map((c,i)=>
+    `<div class="pcand" role="button" tabindex="0" data-pc="${i}">`+
+      `<span>${esc(c.label)}</span>`+
+      `<span style="display:flex;gap:8px;align-items:center">`+
+        (c.folio?`<span class="pcfolio">${esc(c.folio)}</span>`:'')+
+        `<span class="pcarrow">→</span>`+
+      `</span>`+
+    `</div>`).join('');
+  results.innerHTML = setStatus('err',`Found ${cands.length} lots matching “${esc(basisText)}”. Click the right one below, or add a unit / more detail.`)
+    + `<div style="margin-top:6px">${list}</div>`;
+  // Center on the first candidate so the area is visible while choosing.
+  if(isFinite(cands[0].lat) && isFinite(cands[0].lng)) map.setView([cands[0].lat,cands[0].lng],18);
+}
+function _pcPick(i){
+  const c = window.__pcCands && window.__pcCands[i];
+  if(!c || !isFinite(c.lat) || !isFinite(c.lng)) return;
+  const lbl = c.label || '';
+  try{ if(lbl){ addrEl.value=lbl; STORE.set('fl_addr',lbl); addToHistory(lbl); } }catch(e){}
+  const ctx = { raw:lbl, hn:houseNum(lbl), toks:new Set(streetTokens(lbl)), unit:searchUnit(lbl) };
+  results.innerHTML = setStatus('busy','Pinpointing the parcel…');
+  map.setView([c.lat,c.lng],18);
+  runLookup(c.lat, c.lng, ctx);
+}
+// Delegated so it survives every re-render of the results panel.
+document.addEventListener('click', e=>{
+  const row = e.target.closest && e.target.closest('.pcand');
+  if(row && row.dataset.pc!=null) _pcPick(Number(row.dataset.pc));
+});
+document.addEventListener('keydown', e=>{
+  if(e.key!=='Enter' && e.key!==' ') return;
+  const row = e.target && e.target.closest && e.target.closest('.pcand');
+  if(row && row.dataset.pc!=null){ e.preventDefault(); _pcPick(Number(row.dataset.pc)); }
+});
+
 async function doSearch(){
   const q=document.getElementById('addr').value.trim();
   if(!q) return;
@@ -11415,10 +11447,7 @@ async function doSearch(){
       if(!pr){ continue; }
       if(pr && pr.multi && pr.candidates && pr.candidates.length){
         // Several lots share this number+street — show them rather than guess one.
-        const list=pr.candidates.slice(0,8).map(c=>`<div class="sg lotpick" style="cursor:pointer" data-lat="${c.lat}" data-lng="${c.lng}" data-folio="${esc(c.folio||'')}" data-cty="${esc(cty)}" data-label="${esc(c.label)}"><span>${esc(c.label)}</span>${c.folio?`<span class="sgsrc">${esc(c.folio)}</span>`:''}</div>`).join('');
-        results.innerHTML=setStatus('err',`Found ${pr.candidates.length} lots matching “${esc(q)}”. Click one below (or pick it on the map), or add a unit/more detail.`)+`<div style="margin-top:6px">${list}</div>`;
-        // Still center the map on the first candidate so the user sees the area.
-        map.setView([pr.candidates[0].lat,pr.candidates[0].lng],18);
+        renderParcelCandidates(pr.candidates, q);   // clickable rows — click runs the lookup on that lot
         return;
       }
       if(pr && isFinite(pr.lat) && isFinite(pr.lng)){
@@ -11643,9 +11672,7 @@ async function chooseSuggestion(it){
     const pr=await resolveCountyParcel(county, searchCtx).catch(()=>null);
     if(pr && pr.multi && pr.candidates && pr.candidates.length){
       addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr);
-      const list=pr.candidates.slice(0,8).map(c=>`<div class="sg lotpick" style="cursor:pointer" data-lat="${c.lat}" data-lng="${c.lng}" data-folio="${esc(c.folio||'')}" data-cty="${esc(county)}" data-label="${esc(c.label)}"><span>${esc(c.label)}</span>${c.folio?`<span class="sgsrc">${esc(c.folio)}</span>`:''}</div>`).join('');
-      results.innerHTML=setStatus('err',`Found ${pr.candidates.length} lots matching “${esc(basis)}”. Click one below (or pick it on the map), or add a unit/more detail.`)+`<div style="margin-top:6px">${list}</div>`;
-      map.setView([pr.candidates[0].lat,pr.candidates[0].lng],18);
+      renderParcelCandidates(pr.candidates, basis);   // clickable rows — click runs the lookup on that lot
       return;
     }
     if(pr && isFinite(pr.lat) && isFinite(pr.lng)){
