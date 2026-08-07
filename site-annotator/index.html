@@ -5856,6 +5856,63 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
   } // end if(EXPLODE_TEXT)
 
   // ── FREETEXT ANNOTATION PASS ─────────────────────────────────────────────
+  // REAL APPEARANCE FONT --------------------------------------------------
+  // An annotation's /DA can disagree with what its appearance stream actually
+  // paints, and the appearance is what you see. Acrobat's Typewriter tool is a
+  // repeat offender: the "SPD is optional" note declares /Cour 9 in its /DA but
+  // draws /Calibri 9, so trusting /DA imported it as Courier. Scan each
+  // beginAnnotation block for its first setFont and resolve pdf.js's internal
+  // font id to the real base name through commonObjs -- the same resolution the
+  // page-text pass uses. Matched back to the annotation by /Rect.
+  // The same scan also grabs the first STROKE colour set inside each block. A
+  // FreeText's border colour has no home in the annotation dictionary (/C is the
+  // background), so it exists only here. Reading it from the operators works no
+  // matter how the path is painted -- Acrobat draws this border with `B`, a
+  // single path that both fills AND strokes, which the duplicate-frame recovery
+  // misses because that one looks for a stroke-only rect.
+  var _apFontByRect=[], _apStrokeByRect=[];
+  function _hex3(r,g,b){
+    var h=function(v){ v=Math.max(0,Math.min(255,Math.round(v))); return ('0'+v.toString(16)).slice(-2); };
+    return '#'+h(r)+h(g)+h(b);
+  }
+  try{
+    var _fa2=opListAnnot.fnArray, _aa2=opListAnnot.argsArray, _curR=null, _got=false, _gotS=false;
+    for(var _i2=0;_i2<_fa2.length;_i2++){
+      if(_fa2[_i2]===OPS.beginAnnotation){ _curR=(_aa2[_i2]&&_aa2[_i2][1])||null; _got=false; _gotS=false; }
+      else if(_fa2[_i2]===OPS.endAnnotation){ _curR=null; _got=false; _gotS=false; }
+      else if(!_gotS && _curR && (_fa2[_i2]===OPS.setStrokeRGBColor || _fa2[_i2]===OPS.setStrokeGray)){
+        var _sa=_aa2[_i2]||[], _sc2=null;
+        try{
+          if(_fa2[_i2]===OPS.setStrokeGray){
+            var _gv=+_sa[0]; if(isFinite(_gv)){ if(_gv<=1.0001) _gv*=255; _sc2=_hex3(_gv,_gv,_gv); }
+          } else {
+            var _r3=+_sa[0], _g3=+_sa[1], _b3=+_sa[2];
+            if(isFinite(_r3)&&isFinite(_g3)&&isFinite(_b3)){
+              if(_r3<=1.0001&&_g3<=1.0001&&_b3<=1.0001){ _r3*=255; _g3*=255; _b3*=255; }
+              _sc2=_hex3(_r3,_g3,_b3);
+            }
+          }
+        }catch(_se){}
+        if(_sc2){ _apStrokeByRect.push({rect:_curR, col:_sc2}); _gotS=true; }
+      }
+      else if(!_got && _curR && _fa2[_i2]===OPS.setFont){
+        var _fid=_aa2[_i2] && _aa2[_i2][0], _nm2=null;
+        try{ var _fo2=page.commonObjs.get(_fid); _nm2=(_fo2&&(_fo2.name||_fo2.loadedName))||null; }catch(_x2){}
+        if(_nm2){ _apFontByRect.push({rect:_curR, name:String(_nm2).replace(/^[A-Z]{6}\+/,'')}); _got=true; }
+      }
+    }
+  }catch(_apf){}
+  function _apMatch(list, r, key){
+    if(!r) return null;
+    for(var _k2=0;_k2<list.length;_k2++){
+      var q=list[_k2].rect;
+      if(q && Math.abs(q[0]-r[0])<0.5 && Math.abs(q[1]-r[1])<0.5 &&
+             Math.abs(q[2]-r[2])<0.5 && Math.abs(q[3]-r[3])<0.5) return list[_k2][key];
+    }
+    return null;
+  }
+  function _apFontFor(r){ return _apMatch(_apFontByRect, r, 'name'); }
+  function _apStrokeFor(r){ return _apMatch(_apStrokeByRect, r, 'col'); }
   // Acrobat "text boxes typed on the page" are FreeText annotations — a separate
   // layer from the page's own text. Import each as an editable text object at the
   // right spot/rotation, carrying its text, color and font size where available.
@@ -5943,6 +6000,14 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
         if(_mN[1]) importBd='#'+_mN[1];                  // the REAL border colour
         if(_mN[2]!=null) _bgOpIn=parseFloat(_mN[2]);
       }
+      // No marker (a foreign PDF): take the border from what the appearance
+      // actually STROKES. /C is the BACKGROUND, so trusting it sent every
+      // white-backed callout into the darkenHex(bg) guess -- grey, instead of
+      // its real frame colour (black, in this case).
+      if(!(_mN && _mN[1])){
+        var _apBd=_apStrokeFor(an.rect);
+        if(_apBd){ importBd=_apBd; dbg('freetext','border from APPEARANCE stroke',{col:_apBd}); }
+      }
       // No backdrop whiteout: the backdrop is rendered with annotations DISABLED
       // (see _renderBackdropNoText), so the original note was never painted into
       // it. Nothing to cover — and nothing destroyed, so moving the note now
@@ -5969,6 +6034,26 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
           col='#'+[cc[0],cc[1],cc[2]].map(function(v){return ('0'+cv2(v).toString(16)).slice(-2);}).join('');
         }
       }catch(e){}
+      // FONT FAMILY from /DA. Both branches below used to hardcode Arial, so a
+      // Calibri note came back in Arial -- whose advance widths run wider, which
+      // re-wrapped the text and shifted every line break. pdf.js surfaces the /DA
+      // font as defaultAppearanceData.fontName; _normalizeFamily maps it (and the
+      // standard Helv/Cour/TiRo abbreviations) onto a family the app offers.
+      var _ftFam='Arial', _ftBold=false, _ftItal=false;
+      try{
+        // Appearance stream first (what is actually drawn), /DA only as fallback.
+        var _dan=_apFontFor(an.rect) || '';
+        if(_dan){ dbg('freetext','font from APPEARANCE stream',{name:_dan}); }
+        else { _dan=(an.defaultAppearanceData && an.defaultAppearanceData.fontName) || ''; }
+        _dan=String(_dan);
+        if(_dan){
+          _ftFam=(typeof _normalizeFamily==='function') ? _normalizeFamily(_dan) : 'Arial';
+          // Weight/slope live in the name: HelvB, HelvBO, Calibri-BoldItalic, ...
+          _ftBold=/bold|(^|[^a-z])b(o)?$/i.test(_dan) || /B(O)?$/.test(_dan);
+          _ftItal=/italic|oblique/i.test(_dan) || /O$/.test(_dan);
+        }
+      }catch(_ff){}
+      if(_ftFam) dbg('freetext','font resolved',{family:_ftFam, bold:_ftBold, italic:_ftItal});
       // Create the app's COMMENT/NOTE object (sticky-note type) from this
       // FreeText annotation — center on the box, carry text + the note's color.
       // If anything fails, fall back to a plain editable TEXT object so the
@@ -6010,7 +6095,7 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
           bgColor:noteBg, bgOpacity:(_bgOpIn!=null?_bgOpIn:1),
           borderColor:noteBd, borderStrokeW:noteBw,
           fontSize: Math.max(8, Math.round(fpx/sc)),
-          fontFamily:'Arial', bold:false, italic:false, underline:false, strike:false,
+          fontFamily:_ftFam, bold:_ftBold, italic:_ftItal, underline:false, strike:false,
           opacity:1, layerIdx:activeLayerIdx,
           _fromFreeText:true   // imported from a FreeText annotation
         };
@@ -6032,8 +6117,8 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
             x: x0, y: y0 + fpx*0.85,
             text: txt, color: col, fontSize: fpx/sc,
             opacity:1, layerIdx:activeLayerIdx,
-            bold:false, italic:false, underline:false, strike:false,
-            fontFamily:'Arial', textAlign:'left', angle:0,
+            bold:_ftBold, italic:_ftItal, underline:false, strike:false,
+            fontFamily:_ftFam, textAlign:'left', angle:0,
             // Highlight recovered from the marker (/T alpha) + /C colour. Without
             // these two the text came back with its background stripped.
             bgColor:(importBd||'#ffff00'), bgOpacity:_hiOp,
@@ -7271,6 +7356,12 @@ function _normalizeFamily(fam){
   if(/arial|helvetica/i.test(fam)) return 'Arial';
   if(/times/i.test(fam)) return 'Times New Roman';
   if(/courier|mono/i.test(fam)) return 'Courier New';
+  // PDF /DA standard abbreviations: annotations name their font as Helv, HeBo,
+  // TiRo, Cour, ZaDb rather than a full family, so the tests above miss them and
+  // the raw abbreviation leaked out as a bogus family ("Cour").
+  if(/^helv/i.test(fam)) return 'Arial';
+  if(/^cour/i.test(fam)) return 'Courier New';
+  if(/^(tiro|timesnewroman)/i.test(fam)) return 'Times New Roman';
   // pdf.js often reports only a GENERIC family ('sans-serif','serif'). The old
   // fallback chopped 'sans-serif' into the literal (nonexistent) family "sans",
   // which the browser silently substitutes — map generics to real fonts instead.
@@ -17006,6 +17097,23 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
   // text). The dict carries /Contents + /DA + /C so Acrobat regenerates an
   // editable text box when the user edits it. Rotated notes are skipped at the
   // flagging stage (FreeText can't rotate cleanly) and stay flattened.
+  // Register a font under NAME in the AcroForm /DR so a /DA referencing it
+  // resolves. Acrobat reads /DA -- NOT the appearance stream -- to fill its font
+  // dropdown, so a note painted in Carlito while declaring /Helv reported
+  // "Helvetica" in the properties bar and would revert to it on edit.
+  function _ensureDR(name, ref){
+    if(!name || !ref) return;
+    try{
+      var _a=pdf.catalog.lookup(PDFLib.PDFName.of('AcroForm'));
+      if(!_a){ _a=ctx.obj({}); pdf.catalog.set(PDFLib.PDFName.of('AcroForm'), ctx.register(_a)); }
+      if(!_a.get(PDFLib.PDFName.of('Fields'))) _a.set(PDFLib.PDFName.of('Fields'), ctx.obj([]));
+      var _dr=_a.lookup(PDFLib.PDFName.of('DR'));
+      if(!_dr){ _dr=ctx.obj({}); _a.set(PDFLib.PDFName.of('DR'), _dr); }
+      var _fd=_dr.lookup(PDFLib.PDFName.of('Font'));
+      if(!_fd){ _fd=ctx.obj({}); _dr.set(PDFLib.PDFName.of('Font'), _fd); }
+      if(!_fd.get(PDFLib.PDFName.of(name))) _fd.set(PDFLib.PDFName.of(name), ref);
+    }catch(_dre){ console.warn('[AcroAnnot] /DR register '+name, _dre); }
+  }
   try{ if(typeof commentObjs!=='undefined') commentObjs.forEach(function(c){
     if(!c || !c._acroFlag) return;
     var noteA=(c.opacity==null?1:c.opacity);
@@ -17038,6 +17146,30 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
       var _set=(fonts.custom && _famK && fonts.custom[_famK])?fonts.custom[_famK]:fonts;
       var f=c.bold?(c.italic?_set.boldItalic:_set.bold):(c.italic?_set.italic:_set.regular);
       fontRef=f && f.ref ? f.ref : (fonts.regular.ref||null);
+      // TOFU GUARD. The custom families (Calibri/Times/Courier) embed as
+      // Type0/Identity-H fonts whose content-stream operands are 2-byte GLYPH
+      // IDS. pdfStr() writes Latin-1 bytes, and Latin-1 against a Type0 font
+      // renders as a grid of empty boxes -- which is exactly what appeared once
+      // notes started importing with their real family instead of Arial. Only
+      // the STANDARD Helvetica set can take literal bytes; for anything else use
+      // pdf-lib's encodeText(), which emits the correct hex string per font kind.
+      // (The text emitter dodges this by always forcing standard Helvetica; the
+      // vector painters dodge it by going through page.drawText.)
+      var _isCustomF=(_set!==fonts);
+      // /DA font name must match what the appearance actually paints, and must
+      // be resolvable through /DR. Standard set keeps the Helv* names; a custom
+      // family gets its own name (Calibri, CalibriB, ...) registered below.
+      var _daNm = _isCustomF && _famK
+        ? (_famK + (c.bold?(c.italic?'BI':'B'):(c.italic?'I':'')))
+        : (c.bold?(c.italic?'HelvBO':'HelvB'):(c.italic?'HelvO':'Helv'));
+      _ensureDR(_daNm, fontRef);
+      function _tjOf(line){
+        if(_isCustomF && f && typeof f.encodeText==='function'){
+          try{ return f.encodeText(_winAnsiSafe(String(line==null?'':line))).toString()+' Tj '; }
+          catch(_te){ console.warn('[AcroAnnot] note encodeText failed, falling back:',_te); }
+        }
+        return '('+pdfStr(line)+') Tj ';
+      }
       fsize=W(fsPx); daFs=fsize;
       var lxN=c.cx-c.w/2, lyN=c.cy-c.h/2;
       ops+='q BT /F0 '+f2(fsize)+' Tf '+colStr(txCol)+' rg ';
@@ -17047,7 +17179,7 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
         if(ty+fsPx > lyN+c.h-pad+halfLead+0.5) return;   // overflow clip, as on screen
         var bx=lxN+pad, by=ty+fsPx*0.80;
         var pp=P(bx,by);
-        ops+=tmRotAt(pp.x,pp.y,rotDeg)+'('+pdfStr(line)+') Tj ';
+        ops+=tmRotAt(pp.x,pp.y,rotDeg)+_tjOf(line);
         // underline / strike as thin rules
         if(c.underline||c.strike){
           var lwTxt=0; try{ lwTxt=f.widthOfTextAtSize(line,fsize); }catch(_w){ lwTxt=line.length*fsize*0.5; }
@@ -17059,7 +17191,7 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
     }
     var d={ Subtype:'FreeText',
             Contents:_pdfStrOf(c.text),
-            DA:PDFLib.PDFString.of('/Helv '+f2(daFs)+' Tf '+colStr(txCol)+' rg'),
+            DA:PDFLib.PDFString.of('/'+_daNm+' '+f2(daFs)+' Tf '+colStr(txCol)+' rg'),
             Q:0,
             C:[Math.round(bgCol[0]*1000)/1000, Math.round(bgCol[1]*1000)/1000, Math.round(bgCol[2]*1000)/1000],
             CA:noteA,
@@ -17072,6 +17204,9 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
                 +String(c.borderColor||darkenHex(c.bgColor||'#FBBF24',0.35)).replace('#','')
                 +':'+(Math.round(((c.bgOpacity!==undefined?c.bgOpacity:1))*1000)/1000)),
             BS:bsDict(Math.round(bwPt*100)/100,null) };
+    // Annotation-level /DR as well, for viewers that resolve the /DA font from
+    // the annotation rather than from the AcroForm.
+    if(fontRef){ try{ var _frmN={}; _frmN[_daNm]=fontRef; d.DR=ctx.obj({ Font: ctx.obj(_frmN) }); }catch(_dn){} }
     // Keep text upright when Acrobat regenerates the appearance on edit (rotated
     // pages otherwise flip it sideways). Page rotations are always multiples of 90.
     if(rotDeg) d.Rotate=rotDeg;
@@ -17108,9 +17243,30 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
     // against a WinAnsi simple font. A custom/embedded TTF is a Type0/Identity-H
     // font whose content stream needs 2-byte glyph IDs — Latin-1 bytes there come
     // out as tofu boxes (□□□). Helvetica keeps the edited text readable & editable.
-    var f=obj.bold?(obj.italic?fonts.boldItalic:fonts.bold):(obj.italic?fonts.italic:fonts.regular);
-    if(!f) f=fonts.regular;
+    // Custom family when the object has one. This block used to force the
+    // standard Helvetica set unconditionally (see the note above) purely because
+    // pdfStr() writes Latin-1 bytes, which render as tofu against an embedded
+    // Type0/Identity-H font. _tjTxt() below encodes per font kind instead, so the
+    // real family can be used and Calibri text no longer exports as Helvetica.
+    var _famKT=(typeof _customFamilyKey==='function')?_customFamilyKey(obj.fontFamily):null;
+    var _setT=(fonts.custom && _famKT && fonts.custom[_famKT]) ? fonts.custom[_famKT] : fonts;
+    var _isCustomT=(_setT!==fonts);
+    var f=obj.bold?(obj.italic?_setT.boldItalic:_setT.bold):(obj.italic?_setT.italic:_setT.regular);
+    if(!f) f=_setT.regular||fonts.regular;
     var fontRef=(f&&f.ref)?f.ref:(fonts.regular&&fonts.regular.ref)||null;
+    // /DA must name the font actually painted, and it must resolve via /DR --
+    // Acrobat's font dropdown reads /DA, not the appearance stream.
+    var _daNmT = _isCustomT && _famKT
+      ? (_famKT + (obj.bold?(obj.italic?'BI':'B'):(obj.italic?'I':'')))
+      : _daFontName(obj);
+    _ensureDR(_daNmT, fontRef);
+    function _tjTxt(s){
+      if(_isCustomT && f && typeof f.encodeText==='function'){
+        try{ return f.encodeText(String(s==null?'':s)).toString()+' Tj '; }
+        catch(_te){ console.warn('[AcroAnnot] text encodeText failed, falling back:',_te); }
+      }
+      return '('+pdfStr(s)+') Tj ';
+    }
     var efpx=ptToCanvasPx(obj.fontSize), fsize=efpx/sc;
     var lineH=(typeof _lineAdvOf==='function')?_lineAdvOf(obj,efpx):efpx*1.25;
     var txCol=rgb01(obj.color||'#000000');
@@ -17174,20 +17330,20 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
       var twc=_wc(ln);
       var _off=(align==='center'?(maxW-twc)/2:align==='right'?(maxW-twc):0);
       var pp=P(obj.x+_off, obj.y+i*lineH);
-      ops+=tmRotAt(pp.x,pp.y,rotDeg)+'('+pdfStr(ln)+') Tj ';
+      ops+=tmRotAt(pp.x,pp.y,rotDeg)+_tjTxt(ln);
     });
     ops+='ET Q ';
     var d={ Subtype:'FreeText',
             Contents:_pdfStrOf(obj.text),
             // DA points at the styled Helvetica variant (registered in AcroForm /DR
             // above) so Acrobat keeps bold/italic when it regenerates on open.
-            DA:PDFLib.PDFString.of('/'+_daFontName(obj)+' '+f2(fsize)+' Tf '+colStr(txCol)+' rg'),
+            DA:PDFLib.PDFString.of('/'+_daNmT+' '+f2(fsize)+' Tf '+colStr(txCol)+' rg'),
             Q:(align==='center'?1:align==='right'?2:0),
             CA:op,
             BS:bsDict(0,null) };
     // Annotation-level /DR too, mapping the same name → styled font, for viewers
     // that resolve the DA font from the annotation rather than the AcroForm.
-    if(fontRef){ try{ var _nm=_daFontName(obj); var _frm={}; _frm[_nm]=fontRef; d.DR=ctx.obj({ Font: ctx.obj(_frm) }); }catch(_dr){} }
+    if(fontRef){ try{ var _frm={}; _frm[_daNmT]=fontRef; d.DR=ctx.obj({ Font: ctx.obj(_frm) }); }catch(_dr){} }
     // ROUND-TRIP MARKER: "AOG-TEXT:<bgOpacity>" tells the import this is a TEXT
     // object, not a note, and carries the highlight alpha (which otherwise exists
     // only as the /GSF ExtGState value inside the appearance stream, where the
@@ -18177,15 +18333,23 @@ function _loadFontBytes(k){
 function _embedCustomExportFonts(pdf, fonts){
   var need={};          // family key → {regular:true, bold:true, …} actually used
   try{
-    textObjs.forEach(function(o){
-      if(!o.text) return;
+    var _scan=function(o){
+      if(!o || !o.text) return;
       var k=_customFamilyKey(o.fontFamily);
       if(k && _CUSTOM_FONT_SRC[k]){
         var v=o.bold?(o.italic?'boldItalic':'bold'):(o.italic?'italic':'regular');
         (need[k]=need[k]||{})[v]=true;
       }
-    });
+    };
+    textObjs.forEach(_scan);
+    // NOTES COUNT TOO. This only ever scanned textObjs, so a note set to Calibri
+    // never triggered the Carlito fetch: fonts.custom stayed empty, _set fell
+    // back to the standard Helvetica group, and the note exported in Helvetica
+    // no matter what family it carried. Notes hold fontFamily/bold/italic in the
+    // same shape as text objects, so the same scan applies.
+    try{ if(typeof commentObjs!=='undefined' && commentObjs) commentObjs.forEach(_scan); }catch(_ce){}
   }catch(e){}
+  try{ dbg('export','custom font families needed: '+(Object.keys(need).join(',')||'(none)')); }catch(_dn){}
   var keys=Object.keys(need);
   if(!keys.length) return Promise.resolve();
   return _ensureFontkit().then(function(ok){
