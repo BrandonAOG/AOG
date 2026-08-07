@@ -11403,6 +11403,8 @@ function renderParcelCandidates(cands, basisText){
 function _pcPick(i){
   const c = window.__pcCands && window.__pcCands[i];
   if(!c || !isFinite(c.lat) || !isFinite(c.lng)) return;
+  if(Date.now()-(window.__pcPickedAt||0) < 700) return;   // ignore a double-fired tap
+  window.__pcPickedAt=Date.now();
   const lbl = c.label || '';
   try{ if(lbl){ addrEl.value=lbl; STORE.set('fl_addr',lbl); addToHistory(lbl); } }catch(e){}
   const ctx = { raw:lbl, hn:houseNum(lbl), toks:new Set(streetTokens(lbl)), unit:searchUnit(lbl) };
@@ -11698,6 +11700,13 @@ async function chooseSuggestion(it){
   // matches the typed house number + street. If found, drive runLookup from the corrected point so
   // the polygon, marker and details all land on the right house.
   let qLat=it.lat, qLng=it.lng, snapNote='';
+  // Some suggestion sources return a label with no usable coordinate. Rather than silently doing
+  // nothing (which looks like the click "didn't search"), geocode the picked address first.
+  if(!isFinite(qLat) || !isFinite(qLng)){
+    const g = await geocodeBest(fullAddr || basis).catch(()=>null);
+    if(g && isFinite(g.lat) && isFinite(g.lng)){ qLat=g.lat; qLng=g.lng; }
+    else { results.innerHTML=setStatus('err',"Couldn't place that address — try adding the city or ZIP, then press FIND."); return; }
+  }
   if(searchCtx.hn){
     try{
       const snap=await snapToParcelByAddress(basis, it.lat, it.lng);
@@ -11750,10 +11759,25 @@ addrEl.addEventListener('input',()=>{
   },180);                                  // snappier than before; cache + abort keep it cheap
 });
 
+/* Suggestion rows fire on mousedown (beats the input's blur, so the dropdown doesn't vanish first).
+   Some touch browsers don't synthesize mousedown reliably, so a click fallback is wired too — a
+   short dedupe window keeps a tap from running the lookup twice. */
+let _sugPickedAt=0;
+function _sugPick(el){
+  if(!el) return;
+  if(Date.now()-_sugPickedAt < 700) return;   // already handled by the other event
+  _sugPickedAt=Date.now();
+  const it=sugItems[+el.dataset.i]; if(it) chooseSuggestion(it);
+}
 sugEl.addEventListener('mousedown',e=>{      // mousedown beats input blur
   const el=e.target.closest('.sg'); if(!el) return;
   e.preventDefault();
-  const it=sugItems[+el.dataset.i]; if(it) chooseSuggestion(it);
+  _sugPick(el);
+});
+sugEl.addEventListener('click',e=>{          // touch / assistive fallback
+  const el=e.target.closest('.sg'); if(!el) return;
+  e.preventDefault();
+  _sugPick(el);
 });
 addrEl.addEventListener('keydown',e=>{
   if(sugEl.classList.contains('show') && sugItems.length){
