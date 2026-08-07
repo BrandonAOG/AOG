@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.4.7';
+var CACHE_NAME = 'aog-forms-v2.4.8';
 var DEV_MODE   = false;
 
 // Tracks whether this SW instance has already run a precache repair pass
@@ -23,7 +23,8 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-'📍 Address search IN PROPERTY LOOKUP now snaps to the correct parcel statewide — picks the exact lot from the county/state parcel records instead of dropping the pin on a neighboring house',
+'🗺️ SITE PLAN ANNOTATOR — complete refresh, now with Adobe Acrobat support',
+'📝 ELECTRICAL INSTALL FORM footer bumped to V1.1 — check whether anyone is still on a stale copy',
 ];
 // 
 // ============================================================
