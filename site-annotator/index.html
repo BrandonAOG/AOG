@@ -6548,7 +6548,12 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
         try{
           var _annC2=(curAnn && (curAnn.contents!=null ? curAnn.contents
                         : (curAnn.contentsObj && curAnn.contentsObj.str))) || '';
-          _isAogImgStamp = /^AOG-IMG/.test(String(_annC2));
+          // Newer exports carry the tag in /T (titleObj) so that /Contents can
+          // stay empty and Acrobat draws no note marker. Older files still have
+          // it in /Contents, so check both and stay backward compatible.
+          var _annT2=(curAnn && (curAnn.title!=null ? curAnn.title
+                        : (curAnn.titleObj && curAnn.titleObj.str))) || '';
+          _isAogImgStamp = /^AOG-IMG/.test(String(_annC2)) || /^AOG-IMG/.test(String(_annT2));
         }catch(_ae){}
         if(!EXPLODE_SIGSEAL && !_isAogImgStamp){
           try{ dbg('import','annotation image (stamp) skipped — Signatures & seals unticked'); }catch(_d){}
@@ -17173,13 +17178,28 @@ function _emitImageStamps(pdf, page, sz, sc, list){
               var apRef=ctx.register(ctx.stream(apOps, {
                 Type:'XObject', Subtype:'Form', BBox:[rect[0],rect[1],rect[2],rect[3]], Resources:res
               }));
+              // NO COMMENT MARKER ----------------------------------------
+              // Pictures draw on the page and print normally (F:4). Do NOT add
+              // /Popup, /T or /M here: a markup annotation carrying a popup is
+              // what makes Acrobat paint the little yellow note icon beside the
+              // stamp, and a cluster of those icons crowds the sheet worse than
+              // the pictures do. No popup means no marker.
+              // If a marker still appears, /Contents is the remaining trigger --
+              // see the note below before blanking it.
+              // TAG LIVES IN /T, NOT /Contents ---------------------------
+              // Acrobat paints its yellow note marker beside any annotation
+              // that carries /Contents, because /Contents IS the note text.
+              // That marker is viewer chrome at a fixed screen size -- no PDF
+              // key sizes it and it does not scale with /Rect, so it cannot be
+              // shrunk, only avoided. /Contents is therefore left empty and the
+              // AOG-IMG re-import tag moves to /T (the author title), which
+              // pdf.js still exposes as titleObj.str. Stamp stays a Stamp, so
+              // the picture is still selectable and movable in Acrobat.
               var d2={ Type:'Annot', Subtype:'Stamp', Rect:[rect[0],rect[1],rect[2],rect[3]],
                        F:4, P:page.ref, CA:op,
                        NM:PDFLib.PDFString.of('AOG-IMG-'+Date.now().toString(36)+'-'+(seq++)),
-                       // Marker read on re-import: lets the reopen path recognise these
-                       // as OUR OWN picture/equipment stamps and always bring them back,
-                       // instead of gating them behind the "Signatures & seals" option.
-                       Contents:PDFLib.PDFString.of('AOG-IMG'),
+                       T:PDFLib.PDFString.of('AOG-IMG'),
+                       Contents:PDFLib.PDFString.of(''),
                        AP:{ N:apRef } };
               var annotRef=ctx.register(ctx.obj(d2));
               var arr=null; try{ arr=page.node.Annots(); }catch(_a){}
@@ -17784,7 +17804,14 @@ function _markAcroAnnotObjs(){
     (typeof shapeObjs!=='undefined')?shapeObjs:[],
     (typeof penObjs!=='undefined')?penObjs:[],
     (typeof leaderObjs!=='undefined')?leaderObjs:[],
-    (typeof commentObjs!=='undefined')?commentObjs:[]
+    (typeof commentObjs!=='undefined')?commentObjs:[],
+    // textObjs MUST be cleared here, not only in the text pass below. That pass
+    // sits after the `if(!EXPORT_ACRO_ANNOTS) return 0` bail, so unticking
+    // Acrobat-edit after an export left every text object still carrying
+    // _acroFlag from the previous run. The painter's visible() skips flagged
+    // objects and _emitAcrobatAnnots skips them too when the box is off, so the
+    // text was dropped by BOTH paths and vanished from the export entirely.
+    (typeof textObjs!=='undefined')?textObjs:[]
   ];
   lists.forEach(function(a){ try{ a.forEach(function(o){ if(o) delete o._acroFlag; }); }catch(_e){} });
   if(!EXPORT_ACRO_ANNOTS) return 0;
@@ -18374,7 +18401,17 @@ function _buildVectorPdf(attachJson, onReady){
     // as vectors. (It was previously assigned only after the diversion block.)
     var _totRot = (((typeof _pdfPageRot!=='undefined'?_pdfPageRot:0) + (typeof _userRotDeg!=='undefined'?_userRotDeg:0)) % 360 + 360) % 360;
     var _acroImgList=[];
-    if(typeof EXPORT_ACRO_ANNOTS!=='undefined' && EXPORT_ACRO_ANNOTS){
+    // PICTURES NEVER BECOME STAMPS ------------------------------------------
+    // A /Stamp is a markup annotation, so Acrobat paints its little yellow
+    // comment marker next to every one -- and a cluster of photos turns into a
+    // cluster of markers that crowds the sheet worse than the photos did.
+    // There is no annotation flag or opacity setting that suppresses that
+    // marker (/CA dims the picture, not the marker), so the only real fix is to
+    // not emit an annotation: pictures embed straight into the page content
+    // stream instead. Shapes and pen strokes are unaffected and stay editable.
+    // Set this false to restore Acrobat-movable picture stamps (markers return).
+    var _AOG_PICTURES_NATIVE = false;
+    if(typeof EXPORT_ACRO_ANNOTS!=='undefined' && EXPORT_ACRO_ANNOTS && !_AOG_PICTURES_NATIVE){
       // Keep VECTOR-traceable line-art pictures (ov._trace) in the normal pipeline
       // so they still export as TRUE VECTORS (drawSvgPath) even with Acrobat-edit
       // on — otherwise they'd be flattened into raster /Stamp annotations and lose
