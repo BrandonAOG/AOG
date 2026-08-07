@@ -2521,7 +2521,7 @@ function _winAnsiSafe(s){
     .replace(/•/g,'-')                          // bullet -> -
     .replace(/™/g,'(TM)').replace(/®/g,'(R)').replace(/©/g,'(C)')
     .replace(/[ -   　]/g,' ') // exotic spaces -> normal space
-    .replace(/[​-‏U+202A-U+202E﻿]/g,''); // zero-width / bidi marks -> drop
+    .replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g,''); // zero-width / bidi marks -> drop
   // Final guard: replace anything still outside Latin-1 (and stray C1 controls) with '?'
   return s.replace(/[^\x09\x0A\x0D\x20-\x7E -ÿ]/g,'?');
 }
@@ -21462,7 +21462,10 @@ function handleImgPointerMove(e, sp){
     // minimum of 1 ft (converted to canvas units via ppu) — small enough for any
     // real object, large enough to prevent an accidental shrink to nothing.
     // With no scale set, keep the 20px screen-pixel guard.
-    var MIN_SIDE = (scaleSet && ppu > 0) ? Math.max(1, 1 / ppu) : 20;
+    // MIN_IMG_FT: smallest allowed side for an equipment icon, in real feet
+    // when a scale is set. Lower this to place smaller symbols; 0.25 = 3".
+    var MIN_IMG_FT = 0.25;
+    var MIN_SIDE = (scaleSet && ppu > 0) ? Math.max(0.5, MIN_IMG_FT / ppu) : 4;
 
     var isVEdge = (hi===1 || hi===5); // top/bottom centre → only HEIGHT changes
     var isHEdge = (hi===3 || hi===7); // left/right middle → only WIDTH changes
