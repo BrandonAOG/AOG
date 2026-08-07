@@ -5882,7 +5882,10 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       var c2=U2.applyTransform([r[2], r[3]], vp.transform);
       var x0=Math.min(c1[0],c2[0]), y0=Math.min(c1[1],c2[1]);
       var x1=Math.max(c1[0],c2[0]), y1=Math.max(c1[1],c2[1]);
-      _ftRects.push({x0:x0,y0:y0,x1:x1,y1:y1});
+      // Keep a handle on this entry: the duplicate-frame sweep further down is
+      // the only place the note's TRUE border colour is available (see there).
+      var _ftRec={x0:x0,y0:y0,x1:x1,y1:y1,note:null,_bdGuessed:false};
+      _ftRects.push(_ftRec);
       // ── Capture the note's REAL colors from the import ──────────────────────
       // The colored box is baked into the backdrop; read its fill before we white
       // it out so the imported note keeps its actual color (e.g. a green callout)
@@ -5926,6 +5929,20 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
         }
       }catch(e){}
       try{ if(an.borderStyle && an.borderStyle.width>0) importBw=Math.max(1,Math.round(an.borderStyle.width*sc)); }catch(e){}
+      // ROUND-TRIP MARKER (see the emitters). /T tells us whether this FreeText
+      // was one of OUR text objects or one of our notes, and carries the values
+      // that have no home in the annotation dictionary: the note's border colour
+      // and the background alpha. Files exported before this marker existed fall
+      // back to the border-width heuristic below.
+      var _ftTitle='', _mT=null, _mN=null, _hiOp=0, _bgOpIn=null;
+      try{ _ftTitle=String((an.title!=null?an.title:(an.titleObj&&an.titleObj.str))||''); }catch(_tt){}
+      _mT=/^AOG-TEXT(?::([0-9.]+))?/.exec(_ftTitle);
+      _mN=/^AOG-NOTE(?::([0-9a-fA-F]{6}))?(?::([0-9.]+))?/.exec(_ftTitle);
+      if(_mT && _mT[1]!=null) _hiOp=parseFloat(_mT[1])||0;
+      if(_mN){
+        if(_mN[1]) importBd='#'+_mN[1];                  // the REAL border colour
+        if(_mN[2]!=null) _bgOpIn=parseFloat(_mN[2]);
+      }
       // No backdrop whiteout: the backdrop is rendered with annotations DISABLED
       // (see _renderBackdropNoText), so the original note was never painted into
       // it. Nothing to cover — and nothing destroyed, so moving the note now
@@ -5965,14 +5982,32 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
       var noteBd = (importBd && importBd.toLowerCase()!==noteBg.toLowerCase())
                      ? importBd : darkenHex(noteBg, 0.35);
       var noteBw = importBw || 2;
+      // TEXT vs NOTE -------------------------------------------------------
+      // The export writes plain TEXT objects as FreeText with NO /C and a
+      // ZERO-width /BS (see the text emitter: "No /C (transparent background)"),
+      // while NOTES always carry a background /C and a real border width.
+      // Without this test the import turned EVERY FreeText into a note, so each
+      // round trip promoted plain labels ("22KW", "Metermain/ATS", "20' Poly")
+      // into boxed, bordered note objects -- which then re-exported through the
+      // notes emitter, picking up the white /C that the border logic misreads.
+      // No /C and no border width means it was text: rebuild it as text.
+      // Marker wins when present; otherwise fall back to the shape of the dict.
+      // BOTH terms are required. A background /C means there is a box, so it is a
+      // note even when the border width is zero -- Acrobat writes no /BS at all on
+      // some FreeTexts and pdf.js then reports width 0, so border width alone
+      // misreads a white-filled callout as bare text and strips its fill and frame.
+      // No /C AND no border = genuinely bare text (e.g. Acrobat's Typewriter tool,
+      // /IT /FreeTextTypewriter, which pdf.js does not expose to us directly).
+      var _asPlainText = !!_mT || (!_mN && !importBd && !importBw);
+      if(_asPlainText){ dbg('freetext','importing FreeText as TEXT',{text:txt.slice(0,30), marker:_ftTitle||'(none)', hiOp:_hiOp}); }
       var noteOK=false;
-      try{
+      if(!_asPlainText) try{
         var nc={
           id: Date.now()+Math.floor(Math.random()*100000)+commentObjs.length,
           cx:(x0+x1)/2, cy:(y0+y1)/2,
           w:cw, h:ch,
           text: txt, textColor: col,
-          bgColor:noteBg, bgOpacity:1,
+          bgColor:noteBg, bgOpacity:(_bgOpIn!=null?_bgOpIn:1),
           borderColor:noteBd, borderStrokeW:noteBw,
           fontSize: Math.max(8, Math.round(fpx/sc)),
           fontFamily:'Arial', bold:false, italic:false, underline:false, strike:false,
@@ -5981,6 +6016,12 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
         };
         commentObjs.push(nc);
         noteOK=true;
+        // Record whether the border colour above was a real value or the
+        // darkenHex(bg) guess, so the frame sweep knows if it may override it.
+        try{
+          _ftRec.note=nc;
+          _ftRec._bdGuessed=!(importBd && importBd.toLowerCase()!==noteBg.toLowerCase());
+        }catch(_fr){}
         dbg('freetext','imported NOTE',{text:txt.slice(0,30), cx:Math.round(nc.cx), cy:Math.round(nc.cy), w:Math.round(cw), h:Math.round(ch), fs:nc.fontSize, col:col});
       }catch(noteErr){ console.warn('[Explode] note create failed, falling back to text:',noteErr); }
       if(!noteOK){
@@ -5992,7 +6033,10 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
             text: txt, color: col, fontSize: fpx/sc,
             opacity:1, layerIdx:activeLayerIdx,
             bold:false, italic:false, underline:false, strike:false,
-            fontFamily:'Arial', textAlign:'left', angle:0, bgOpacity:0,
+            fontFamily:'Arial', textAlign:'left', angle:0,
+            // Highlight recovered from the marker (/T alpha) + /C colour. Without
+            // these two the text came back with its background stripped.
+            bgColor:(importBd||'#ffff00'), bgOpacity:_hiOp,
             _fromFreeText:true
           });
           dbg('freetext','FALLBACK to text',{text:txt.slice(0,30), x:Math.round(x0), y:Math.round(y0)});
@@ -6038,6 +6082,23 @@ function _explodeObjects(page, opList, tc, vp, sc, w, h, n, opListAnnot){
           // Kill it if the two boxes largely coincide (IoU) OR the extracted rect is
           // mostly swallowed by the note's box (its own inner/outer border).
           if(o.iou>=0.5 || o.containA>=0.8){
+            // RECOVER THE NOTE'S TRUE BORDER COLOUR --------------------------
+            // This shape IS the note's own frame, pulled off the appearance
+            // stream by the vector extractor, so s.color holds the real stroke
+            // colour. The FreeText pass above could not know it: pdf.js exposes
+            // only /C, which for a FreeText annotation is the BACKGROUND, not
+            // the border. /C therefore came back white, matched the white bg,
+            // and the border fell through to darkenHex(bg) -- which is why every
+            // re-imported note came back with a grey frame instead of its blue
+            // or red one. Lift the colour off the duplicate before binning it.
+            try{
+              if(ft.note && ft._bdGuessed && !s.fill && s.color){
+                ft.note.borderColor=s.color;
+                if(s.strokeW>0) ft.note.borderStrokeW=s.strokeW;
+                ft._bdGuessed=false;
+                dbg('freetext','recovered border colour from frame',{col:s.color,w:s.strokeW});
+              }
+            }catch(_bc){}
             dbg('freetext','suppressed duplicate border rect',{cx:Math.round(s.cx),cy:Math.round(s.cy),w:Math.round(s.w),h:Math.round(s.h),iou:o.iou.toFixed(2),cont:o.containA.toFixed(2)});
             shapeObjs.splice(si,1);
             break;
@@ -6526,6 +6587,19 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
       }
       else if(fnA===OPS.fillStroke || fnA===OPS.eoFillStroke){
         if(curSubs.length) curSubs[curSubs.length-1].painted='fillstroke';
+      }
+      // `n` (endPath) ends a path WITHOUT painting it -- PDF's explicit discard.
+      // Acrobat opens a FreeText appearance with "<rect> re n" as a bounds
+      // artifact and uses "W n" to set a clip region; NEITHER is artwork. These
+      // subpaths never received a painted value, so they fell through to the
+      // stroke branch below and imported as a phantom outline -- the box that
+      // appeared around Typewriter text that has no border in the file at all.
+      // Drop every trailing unpainted subpath: a real painted path always got
+      // its value from one of the handlers above before `n` could be reached.
+      else if(OPS.endPath!==undefined && fnA===OPS.endPath){
+        var _dropped=0;
+        while(curSubs.length && !curSubs[curSubs.length-1].painted){ curSubs.pop(); _dropped++; }
+        if(_dropped){ try{ dbg('import','discarded '+_dropped+' unpainted subpath(s) at endPath (re n / W n)'); }catch(_ep){} }
       }
       else if(fnA===OPS.paintImageXObject || fnA===OPS.paintJpegXObject || fnA===OPS.paintInlineImage){
         // IMAGE-BEARING ANNOTATION (e.g. an Acrobat Stamp with a company badge).
@@ -16989,6 +17063,14 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
             Q:0,
             C:[Math.round(bgCol[0]*1000)/1000, Math.round(bgCol[1]*1000)/1000, Math.round(bgCol[2]*1000)/1000],
             CA:noteA,
+            // ROUND-TRIP MARKER: "AOG-NOTE:<borderHex>:<bgOpacity>". /C on a
+            // FreeText is the BACKGROUND per spec, so the border colour has no
+            // standard key and the alpha lives only in the appearance stream's
+            // ExtGState -- neither survives a re-import. Both ride in /T, which
+            // pdf.js exposes as titleObj.str.
+            T:PDFLib.PDFString.of('AOG-NOTE:'
+                +String(c.borderColor||darkenHex(c.bgColor||'#FBBF24',0.35)).replace('#','')
+                +':'+(Math.round(((c.bgOpacity!==undefined?c.bgOpacity:1))*1000)/1000)),
             BS:bsDict(Math.round(bwPt*100)/100,null) };
     // Keep text upright when Acrobat regenerates the appearance on edit (rotated
     // pages otherwise flip it sideways). Page rotations are always multiples of 90.
@@ -17106,15 +17188,76 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
     // Annotation-level /DR too, mapping the same name → styled font, for viewers
     // that resolve the DA font from the annotation rather than the AcroForm.
     if(fontRef){ try{ var _nm=_daFontName(obj); var _frm={}; _frm[_nm]=fontRef; d.DR=ctx.obj({ Font: ctx.obj(_frm) }); }catch(_dr){} }
-    // No /C (transparent background): any highlight is drawn in the appearance
-    // above (at its real opacity); the original page text is hidden by the page
-    // white box, so the annotation itself carries no opaque background box.
+    // ROUND-TRIP MARKER: "AOG-TEXT:<bgOpacity>" tells the import this is a TEXT
+    // object, not a note, and carries the highlight alpha (which otherwise exists
+    // only as the /GSF ExtGState value inside the appearance stream, where the
+    // import's operator walk never looks). /C carries the highlight COLOUR, and
+    // is written only when there actually is a highlight -- an un-highlighted
+    // text annotation still has no background box.
+    d.T=PDFLib.PDFString.of('AOG-TEXT:'+(Math.round((_bgOp||0)*1000)/1000));
+    if(_hasHi){
+      var _hc=rgb01(obj.bgColor||'#ffff00');
+      d.C=[Math.round(_hc[0]*1000)/1000, Math.round(_hc[1]*1000)/1000, Math.round(_hc[2]*1000)/1000];
+    }
     if(rotDeg) d.Rotate=rotDeg;
     addAnnot(d, ops, rect, op, _fillA, fontRef);
   }); }catch(e){ console.warn('[AcroAnnot] text',e); }
 
   if(emitted) dbg('export','Acrobat annotations emitted: '+emitted);
   return emitted;
+}
+
+// SAVE-TIME GARBAGE COLLECTION -----------------------------------------------
+// pdf-lib never drops objects it loaded, so every export/import round trip
+// stranded the previous cycle's images. Measured on a 3-cycle file: 36 orphaned
+// image XObjects, 7.32 MB of a 10.5 MB total, 1130 of 1544 objects unreachable,
+// growing a flat ~1.97 MB per cycle (mostly repeat copies of the 926x919 badge
+// and its soft mask). Copying the finished pages into a FRESH document walks
+// references, so unreachable objects are never visited and simply vanish.
+// Every failure path returns the original bytes: a bigger file is always better
+// than a broken one.
+function _gcPdfBytes(bytes, attachJson, attachName){
+  if(!bytes || !bytes.length || !window.PDFLib || !PDFLib.PDFDocument){ return Promise.resolve(bytes); }
+  var _before=bytes.length;
+  function _d(m){ try{ dbg('export',m); }catch(_e){} }
+  return PDFLib.PDFDocument.load(bytes, {ignoreEncryption:true, updateMetadata:false})
+    .then(function(src){
+      // copyPages does NOT carry the AcroForm dictionary. An empty AcroForm
+      // (/DR + /DA only, which is what survey plans normally carry) is safe to
+      // drop, but real form FIELDS would be lost -- bail out rather than eat them.
+      try{
+        var _af=src.catalog.lookup(PDFLib.PDFName.of('AcroForm'));
+        if(_af && _af.lookup){
+          var _fl=_af.lookup(PDFLib.PDFName.of('Fields'));
+          if(_fl && _fl.size && _fl.size()>0){
+            _d('GC skipped - AcroForm carries '+_fl.size()+' field(s)');
+            return bytes;
+          }
+        }
+      }catch(_e){}
+      return PDFLib.PDFDocument.create().then(function(dst){
+        return dst.copyPages(src, src.getPageIndices()).then(function(pages){
+          pages.forEach(function(pg){ dst.addPage(pg); });
+          // The attachment lives on the catalog, so it does not survive the copy
+          // either -- rewrite it onto the clean document.
+          if(!attachJson) return dst.save();
+          return Promise.resolve(
+            dst.attach(new TextEncoder().encode(attachJson), attachName, {
+              mimeType:'application/json',
+              description:'AOG editable annotation data',
+              creationDate:new Date(), modificationDate:new Date()
+            })
+          ).then(function(){ return dst.save(); });
+        });
+      });
+    })
+    .then(function(out){
+      if(!out || !out.length) return bytes;
+      if(out.length>=_before){ _d('GC found nothing to reclaim - keeping original'); return bytes; }
+      _d('GC: '+(_before/1048576).toFixed(2)+' MB -> '+(out.length/1048576).toFixed(2)+' MB');
+      return out;
+    })
+    .catch(function(e){ console.warn('[GC] skipped:',e); return bytes; });
 }
 
 // Emit user-placed pictures as editable /Stamp annotations. Async: image bytes
@@ -17143,7 +17286,17 @@ function _emitImageStamps(pdf, page, sz, sc, list){
         var _sw=(ov.img&&(ov.img.naturalWidth||ov.img.width))||Math.round(ov.w);
         var _sh=(ov.img&&(ov.img.naturalHeight||ov.img.height))||Math.round(ov.h);
         var iw=Math.max(1,Math.round(_sw)), ih=Math.max(1,Math.round(_sh));
-        var CAP=2200, dn=Math.min(1, CAP/Math.max(iw,ih));
+        // Resolution cap. 2200 is the absolute pixel ceiling; _AOG_STAMP_DPI caps
+        // resolution RELATIVE to on-page size, which is what drives file size.
+        // The AOG badge is 926x919 but lands at ~125 pt, i.e. ~533 DPI -- far past
+        // what any plotter or reviewer resolves. The 256 px floor protects the
+        // small equipment symbols: a 240 px preset at 10 pt is left untouched, so
+        // it stays as crisp as it is now. Only oversized art is trimmed.
+        // Raise _AOG_STAMP_DPI (or set it to Infinity) to keep every source pixel.
+        var _AOG_STAMP_DPI=400;
+        var _ptMax=Math.max(1, W(ov.w), W(ov.h));
+        var CAP=Math.min(2200, Math.max(256, Math.round(_ptMax*(_AOG_STAMP_DPI/72))));
+        var dn=Math.min(1, CAP/Math.max(iw,ih));
         var cw=Math.max(1,Math.round(iw*dn)), ch=Math.max(1,Math.round(ih*dn));
         var cnv=document.createElement('canvas'); cnv.width=cw; cnv.height=ch;
         var g=cnv.getContext('2d');
@@ -19394,9 +19547,13 @@ function _buildVectorPdf(attachJson, onReady){
                       mimeType:'application/json',
                       description:'AOG editable annotation data',
                       creationDate:new Date(), modificationDate:new Date()
-                    }).then(function(){ return pdf.save(); }).then(_postFix);
+                    }).then(function(){ return pdf.save(); })
+                      .then(function(_b){ return _gcPdfBytes(_b, attachJson, AOG_PDF_ATTACH); })
+                      .then(_postFix);
                   }
-                  return pdf.save().then(_postFix);
+                  return pdf.save()
+                    .then(function(_b){ return _gcPdfBytes(_b, null, null); })
+                    .then(_postFix);
                 });
               });
             });
