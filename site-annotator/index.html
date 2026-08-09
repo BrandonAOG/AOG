@@ -1373,7 +1373,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
       <span id="alb-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Layer 1</span>
     </button>
     <button class="ic-btn" id="btn-layers" title="Layers">&#9776;</button>
-    <button class="ic-btn" id="btn-props" title="Properties">&#9881;</button>
+    <button class="ic-btn" id="btn-props" title="Properties" style="width:auto;padding:0 8px;font-size:11px;font-weight:700;white-space:nowrap">&#9881; Properties</button>
   </div>
   <div class="sb-group">
     <button class="ic-btn" id="btn-presets" title="AOG Presets" style="width:auto;padding:0 8px;font-size:10px;font-weight:700;letter-spacing:.5px;white-space:nowrap;">⚡ Labels</button>
@@ -17524,6 +17524,10 @@ btnSetScale.addEventListener('click',function(){
   _swapStrokeForTool('measure'); tool='measure';
   document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
   document.querySelector('.tb-btn[data-tool="measure"]').classList.add('active');
+  // Switch the PROPERTIES ROW too. Setting `tool` and highlighting the button
+  // left the toolbar showing the previous tool's controls, so it did not feel
+  // like the tool had changed.
+  try{ if(typeof updateToolbarForTool==='function') updateToolbarForTool('measure'); }catch(_ut){}
   drawCv.style.cursor=AOG_CROSSHAIR;
   scaleStatus.textContent='Draw a line of known length...';
   toast('Draw a line on the plan, then enter its length in the Properties panel.','ok',4000);
@@ -17594,6 +17598,7 @@ document.getElementById('scale-redraw').addEventListener('click',function(){
   document.querySelectorAll('.tb-btn[data-tool]').forEach(function(b){ b.classList.remove('active'); });
   var mb=document.querySelector('.tb-btn[data-tool="measure"]');
   if(mb) mb.classList.add('active');
+  try{ if(typeof updateToolbarForTool==='function') updateToolbarForTool('measure'); }catch(_ut2){}
   drawCv.style.cursor=AOG_CROSSHAIR;
   toast('Draw a new reference line, then enter its real length.','ok',4000);
 });
