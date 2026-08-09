@@ -13192,8 +13192,9 @@ function _textChromeRect(o){
       // SCREEN units (/zoom). Take whichever is larger on screen so the dashed
       // box clears the border at every zoom, then add a fixed visible gap.
       var cpad=Math.max(_calloutPad(o), _calloutPad(o)/zoom)+5/zoom;
-      L=Math.min(L,-cpad);
-      R=Math.max(R,cb.w+cpad);
+      var cpadX=cpad + (_calloutPadX(o)-_calloutPad(o));
+      L=Math.min(L,-cpadX);
+      R=Math.max(R,cb.w+cpadX);
       T=Math.min(T,cb.top-cpad);
       B=Math.max(B,cb.top+cb.h+cpad);
     }catch(_cr){}
@@ -13219,6 +13220,9 @@ function _drawTextChrome(o){
   if(o._leaderLabel && o.calloutBox!==false){
     try{
       var _cpad=_calloutPad(o)/zoom, _cb=_calloutBounds(o);
+      // Horizontal: the char-space extra is in CANVAS units (scales with the
+      // text); only the base gap stays screen-fixed to match the vertical.
+      var _cpadX=_cpad + (_calloutPadX(o)-_calloutPad(o));
       selCtx.save();
       selCtx.setLineDash([]);
       // Background FILL first (under the border). While editing, the textarea is
@@ -13227,12 +13231,12 @@ function _drawTextChrome(o){
       if(o.bgOpacity>0){
         selCtx.globalAlpha=(o.opacity==null?1:o.opacity)*o.bgOpacity;
         selCtx.fillStyle=o.bgColor||'#ffffff';
-        selCtx.fillRect(-_cpad, _cb.top-_cpad, _cb.w+_cpad*2, _cb.h+_cpad*2);
+        selCtx.fillRect(-_cpadX, _cb.top-_cpad, _cb.w+_cpadX*2, _cb.h+_cpad*2);
         selCtx.globalAlpha=1;
       }
       selCtx.strokeStyle=o.color||'#000000';
       selCtx.lineWidth=Math.max(1,(o.borderStrokeW||1))/zoom;
-      selCtx.strokeRect(-_cpad, _cb.top-_cpad, _cb.w+_cpad*2, _cb.h+_cpad*2);
+      selCtx.strokeRect(-_cpadX, _cb.top-_cpad, _cb.w+_cpadX*2, _cb.h+_cpad*2);
       selCtx.restore();
       selCtx.setLineDash([5/zoom,3/zoom]);
     }catch(_lc){}
@@ -14411,6 +14415,15 @@ function _calloutPad(o){
   try{ bw=(o && o.calloutBox!==false) ? (o.borderStrokeW==null?1:o.borderStrokeW) : 0; }catch(e){}
   return CALLOUT_PAD + (bw>0 ? bw/2 : 0);
 }
+// HORIZONTAL pad: the vertical pad plus roughly ONE CHARACTER of the label's
+// own font (~0.5em) so the text never starts/ends jammed against the side
+// borders — every row gets the same breathing room at both ends. In canvas
+// units so it scales with the text at every zoom, matching print/export.
+function _calloutPadX(o){
+  var fpx=0;
+  try{ fpx=ptToCanvasPx((o&&o.fontSize)||FONT_SIZE); }catch(e){}
+  return _calloutPad(o) + fpx*0.5;
+}
 // Draw a leader label's callout box, rotation included. The rect is expressed in
 // the label's LOCAL frame (origin at its baseline anchor) and the context is
 // translated+rotated first -- the same approach _drawTextChrome uses -- so the
@@ -14481,7 +14494,7 @@ function _calloutBounds(o){
 function _drawCalloutBox(ctx, o, mode){
   if(!o || !o._leaderLabel || o.calloutBox===false) return false;
   try{
-    var d=_calloutBounds(o), p=_calloutPad(o);
+    var d=_calloutBounds(o), p=_calloutPad(o), px=_calloutPadX(o);
     ctx.save();
     ctx.translate(o.x, o.y);
     if(o.angle) ctx.rotate(o.angle);
@@ -14489,12 +14502,12 @@ function _drawCalloutBox(ctx, o, mode){
     if(mode==='fill'){
       ctx.globalAlpha=(o.opacity==null?1:o.opacity)*(o.bgOpacity||0);
       ctx.fillStyle=o.bgColor||'#ffff00';
-      ctx.fillRect(-p, d.top-p, d.w+p*2, d.h+p*2);
+      ctx.fillRect(-px, d.top-p, d.w+px*2, d.h+p*2);
     } else {
       ctx.globalAlpha=(o.opacity==null?1:o.opacity);
       ctx.strokeStyle=o.color||'#000000';
       ctx.lineWidth=Math.max(1,(o.borderStrokeW||1));
-      ctx.strokeRect(-p, d.top-p, d.w+p*2, d.h+p*2);
+      ctx.strokeRect(-px, d.top-p, d.w+px*2, d.h+p*2);
     }
     ctx.restore();
     return true;
@@ -19589,10 +19602,10 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
     // no account of border WEIGHT -- a heavy box then touched the text.
     if(obj._leaderLabel && obj.calloutBox!==false){
       try{
-        var _cb2=_calloutBounds(obj), _cp2=_calloutPad(obj);
-        boxL   = obj.x - _cp2;
+        var _cb2=_calloutBounds(obj), _cp2=_calloutPad(obj), _cp2x=_calloutPadX(obj);
+        boxL   = obj.x - _cp2x;
         boxTop = obj.y + _cb2.top - _cp2;
-        boxW   = _cb2.w + _cp2*2;
+        boxW   = _cb2.w + _cp2x*2;
         boxH   = _cb2.h + _cp2*2;
       }catch(_cbx){}
     }
@@ -20375,7 +20388,7 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
     // before P() maps them, so the box turns with the glyphs.
     if(obj._leaderLabel && obj.calloutBox!==false){
       try{
-        var _vb=_calloutBounds(obj), _vp2=_calloutPad(obj);
+        var _vb=_calloutBounds(obj), _vp2=_calloutPad(obj), _vp2x=_calloutPadX(obj);
         // WIDTH from the PAINTER's own font, not the browser's. _calloutBounds
         // measures through a canvas context; the painter lays the glyphs out with
         // the embedded PDF font, and on a rotated label the difference showed as
@@ -20397,8 +20410,8 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
             +((obj.bgOpacity>0)?' + fill':'')+') -- this is NOT an annotation, so a'
             +' re-import cannot remove it: angle='+Math.round((obj.angle||0)*180/Math.PI)
             +'deg w='+Math.round(_vw)+' h='+Math.round(_vb.h));
-        var _lx=-_vp2, _ty=_vb.top-_vp2;
-        var _rx=_lx+_vw+_vp2*2, _by=_ty+_vb.h+_vp2*2;
+        var _lx=-_vp2x, _ty=_vb.top-_vp2;
+        var _rx=_lx+_vw+_vp2x*2, _by=_ty+_vb.h+_vp2*2;
         var _oa2=obj.angle||0, _ca2=Math.cos(_oa2), _sa2=Math.sin(_oa2);
         var _RP=function(lx,ly){
           return P(obj.x + lx*_ca2 - ly*_sa2, obj.y + lx*_sa2 + ly*_ca2);
