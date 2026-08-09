@@ -8907,14 +8907,36 @@ function onDown(e){
       var _ncol=(typeof _noteLibArmedColor!=='undefined' && _noteLibArmedColor) ? _noteLibArmedColor : null;
       _noteLibArmedColor=null;
       captureState(false);
-      // Width from the text length so a long clearance note does not land in a
+      // Width from the text so a long clearance note does not land in a
       // tiny box; fitCommentToText then tightens the height to the wrap.
       var _nfpx=ptToCanvasPx(_cFontSize||10);
-      // Size from the LONGEST line. Using the whole character count made a
-      // multi-line block absurdly wide.
-      var _longest=0;
-      String(_txt).split('\n').forEach(function(l){ if(l.length>_longest) _longest=l.length; });
-      var _nw=Math.min(Math.max(220, _longest*_nfpx*0.34), 900);
+      // MEASURE the longest line with the EXACT font the note renderer will use
+      // (cmtEffFontSize rounds; cmtCtxFont builds the same font string), instead
+      // of estimating from character count (the old *0.34 factor underestimated,
+      // so every library note placed with its rows wrapped). The box now opens
+      // wide enough that each requirement sits on its OWN line, as authored.
+      var _nProbe={fontSize:_cFontSize, fontFamily:_cFontFamily, bold:_cBold,
+                   italic:_cItalic, borderStrokeW:_cBorderW};
+      var _longestPx=0;
+      try{
+        var _nfs=Math.max(8, Math.round(cmtEffFontSize(_nProbe)));
+        tCtx.save();
+        tCtx.font=cmtCtxFont(_nProbe,_nfs);
+        String(_txt).split('\n').forEach(function(l){
+          var _w=tCtx.measureText(l).width;
+          if(_w>_longestPx) _longestPx=_w;
+        });
+        tCtx.restore();
+      }catch(_ms){
+        // Fallback to the old estimate if measuring fails for any reason.
+        var _longest=0;
+        String(_txt).split('\n').forEach(function(l){ if(l.length>_longest) _longest=l.length; });
+        _longestPx=_longest*_nfpx*0.5;
+      }
+      // Interior padding both sides + a small safety margin so the last
+      // character never wraps from rounding.
+      var _npad=(typeof cmtInnerPad==='function')?cmtInnerPad(_nProbe,'snap'):4;
+      var _nw=Math.max(220, Math.ceil(_longestPx+_npad*2+_nfpx*0.75));
       var _nc2={
         id:Date.now(),
         cx:_lp.x+_nw/2, cy:_lp.y+60,
@@ -9334,6 +9356,17 @@ function onDown(e){
         _txtSizeReedit=true;               // caret returns on release
         _beginTextWrapResize(editingObj,sp,_textHandleSide(_lth));
         return;
+      }
+      // Clicked OUTSIDE the label being edited (not a handle, not its border,
+      // not inside the box) → commit the edit right now. Previously the leader
+      // block never called commitText(), so clicking out while editing a leader
+      // label did nothing and the text only committed "eventually" via some
+      // other path (tool switch, Escape, blur). The press then continues into
+      // the normal leader logic below (select / place / deselect).
+      if(_lth===-1 && !_textRotHandleAt(editingObj,sp.x,sp.y) &&
+         !_textBorderAt(editingObj,sp.x,sp.y) &&
+         findTextObjAt(sp.x,sp.y)!==editingObj){
+        commitText();
       }
     }
     // Double-tap a label's TEXT with the leader tool → edit the text directly,
@@ -11144,7 +11177,7 @@ function _endDotR(base){
 }
 
 function getMeasureHandleAt(m, x, y, isTouch){
-  var slop=(isTouch?20:10)/zoom;
+  var slop=(isTouch?16:7)/zoom;
   if(Math.hypot(x-m.x1,y-m.y1)<slop) return 0;
   if(Math.hypot(x-m.x2,y-m.y2)<slop) return 1;
   // check body
@@ -11235,7 +11268,7 @@ function cancelMeasureSelection(){
 // Returns which leader control is under (x,y): 0=arrow tip, 1=elbow,
 // 2=shoulder end, -2=on a segment (move whole), -1=none.
 function getLeaderHandleAt(o, x, y, isTouch){
-  var slop=(isTouch?20:10)/zoom;
+  var slop=(isTouch?16:7)/zoom;
   var _se=leaderShoulderEnd(o);
   var sx=_se.x, sy=_se.y; // shoulder end
   if(Math.hypot(x-o.x1,y-o.y1)<slop) return 0;   // arrow tip
@@ -13143,6 +13176,30 @@ function _textCenter(o){
   var lcx=d.w/2, lcy=d.top+d.h/2;
   return {x:o.x+(lcx*ca-lcy*sa), y:o.y+(lcx*sa+lcy*ca)};
 }
+// The dashed selection/edit rectangle in the label's LOCAL frame: {L,T,R,B}.
+// For a leader label with a visible callout box, the dashed chrome is pushed
+// OUTSIDE the solid border (callout bounds + callout pad + a visible gap)
+// instead of cutting through it. All chrome drawing and hit-testing
+// (_drawTextChrome, _textHandlePts, _textBorderAt, _textSideAt) read from this
+// one function so the dashed line, handles, and grab zones always agree.
+function _textChromeRect(o){
+  var d=_textBoxDims(o), pad=6/zoom;
+  var L=-pad, R=d.w+pad, T=d.top-pad, B=d.top+d.h+pad;
+  if(o && o._leaderLabel && o.calloutBox!==false){
+    try{
+      var cb=_calloutBounds(o);
+      // The committed callout pads in PAGE units; the live edit preview pads in
+      // SCREEN units (/zoom). Take whichever is larger on screen so the dashed
+      // box clears the border at every zoom, then add a fixed visible gap.
+      var cpad=Math.max(_calloutPad(o), _calloutPad(o)/zoom)+5/zoom;
+      L=Math.min(L,-cpad);
+      R=Math.max(R,cb.w+cpad);
+      T=Math.min(T,cb.top-cpad);
+      B=Math.max(B,cb.top+cb.h+cpad);
+    }catch(_cr){}
+  }
+  return {L:L,T:T,R:R,B:B};
+}
 // Draw the dashed text box + rotate handle for o onto selCtx. Caller has cleared selCv.
 function _drawTextChrome(o){
   if(!o) return;
@@ -13150,10 +13207,11 @@ function _drawTextChrome(o){
   var pad=6/zoom, lw=1.5/zoom, ro=ROT_OFFSET/zoom, ang=o.angle||0;
   selCtx.save();
   selCtx.translate(o.x,o.y); selCtx.rotate(ang);
-  // Dashed text box (rectangular, hugs the glyphs)
+  // Dashed text box (rectangular; wraps OUTSIDE the callout border on leaders)
+  var cr=_textChromeRect(o);
   selCtx.strokeStyle='rgba(0,212,255,0.9)'; selCtx.lineWidth=lw;
   selCtx.setLineDash([5/zoom,3/zoom]); selCtx.globalAlpha=1;
-  selCtx.strokeRect(-pad,d.top-pad,d.w+pad*2,d.h+pad*2);
+  selCtx.strokeRect(cr.L,cr.T,cr.R-cr.L,cr.B-cr.T);
   // LIVE CALLOUT BOX. renderTextObjs skips the object being edited, so a leader
   // label's border only appeared after commit. Draw it here from the same
   // _textBoxDims the dashed chrome uses -- solid, in the label's own colour, so
@@ -13163,6 +13221,15 @@ function _drawTextChrome(o){
       var _cpad=_calloutPad(o)/zoom, _cb=_calloutBounds(o);
       selCtx.save();
       selCtx.setLineDash([]);
+      // Background FILL first (under the border). While editing, the textarea is
+      // kept transparent (see repositionTextOverlay) so it can't cover the top
+      // border — the fill the user expects behind the text is painted here.
+      if(o.bgOpacity>0){
+        selCtx.globalAlpha=(o.opacity==null?1:o.opacity)*o.bgOpacity;
+        selCtx.fillStyle=o.bgColor||'#ffffff';
+        selCtx.fillRect(-_cpad, _cb.top-_cpad, _cb.w+_cpad*2, _cb.h+_cpad*2);
+        selCtx.globalAlpha=1;
+      }
       selCtx.strokeStyle=o.color||'#000000';
       selCtx.lineWidth=Math.max(1,(o.borderStrokeW||1))/zoom;
       selCtx.strokeRect(-_cpad, _cb.top-_cpad, _cb.w+_cpad*2, _cb.h+_cpad*2);
@@ -13175,8 +13242,8 @@ function _drawTextChrome(o){
   // width; the text reflows live. Drawn while the caret is still active.
   selCtx.setLineDash([]);
   var _hr=HANDLE_SIZE*0.62/zoom;
-  var _hxL=-pad, _hxR=d.w+pad, _hxC=d.w/2;
-  var _hyT=d.top-pad, _hyB=d.top+d.h+pad, _hyM=d.top+d.h/2;
+  var _hxL=cr.L, _hxR=cr.R, _hxC=(cr.L+cr.R)/2;
+  var _hyT=cr.T, _hyB=cr.B, _hyM=(cr.T+cr.B)/2;
   var _hps=[[_hxL,_hyT],[_hxC,_hyT],[_hxR,_hyT],[_hxR,_hyM],
             [_hxR,_hyB],[_hxC,_hyB],[_hxL,_hyB],[_hxL,_hyM]];
   selCtx.fillStyle='#fff'; selCtx.strokeStyle='rgba(0,150,255,0.95)';
@@ -13188,7 +13255,7 @@ function _drawTextChrome(o){
   }
   selCtx.setLineDash([5/zoom,3/zoom]);
   // Connector + rotate handle above top-center
-  var topx=d.w/2, topy=d.top-pad, hubx=topx, huby=topy-ro;
+  var topx=(cr.L+cr.R)/2, topy=cr.T, hubx=topx, huby=topy-ro;
   selCtx.setLineDash([2/zoom,2/zoom]);
   selCtx.beginPath(); selCtx.moveTo(topx,topy); selCtx.lineTo(hubx,huby); selCtx.stroke();
   selCtx.setLineDash([]);
@@ -13202,7 +13269,7 @@ function _drawTextChrome(o){
   selCtx.restore();
   // Store the handle's world position for hit-testing
   var ca=Math.cos(ang), sa=Math.sin(ang);
-  o._rotHandle={x:o.x+(hubx*ca-huby*sa), y:o.y+(hubx*sa+huby*ca), r:22/zoom};
+  o._rotHandle={x:o.x+(hubx*ca-huby*sa), y:o.y+(hubx*sa+huby*ca), r:15/zoom};
 }
 function _textRotHandleAt(o,x,y){
   return !!(o&&o._rotHandle&&Math.hypot(x-o._rotHandle.x,y-o._rotHandle.y)<=o._rotHandle.r);
@@ -13255,12 +13322,12 @@ function _drawAngleBadge(o,deg){
 // True when (x,y) is on/near the dashed BOX border of o (in its rotated frame),
 // but not deep inside the text. Grabbing the border drags the whole label.
 function _textBorderAt(o,x,y){
-  var d=_textBoxDims(o);
-  var pad=6/zoom, band=18/zoom;
+  var band=18/zoom;
   var ang=o.angle||0, ca=Math.cos(-ang), sa=Math.sin(-ang);
   var dx=x-o.x, dy=y-o.y;
   var lx=dx*ca-dy*sa, ly=dx*sa+dy*ca;
-  var L=-pad, R=d.w+pad, T=d.top-pad, B=d.top+d.h+pad;
+  var cr=_textChromeRect(o);
+  var L=cr.L, R=cr.R, T=cr.T, B=cr.B;
   if(lx<L-band||lx>R+band||ly<T-band||ly>B+band) return false;   // outside box+band
   if(lx>L+band&&lx<R-band&&ly>T+band&&ly<B-band) return false;   // deep interior → not border
   return true;
@@ -13273,12 +13340,12 @@ function _textBorderAt(o,x,y){
 // tables / anchors would desync), so they return null and keep move behavior.
 function _textSideAt(o,x,y){
   if(!o || o._fitWs || o._anchorRight) return null;
-  var d=_textBoxDims(o);
-  var pad=6/zoom, band=18/zoom;
+  var band=18/zoom;
   var ang=o.angle||0, ca=Math.cos(-ang), sa=Math.sin(-ang);
   var dx=x-o.x, dy=y-o.y;
   var lx=dx*ca-dy*sa, ly=dx*sa+dy*ca;
-  var L=-pad, R=d.w+pad, T=d.top-pad, B=d.top+d.h+pad;
+  var cr=_textChromeRect(o);
+  var L=cr.L, R=cr.R, T=cr.T, B=cr.B;
   if(ly<T-band||ly>B+band) return null;
   if(Math.abs(lx-L)<=band) return 'L';
   if(Math.abs(lx-R)<=band) return 'R';
@@ -13287,9 +13354,9 @@ function _textSideAt(o,x,y){
 // The 8 chrome handle positions in the label's LOCAL frame — must match the
 // circles drawn by _drawTextChrome. 0=TL 1=TC 2=TR 3=MR 4=BR 5=BC 6=BL 7=ML.
 function _textHandlePts(o){
-  var d=_textBoxDims(o), pad=6/zoom;
-  var xL=-pad, xC=d.w/2, xR=d.w+pad;
-  var yT=d.top-pad, yM=d.top+d.h/2, yB=d.top+d.h+pad;
+  var cr=_textChromeRect(o);
+  var xL=cr.L, xC=(cr.L+cr.R)/2, xR=cr.R;
+  var yT=cr.T, yM=(cr.T+cr.B)/2, yB=cr.B;
   return [[xL,yT],[xC,yT],[xR,yT],[xR,yM],[xR,yB],[xC,yB],[xL,yB],[xL,yM]];
 }
 // Which chrome handle (x,y) is on: 0-7 or -1. ON a handle = stretch;
@@ -13299,7 +13366,7 @@ function _textHandleAt(o,x,y){
   var ang=o.angle||0, ca=Math.cos(-ang), sa=Math.sin(-ang);
   var dx=x-o.x, dy=y-o.y;
   var lx=dx*ca-dy*sa, ly=dx*sa+dy*ca;
-  var pts=_textHandlePts(o), r=16/zoom;
+  var pts=_textHandlePts(o), r=10/zoom;
   for(var i=0;i<8;i++){
     if(Math.hypot(lx-pts[i][0],ly-pts[i][1])<=r) return i;
   }
@@ -13746,7 +13813,14 @@ function repositionTextOverlay(clampToView){
   // Live Text-BG highlight behind the typed text (rgba from color+opacity).
   // Shown as soon as editing starts; the box hugs the text so it begins at ~1
   // letter and grows as you type.
-  if(textBgOpacity>0){
+  // EXCEPTION — leader labels WITH a callout box: the textarea floats ABOVE the
+  // canvases and its box includes the font's internal leading, so an opaque
+  // textarea background covered the callout's TOP border (drawn on selCv
+  // underneath) — "the top border is invisible in edit". Keep the textarea
+  // transparent for those; _drawTextChrome paints the background fill on the
+  // canvas UNDER the border instead, so nothing is lost visually.
+  var _calloutEdit = !!(editingObj && editingObj._leaderLabel && editingObj.calloutBox!==false);
+  if(textBgOpacity>0 && !_calloutEdit){
     var _hx=(textBgColor||'#ffff00').replace('#','');
     if(_hx.length===3) _hx=_hx[0]+_hx[0]+_hx[1]+_hx[1]+_hx[2]+_hx[2];
     var _r=parseInt(_hx.slice(0,2),16)||0,_g=parseInt(_hx.slice(2,4),16)||0,_b=parseInt(_hx.slice(4,6),16)||0;
@@ -14467,7 +14541,7 @@ function getHandleAt(x,y,isTouch){
   // target stays constant on screen at every zoom level. The desktop target is
   // generous (the rendered handle is 9px; a ~22px grab ring makes corners easy
   // to hit even when zoomed out, where handles look tiny and sit far apart).
-  var screenTarget = isTouch ? 32 : 22;                // physical px
+  var screenTarget = isTouch ? 24 : 12;                // physical px — tight ring so the cursor only changes right ON a handle, not inside the box
   var hitR = screenTarget / zoom;                      // canvas px at this zoom
   // For comments, keep handles from fully swallowing a small box's interior,
   // but never shrink the grab target below a clickable floor. The floor is
@@ -15049,7 +15123,7 @@ drawCv.addEventListener('mousemove',function(e){
   }
   if(tool==='text'&&!_txtCursorActive&&!selectedShape&&baseLoaded){ showTextHover(p.x,p.y); }
   else if(tool!=='text'){ clearTextHover(); }
-  if(selectedMeasure&&measureDragHandle===-1){
+  if(selectedMeasure&&measureDragHandle===-1&&tool!=='pen'&&tool!=='polyline'){
     var mh=getMeasureHandleAt(selectedMeasure,p.x,p.y,false);
     if(mh===0||mh===1) drawCv.style.cursor=AOG_CROSSHAIR;
     else if(mh===-2) drawCv.style.cursor='move';
@@ -15090,7 +15164,18 @@ drawCv.addEventListener('mousemove',function(e){
   if(tool==='polyline'&&!plActive&&baseLoaded){
     var ph2=findPolylineObjAt(p.x,p.y,false);
     var pv2=selectedPolyline&&findPolylineVertexAt(selectedPolyline,p.x,p.y,false)!==-1;
-    drawCv.style.cursor=pv2?'grab':((ph2||selectedPolyline)?'move':AOG_CROSSHAIR);
+    // 'move' only when actually ON a stroke (selected or not); a selected
+    // polyline no longer forces 'move' across the whole empty canvas.
+    drawCv.style.cursor=pv2?'grab':(ph2?'move':AOG_CROSSHAIR);
+    return;
+  }
+  // Pen tool: 'move' when hovering a committed stroke (selected or not),
+  // crosshair over empty canvas. Previously the pen tool set NO hover cursor,
+  // so it stayed crosshair even over a selected stroke in edit mode.
+  if(tool==='pen'&&baseLoaded&&!(typeof drawing!=='undefined'&&drawing)){
+    var pnHov=findPenObjAt(p.x,p.y,false);
+    drawCv.style.cursor=pnHov?'move':AOG_CROSSHAIR;
+    return;
   }
   // Leader tool: show grab cursor over the selected leader's handles/body,
   // pointer over any re-selectable leader, crosshair otherwise.
@@ -16779,6 +16864,15 @@ function _txtBgRgba(){
 }
 function _txtBgLive(){
   if(textOv.style.display==='none' || _editingComment) return; // notes own their own styling
+  // Leader labels WITH a callout box: the textarea must STAY transparent while
+  // editing (its box extends above the glyphs and an opaque background covers
+  // the callout's top border on the canvas underneath). This runs on EVERY
+  // input event, so without the guard the first keystroke repainted the bg and
+  // the top border "went thin" again until commit. The chrome draws the fill
+  // on the canvas instead.
+  if(editingObj && editingObj._leaderLabel && editingObj.calloutBox!==false){
+    textOv.style.background='transparent'; return;
+  }
   // Show the highlight as soon as you start typing — the editor box now hugs the
   // text (≈1 letter on first click, growing per character), so the bar tracks the
   // content instead of filling a big block.
@@ -24296,8 +24390,8 @@ function _imgHandles(ov){
 
 function _imgHandleAt(ov, x, y, isTouch){
   var handles=_imgHandles(ov);
-  var resizeSlop = (isTouch ? 18 : 9) / zoom;
-  var rotSlop    = (isTouch ? 24 : 12) / zoom; // slightly larger for rotation circles
+  var resizeSlop = (isTouch ? 14 : 7) / zoom;
+  var rotSlop    = (isTouch ? 18 : 10) / zoom; // slightly larger for rotation circles
   for(var i=handles.length-1;i>=0;i--){
     var h=handles[i];
     var slop = i >= 8 ? rotSlop : resizeSlop;
