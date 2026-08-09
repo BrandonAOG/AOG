@@ -1268,9 +1268,13 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   </div>
   <!-- LINE STYLE -->
   <div id="tb-ls-grp" style="display:flex;gap:2px;flex-shrink:0"><div class="ls-group">
-    <button class="ls-btn active" data-ls="solid" title="Solid"><svg viewBox="0 0 20 10"><line x1="1" y1="5" x2="19" y2="5" stroke-width="2"/></svg></button>
-    <button class="ls-btn" data-ls="dashed" title="Dashed"><svg viewBox="0 0 20 10"><line x1="1" y1="5" x2="19" y2="5" stroke-width="2" stroke-dasharray="4 3"/></svg></button>
-    <button class="ls-btn" data-ls="dotted" title="Dotted"><svg viewBox="0 0 20 10"><line x1="1" y1="5" x2="19" y2="5" stroke-width="2" stroke-dasharray="1.5 3"/></svg></button>
+    <button class="ls-btn active" data-ls="solid" title="Solid"><svg viewBox="0 0 24 10"><line x1="1" y1="5" x2="23" y2="5" stroke-width="2"/></svg></button>
+    <button class="ls-btn" data-ls="dotted" title="Dotted"><svg viewBox="0 0 24 10"><line x1="1" y1="5" x2="23" y2="5" stroke-width="2" stroke-dasharray="2 2"/></svg></button>
+    <button class="ls-btn" data-ls="dotted2" title="Dotted (heavy)"><svg viewBox="0 0 24 10"><line x1="1" y1="5" x2="23" y2="5" stroke-width="2" stroke-dasharray="3 3"/></svg></button>
+    <button class="ls-btn" data-ls="dashed" title="Dashed"><svg viewBox="0 0 24 10"><line x1="1" y1="5" x2="23" y2="5" stroke-width="2" stroke-dasharray="4 4"/></svg></button>
+    <button class="ls-btn" data-ls="dashdot" title="Dash-dot"><svg viewBox="0 0 28 10"><line x1="1" y1="5" x2="27" y2="5" stroke-width="2" stroke-dasharray="4 3 2 3"/></svg></button>
+    <button class="ls-btn" data-ls="dashdot2" title="Dash &#8211; long dash"><svg viewBox="0 0 34 10"><line x1="1" y1="5" x2="33" y2="5" stroke-width="2" stroke-dasharray="4 3 16 3"/></svg></button>
+    <button class="ls-btn" data-ls="dashed2" title="Long dash &#8211; short dash"><svg viewBox="0 0 30 10"><line x1="1" y1="5" x2="29" y2="5" stroke-width="2" stroke-dasharray="8 4 4 4"/></svg></button>
   </div>
   <button id="fill-btn" title="Fill shape">Fill</button>
   </div><!-- /tb-ls-grp -->
@@ -3748,6 +3752,28 @@ document.addEventListener('touchmove', function(e){
 
 // ── APP STATE ──
 var tool='none', color='#ef4444', strokeW=1, opacity=1, lineStyle='solid', fillShape=false;
+// ── LINE STYLE TABLE ─────────────────────────────────────────────────────────
+// One table drives EVERY dash pattern in the app: canvas rendering (lsDash),
+// flattened PDF vector export (dashArr), Acrobat annotation /BS /D arrays
+// (dashOf) and the SVG previews in the toolbar.
+// PATTERNS ARE ABSOLUTE, IN PDF POINTS — the exact arrays Acrobat's Line
+// Properties style dropdown writes (verified against a file authored in
+// Acrobat), independent of stroke width, so an exported line's /D is
+// byte-identical to a native Acrobat line of the same style. To draw on a
+// canvas, multiply by that canvas's px-per-point scale (the `unit` argument).
+var LS_DASH={ solid:null,
+              dotted:[2,2],           // Acrobat style 2
+              dotted2:[3,3],          // Acrobat style 3
+              dashed:[4,4],           // Acrobat style 4
+              dashed2:[8,4,4,4],      // Acrobat style 7: long dash - short dash
+              dashdot:[4,3,2,3],      // Acrobat style 5: dash-dot
+              dashdot2:[4,3,16,3] };  // Acrobat style 6: dash - long dash
+function lsDash(style,unit){
+  var p=LS_DASH[style];
+  if(!p) return [];
+  if(!(unit>0)) unit=1;
+  return p.map(function(v){ return v*unit; });
+}
 // ── Per-tool stroke width memory ──
 // Each tool keeps its OWN thickness. Changing it for one tool never affects
 // another, and switching tools restores that tool's last value (or its default).
@@ -6942,8 +6968,24 @@ function _extractMarkups(page, opList, annots, vp, sc, w, h, pageOpCount){
         var hasPos=false;
         for(var i=0;i<da.length;i++){ if(da[i]>0){ hasPos=true; break; } }
         if(!hasPos) return false;
+      // EXACT MATCH against the Acrobat style arrays in LS_DASH first (±0.35pt
+      // tolerance) — this is what guarantees a file authored in Acrobat maps
+      // each line to precisely the style Acrobat's dropdown shows for it, and
+      // that a round trip re-exports the identical /D array.
+      for(var _k in LS_DASH){
+        var _p=LS_DASH[_k]; if(!_p) continue;
+        if(_p.length!==da.length) continue;
+        var _hit=true;
+        for(var _j=0;_j<_p.length;_j++){ if(Math.abs(da[_j]-_p[_j])>0.35){ _hit=false; break; } }
+        if(_hit) return _k;
+      }
         if(da.length<2) return (da[0]>=4) ? 'dashed' : false;
-        return (da[0]>0 && da[0]<=2) ? 'dotted' : 'dashed';
+        // 4+ entry pattern = dash-dot. Otherwise bucket by dash length into the
+        // nearest of the four dot/dash styles (units are multiples of stroke w).
+        if(da.length>=4) return (da[0]/Math.max(0.001,(da[1]||3))>=2.3) ? 'dashdot2' : 'dashdot';
+        var _u=(da[1]>0)?da[1]:1, _r=da[0]/Math.max(0.001,_u*0.9);
+        if(da[0]<=2)  return (_r>0.6)?'dotted2':'dotted';
+        return (da[0]>=5.5*_u/3.5)?'dashed2':'dashed';
       }catch(e){ return false; }
     };
     var _annC=function(c,dflt){
@@ -7415,8 +7457,24 @@ function _extractVectors(opList, vp, sc, w, h){
       var hasPos=false;
       for(var i=0;i<da.length;i++){ if(da[i]>0){ hasPos=true; break; } }
       if(!hasPos) return false;
+      // EXACT MATCH against the Acrobat style arrays in LS_DASH first (±0.35pt
+      // tolerance) — this is what guarantees a file authored in Acrobat maps
+      // each line to precisely the style Acrobat's dropdown shows for it, and
+      // that a round trip re-exports the identical /D array.
+      for(var _k in LS_DASH){
+        var _p=LS_DASH[_k]; if(!_p) continue;
+        if(_p.length!==da.length) continue;
+        var _hit=true;
+        for(var _j=0;_j<_p.length;_j++){ if(Math.abs(da[_j]-_p[_j])>0.35){ _hit=false; break; } }
+        if(_hit) return _k;
+      }
       if(da.length<2) return (da[0]>=4) ? 'dashed' : false;
-      return (da[0]>0 && da[0]<=2) ? 'dotted' : 'dashed';
+      // Same buckets as the first copy (which wins when it installs first):
+      // 4+ entries = dash-dot; then split dots/dashes by pattern length.
+      if(da.length>=4) return (da[0]/Math.max(0.001,(da[1]||3))>=2.3) ? 'dashdot2' : 'dashdot';
+      var _u=(da[1]>0)?da[1]:1, _r=da[0]/Math.max(0.001,_u*0.9);
+      if(da[0]<=2)  return (_r>0.6)?'dotted2':'dotted';
+      return (da[0]>=5.5*_u/3.5)?'dashed2':'dashed';
     }catch(e){ return false; }
   };
   var strokeColor=[0,0,0], fillColorV=[0,0,0], lineW=1, dashOn=false, pendingPaths=[];
@@ -8834,9 +8892,7 @@ function setupCtx(ctx){
   ctx.lineWidth=strokeW;
   ctx.lineCap='round';
   ctx.lineJoin='round';
-  if(lineStyle==='dashed') ctx.setLineDash([strokeW*4,strokeW*3]);
-  else if(lineStyle==='dotted') ctx.setLineDash([strokeW,strokeW*2.5]);
-  else ctx.setLineDash([]);
+  ctx.setLineDash(lsDash(lineStyle, ptToCanvasPx(1)));   // solid → lsDash returns []
 }
 
 function resetCtx(ctx){ ctx.globalAlpha=1; ctx.setLineDash([]); }
@@ -10784,9 +10840,7 @@ function drawMeasureObjOnCtx(ctx, m, highlight){
   ctx.strokeStyle=highlight?'#00D4FF':m.color;
   ctx.lineWidth=_hairline(m.strokeW);
   ctx.lineCap='round'; ctx.lineJoin='round';
-  if(m.lineStyle==='dashed') ctx.setLineDash([m.strokeW*4,m.strokeW*3]);
-  else if(m.lineStyle==='dotted') ctx.setLineDash([m.strokeW,m.strokeW*2.5]);
-  else ctx.setLineDash([]);
+  ctx.setLineDash(lsDash(m.lineStyle, ptToCanvasPx(1)));   // solid → lsDash returns []
   // main line
   ctx.beginPath(); ctx.moveTo(m.x1,m.y1); ctx.lineTo(m.x2,m.y2); ctx.stroke();
   // Arrow: draw a solid arrowhead at P2, no ticks/label
@@ -10904,9 +10958,7 @@ function renderShapeAndMeasure(){
     shCtx.strokeStyle=s.color; shCtx.fillStyle=s.color;
     shCtx.lineWidth=_hairline(s.strokeW); shCtx.lineCap='round'; shCtx.lineJoin='round';
     shCtx.globalAlpha=s.opacity;
-    if(s.lineStyle==='dashed') shCtx.setLineDash([s.strokeW*4,s.strokeW*3]);
-    else if(s.lineStyle==='dotted') shCtx.setLineDash([s.strokeW,s.strokeW*2.5]);
-    else shCtx.setLineDash([]);
+    shCtx.setLineDash(lsDash(s.lineStyle, ptToCanvasPx(1)));   // solid → lsDash returns []
     if(s.type==='rect'){
       if(s.fill){shCtx.fillStyle=s.fillColor||s.color;shCtx.globalAlpha=s.fillOpacity!==undefined?s.fillOpacity:s.opacity*.25;shCtx.fillRect(-s.w/2,-s.h/2,s.w,s.h);shCtx.globalAlpha=s.opacity;shCtx.fillStyle=s.color;}
       shCtx.strokeRect(-s.w/2,-s.h/2,s.w,s.h);
@@ -10968,9 +11020,7 @@ function drawPenOnCtx(ctx,o,sc){
   ctx.strokeStyle=o.color;
   ctx.lineWidth=o.strokeW*sc;
   ctx.lineCap='round'; ctx.lineJoin='round';
-  if(o.lineStyle==='dashed') ctx.setLineDash([o.strokeW*4*sc,o.strokeW*3*sc]);
-  else if(o.lineStyle==='dotted') ctx.setLineDash([o.strokeW*sc,o.strokeW*2.5*sc]);
-  else ctx.setLineDash([]);
+  ctx.setLineDash(lsDash(o.lineStyle, ptToCanvasPx(1)*sc));   // solid → lsDash returns []
   ctx.beginPath();
   var p=o.pts;
   ctx.moveTo(p[0].x*sc,p[0].y*sc);
@@ -10991,9 +11041,7 @@ function drawPolygonOnCtx(ctx,o,sc){
   ctx.globalAlpha=o.opacity;
   ctx.strokeStyle=o.color; ctx.fillStyle=o.color;
   ctx.lineWidth=o.strokeW*sc; ctx.lineCap='round'; ctx.lineJoin='round';
-  if(o.lineStyle==='dashed') ctx.setLineDash([o.strokeW*4*sc,o.strokeW*3*sc]);
-  else if(o.lineStyle==='dotted') ctx.setLineDash([o.strokeW*sc,o.strokeW*2.5*sc]);
-  else ctx.setLineDash([]);
+  ctx.setLineDash(lsDash(o.lineStyle, ptToCanvasPx(1)*sc));   // solid → lsDash returns []
   ctx.beginPath();
   ctx.moveTo(o.pts[0].x*sc,o.pts[0].y*sc);
   for(var i=1;i<o.pts.length;i++) ctx.lineTo(o.pts[i].x*sc,o.pts[i].y*sc);
@@ -11704,9 +11752,7 @@ function _runPreviewMove(e){
     shCtx.strokeStyle=color;
     shCtx.lineWidth=Math.max(1.5,strokeW);
     shCtx.lineCap='round'; shCtx.lineJoin='round';
-    if(lineStyle==='dashed') shCtx.setLineDash([strokeW*4,strokeW*3]);
-    else if(lineStyle==='dotted') shCtx.setLineDash([strokeW,strokeW*2.5]);
-    else shCtx.setLineDash([]);
+    shCtx.setLineDash(lsDash(lineStyle, ptToCanvasPx(1)));   // solid → lsDash returns []
     shCtx.beginPath(); shCtx.moveTo(startX,startY); shCtx.lineTo(lpos.x,lpos.y); shCtx.stroke();
     // LIVE ENDINGS. The Line tool draws its own drag preview here instead of
     // going through drawShapeOnCtx (which is what the Arrow tool uses), so the
@@ -11752,9 +11798,7 @@ function _runPreviewMove(e){
     shCtx.strokeStyle=color;
     shCtx.lineWidth=Math.max(1.5,strokeW);
     shCtx.lineCap='round';
-    if(lineStyle==='dashed') shCtx.setLineDash([strokeW*4,strokeW*3]);
-    else if(lineStyle==='dotted') shCtx.setLineDash([strokeW,strokeW*2.5]);
-    else shCtx.setLineDash([]);
+    shCtx.setLineDash(lsDash(lineStyle, ptToCanvasPx(1)));   // solid → lsDash returns []
     shCtx.beginPath(); shCtx.moveTo(startX,startY); shCtx.lineTo(mpos.x,mpos.y); shCtx.stroke();
     // Dashed overrun extensions past each endpoint
     var ext=22;
@@ -14793,9 +14837,7 @@ function renderSelection(){
   selCtx.translate(s.cx,s.cy); selCtx.rotate(s.angle);
   selCtx.strokeStyle=s.color; selCtx.lineWidth=s.strokeW;
   selCtx.globalAlpha=s.opacity;
-  if(s.lineStyle==='dashed') selCtx.setLineDash([s.strokeW*4,s.strokeW*3]);
-  else if(s.lineStyle==='dotted') selCtx.setLineDash([s.strokeW,s.strokeW*2.5]);
-  else selCtx.setLineDash([]);
+  selCtx.setLineDash(lsDash(s.lineStyle, ptToCanvasPx(1)));   // solid → lsDash returns []
   selCtx.fillStyle=s.color;
   if(s.type==='rect'){
     if(s.fill){selCtx.fillStyle=s.fillColor||s.color;selCtx.globalAlpha=s.fillOpacity!==undefined?s.fillOpacity:s.opacity*.25;selCtx.fillRect(-s.w/2,-s.h/2,s.w,s.h);selCtx.globalAlpha=s.opacity;selCtx.fillStyle=s.color;}
@@ -15655,9 +15697,7 @@ function drawPolylineOnCtx(ctx, pl, sc){
   ctx.strokeStyle=pl.color;
   ctx.lineWidth=_hairline(pl.strokeW*sc);
   ctx.lineCap='round'; ctx.lineJoin='round';
-  if(pl.lineStyle==='dashed') ctx.setLineDash([pl.strokeW*4*sc,pl.strokeW*3*sc]);
-  else if(pl.lineStyle==='dotted') ctx.setLineDash([pl.strokeW*sc,pl.strokeW*2.5*sc]);
-  else ctx.setLineDash([]);
+  ctx.setLineDash(lsDash(pl.lineStyle, ptToCanvasPx(1)*sc));   // solid → lsDash returns []
   ctx.beginPath();
   ctx.moveTo(pl.pts[0].x*sc, pl.pts[0].y*sc);
   for(var i=1;i<pl.pts.length;i++) ctx.lineTo(pl.pts[i].x*sc, pl.pts[i].y*sc);
@@ -15782,9 +15822,7 @@ function renderPolylineSelection(){
   // Match the line's dash so the glow doesn't fill the gaps of a dashed/dotted
   // polyline (which made it look partly solid). Solid lines keep a solid glow.
   var _gsw=pl.strokeW||2;
-  if(pl.lineStyle==='dashed') selCtx.setLineDash([_gsw*4,_gsw*3]);
-  else if(pl.lineStyle==='dotted') selCtx.setLineDash([_gsw,_gsw*2.5]);
-  else selCtx.setLineDash([]);
+  selCtx.setLineDash(lsDash(pl.lineStyle, ptToCanvasPx(1)));   // solid → lsDash returns []
   selCtx.beginPath();
   selCtx.moveTo(pl.pts[0].x,pl.pts[0].y);
   for(var i=1;i<pl.pts.length;i++) selCtx.lineTo(pl.pts[i].x,pl.pts[i].y);
@@ -15832,9 +15870,7 @@ function redrawPolylinePreview(mx,my){
   shCtx.strokeStyle=color;
   shCtx.lineWidth=Math.max(1.5,strokeW);
   shCtx.lineCap='round'; shCtx.lineJoin='round';
-  if(lineStyle==='dashed') shCtx.setLineDash([strokeW*4,strokeW*3]);
-  else if(lineStyle==='dotted') shCtx.setLineDash([strokeW,strokeW*2.5]);
-  else shCtx.setLineDash([]);
+  shCtx.setLineDash(lsDash(lineStyle, ptToCanvasPx(1)));   // solid → lsDash returns []
   shCtx.beginPath();
   shCtx.moveTo(pts[0].x,pts[0].y);
   for(var i=1;i<pts.length;i++) shCtx.lineTo(pts[i].x,pts[i].y);
@@ -16148,7 +16184,10 @@ function updateToolbarForTool(t){
   try{ if(typeof _swSyncUI==='function') _swSyncUI(); }catch(_sw){}
 
   // line style + fill button (shapes + stroke tools, not note/text/none)
-  var showLS = isShape || isStroke;
+  // Line style buttons: stroke tools and shapes, but NOT Leader — a leader's
+  // arrow is always solid and its label is text, so the dash row is dead
+  // weight there and just pushes the useful controls off-screen.
+  var showLS = (isShape || isStroke) && !isLeader;
   shFlex(ids.lsGrp, showLS);
   if(ids.lsSep) ids.lsSep.style.display = showLS ? '' : 'none';
 
@@ -18071,9 +18110,7 @@ function compositeExport(maxPx){
       ctx.strokeStyle=s.color; ctx.fillStyle=s.color;
       ctx.lineWidth=s.strokeW*scale; ctx.lineCap='round'; ctx.lineJoin='round';
       ctx.globalAlpha=s.opacity;
-      if(s.lineStyle==='dashed') ctx.setLineDash([s.strokeW*4*scale,s.strokeW*3*scale]);
-      else if(s.lineStyle==='dotted') ctx.setLineDash([s.strokeW*scale,s.strokeW*2.5*scale]);
-      else ctx.setLineDash([]);
+      ctx.setLineDash(lsDash(s.lineStyle, ptToCanvasPx(1)*scale));   // solid → lsDash returns []
       var sw=s.w/2*scale, sh_=s.h/2*scale;
       if(s.type==='rect'){
         if(s.fill){ctx.fillStyle=s.fillColor||s.color;ctx.globalAlpha=s.fillOpacity!==undefined?s.fillOpacity:s.opacity*.25;ctx.fillRect(-sw,-sh_,sw*2,sh_*2);ctx.globalAlpha=s.opacity;ctx.fillStyle=s.color;}
@@ -18178,9 +18215,7 @@ function compositeExport(maxPx){
       ctx.globalAlpha=m.opacity;
       ctx.strokeStyle=m.color; ctx.lineWidth=m.strokeW*sc;
       ctx.lineCap='round'; ctx.lineJoin='round';
-      if(m.lineStyle==='dashed') ctx.setLineDash([m.strokeW*4*sc,m.strokeW*3*sc]);
-      else if(m.lineStyle==='dotted') ctx.setLineDash([m.strokeW*sc,m.strokeW*2.5*sc]);
-      else ctx.setLineDash([]);
+      ctx.setLineDash(lsDash(m.lineStyle, ptToCanvasPx(1)*sc));   // solid → lsDash returns []
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
       ctx.setLineDash([]);
       // Arrow: draw arrowhead at P2, no ticks/label
@@ -18980,9 +19015,8 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
   function rgb01(hex){ var c=_hexToRgb(hex||'#000000')||{r:0,g:0,b:0}; return [c.r/255,c.g/255,c.b/255]; }
   function colStr(a){ return f2(a[0])+' '+f2(a[1])+' '+f2(a[2]); }
   function dashOf(o,sw){
-    if(o.lineStyle==='dashed') return [sw*4, sw*3];
-    if(o.lineStyle==='dotted') return [sw, sw*2.5];
-    return null;
+    var d=lsDash(o.lineStyle, 1);   // ABSOLUTE pt arrays — byte-identical to native Acrobat /D
+    return d.length ? d : null;
   }
   var emitted=0, nmSeq=0;
   // Page /Rotate: baked text must be counter-rotated by this so it reads upright
@@ -19057,12 +19091,15 @@ function _emitAcrobatAnnots(pdf, page, sz, sc, fonts){
 
   function bsDict(sw, dash){
     var bs={ W: sw, S: dash?'D':'S' };
-    if(dash) bs.D=[Math.round(dash[0]*100)/100, Math.round(dash[1]*100)/100];
+    // Whole pattern, not just the first pair — dash-dot carries 4 entries, and
+    // truncating /D to two turned it back into a plain dash when Acrobat
+    // regenerated the appearance on edit.
+    if(dash) bs.D=dash.map(function(v){ return Math.round(v*100)/100; });
     return bs;
   }
   function strokePrefix(sw, dash, cArr){
     var s='q 1 J 1 j /GS0 gs '+f2(sw)+' w '+colStr(cArr)+' RG ';
-    if(dash) s+='['+f2(dash[0])+' '+f2(dash[1])+'] 0 d ';
+    if(dash) s+='['+dash.map(f2).join(' ')+'] 0 d ';
     return s;
   }
 
@@ -20096,10 +20133,8 @@ function _paintVectorAnnotations(page, sz, sc, fonts){
     var L=layers[o.layerIdx]; var vis=!(L && !L.visible); if(vis)_dbgCnt.drawn++; return vis;
   }
   function dashArr(o){
-    var w=W(Math.max(1,o.strokeW||1));
-    if(o.lineStyle==='dashed') return [w*4, w*3];
-    if(o.lineStyle==='dotted') return [w, w*2.5];
-    return undefined;
+    var d=lsDash(o.lineStyle, 1);   // ABSOLUTE pt arrays (see LS_DASH) — no stroke scaling
+    return d.length ? d : undefined;
   }
   function line(x1,y1,x2,y2,hex,wpx,op,dash){
     var a=P(x1,y1), b=P(x2,y2);
