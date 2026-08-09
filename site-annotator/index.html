@@ -9695,6 +9695,13 @@ function onMove(e){
     if(!_shiftDown){
       var _DEG=Math.PI/180;
       _na=Math.round(_na/_DEG)*_DEG;
+      // CARDINAL SNAP. The export keeps text Acrobat-editable (/FreeText) only at
+      // EXACT right angles (see _textToAcro, ±0.5° tolerance) — arbitrary angles
+      // flatten to vector. With 1° steps a "sideways" label almost always landed
+      // on 88–92°, silently failing that test, so rotated text came out dead in
+      // Acrobat. Pull anything within 4° of a cardinal onto it exactly.
+      var _q=Math.round(_na/(Math.PI/2))*(Math.PI/2);
+      if(Math.abs(_na-_q)<=4*_DEG) _na=_q;
     }
     // Rotate about the box CENTER: re-derive the origin so the center stays put.
     var _d=_textBoxDims(_txtRotObj);
