@@ -3276,6 +3276,61 @@ function _sanitizeCloneForCapture(clonedDoc) {
         el.setAttribute('style', kept.join(';'));
       }
     });
+    // 4) GUARD COMPUTED STYLES. The "unexpected EOF" crash on some Android
+    // WebViews happens while html2canvas parses values returned by
+    // getComputedStyle() on the CLONE (its stack goes element-walker ->
+    // CSSParsedDeclaration -> parseComponentValue). Steps 1-3 can't reach
+    // those. So we wrap the clone window's getComputedStyle in a Proxy that
+    // replaces any empty / unbalanced value with a safe default before
+    // html2canvas ever sees it. Only affects the throwaway clone.
+    var view = clonedDoc.defaultView;
+    if (view && !view.__aogCsGuard) {
+      view.__aogCsGuard = true;
+      var _isBalanced = function (v) {
+        var d = 0, q = null;
+        for (var i = 0; i < v.length; i++) {
+          var c = v[i];
+          if (q) { if (c === '\\') { i++; } else if (c === q) { q = null; } continue; }
+          if (c === '"' || c === "'") { q = c; }
+          else if (c === '(') { d++; }
+          else if (c === ')') { d--; if (d < 0) return false; }
+        }
+        return d === 0 && q === null;
+      };
+      var _safeCssValue = function (prop, v) {
+        if (typeof v !== 'string') return v;
+        var p = String(prop);
+        var s = v.trim();
+        var bad = (s === '' || s === ',' || /,\s*$/.test(s) || !_isBalanced(s));
+        if (!bad) return v;
+        var pl = p.toLowerCase();
+        if (pl.indexOf('font-family') !== -1 || pl === 'fontfamily') return 'Arial';
+        if (pl.indexOf('color') !== -1) return 'rgb(0, 0, 0)';
+        if (pl === 'content') return 'normal';
+        if (pl.indexOf('font') !== -1 && pl.indexOf('size') !== -1) return '16px';
+        return 'none';
+      };
+      var _origGCS = view.getComputedStyle.bind(view);
+      view.getComputedStyle = function (el, pseudo) {
+        var cs = _origGCS(el, pseudo);
+        try {
+          return new Proxy(cs, {
+            get: function (target, prop) {
+              var val;
+              if (prop === 'getPropertyValue') {
+                return function (name) { return _safeCssValue(name, target.getPropertyValue(name)); };
+              }
+              val = target[prop];
+              if (typeof val === 'function') return val.bind(target);
+              if (typeof val === 'string' && typeof prop === 'string' && !/^\d+$/.test(prop) && prop !== 'cssText') {
+                return _safeCssValue(prop, val);
+              }
+              return val;
+            }
+          });
+        } catch (e2) { return cs; }
+      };
+    }
   } catch (e) { /* never let sanitation abort the capture */ }
 }
 
