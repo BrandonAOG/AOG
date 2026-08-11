@@ -8,7 +8,7 @@
 //    2. Update CHANGELOG below with what changed
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.4.8';
+var CACHE_NAME = 'aog-forms-v2.5.0';
 var DEV_MODE   = false;
 
 // Tracks whether this SW instance has already run a precache repair pass
@@ -23,6 +23,7 @@ var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE duri
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
+'🧱 NEW: CONCRETE CALCULATOR — slab, column & footing volume, bags & yardage',
 '🗺️ SITE PLAN ANNOTATOR — complete refresh, now with Adobe Acrobat support',
 '📝 ELECTRICAL INSTALL FORM footer bumped to V1.1 — check whether anyone is still on a stale copy',
 ];
@@ -54,7 +55,8 @@ var PRECACHE_URLS = [
   './property-lookup/fl_gas_territories.geojson',
   './property-lookup/fl_electric_territories.geojson',
   './gas-calc/',
-  './spec-viewer/'
+  './spec-viewer/',
+  './concrete-calc/'
 ];
 
 // CDN assets that must be cached on install for 100% offline support
