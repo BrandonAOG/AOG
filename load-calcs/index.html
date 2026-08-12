@@ -1584,10 +1584,18 @@ function calc(){
   }
 
   // Generator
-  var fuel=gs('fuel'), kw=svcDem/1000, gen='> 150KW';
+  var fuel=gs('fuel'), kw=svcDem/1000, gen='> 150KW', bestOut=Infinity;
   for(var gi=0;gi<GENS.length;gi++){
     var out=fuel==='propane'?GENS[gi][1]:GENS[gi][2];
-    if(out>=kw){gen=GENS[gi][0];break;}
+    if(out>=kw && out<bestOut){bestOut=out;}
+  }
+  if(bestOut<Infinity){
+    var matches=[];
+    for(var gj=0;gj<GENS.length;gj++){
+      var o=fuel==='propane'?GENS[gj][1]:GENS[gj][2];
+      if(o===bestOut) matches.push(GENS[gj][0]);
+    }
+    gen=matches.join(' / ');
   }
 
   // ── Update Summary ──
