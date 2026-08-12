@@ -406,6 +406,12 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
     <div class="card-head"><div class="card-title">⚙️ Configuration</div></div>
     <div class="card-body">
       <div class="fg fg-3">
+        <div class="field"><label>Generator Brand</label>
+          <select id="brand" onchange="calc()">
+            <option value="generac" selected>Generac</option>
+            <option value="kohler">Kohler</option>
+          </select>
+        </div>
         <div class="field"><label>Fuel Source</label>
           <select id="fuel" onchange="calc()">
             <option value="propane" selected>Propane (LP)</option>
@@ -824,11 +830,23 @@ function minSvc(a){var s=[100,110,125,150,175,200,225,250,300,350,400,450,500,60
 // Cooking: optional method uses raw VA directly (no Col C demand factor)
 
 // ── Generators ──
-var GENS=[['AC 10KW',10,9],['AC 12KW',12,12],['AC 14KW',14,14],['AC 16KW',16,16],
+// Format: ['name', LP_kW, NG_kW]
+var GENS_GENERAC=[['AC 10KW',10,9],['AC 12KW',12,12],['AC 14KW',14,14],['AC 16KW',16,16],
   ['AC 18KW',18,17],['AC 20KW',20,18],['AC 22KW',22,21],['AC 24KW',24,22.5],
   ['AC 26KW',26,24],['LC 25KW',25,25],['LC 30KW',30,30],['LQ 27KW',27,25],['AC 28KW',28,25],['LQ 32KW',32,32],
   ['LQ 38KW',38,38],['LQ 40KW',40,40],['LQ 48KW',48,48],['LQ 60KW',60,60],
   ['LQ 80KW',75,80],['LQ 100KW',96,96],['LQ 130KW',130,130],['LQ 150KW',134,144]];
+
+// Kohler — ['name', LP_kW, NG_kW]
+var GENS_KOHLER=[['10RESV',11,10],['12RESV',12,11],['14RCA',14,14],['20RCA',20,20],
+  ['26RCA',26,26],['24RCLA',24,24],['30RCLA',30,30],['38RCLC',38,38],['48RCLC',48,48],
+  ['60RCLB',60,60],['KG80R',80,80],['KG100R',100,100],['KG125R',105,125],['KG150R',130,150]];
+
+// Active generator list based on selected brand
+function activeGens(){
+  var b=gs('brand');
+  return b==='kohler'?GENS_KOHLER:GENS_GENERAC;
+}
 
 // NEC Table 430.248 Single-Phase AC Motors FLA
 // HP_FLA_115 = FLA at 115V (used for 120V circuits)
@@ -1585,15 +1603,16 @@ function calc(){
 
   // Generator
   var fuel=gs('fuel'), kw=svcDem/1000, gen='> 150KW', bestOut=Infinity;
-  for(var gi=0;gi<GENS.length;gi++){
-    var out=fuel==='propane'?GENS[gi][1]:GENS[gi][2];
+  var G=activeGens();
+  for(var gi=0;gi<G.length;gi++){
+    var out=fuel==='propane'?G[gi][1]:G[gi][2];
     if(out>=kw && out<bestOut){bestOut=out;}
   }
   if(bestOut<Infinity){
     var matches=[];
-    for(var gj=0;gj<GENS.length;gj++){
-      var o=fuel==='propane'?GENS[gj][1]:GENS[gj][2];
-      if(o===bestOut) matches.push(GENS[gj][0]);
+    for(var gj=0;gj<G.length;gj++){
+      var o=fuel==='propane'?G[gj][1]:G[gj][2];
+      if(o===bestOut) matches.push(G[gj][0]);
     }
     gen=matches.join(' / ');
   }
