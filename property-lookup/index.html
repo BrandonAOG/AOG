@@ -2612,7 +2612,7 @@ document.addEventListener('click', closeBasemapMenu);
 map.on('moveend', ()=>{ if(_curBasemap==='sarco') updateLocalAerial(false); });
 
 let marker=null, parcelLayer=null, homeParcelLayer=null;
-map.on('click', e => runLookup(e.latlng.lat, e.latlng.lng));
+map.on('click', e => { newSearch(); runLookup(e.latlng.lat, e.latlng.lng); });
 
 /* ---------- City/county separation: color-coded INCORPORATED city outlines ----------
    The FDOT "Florida Cities Bndy" layer is built from US Census place data, which mixes
@@ -9798,6 +9798,13 @@ function renderParcelGeneric(a, d){
 }
 
 let runId=0;
+/* searchSeq: generation counter for user-initiated searches. Every new search (FIND button,
+   suggestion pick, candidate pick, map click) bumps it; long-running async search flows capture
+   their own value and bail out after every await if a newer search has started. This stops an
+   old, still-loading search from finishing late and hijacking the map/results with the OLD
+   address after the user has already typed and launched a NEW one. */
+let searchSeq=0;
+function newSearch(){ return ++searchSeq; }
 async function runLookup(lat,lng,searchCtx){
   const myId=++runId;
   window.__parcelMeta=null;   // cleared each lookup; set when a parcel renders
@@ -11408,6 +11415,7 @@ function _pcPick(i){
   const lbl = c.label || '';
   try{ if(lbl){ addrEl.value=lbl; STORE.set('fl_addr',lbl); addToHistory(lbl); } }catch(e){}
   const ctx = { raw:lbl, hn:houseNum(lbl), toks:new Set(streetTokens(lbl)), unit:searchUnit(lbl) };
+  newSearch();   // cancel any address search still loading — this pick wins
   results.innerHTML = setStatus('busy','Pinpointing the parcel…');
   map.setView([c.lat,c.lng],18);
   runLookup(c.lat, c.lng, ctx);
@@ -11426,6 +11434,8 @@ document.addEventListener('keydown', e=>{
 async function doSearch(){
   const q=document.getElementById('addr').value.trim();
   if(!q) return;
+  const mySeq=newSearch();                       // cancel any search still loading
+  const stale=()=> mySeq!==searchSeq;            // true if a NEWER search has started
   const searchCtx = { raw:q, hn:houseNum(q), toks:new Set(streetTokens(q)), unit:searchUnit(q) };
 
   // AUTHORITATIVE COUNTY-PARCEL FIRST (e.g. Collier): if the search is in a county whose parcel layer
@@ -11438,7 +11448,9 @@ async function doSearch(){
     // Rough county identification: try a fast geocode just to find WHICH county, not to place the pin.
     let county=null;
     const rough=await geocodeBest(q).catch(()=>null);
+    if(stale()) return;
     if(rough && isFinite(rough.lat) && isFinite(rough.lng)) county=await countyNameAt(rough.lat,rough.lng).catch(()=>null);
+    if(stale()) return;
     // If the rough geocode failed or landed somewhere without a resolver (common for short
     // addresses like "481 8th Ave S" that exist in many cities), don't give up — try each
     // configured county parcel layer directly. The strict house-number + street/direction/suffix
@@ -11446,6 +11458,7 @@ async function doSearch(){
     let tryCounties = (county && COUNTY_PARCEL_RESOLVERS[norm(county)]) ? [county] : Object.keys(COUNTY_PARCEL_RESOLVERS);
     for(const cty of tryCounties){
       const pr=await resolveCountyParcel(cty, searchCtx).catch(()=>null);
+      if(stale()) return;
       if(!pr){ continue; }
       if(pr && pr.multi && pr.candidates && pr.candidates.length){
         // Several lots share this number+street — show them rather than guess one.
@@ -11462,6 +11475,7 @@ async function doSearch(){
         // folio lets runLookup fetch the EXACT parcel that was matched instead of re-guessing by point.
         const _ctx = Object.assign({}, searchCtx, { folioHint: pr.folio||null, countyHint: cty });
         await runLookup(pr.lat, pr.lng, _ctx);
+        if(stale()) return;
         const fol = pr.folio ? ` · Folio ${esc(pr.folio)}` : '';
         const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(pr.src)}): <b style="color:var(--ink)">${esc(pr.label)}</b>${fol} — authoritative county parcel; confirm the marker is on the right lot.</div>`;
         results.insertAdjacentHTML('afterbegin',conf);
@@ -11474,14 +11488,16 @@ async function doSearch(){
   // FALLBACK: external geocoder (universal — all counties, partial addresses, place names, ZIPs).
   results.innerHTML=setStatus('busy','Geocoding address…');
   let g=await geocodeBest(q);
+  if(stale()) return;
   // LAST-RESORT: geocoders (Census/OSM) often miss rural addresses (e.g. Glades/Moore Haven) that
   // DO exist in the statewide parcel roll. Query the roll directly by house number + street.
   if(!g && searchCtx.hn){
     results.innerHTML=setStatus('busy','Searching county parcel roll…');
     const sw=await resolveAddressStatewide(searchCtx).catch(()=>null);
+    if(stale()) return;
     if(sw && isFinite(sw.lat) && isFinite(sw.lng)) g={lat:sw.lat,lng:sw.lng,label:sw.label||q,src:'FL parcel roll'};
   }
-  if(!g){ results.innerHTML=setStatus('err','Could not geocode that address. Try adding city/ZIP, or just click the spot on the map.'); return; }
+  if(!g){ if(!stale()) results.innerHTML=setStatus('err','Could not geocode that address. Try adding city/ZIP, or just click the spot on the map.'); return; }
   addToHistory(g.label || q);
   results.innerHTML=setStatus('busy','Pinpointing the parcel…');
   // UNIVERSAL ROOFTOP SNAP (every county): the geocoder point is INTERPOLATED along the street's
@@ -11500,8 +11516,10 @@ async function doSearch(){
       }
     }catch(e){}
   }
+  if(stale()) return;
   map.setView([sLat,sLng], 18);
   await runLookup(sLat,sLng, searchCtx);
+  if(stale()) return;
   const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(snapSrc)}): <b style="color:var(--ink)">${esc(snapLabel)}</b> — parcel resolved below; confirm the marker is on the right lot.</div>`;
   results.insertAdjacentHTML('afterbegin',conf);
 }
@@ -11653,6 +11671,8 @@ async function fetchSuggestions(q, signal){
 }
 
 async function chooseSuggestion(it){
+  const mySeq=newSearch();                       // cancel any search still loading
+  const stale=()=> mySeq!==searchSeq;
   const typed=(addrEl.value||'').trim();           // what the user actually typed (before we overwrite it)
   hideSuggest();
   // Anchor on what the user TYPED (house #, street, unit) — not the verbose suggestion label, which
@@ -11670,8 +11690,10 @@ async function chooseSuggestion(it){
   // what stops the click landing on the neighbour.
   results.innerHTML=setStatus('busy','Locating address (county parcel records)…');
   let county = (it.lat!=null && it.lng!=null) ? await countyNameAt(it.lat,it.lng).catch(()=>null) : null;
+  if(stale()) return;
   if(searchCtx.hn && county && COUNTY_PARCEL_RESOLVERS[norm(county)]){
     const pr=await resolveCountyParcel(county, searchCtx).catch(()=>null);
+    if(stale()) return;
     if(pr && pr.multi && pr.candidates && pr.candidates.length){
       addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr);
       renderParcelCandidates(pr.candidates, basis);   // clickable rows — click runs the lookup on that lot
@@ -11683,6 +11705,7 @@ async function chooseSuggestion(it){
       results.innerHTML=setStatus('busy','Pinpointing the parcel…');
       map.setView([pr.lat,pr.lng], 18);
       await runLookup(pr.lat, pr.lng, searchCtx);
+      if(stale()) return;
       const fol = pr.folio ? ` · Folio ${esc(pr.folio)}` : '';
       const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(pr.src)}): <b style="color:var(--ink)">${esc(pr.label)}</b>${fol} — authoritative county parcel; confirm the marker is on the right lot.</div>`;
       results.insertAdjacentHTML('afterbegin',conf);
@@ -11704,6 +11727,7 @@ async function chooseSuggestion(it){
   // nothing (which looks like the click "didn't search"), geocode the picked address first.
   if(!isFinite(qLat) || !isFinite(qLng)){
     const g = await geocodeBest(fullAddr || basis).catch(()=>null);
+    if(stale()) return;
     if(g && isFinite(g.lat) && isFinite(g.lng)){ qLat=g.lat; qLng=g.lng; }
     else { results.innerHTML=setStatus('err',"Couldn't place that address — try adding the city or ZIP, then press FIND."); return; }
   }
@@ -11716,8 +11740,10 @@ async function chooseSuggestion(it){
       }
     }catch(e){}
   }
+  if(stale()) return;
   map.setView([qLat,qLng], 18);
   await runLookup(qLat,qLng, searchCtx);
+  if(stale()) return;
   const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched: <b style="color:var(--ink)">${esc(it.label)}</b>${snapNote} — parcel resolved below; confirm the marker is on the right lot.</div>`;
   results.insertAdjacentHTML('afterbegin',conf);
 }
