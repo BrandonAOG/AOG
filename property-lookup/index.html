@@ -45,6 +45,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="dns-prefetch" href="https://gismapserver.leegov.com">              <!-- Lee parcels + building footprints -->
 <link rel="dns-prefetch" href="https://agis3.charlottecountyfl.gov">           <!-- Charlotte parcels + footprints -->
 <link rel="dns-prefetch" href="https://ags.colliergov.net">                  <!-- county flood cross-check queries -->
+<link rel="dns-prefetch" href="https://gis.asce.org">                        <!-- ASCE 7-22 Risk Cat II design wind speed (live) -->
 <link rel="dns-prefetch" href="https://unpkg.com">
 <link rel="dns-prefetch" href="https://tile.openstreetmap.org">
 <link rel="dns-prefetch" href="https://geocode.arcgis.com">
@@ -8893,13 +8894,26 @@ const SWFL_VULT = {  // Risk Category II ultimate design wind speed (ASCE 7-22 /
    in SWFL_VULT, so worst case == prior behavior. URLs are tried in order — add confirmed candidates
    here. ⚠ Browser CORS is not guaranteed on every host; an offline/blocked host simply falls back. */
 const WIND_LIVE = {
-  label:"ASCE 7-22 Risk Cat II wind-speed contours (FGDL / UF GeoPlan)",
-  // Risk Cat II contour-LINE layer (esriGeometryPolyline) hosted on Osceola County GIS (CORS-open).
-  url:"https://gis.osceola.org/hosting/rest/services/Hosted/Ultimate_Design_Wind_Speeds_Risk_Category_2/FeatureServer/26/query",
+  label:"ASCE 7-22 Risk Cat II ultimate design wind speed (ASCE Hazard Tool GIS)",
+  // Primary: ASCE's OWN public GIS server — the backend of the official ASCE 7 Hazard Tool. This is
+  // the authoritative source (not a county mirror), requires no login, and exposes the Risk Category II
+  // "Wind Contours (Vmph)" polyline layer (layer 2) with the mph value in the CONTOUR field. Verified
+  // Aug 2026 returning CONTOUR=105/110/… with MRI=700yrs (= Risk Cat II). Replaced the Osceola County
+  // mirror, which was taken offline (HTTP 403 "Services Directory disabled").
+  url:"https://gis.asce.org/arcgis/rest/services/ASCE722/w2022_Tile_RC_II/MapServer/2/query",
+  // FAILOVER: additional public hosts carrying an ASCE 7-22 Risk Cat II wind-speed LINE layer, queried
+  // in parallel with the primary; the first host that returns a usable contour value wins, so one
+  // dead/blocked/moved host no longer breaks the whole "live" feature. A wrong/offline URL simply
+  // contributes nothing (worst case == the county planning fallback). Add verified hosts here.
+  urls:[
+    "https://gis.asce.org/arcgis/rest/services/ASCE722/w2022_Tile_RC_II/MapServer/2/query"
+  ],
   radii:[3000, 6000, 12000, 25000]   // metres; expand the search until contour lines are found
 };
-/* Pull a plausible V_ult (mph) out of an ArcGIS feature's attributes. Field names vary by host
-   (CONTOUR / WINDSPEED / DESCRIPT…), so scan preferred names first, then any wind-speed integer. */
+/* Pull a plausible V_ult (mph) out of an ArcGIS feature's attributes. Field names vary by host —
+   ASCE's own layer uses CONTOUR (mph) alongside CONTOUR_SI (m/s); older FGDL mirrors used
+   WINDSPEED / DESCRIPT. We scan preferred names first (CONTOUR wins, and the sub-100 SI values are
+   rejected by the 100–220 sanity band), then fall back to any wind-speed-range integer. */
 function detectWindSpeed(attrs){
   if(!attrs) return null;
   const keys=Object.keys(attrs);
@@ -8930,14 +8944,11 @@ function _ptToPaths(lat,lng, paths){
 /* Live Risk-Cat-II wind speed at a point: query the contour LINES near the point (expanding radius),
    find the nearest distinct contour value on each side, and linearly interpolate by distance — the
    ASCE-sanctioned method, and what the Hazard Tool does. Returns {v, lo, hi, interp} or null. */
-async function queryWindSpeed(lat,lng){
-  const base=WIND_LIVE.url; if(!base) return null;
-  // SPEED: fire ALL radii in parallel (was: sequential, each waiting for the last to miss) and ask the
-  // server to GENERALIZE the contour lines (maxAllowableOffset scaled to the search radius, plus
-  // geometryPrecision=5). The statewide ASCE contour polylines are enormous at full resolution —
-  // generalizing cuts each payload ~10-100× with no meaningful effect on a km-scale distance
-  // interpolation. We then take the SMALLEST radius that produced usable values, so the result is
-  // identical to the old sequential logic — just arriving in one round-trip time instead of four.
+/* Query ONE wind-contour host at a point (expanding radius, all radii in parallel). Returns the
+   interpolated {v, lo, hi, interp, url, label} or null on any miss/failure. Split out of
+   queryWindSpeed so multiple hosts can be raced for resilience. */
+async function _queryWindHost(base, lat, lng){
+  if(!base) return null;
   const attempts = WIND_LIVE.radii.map(r=>{
     const off = Math.max(50, Math.round(r/50));   // metres of allowed simplification (~2% of radius)
     const params=`geometry=${pointGeom(lat,lng)}&geometryType=esriGeometryPoint&inSR=4326`+
@@ -8968,6 +8979,27 @@ async function queryWindSpeed(lat,lng){
     return { v:interpV, lo:Math.min(v1,v2), hi:Math.max(v1,v2), interp:(v1!==v2), url:base, label:WIND_LIVE.label };
   }
   return null;
+}
+/* Live Risk-Cat-II wind speed at a point. Tries EVERY configured host (WIND_LIVE.urls, primary
+   first) in parallel and returns the first usable result — so a dead/slow/blocked host no longer
+   sinks the whole "live wind" feature. Falls back to the county planning figure (in the renderer)
+   only when NONE of the hosts answer. Returns {v, lo, hi, interp, url, label} or null. */
+async function queryWindSpeed(lat,lng){
+  const hosts = (WIND_LIVE.urls && WIND_LIVE.urls.length) ? WIND_LIVE.urls
+              : (WIND_LIVE.url ? [WIND_LIVE.url] : []);
+  if(!hosts.length) return null;
+  // Race the hosts: resolve as soon as ANY host returns a valid contour value, rather than waiting
+  // for all of them. Each host that misses/fails resolves to null and is ignored. If all miss, null.
+  return await new Promise(resolve=>{
+    let pending = hosts.length, settled = false;
+    hosts.forEach(h=>{
+      _queryWindHost(h, lat, lng).then(res=>{
+        if(settled) return;
+        if(res && typeof res.v==='number'){ settled=true; resolve(res); return; }
+        if(--pending===0){ resolve(null); }
+      }).catch(()=>{ if(!settled && --pending===0) resolve(null); });
+    });
+  });
 }
 
 function renderWindDesign(lat, lng, cityName, countyName, liveWind){
@@ -10639,8 +10671,11 @@ async function runLookup(lat,lng,searchCtx){
     document.body.classList.add('has-results');
   }
 
-  /* ---- Wind Design (FBC 8th Ed. / ASCE 7-22): site design wind speed + calculation ---- */
-  html += renderWindDesign(lat, lng, cityName, countyName, await pWind);
+  /* ---- Wind Design (FBC 8th Ed. / ASCE 7-22): site design wind speed + calculation ----
+     Un-gated: render the card NOW from the county planning figure (instant) rather than blocking the
+     whole panel on await pWind — a slow/dead wind host used to freeze everything here. The live
+     ASCE-contour value swaps in a moment later (see upgradeWindCard after the final paint). */
+  html += renderWindDesign(lat, lng, cityName, countyName, null);
 
   /* ---- Zoning & setbacks: from the local CODE + permitting portal, NOT the appraiser ---- */
   const zr = resolveZoning(cityName, countyName);
@@ -11060,6 +11095,30 @@ async function runLookup(lat,lng,searchCtx){
     + _bc + _sum + '<div class="cardflow">' + html + '</div>';
   tabifyResults(results);
   document.body.classList.add('has-results');   // hides the intro disclaimer now that the breadcrumb/summary carry context
+
+  /* ---- LIVE WIND UPGRADE (non-blocking) --------------------------------------------------------
+     The wind card above was painted instantly from the county planning figure so nothing waits on
+     the ASCE-contour host. Now await the live lookup (already running as pWind) and, if it returns a
+     per-point value while THIS search is still current, replace the wind card's contents in place —
+     so the "● LIVE" value + interpolation note appear without ever having gated the panel. Any
+     failure/miss simply leaves the county figure showing (exactly the old fallback). */
+  pWind.then(liveWind=>{
+    if(myId!==runId) return;                     // a newer search superseded this one
+    if(!liveWind || typeof liveWind.v!=='number') return;   // no live value → keep county figure
+    if(window.__exportData) window.__exportData.windVult=liveWind.v;   // keep export in sync
+    // Find the rendered Wind card by its heading (survives tabify, which keys off the h2 text).
+    let target=null;
+    results.querySelectorAll('.card').forEach(c=>{
+      const h=c.querySelector('h2'); if(h && /wind design/i.test(h.textContent||'')) target=c;
+    });
+    if(!target) return;
+    // renderWindDesign returns a whole <div class="card">…</div>; parse it and swap our card's
+    // inner HTML for the live version's, so the card stays in its tab/position.
+    const tmp=document.createElement('div');
+    tmp.innerHTML=renderWindDesign(lat, lng, cityName, countyName, liveWind);
+    const fresh=tmp.querySelector('.card');
+    if(fresh) target.innerHTML=fresh.innerHTML;
+  }).catch(()=>{});
 }
 
 /* ---- Docked/tabbed view helpers (desktop redesign) ----------------------------------------
