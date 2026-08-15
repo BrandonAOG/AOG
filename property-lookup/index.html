@@ -258,6 +258,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:8px 16px;}
   #footToggle:hover{color:var(--signal)}
   #footToggle .fchev{font-size:11px;line-height:1;transition:transform .25s}
+  #footToggle .footver{color:var(--faint);font-size:10px;font-weight:700;letter-spacing:.06em;opacity:.9}
   #footBody{max-height:0;overflow:hidden;transition:max-height .3s ease;padding:0 16px}
   footer:not(.collapsed) #footBody{max-height:360px;padding:2px 16px 12px}
   footer:not(.collapsed) #footToggle .fchev{transform:rotate(180deg)}
@@ -505,6 +506,13 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   /* "Matched … confirm the marker is on the right lot" — a verify prompt, so make it stand out. */
   .matchconf{color:var(--warn)!important;font-size:13px;font-weight:600;line-height:1.4}
   .matchconf b{color:var(--warn)!important}
+  /* Footer "Counties/Cities live" toggles + chips */
+  .wiredtoggles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .wbtn{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--ink);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.16);border-radius:6px;padding:4px 9px;cursor:pointer}
+  .wbtn:hover{border-color:var(--signal);color:var(--signal)}
+  .wbtn .wchev{color:var(--signal);margin-right:2px}
+  .wiredlist{margin:2px 0 9px;padding:7px 9px;border-left:2px solid rgba(255,255,255,.14);line-height:1.9}
+  .wiredlist .wchip{display:inline-block;font-family:var(--mono);font-size:10.5px;color:var(--ink);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:1px 7px;margin:2px 5px 2px 0}
   .suggest .sgmsg{padding:10px 12px;font-family:var(--mono);font-size:11px;color:var(--faint)}
 
   /* ---- Our blue flood-zone labels (replace FEMA's baked-in black ones) ---- */
@@ -1102,7 +1110,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 
   <footer id="foot" class="collapsed">
     <button id="footToggle" type="button" aria-label="Show sources &amp; details" aria-expanded="false">
-      <span class="fchev">▲</span><span>Sources &amp; details</span>
+      <span class="fchev">▲</span><span>Sources &amp; details</span><span class="footver">V2.2</span>
     </button>
     <div id="footBody">
       <div style="color:var(--signal);font-family:var(--disp);font-weight:600;letter-spacing:.08em;margin-bottom:6px">ALWAYS ON GENERATORS · PROPERTY LOOKUP</div>
@@ -13801,15 +13809,42 @@ window.Sheet=Sheet;
   if(loc){ try{ const o=JSON.parse(loc); if(o&&typeof o.lat==='number'){ map.setView([o.lat,o.lng], o.z||18); await runLookup(o.lat,o.lng); } }catch(e){} }
 })();
 
-/* ---------- Statewide refresh date (footer) ---------- */
+/* ---------- Statewide refresh date + live-wired toggles (footer) ---------- */
 (async()=>{
   try{
     STATEWIDE_INFO = await getLayerInfo(EP.parcel);
-    if(STATEWIDE_INFO && STATEWIDE_INFO.lastEdit){
-      const f=document.getElementById('footBody')||document.getElementById('foot');
-      if(f) f.insertAdjacentHTML('afterbegin',
-        '<div style="color:var(--signal);margin-bottom:6px">State parcel roll last refreshed: '+STATEWIDE_INFO.lastEdit.toLocaleDateString()+' · live county feeds pre-wired for '+Object.keys(COUNTY_LIVE).map(k=>titleCase(k)).join(', ')+'</div>');
-    }
+    const f=document.getElementById('footBody')||document.getElementById('foot');
+    if(!f) return;
+    const refreshed = (STATEWIDE_INFO && STATEWIDE_INFO.lastEdit) ? STATEWIDE_INFO.lastEdit.toLocaleDateString() : null;
+    // Live-wired COUNTIES come from the live parcel-feed registry; CITIES from the city zoning-layer
+    // registry — so these lists always match what's actually wired, never a hand-kept list that drifts.
+    const counties = Object.keys(COUNTY_LIVE).map(k=>titleCase(k)).sort();
+    // Cities with their OWN live zoning layer (ZONING_LIVE_CITY) PLUS cities served through a county's
+    // per-municipality sublayers (byCity maps — e.g. Lee's Fort Myers / Estero / Bonita Springs / Fort
+    // Myers Beach). Both are live for zoning; the byCity ones just ride the county service rather than a
+    // standalone city entry. norm-form byCity keys map to display names via CITY_DISPLAY (else titleCase).
+    const CITY_DISPLAY = { CAPECORAL:"Cape Coral", FORTMYERS:"Fort Myers", FORTMYERSBEACH:"Fort Myers Beach", BONITASPRINGS:"Bonita Springs", ESTERO:"Estero" };
+    const cityList = Object.values(ZONING_LIVE_CITY).map(v=>String(v.label||'')
+        .replace(/^\s*(city|town|village)\s+of\s+/i,'')
+        .replace(/\s+(zoning(\s+districts)?|ecological zones|land use district\b.*)$/i,'').trim()).filter(Boolean);
+    Object.values(ZONING_LIVE).forEach(r=>{ if(r&&r.byCity) Object.keys(r.byCity).forEach(k=>{ if(k) cityList.push(CITY_DISPLAY[k]||titleCase(k)); }); });
+    const cities = [...new Set(cityList)].sort();
+    const listHTML = arr => arr.length
+      ? arr.map(x=>'<span class="wchip">'+esc(x)+'</span>').join('')
+      : '<span style="color:var(--faint)">none wired</span>';
+    f.insertAdjacentHTML('afterbegin',
+      (refreshed?'<div style="color:var(--signal);margin-bottom:6px">State parcel roll last refreshed: '+esc(refreshed)+'</div>':'')
+      + '<div class="wiredtoggles">'
+      +   '<button type="button" class="wbtn" data-tgt="wiredCounties"><span class="wchev">▸</span> Counties live ('+counties.length+')</button>'
+      +   '<button type="button" class="wbtn" data-tgt="wiredCities"><span class="wchev">▸</span> Cities live ('+cities.length+')</button>'
+      + '</div>'
+      + '<div id="wiredCounties" class="wiredlist" hidden>'+listHTML(counties)+'</div>'
+      + '<div id="wiredCities" class="wiredlist" hidden>'+listHTML(cities)+'</div>');
+    f.querySelectorAll('.wbtn').forEach(b=>b.addEventListener('click',()=>{
+      const t=document.getElementById(b.dataset.tgt); if(!t) return;
+      const opening=t.hidden; t.hidden=!opening;
+      const ch=b.querySelector('.wchev'); if(ch) ch.textContent=opening?'▾':'▸';
+    }));
   }catch(e){}
 })();
 
