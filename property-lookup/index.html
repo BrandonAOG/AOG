@@ -2468,14 +2468,19 @@ async function queryZoning(lat,lng, cityName, countyName){
       }
     }
     if(!((code!=null && String(code).trim()!=='') || (desc!=null && String(desc).trim()!=='') || extras.length || sheetUrl)) continue;
-    const info = await getLayerInfo(cu).catch(()=>null);
-    if(multi && !isOverride){                       // only accept a probed layer whose name looks zoning-related
-      const nm = (info && info.name) ? info.name.toLowerCase() : '';
-      // EXCEPTION: if the value came from an explicitly pinned codeField that the layer actually
-      // carries (e.g. Sanibel's parcel layer exposes "Zoning Area Code" though it's named
-      // "...Parcel_Address"), trust it — the pin is a deliberate, verified mapping, not a guess.
-      const pinnedHit = pin && pin.codeField && a[pin.codeField]!==undefined && codeKey===pin.codeField && code!=null;
-      if(!pinnedHit && nm && !/zon|pud|district|land\s?use|overlay/.test(nm)) continue;
+    const pinnedHit = pin && pin.codeField && a[pin.codeField]!==undefined && codeKey===pin.codeField && code!=null;
+    // getLayerInfo() is a SECOND round-trip to the layer's server (for its name + last-edit date). We
+    // only truly need it to name-validate a PROBED, non-pinned layer. On a pinned hit we already trust
+    // the field mapping and skip the name check, so skip this call too — it was adding a full extra
+    // request to possibly-slow self-hosted servers (what made the first Tarpon Springs / Dunedin /
+    // Lakeland lookups drag). Non-pinned results still fetch it for display/validation.
+    let info = null;
+    if(!pinnedHit){
+      info = await getLayerInfo(cu).catch(()=>null);
+      if(multi && !isOverride){
+        const nm = (info && info.name) ? info.name.toLowerCase() : '';
+        if(nm && !/zon|pud|district|land\s?use|overlay/.test(nm)) continue;
+      }
     }
     return { code, desc, extras, sheetUrl, layerName:(info&&info.name)||null, lastEdit:(info&&info.lastEdit)||null, url:cu };
   }
