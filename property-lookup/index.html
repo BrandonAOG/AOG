@@ -4672,8 +4672,14 @@ async function arcQuery(url, lat, lng, outFields, withGeom, timeoutMs){
     return j;
   }catch(e){ clearTimeout(t); throw e; }
 }
-const ENRICH_TIMEOUT = 6000;   // shorter timeout for secondary/enrichment lookups so a dead server fails fast
-const COUNTY_FEED_TIMEOUT = 13000;  // primary county parcel feeds get a generous timeout (dense areas can be slow)
+// Secondary/enrichment lookups (incl. the live parcel-feed sub-queries: NG911 resolve, forward
+// address-point, point-in-polygon, address query). On a phone — typically a slower/flakier cell
+// connection — a flat 6s often isn't enough to complete the TLS handshake + query, so the chain
+// aborts and falls back to the statewide roll, showing "not live" on exactly some devices/networks
+// and not others. Give mobile the same headroom the FEMA flood layer already gets; desktop stays
+// snappy so a genuinely dead server still fails fast.
+const ENRICH_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 11000 : 6000;
+const COUNTY_FEED_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 18000 : 13000;  // primary county parcel feeds get a generous timeout (dense areas can be slow; mobile slower still)
 // FEMA's NFHL server (hazards.fema.gov) is slow and strict (TLS 1.2 + cipher suites). On a phone
 // — typically a slower cell connection — the default 9s often isn't enough to complete the TLS
 // handshake + the geometry-bearing flood query, and Safari reports the aborted request as
