@@ -499,6 +499,12 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .pcand .pcarrow{color:var(--signal);flex:none;font-size:13px}
   .pcand .pcfolio{color:var(--faint);font-size:11px;flex:none}
   .suggest .sg .sgsrc{margin-left:auto;color:var(--faint);font-size:9.5px;flex:none;padding-top:1px}
+  /* Interpolated (guessed) geocode: warn loudly so it's obvious before a click. */
+  .suggest .sg .sgsrc.approx{color:var(--warn);font-size:12px;font-weight:800;letter-spacing:.04em;padding-top:0}
+  .suggest .sg.sg-approx .pin{color:var(--warn)}
+  /* "Matched … confirm the marker is on the right lot" — a verify prompt, so make it stand out. */
+  .matchconf{color:var(--warn)!important;font-size:13px;font-weight:600;line-height:1.4}
+  .matchconf b{color:var(--warn)!important}
   .suggest .sgmsg{padding:10px 12px;font-family:var(--mono);font-size:11px;color:var(--faint)}
 
   /* ---- Our blue flood-zone labels (replace FEMA's baked-in black ones) ---- */
@@ -5176,6 +5182,11 @@ const COUNTY_FEED_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mo
 // handshake + the geometry-bearing flood query, and Safari reports the aborted request as
 // "Load failed". Give mobile more headroom; desktop stays snappy.
 const FLOOD_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 14000 : 9000;
+// The statewide DOR parcel roll normally answers in well under 1s. When a lookup lands on a marginal
+// point (a clicked house near a parcel edge, or an interpolated geocode) the request can instead HANG
+// until it times out — and because the parcel gates first paint, that froze the whole result for ~9s.
+// Give it a shorter leash: still generous for a legit slow response, but it fails over fast on a hang.
+const PARCEL_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 8000 : 5500;
 
 /* Retry wrapper: ArcGIS Online services occasionally fail transiently (a 5xx/CORS blip comes back
    fast). One quick retry clears most of these. But a *timeout* means the server is just slow —
@@ -5319,14 +5330,24 @@ async function geocodeAll(q){
   }
   if(eRes.status==='fulfilled'){
     const cands=(eRes.value&&eRes.value.candidates)||[];
+    // Filter by Esri's Addr_type so the dropdown stops offering addresses that don't exist:
+    //   PointAddress / Subaddress = a real, mapped rooftop → keep.
+    //   StreetAddress = INTERPOLATED along the block (a guessed house number that may not be a real
+    //     house) → keep only on a strong score, tagged "~approx" so it reads as a guess; the rooftop
+    //     snap corrects it on select.
+    //   StreetName / StreetInt / Locality / Postal / POI = not a specific house → drop (these are the
+    //     main source of phantom addresses in the list).
+    const TIER = { POINTADDRESS:2, SUBADDRESS:2, STREETADDRESS:1 };
     for(const c of cands){
       const loc=c.location; if(!loc||loc.y==null||loc.x==null) continue;
-      // Esri returns a score 0–100; rural/interpolated matches often land in the 60s–70s, so keep a
-      // lower bar than for dense areas — a roughly-right rural location beats a dead-end.
-      if(typeof c.score==='number' && c.score<55) continue;
+      const at=String((c.attributes&&c.attributes.Addr_type)||'').toUpperCase();
+      const tier=TIER[at]; if(!tier) continue;                 // not a specific address → skip
+      const sc=(typeof c.score==='number')?c.score:100;
+      if(tier===1 && sc<85) continue;                          // interpolated needs a strong score
+      if(tier===2 && sc<55) continue;                          // real rooftop: keep the old lower bar
       const lbl=c.address||qq;
       if(out.some(o=>o.label===lbl)) continue;
-      out.push({lat:+loc.y,lng:+loc.x,label:lbl,src:'Esri'});
+      out.push({lat:+loc.y,lng:+loc.x,label:lbl,src: tier===1?'Esri ~approx':'Esri'});
     }
   }
   return out;
@@ -9661,7 +9682,7 @@ async function _queryParcelsByHouse(hn, lat, lng, d){
     `&spatialRel=esriSpatialRelIntersects&outFields=${encodeURIComponent('PHY_ADDR1,PHY_CITY,PHY_ZIPCD')}`+
     `&returnGeometry=true&returnCentroid=true&outSR=4326&resultRecordCount=200&f=json`;
   try{
-    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),6000);   // best-effort snap; runs up to 3 widening boxes in sequence, so keep each short so a hanging roll can't stack into a long stall
     const r=await fetch(EP.parcel+'?'+params,{signal:ctrl.signal}); clearTimeout(t);
     if(!r.ok) return []; const j=await r.json(); if(j.error) return [];
     return (j.features)||[];
@@ -11065,7 +11086,7 @@ async function runLookup(lat,lng,searchCtx){
   if(window.Sheet) Sheet.setState('full');   // bring results into view on mobile
 
   // Fire all queries in parallel; each degrades independently.
-  const pParcel  = _timed('parcel (state roll)', arcQueryRetry(EP.parcel, lat, lng, '*', true)).catch(e=>({__err:e.message}));
+  const pParcel  = _timed('parcel (state roll)', arcQueryRetry(EP.parcel, lat, lng, '*', true, PARCEL_TIMEOUT)).catch(e=>({__err:e.message}));
   const pFlood   = _timed('flood (FEMA)', arcQueryRetry(EP.flood, lat, lng, 'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, FLOOD_TIMEOUT)).catch(e=>({__err:e.message}));
   const pCity    = _timed('city boundary', arcQuery(EP.city,    lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
   const pCounty  = _timed('county boundary', arcQuery(EP.county,  lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
@@ -12370,8 +12391,14 @@ async function runLookup(lat,lng,searchCtx){
       ? [window.__exportData.address, window.__exportData.city].filter(Boolean).join(', ')
       : ((window.__parcelMeta && window.__parcelMeta.site) || null);
     const _coords='Pin: '+lat.toFixed(5)+', '+lng.toFixed(5);
-    const _addr=(searchCtx&&searchCtx.raw) ? searchCtx.raw
-              : (_parcelSite || _coords);
+    // Prefer the RESOLVED PARCEL's own site address (the ground truth for what actually rendered) over
+    // the geocoder's search label. A geocoder frequently interpolates a house number that lands INSIDE a
+    // differently-numbered parcel — e.g. you search "5250 Nautilus Dr" but the pin falls in the "5242"
+    // lot, and the parcel/map/labels all correctly show 5242 while the header used to still say 5250.
+    // The header should name the parcel we resolved. Fall back to the search text, then coords.
+    const _addr = _parcelSite ? _parcelSite
+                : (searchCtx&&searchCtx.raw) ? searchCtx.raw
+                : _coords;
     window.__printMeta={ addr:_addr, lat:lat, lng:lng,
       where:[cityName?titleCase(cityName):null, countyName?titleCase(countyName)+' County':null].filter(Boolean).join(', '),
       when:new Date() };
@@ -12885,9 +12912,13 @@ function renderSuggest(items){
   sugItems=items; sugActive=-1;
   if(!items.length){ hideSuggest(); return; }
   hideHistory();
-  sugEl.innerHTML=items.map((it,i)=>
-    `<div class="sg" data-i="${i}"><span class="pin">▸</span><span>${esc(it.label)}</span><span class="sgsrc">${esc(it.src)}</span></div>`
-  ).join('');
+  sugEl.innerHTML=items.map((it,i)=>{
+    const approx = /~approx/.test(it.src||'');
+    const srcHTML = approx
+      ? `<span class="sgsrc approx">≈ APPROX</span>`
+      : `<span class="sgsrc">${esc(it.src)}</span>`;
+    return `<div class="sg${approx?' sg-approx':''}" data-i="${i}"><span class="pin">▸</span><span>${esc(it.label)}</span>${srcHTML}</div>`;
+  }).join('');
   sugEl.classList.add('show');
 }
 function setSugMsg(msg){ sugEl.innerHTML=`<div class="sgmsg">${esc(msg)}</div>`; sugEl.classList.add('show'); sugItems=[]; sugActive=-1; }
