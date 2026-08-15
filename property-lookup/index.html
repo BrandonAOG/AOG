@@ -2128,8 +2128,14 @@ async function queryZoning(lat,lng, cityName, countyName){
   }
   const multi = cands.length>1;                    // probing several layers → be stricter about what we trust
   const folio = v => v!=null && /^[0-9]{6,}$/.test(String(v).trim());   // parcel-folio numbers aren't districts
-  for(const cu of cands){
-    const r = await arcQuery(cu, lat, lng, '*', false, ENRICH_TIMEOUT).catch(e=>({__err:e.message}));
+  // Query every candidate layer IN PARALLEL (was sequential: a slow/dead first layer — e.g. a city
+  // zoning endpoint with a county fallback appended — blocked the whole zoning step, which the panel
+  // awaits). We fire all point-in-polygon queries at once, then evaluate results in the ORIGINAL
+  // priority order (city before county fallback) so the preferred layer still wins when it answers.
+  const _results = await Promise.all(cands.map(cu =>
+    arcQuery(cu, lat, lng, '*', false, ENRICH_TIMEOUT).then(r=>({cu,r})).catch(e=>({cu,r:{__err:e.message}}))
+  ));
+  for(const {cu, r} of _results){
     if(!(r && !r.__err && r.features && r.features[0])) continue;
     const a = r.features[0].attributes || {};
     const det = detectZoningFields(Object.keys(a));
