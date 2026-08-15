@@ -1495,6 +1495,35 @@ const COUNTY_LIVE = {
     // web map 13630fbe10054c46982f5b3117323f6c.
     "https://services6.arcgis.com/90Aakxb3SLGcQGor/arcgis/rest/services/glades_parcels_2026_06_01/FeatureServer/0/query"
   ]},
+  PASCO : { label:"Pasco County (Property Appraiser · Pasco Mapper)", urls:[
+    // ✅ verified queryable public layer — discovered via F12 on Pasco Mapper (the county's own ArcGIS
+    // Web AppBuilder viewer), which is what Pasco Mapper's identify tool itself queries when a parcel
+    // is clicked. Token-free, no login required despite the app's own "user has not signed in" console
+    // noise (that's an unrelated sign-in prompt for editing tools, not a query block). Rich roll:
+    // owner=OWNER_NAME_1(+OWNER_NAME_2), site=SITE_ADDRESS/SITE_ZIP, value=JUST_VALUE (land LAND_VALUE /
+    // building BUILDING_VALUE / ag AG_LAND_VALUE / extra-features EXTRA_FEATURE_VALUE), year built=
+    // ACTUAL_YEAR_BUILT (effective EFFECTIVE_YEAR_BUILT), living area=LIVING_AREA (heated), use=
+    // LAND_USE_DESC (readable text, e.g. "Stores") / LAND_USE_CODE, zoning=ZONING, sale=SALE_AMOUNT/
+    // SALE_DATE, legal=LEGAL_DESCRIPTION, subdivision, acreage=SITE_ACRES, lot sqft=LAND_SQ_FT, owner
+    // mailing MAILING_ADDRESS_1/2 + MAILING_CITY/STATE/ZIP, plus FEMA/EVACZONES/WINDCODE/HAS_POOL/
+    // HAS_HOMESTEAD flags. PARCEL ID = HPARCEL — the hyphenated STR-based folio (e.g.
+    // "11-26-16-0020-03500-0011"), confirmed via full layer-metadata + sample query Aug 2026. (VPARCEL/
+    // LPARCEL are the same number in space- and digit-only encodings — HPARCEL is the display format.)
+    // Verified Aug 2026 (owner "HUDSON FISH CAMP LLC", JUST_VALUE 32674).
+    "https://pascogis.pascocountyfl.net/giswebmm/rest/services/Tile_Caches/Parcels_MM/MapServer/3/query"
+  ]},
+  PINELLAS : { label:"Pinellas County (PAO ParcelPropertyInfo)", urls:[
+    // ✅ verified queryable public layer on ArcGIS Online (services.arcgis.com/f5HgUpxURgEzTccH),
+    // discovered via the Pinellas Property Appraiser's own Experience-app network trace — this is the
+    // service their site itself queries for parcel detail popups. Token-free, CORS-open. Genuinely rich
+    // roll: owner=OWNER1(+OWNER2), parcel=STRAP/PARCELID, site=SITE_ADDRESS/STR_CITY/STR_ZIP, value=
+    // JUST_BUILDING+JUST_LAND (summed to JV — no single just-value field on this layer), taxable=
+    // CNTY_TAXABLE_VALUE, year built=YEAR_BUILT, use=PROPERTY_USE (readable text), legal=LEGAL,
+    // subdivision, acreage, owner mailing MAILING_ADDRESS_1/2 + MAILING_CITY/STATE/ZIP. No living-area
+    // field on this layer (falls back to statewide roll for that, like Collier). Two other Pinellas
+    // public layers were tested and rejected as geometry-only (no owner/value) — this is the real roll.
+    "https://services.arcgis.com/f5HgUpxURgEzTccH/arcgis/rest/services/Pinellas_ParcelPropertyInfo/FeatureServer/0/query"
+  ]},
   HILLSBOROUGH : { label:"Hillsborough County (City of Tampa GIS · HCPA parcels)", urls:[
     // ✅ verified queryable public layer on the City of Tampa's ArcGIS server (arcgis.tampagov.net).
     // Description: "Hillsborough County Property Appraiser Data (City & county Parcels) — updated
@@ -1941,6 +1970,22 @@ function municodeSection(sec){ return "https://library.municode.com/fl/naples/co
    cities, etc.) paste that jurisdiction's zoning layer URL in the Advanced
    panel — it takes priority over this table and auto-detects the field. */
 const ZONING_LIVE = {
+  PINELLAS: { label:"Pinellas County Zoning (Unincorporated, 2019)", codeField:"ZONECLASS", urls:[
+    // ✅ verified queryable public layer — discovered via F12 on Pinellas County's own public WebGIS
+    // Experience app (same trick that found the parcel/owner data). Service "Pinellas_Zoning2019_view"
+    // on ArcGIS Online (services.arcgis.com/f5HgUpxURgEzTccH — same trusted org as the Pinellas parcel
+    // feed). Token-free. codeField pinned to ZONECLASS. Effective 1 Jan 2019 per the county's Open Data
+    // listing ("Planning Unincorporated Zoning") — covers UNINCORPORATED Pinellas only; incorporated
+    // cities (St. Petersburg, Clearwater, Largo, etc.) run their own zoning and are not in this layer.
+    "https://services.arcgis.com/f5HgUpxURgEzTccH/arcgis/rest/services/Pinellas_Zoning2019_view/FeatureServer/0/query"
+  ]},
+  PASCO: { label:"Pasco County BOCC Zoning", codeField:"ZN_TYPE", urls:[
+    // ✅ verified queryable public layer — "BOCC Zoning" (layer 1) of the Land_Use MapServer on the
+    // Property Appraiser's own mapping server (mapping.pascopa.com). Token-free. Codes match Pasco LDC
+    // Chapter 500 (e.g. AC = Agricultural, C2 = Commercial). ZN_STR is a section-township-range
+    // reference, not the district — codeField is pinned to ZN_TYPE so detection can't drift to it.
+    "https://mapping.pascopa.com/arcgis/rest/services/Land_Use/MapServer/1/query"
+  ]},
   LEE: { label:"Lee County DCD Zoning", urls:[
     "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/0/query", // unincorporated Lee
     "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/1/query", // City of Cape Coral
@@ -4631,24 +4676,24 @@ function detectFields(fields){
   return {
     // /^NAME$/ (last) is Marion County's Ocala-hosted parcel layer; fully anchored so it can't false-match.
     owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^OWN1$/,/^NAME1$/,/^ONAME$/,/^O_NAME/,/^OWNERLINE1$/,/OWN.*NAME/,/OWNER_?LINE_?1/,/^GRANTEE/,/^NAME$/]),
-    owner2:find([/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^OWN2$/,/^NAME2$/,/^OWNERLINE2$/,/OWNER_?LINE_?2/,/OWN.*NAME2/]),
-    pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/,/^PARCEL$/]),
+    owner2:find([/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^OWN2$/,/^NAME2$/,/^OWNERLINE2$/,/OWNER_?LINE_?2/,/OWN.*NAME2/,/^OWNER_NAME_2$/]),
+    pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/,/^PARCEL$/,/^HPARCEL$/]),
     site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/]),
-    city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/]),
+    city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/,/^STR_CITY$/,/^SITE_MAILING_CITY$/]),
     jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/]),
-    land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/]),
+    land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/,/^JUST_LAND$/]),
     // /^ACT$/ is Hillsborough (Tampa-hosted) "Actual Year Built"; /^EFF$/ is its remodel year (fallback).
-    yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/]),
+    yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/,/^ACTUAL_YEAR_BUILT$/]),
     // Marion's Ocala-hosted layer: RESUSESF = heated/living (residential use) sq ft — the TRUE living
     // area; USE_SF matches it. BLD1_SF / RESTOTSF are the larger TOTAL under-roof figure (incl.
     // garage/porch), so they must rank BELOW resusesf/use_sf or living area over-reports. Verified
     // Aug 2026 on real parcels (e.g. 1504 heated vs 1940 under-roof).
     liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^RESUSESF$/,/^USE_SF$/,/^BLD1_SF$/,/^HEAT_?AR$/]),
-    saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/,/^AMT$/]),
-    saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/]),
+    saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/,/^AMT$/,/^SALE_AMOUNT$/]),
+    saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/,/^SALE_DATE$/]),
     mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/,/^ADD_1$/]),
-    mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/^O_CITY$/,/OWNER_?CITY/,/^ADD_3$/]),
-    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/,/^DOR_C$/]),
+    mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/^O_CITY$/,/OWNER_?CITY/,/^ADD_3$/,/^MAILING_CITY$/]),
+    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/,/^DOR_C$/,/^PROPERTY_USE$/,/^LAND_USE_DESC$/,/^LAND_USE_CODE$/]),
     lotSqft: find([/^LND_?SQFOOT$/,/^LOT_?SQ/,/^LOTSQFT$/,/^LAND_?SQFT$/,/^SQFT_?LND$/,/^LOTSF$/,/^LOT_?SIZE$/,/LOTSQUARE/,/^LAND_?SQ/])
   };
 }
@@ -10297,6 +10342,7 @@ function renderParcelGeneric(a, d){
   else if(a.__saleP!=null) h += fieldRow('Last sale', fmtMoney(a.__saleP)+(a.__saleY?' ('+esc(String(a.__saleY))+')':''));
   else if(a.__saleDateOnly) h += fieldRow('Last sale', esc(String(a.__saleDateOnly)));
   if(a.__legal) h += fieldRow('Legal', '<span style="font-size:11px">'+esc(String(a.__legal))+'</span>');
+  if(a.__zoning) h += fieldRow('Zoning (per parcel roll)', esc(String(a.__zoning)));
   return h;
 }
 
@@ -10743,7 +10789,32 @@ async function runLookup(lat,lng,searchCtx){
           if(_yr>1900 && _yr<2100) _la.__saleDateOnly=String(_yr); }catch(e){}
       }
     }
-    if(det.yr){ const _y=pick(liveRes.features[0].attributes,det.yr); if(_y) parcelYearBuilt=_y; }
+    // Pinellas' ParcelPropertyInfo layer has no single "just value" field — only JUST_BUILDING +
+    // JUST_LAND split out, plus CNTY_TAXABLE_VALUE (taxable, not market). Sum land+building into a
+    // synthetic JV field (reuses the existing 'jv' render path) and surface taxable value/legal via
+    // the standard custom-key channels. Gap-only; guarded to Pinellas.
+    if(norm(countyName)==='PINELLAS'){
+      const _la=liveRes.features[0].attributes;
+      const _n=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+      if(!det.jv){
+        const _jb=Number(_la.JUST_BUILDING)||0, _jl=Number(_la.JUST_LAND)||0, _sum=_jb+_jl;
+        if(_sum>0){ _la.JV=_sum; det.jv='JV'; }
+      }
+      if(_la.__taxableVal==null && _n(_la.CNTY_TAXABLE_VALUE)) _la.__taxableVal=_la.CNTY_TAXABLE_VALUE;
+      if(_la.__legal==null && _la.LEGAL!=null && String(_la.LEGAL).trim()!=='') _la.__legal=String(_la.LEGAL).trim();
+    }
+    // Pasco's Parcels_MM layer carries a legal description and zoning code the generic renderer
+    // doesn't otherwise surface from these field names (parcel ID now resolves via HPARCEL — see
+    // COUNTY_LIVE note; no change needed here). ZONING here is a per-parcel ATTRIBUTE on the roll (not a
+    // spatial polygon lookup), so it's shown via __zoning as "Zoning (per parcel roll)" rather than the
+    // "● LIVE zoning polygon" badge, which is reserved for point-in-polygon results against a dedicated
+    // zoning layer (Pasco has no such public layer, so no setback table is attached to this value —
+    // it's informational only). Gap-only; guarded to Pasco.
+    if(norm(countyName)==='PASCO'){
+      const _la=liveRes.features[0].attributes;
+      if(_la.__legal==null && _la.LEGAL_DESCRIPTION!=null && String(_la.LEGAL_DESCRIPTION).trim()!=='') _la.__legal=String(_la.LEGAL_DESCRIPTION).trim();
+      if(_la.__zoning==null && _la.ZONING!=null && String(_la.ZONING).trim()!=='') _la.__zoning=String(_la.ZONING).trim();
+    }
     const le=liveMeta&&liveMeta.lastEdit;
     html += `<div class="freshline"><span class="badge live">● LIVE</span> ${esc((liveMeta&&liveMeta.name)||'county parcel service')}${le?' · updated '+esc(le.toLocaleDateString()):' · real-time query'}</div>`;
     html += renderParcelGeneric(liveRes.features[0].attributes, det);
