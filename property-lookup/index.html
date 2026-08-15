@@ -1820,7 +1820,14 @@ const ZONING_CITY = {
   BRADENTON:{code:"https://library.municode.com/fl/bradenton/codes/code_of_ordinances", permit:"https://www.cityofbradenton.com/162/Planning-Community-Development"},
   PALMETTO:{code:"https://library.municode.com/fl/palmetto/codes/code_of_ordinances", permit:"https://www.palmettofl.org/152/Planning-Zoning"},
   MOOREHAVEN:{code:"https://library.municode.com/fl/moore_haven/codes/code_of_ordinances", permit:"https://moorehaven.org/zoning-building-code-enforcement/"},
-  CLEARWATER:{code:"https://library.municode.com/fl/clearwater/codes/community_development_code", zoningCh:"https://library.municode.com/fl/clearwater/codes/community_development_code?nodeId=PTICODECO_ART2ZODI", permit:"https://www.myclearwater.com/Business-Development/Permits-and-Inspections"}  // City of Clearwater — zoning lives in the Community Development Code (Art. 2), NOT the county code
+  CLEARWATER:{code:"https://library.municode.com/fl/clearwater/codes/community_development_code", zoningCh:"https://library.municode.com/fl/clearwater/codes/community_development_code?nodeId=PTICODECO_ART2ZODI", permit:"https://www.myclearwater.com/Business-Development/Permits-and-Inspections"},  // City of Clearwater — zoning lives in the Community Development Code (Art. 2), NOT the county code
+  // Town of Longboat Key — no usable LIVE zoning layer (the Town's own lbkzoning service only carries
+  // the Manatee-half geometry and 404s on a direct query; Sarasota County's layer is unincorporated-
+  // only) so LBK parcels get these reference links instead of a live district. Zoning = Ch. 158 (Art.
+  // IV Zoning Districts) of the Town's Land Development Code. Applies on BOTH the Manatee and Sarasota
+  // sides (LONGBOATKEY is in both _INCORP sets). Note: per §158, a parcel not shown on the official
+  // Zoning Map defaults to R-1SF.
+  LONGBOATKEY:{code:"https://library.municode.com/fl/longboat_key/codes/code_of_ordinances", zoningCh:"https://library.municode.com/fl/longboat_key/codes/code_of_ordinances?nodeId=TIT15LADECO_CH158ZOCO_ARTIVZODI", permit:"https://www.longboatkey.org/town-government/departments/planning-zoning-building"}
 };
 /* Resolve zoning config: city first (by municipality), else county. */
 function resolveZoning(cityName, countyName){
@@ -2210,7 +2217,22 @@ const ZONING_LIVE_CITY = {
   // County layer (which would otherwise be the fallback and return county-style codes). Zoning is
   // layer 3 of the DataHub MapServer. Field names aren't pinned, so detectZoningFields() resolves
   // the code/description columns automatically (same as the Lee layers).
-  MARCOISLAND: { label:"City of Marco Island Zoning", urls:[
+  // City of Marco Island runs its OWN GIS (gis.cityofmarcoisland.com). Marco Island is incorporated
+  // and has its own LDC (Ch. 30), so its zoning must come from the city's layer — NOT the Collier
+  // County layer (which would otherwise be the fallback and return county-style codes). Fields are
+  // PINNED (verified from the layer def): ZONING = district code (RSF-2/3/4, RMF-6/12/16, C-1..C-5, RT,
+  // PUD, A, CON, CF, GC, P), DESCRIP = readable description. Marco Island is heavily PUD-zoned, so
+  // PUD_NAME (the layer's display field) is surfaced as an extra so PUD parcels show their specific PUD
+  // name. Pinning is REQUIRED — left to auto-detect it drifted to the bare "Zoning" layer name. PRIMARY
+  // url is the city's canonical "General/Zoning" service (layer 3); the "General/DataHub" copy (same
+  // layer 3, same fields) is kept as a fallback since it intermittently returns 503. NOTE: a Y in the
+  // ST_OVER field means the parcel also carries the Special Treatment (ST) overlay (the city labels it
+  // "<code>-ST") — not surfaced here, but relevant to development standards.
+  MARCOISLAND: { label:"City of Marco Island Zoning",
+    codeField:"ZONING", descField:"DESCRIP",
+    extra:[ {field:"PUD_NAME", label:"PUD"} ],
+    urls:[
+    "https://gis.cityofmarcoisland.com/arcgis/rest/services/General/Zoning/MapServer/3/query",
     "https://gis.cityofmarcoisland.com/arcgis/rest/services/General/DataHub/MapServer/3/query"
   ]},
   // City of Cape Coral's OWN DCD zoning layer carries the EXACT per-parcel code (R-1A vs R-1B,
@@ -2305,6 +2327,14 @@ const ZONING_LIVE_CITY = {
   PALMETTO: { label:"City of Palmetto Zoning", codeField:"ZONE", descField:"DESC_", urls:[
     "https://services1.arcgis.com/L2Neyx2ylSeTBS0F/arcgis/rest/services/Zoning/FeatureServer/0/query"
   ]}
+  // NOTE: Longboat Key is intentionally NOT wired as a city zoning layer. LBK is incorporated and DOES
+  // publish its own queryable layer (www.mymanatee.org/arcgis01/rest/services/municipal/lbkzoning/
+  // MapServer/0, field ZONING), but it returns the SAME LBK_-prefixed codes (LBK_OS, LBK R-3MX,
+  // LBK R-4SF, ...) that Manatee County's own zoning already carries — so it's a pure duplicate on the
+  // Manatee half and returns nothing useful on the Sarasota half. Unlike Bradenton (BR_) and Palmetto
+  // (PA_), where the city layer was a cleaner upgrade over the county's prefixed codes, LBK's town layer
+  // is not an upgrade, so it's left out. LBK parcels resolve via the Manatee county zoning on the
+  // Manatee side; the Sarasota side has no district data in either county feed (city-of-LBK enclave).
 };
 
 /* Auto-detect the zoning code & description fields from a layer's attribute keys.
@@ -3436,7 +3466,9 @@ function zoneCategory(code){
   if(/^(P|PU|GU|CF|CON|OS|REC|ST|GOV|INST)/.test(c)) return 'public';
   return 'other';
 }
-const ZONING_FILL_OPACITY = 0.35;
+const ZONING_FILL_OPACITY = 0.30;   // districts paint ONCE now (see the coincident-footprint de-dup in the
+                                    // overlay build below), so stacking no longer compounds into opaque
+                                    // blobs — 0.30 gives a clear district tint while the aerial stays visible.
 /* City of Naples — per-district colors. Each zoning *family* gets a hue; variants within a family
    are graded light→dark (bigger lot / lower density = lighter, smaller lot / higher density = darker)
    so you can tell R1-15 from R1-10 from R1-7.5 at a glance, and families apart by hue. Codes come
@@ -3675,13 +3707,43 @@ async function refreshZoning(){
   }
   // Merge: counties first (drawn underneath), cities last (drawn on top). Tag each feature with which
   // reg it came from so per-feature styling/tooltips/legend use the RIGHT jurisdiction's field names.
+  //
+  // DE-DUP OVERLAPPING FOOTPRINTS: some county layers stack several polygons over the SAME spot — a
+  // marina / submerged-land / govt polygon sitting under (or coincident with) a base district, or the
+  // same district digitized more than once. With translucent fills those stacks compound into a
+  // near-opaque blob that hides the aerial. We paint each footprint ONCE: the first polygon at a given
+  // geometry signature wins, later coincident copies are dropped (fill + outline). Signature is a cheap
+  // rounded-vertex hash (~1 m precision, sampled) so exact/near-coincident rings collapse to one key
+  // while genuinely different adjacent districts keep distinct keys. Cities are ordered last, so where a
+  // city and county polygon truly coincide the county one (added first) is the one kept — harmless,
+  // since in-city points resolve to the city district via the separate point lookup anyway.
+  const geomSig = (g)=>{
+    if(!g || !g.coordinates) return null;
+    const rings = g.type==='MultiPolygon' ? g.coordinates.flat() : (g.type==='Polygon' ? g.coordinates : null);
+    if(!rings) return null;
+    let s='';
+    for(const ring of rings){
+      if(!ring || !ring.length) continue;
+      const step = Math.max(1, Math.floor(ring.length/24));   // sample ≤~24 vertices; big rings stay cheap
+      for(let i=0;i<ring.length;i+=step){ const c=ring[i]; if(c&&c.length>=2) s+=c[0].toFixed(5)+','+c[1].toFixed(5)+';'; }
+      s+='|';
+    }
+    return s||null;
+  };
   const ordered = [...results.filter(r=>!r.a.isCity), ...results.filter(r=>r.a.isCity)];
   const merged = { type:'FeatureCollection', features:[] };
   const legendGroups=[];
+  const seenGeom = new Set();
   for(const {a, gj} of ordered){
     if(!gj || !gj.features || !gj.features.length) continue;
-    for(const f of gj.features){ f.properties = f.properties || {}; f.properties.__zreg = a; merged.features.push(f); }
-    legendGroups.push({ reg:a.reg, features:gj.features });
+    const kept=[];
+    for(const f of gj.features){
+      const sig = geomSig(f.geometry);
+      if(sig && seenGeom.has(sig)) continue;   // coincident footprint already painted — skip this copy
+      if(sig) seenGeom.add(sig);
+      f.properties = f.properties || {}; f.properties.__zreg = a; merged.features.push(f); kept.push(f);
+    }
+    if(kept.length) legendGroups.push({ reg:a.reg, features:kept });
   }
   if(!merged.features.length){ zoningLayer.clearLayers(); setZoningLegend([]); zoningKey=key; zoningBusy=false; return; }
   zoningLayer.clearLayers(); zoningLayer.addData(merged);
