@@ -4621,8 +4621,11 @@ function detectFields(fields){
     jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/]),
     land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/]),
     yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/]),
-    // /^BLD1_SF$/ and /^RESUSESF$/ are Marion's Ocala-hosted layer (building 1 sqft / residential use sqft).
-    liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^BLD1_SF$/,/^RESUSESF$/]),
+    // Marion's Ocala-hosted layer: RESUSESF = heated/living (residential use) sq ft — the TRUE living
+    // area; USE_SF matches it. BLD1_SF / RESTOTSF are the larger TOTAL under-roof figure (incl.
+    // garage/porch), so they must rank BELOW resusesf/use_sf or living area over-reports. Verified
+    // Aug 2026 on real parcels (e.g. 1504 heated vs 1940 under-roof).
+    liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^RESUSESF$/,/^USE_SF$/,/^BLD1_SF$/]),
     saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/]),
     saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/]),
     mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/,/^ADD_1$/]),
