@@ -1821,10 +1821,14 @@ const ZONING_CITY = {
   PALMETTO:{code:"https://library.municode.com/fl/palmetto/codes/code_of_ordinances", permit:"https://www.palmettofl.org/152/Planning-Zoning"},
   MOOREHAVEN:{code:"https://library.municode.com/fl/moore_haven/codes/code_of_ordinances", permit:"https://moorehaven.org/zoning-building-code-enforcement/"},
   CLEARWATER:{code:"https://library.municode.com/fl/clearwater/codes/community_development_code", zoningCh:"https://library.municode.com/fl/clearwater/codes/community_development_code?nodeId=PTICODECO_ART2ZODI", permit:"https://www.myclearwater.com/Business-Development/Permits-and-Inspections"},  // City of Clearwater — zoning lives in the Community Development Code (Art. 2), NOT the county code
-  // City of Dunedin — incorporated, runs its OWN Land Development Code, so its parcels are NOT in the
-  // Pinellas County unincorporated zoning layer. Zoning = LDC (Subpart B) Chapter 103. These reference
-  // links back up the live layer-17 district lookup above if that self-hosted service is ever down/CORS-blocked.
+  // City of Dunedin — incorporated, own LDC (Subpart B, Ch. 103). These reference links back up the live
+  // layer-17 district lookup above if that self-hosted service is ever down or CORS-blocked.
   DUNEDIN:{code:"https://library.municode.com/fl/dunedin/codes/code_of_ordinances", zoningCh:"https://library.municode.com/fl/dunedin/codes/code_of_ordinances?nodeId=SPBLADECO_CH103ZO", permit:"https://www.dunedin.gov/City-Services/Business-Development/Community-and-Economic-Development/Zoning"},
+  // City of Largo — no traditional zoning; regulation is the Comprehensive Development Code (FLU-based
+  // districts). Backs up the live layer-241 land-use-district lookup.
+  LARGO:{code:"https://library.municode.com/fl/largo/codes/comprehensive_development_code", permit:"https://www.largo.com/planning/"},
+  // City of Pinellas Park — zoning is Land Development Code Ch. 18, Article 15. Backs up the live layer.
+  PINELLASPARK:{code:"https://library.municode.com/fl/pinellas_park/codes/land_development_code", zoningCh:"https://library.municode.com/fl/pinellas_park/codes/land_development_code?nodeId=CH18LADECO_AR15.ZO", permit:"https://www.pinellaspark.gov/1276/Zoning-Regulations-and-Map"},
   // Town of Longboat Key — no usable LIVE zoning layer (the Town's own lbkzoning service only carries
   // the Manatee-half geometry and 404s on a direct query; Sarasota County's layer is unincorporated-
   // only) so LBK parcels get these reference links instead of a live district. Zoning = Ch. 158 (Art.
@@ -2209,17 +2213,17 @@ const ZONING_LIVE_CITY = {
   PINELLASPARK: { label:"City of Pinellas Park Zoning", codeField:"CATEGORY", descField:"DESCRIPTION", urls:[
     "https://services6.arcgis.com/fH2ZwfxOgb5eaBS4/arcgis/rest/services/Planning_Development_2_WFL1/FeatureServer/19/query"
   ]},
-  // ✅ City of Dunedin zoning — the "ZoningDistrict" layer on the City's OWN self-hosted GIS server
-  // (gis.dunedingov.com). ⚠️ IMPORTANT: there is NO standalone ".../ZoningDistrict/MapServer" service
-  // (that path 404s — it was the earlier, unverified guess). The zoning polygons are LAYER 17 of the
-  // CommunityDevelopment/DunedinERP_PublicBasemap MapServer — VERIFIED live from the layer def. Fields
-  // confirmed: ZONECLASS = district code (alias "Zoning Classification"; e.g. "MPL", "R-100", "DC",
-  // "FX-M"), ZONEDESC = readable name (alias "Zoning Description"; e.g. "Municipal Public Lands").
-  // codeField/descField pinned so detection can't drift to the LASTEDITOR / ZONECLASS_2020 (superseded
-  // 2020 scheme) / Municode_link columns. Layer also carries MaxHeight + ZONINGDEF if ever surfaced.
-  // SR 2882 (FL State Plane ft); arcQuery sends the point as 4326 and the server reprojects. ⚠️ self-
-  // hosted server — verify CORS with the diagnostic (esp. older iOS); if blocked, falls back to the
-  // Pinellas county layer (unincorporated-only) / Municode links.
+  // ✅ City of Dunedin zoning — the zoning polygons are LAYER 17 of the CommunityDevelopment/
+  // DunedinERP_PublicBasemap MapServer on the City's self-hosted GIS (gis.dunedingov.com). This is the
+  // layer that actually SERVES GEOMETRY (verified live: real WGS84 polygons), so it both point-looks-up
+  // AND colors the map overlay. Fields: ZONECLASS = district code (alias "Zoning Classification"; e.g.
+  // "MPL", "R-100", "DC", "FX-M"), ZONEDESC = readable name. codeField/descField pinned.
+  // ⚠️ DO NOT use these two look-alike Dunedin services — both return attributes with geometry:null, so
+  // the point lookup would work but the map overlay would stay blank (this exact trap cost a lot of time):
+  //   • CommunityDevelopment/ZoningDistrict/MapServer/0   (geometry:null)
+  //   • ParcelData/City_of_Dunedin_Basemap/MapServer/12   (geometry:null)
+  // Self-hosted server (SR sent as 4326, server returns 4326 here) — verify CORS with the diagnostic
+  // (esp. older iOS); falls back to the Pinellas county layer (unincorporated-only) / Municode links.
   DUNEDIN: { label:"City of Dunedin Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
     "https://gis.dunedingov.com/server/rest/services/CommunityDevelopment/DunedinERP_PublicBasemap/MapServer/17/query"
   ]},
