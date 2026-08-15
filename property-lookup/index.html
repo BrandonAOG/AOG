@@ -6079,6 +6079,71 @@ function renderVeniceGeneratorNote(){
   h+=`<a class="palink" href="${VENICE_CODE_URL}" target="_blank" rel="noopener" style="margin-top:6px">↗ Venice LDC (Municode) — § 3.1.9 Accessory Uses & § 7.10.10</a>`;
   return h;
 }
+
+/* ===================================================================================
+   GENERATOR-SITING NOTES for the cities wired in the Tampa Bay / SW-FL expansion.
+   Each mirrors the Sarasota/Venice/Glades pattern: a "⚡ GENERATOR" run-in subhead + a
+   paraphrased placement rule read from that city's OWN adopted code (verified per city),
+   plus a Municode link. Rules are the ZONING/placement layer only — the NFPA 37 clearance,
+   LP-tank (NFPA 58) distances, and (on coastal lots) the FBC flood-elevation requirement
+   still apply on top and are frequently the real limiting factor. Dispatched by cityName.
+   =================================================================================== */
+function renderBradentonGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment placement · Bradenton Zoning Code § 5.1.2 / § 5.2.2.10</div>`;
+  h+=`<div class="note"><b>A standby generator is treated as an accessory structure / mechanical equipment.</b> It must keep a <b>5 ft setback from any side or rear property line</b> and <b>may not be located in the front yard</b>. Bradenton has no generator-specific encroachment allowance — the 5 ft accessory rule governs. Keep it out of utility/drainage easements.</div>`;
+  h+=`<div class="note">Also apply the statewide layer: NFPA 37 clearance per the unit's listing, LP-tank distances (NFPA 58), and — this is a coastal city — FBC flood elevation in AE/VE zones (elevate the generator, fuel and transfer switch above BFE).</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/bradenton/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Bradenton Zoning Code (Municode) — Ch. 5 Accessory Uses/Structures</a>`;
+  return h;
+}
+function renderPalmettoGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment placement · City of Palmetto Land Development Code</div>`;
+  h+=`<div class="note"><b>A standby generator is an accessory structure / mechanical equipment</b> — side or rear yard only, <b>not in the front yard</b>, and out of easements. <b>⚠️ Confirm the exact side/rear setback number in Palmetto's LDC before quoting the job</b> — it was not verified here (do not assume the common 5 ft without checking the accessory-structure / supplementary-district section).</div>`;
+  h+=`<div class="note">Statewide layer still applies: NFPA 37 listing clearance, LP-tank (NFPA 58) distances, and FBC flood elevation on AE/VE lots (coastal city).</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/palmetto/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Palmetto Land Development Code (Municode)</a>`;
+  return h;
+}
+function renderMarcoGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment encroachment · Marco Island LDC § 30-1004 / § 30-86(b)</div>`;
+  h+=`<div class="note"><b>Marco Island names generators specifically:</b> a generator <b>may encroach up to 4 ft into a required (side or rear) yard</b>. Pad-mounted A/C and pool equipment are likewise allowed in required yards. Not in the front yard, and not in easements.</div>`;
+  h+=`<div class="note"><b>Coastal / flood is usually the binding constraint:</b> in AE/VE zones the generator, its fuel and the transfer switch must be elevated above BFE (FBC/ASCE 24). Watch for a <b>Special Treatment (ST) overlay</b> on the parcel (extra environmental review). Plus NFPA 37 listing clearance and LP-tank (NFPA 58) distances.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/marco_island/codes/code_of_ordinances?nodeId=PTIICOOR_CH30LADECO" target="_blank" rel="noopener" style="margin-top:6px">↗ Marco Island LDC (Municode) — Ch. 30, § 30-1004 Setback Encroachments</a>`;
+  return h;
+}
+function renderLargoGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment placement · Largo Comprehensive Development Code (Subsec. 10001)</div>`;
+  h+=`<div class="note">Largo is <b>Future-Land-Use-based</b>, so setbacks vary by the parcel's land-use designation. A detached accessory structure — and a generator follows the same treatment — takes the <b>same side/rear setback as the principal use</b> for that designation, is <b>not permitted in the front yard</b>, and keeps a <b>3 ft minimum separation from the house</b>. So the generator's required distance off the line = this parcel's principal-structure side/rear setback (check the specific land-use district).</div>`;
+  h+=`<div class="note">Then apply NFPA 37 listing clearance, LP-tank (NFPA 58) distances, and FBC flood elevation on any AE/VE lot.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/largo/codes/comprehensive_development_code" target="_blank" rel="noopener" style="margin-top:6px">↗ Largo Comprehensive Development Code (Municode)</a>`;
+  return h;
+}
+function renderPinellasParkGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment placement · Pinellas Park LDC § 18-1503.2 (Art. 15 Zoning)</div>`;
+  h+=`<div class="note"><b>Strict — a generator is regarded as a structure</b> and must meet the <b>full zoning-district structure setbacks</b> (not a reduced accessory setback). The "screened quiet equipment needs no setback variance" exemption <b>does NOT apply to generators</b>, because they generate noise. Mechanical equipment must also be located as far as practical from any abutting residential district (noise/exhaust).</div>`;
+  h+=`<div class="note">So confirm the parcel's district and use its side/rear structure setback. Then apply NFPA 37 listing clearance, LP-tank (NFPA 58) distances, and the city noise limit at the property line.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/pinellas_park/codes/land_development_code?nodeId=CH18LADECO_AR15.ZO" target="_blank" rel="noopener" style="margin-top:6px">↗ Pinellas Park LDC (Municode) — Art. 15 Zoning, § 18-1503</a>`;
+  return h;
+}
+function renderDunedinGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment placement · Dunedin Zoning Ch. 103 § 103-50 (Table 103-50.1)</div>`;
+  h+=`<div class="note">A generator is mechanical equipment; its permitted <b>setback encroachment is set per district in Table 103-50.1</b> — check that table for the parcel's district rather than assuming a flat number. Not in the front yard, and not in easements. On <b>waterfront</b> lots, equipment more than <b>12 in above grade is prohibited in the waterfront view triangle</b>.</div>`;
+  h+=`<div class="note"><b>Coastal:</b> AE/VE lots require the generator, fuel and transfer switch elevated above BFE (FBC/ASCE 24). Plus NFPA 37 listing clearance and LP-tank (NFPA 58) distances.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/dunedin/codes/code_of_ordinances?nodeId=SPBLADECO_CH103ZO" target="_blank" rel="noopener" style="margin-top:6px">↗ Dunedin Zoning Code (Municode) — Ch. 103, § 103-50</a>`;
+  return h;
+}
+function renderLongboatGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment placement · Longboat Key Zoning Ch. 158, Art. V</div>`;
+  h+=`<div class="note"><b>The hardest to fit.</b> A generator (mechanical equipment) must <b>meet the district's setback requirements AND be raised above the flood elevation.</b> On the Key's narrow lots there's often little compliant space; relief requires a <b>variance from the Zoning Board of Adjustment</b> (hardship finding). Not in the front yard, not in easements. A parcel not shown on the official zoning map defaults to <b>R-1SF</b>.</div>`;
+  h+=`<div class="note">Plan siting early. Then apply NFPA 37 listing clearance, LP-tank (NFPA 58) distances, and — this is the controlling item here — FBC/ASCE 24 flood elevation above BFE for the generator, fuel and transfer switch.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/longboat_key/codes/code_of_ordinances?nodeId=TIT15LADECO_CH158ZOCO" target="_blank" rel="noopener" style="margin-top:6px">↗ Longboat Key Zoning Code (Municode) — Ch. 158, Art. V</a>`;
+  return h;
+}
+function renderTarponGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment placement · Tarpon Springs Appendix A § 36 (Accessory Uses)</div>`;
+  h+=`<div class="note"><b>A standby generator is treated as an accessory structure / mechanical equipment</b> — placed in a side or rear yard, <b>no closer than 5 ft to the side or rear lot line</b>, and <b>not in the front yard</b> or in easements.</div>`;
+  h+=`<div class="note">Sponge Docks / waterfront parcels are in flood zones — apply FBC/ASCE 24 elevation on AE/VE lots. Plus NFPA 37 listing clearance and LP-tank (NFPA 58) distances.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/tarpon_springs/codes/code_of_ordinances?nodeId=COOR_APCOZOLADECO" target="_blank" rel="noopener" style="margin-top:6px">↗ Tarpon Springs Zoning (Municode) — Appendix A, Art. III § 36</a>`;
+  return h;
+}
 /* Render required setbacks for a City of Venice district. Handles numeric minimums AND the
    form-based build-to "min/max" strings. Falls back to a general Venice reference when the
    district code is null/unrecognized. */
@@ -11884,6 +11949,18 @@ async function runLookup(lat,lng,searchCtx){
   // Collier County generator siting (LDC 5.03.07) — UNINCORPORATED Collier only. The incorporated
   // cities (Naples has its own § 56-41 rendered above; Marco Island has its own LDC) are excluded.
   if(norm(countyName)==='COLLIER' && !COLLIER_INCORP.has(norm(cityName))){ html += renderCollierGeneratorRules(); }
+  // Tampa Bay / SW-FL cities wired in the zoning-layer expansion — each carries a generator-siting note
+  // read from its own adopted code (verified per city). Dispatched by cityName so it rides on any parcel
+  // in that city, whether or not a district code was read. (Marco Island's setback table renders above;
+  // this adds its 4-ft generator encroachment rule specifically.)
+  if(norm(cityName)==='BRADENTON'){ html += renderBradentonGeneratorNote(); }
+  if(norm(cityName)==='PALMETTO'){ html += renderPalmettoGeneratorNote(); }
+  if(norm(cityName)==='MARCOISLAND'){ html += renderMarcoGeneratorNote(); }
+  if(norm(cityName)==='LARGO'){ html += renderLargoGeneratorNote(); }
+  if(norm(cityName)==='PINELLASPARK'){ html += renderPinellasParkGeneratorNote(); }
+  if(norm(cityName)==='DUNEDIN'){ html += renderDunedinGeneratorNote(); }
+  if(norm(cityName)==='LONGBOATKEY'){ html += renderLongboatGeneratorNote(); }
+  if(norm(cityName)==='TARPONSPRINGS'){ html += renderTarponGeneratorNote(); }
   if(norm(cityName)==='CAPECORAL'){ html += renderCapeCoralGeneratorRules(zhit && zhit.code ? zhit.code : null); }
   // City of Sanibel: ecological-zone setbacks + the Ch. 126 Div. 16 generator ordinance. Rendered
   // unconditionally for any Sanibel parcel (not gated on a detected zoning code), since Sanibel's
