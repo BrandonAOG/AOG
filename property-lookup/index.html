@@ -2265,6 +2265,45 @@ const ZONING_LIVE_CITY = {
   // unincorporated Marion parcels are served by the county ZoningClassifications layer instead.
   OCALA: { label:"City of Ocala Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
     "https://gis.ocalafl.org/arcgis/rest/services/Public/GrowthManagement/FeatureServer/15/query"
+  ]},
+  // City of Lakeland zoning — Lakeland runs its OWN code and is incorporated, so it's NOT in the Polk
+  // County land-use/zoning layer (which is unincorporated FLU-based). CONFIRMED as the City's official
+  // zoning service (Community Development Dept, "Public" license) AND field-verified against a live
+  // sample record. codeField/descField are PINNED: the real district code is in LABEL (e.g. "O-1",
+  // "RA-3", "C-2") and the readable name in DESIGNATIO (e.g. "Office"). This pinning is REQUIRED — the
+  // layer comes from an enterprise geodatabase whose fields carry schema-qualified names, including
+  // one literally named "ARCCOMMDEV.Zoning.ENTITY"; detectZoningFields() matched the "Zoning" inside
+  // that name and grabbed the (null) ENTITY field, which is why an unpinned wire showed a single blank
+  // "Zoning" everywhere. Layer 0 of the self-hosted Zoning MapServer; verified LIVE + queryable.
+  // ⚠️ CORS on the city's self-hosted portal isn't tested from here — if the diagnostic flags CORS,
+  // the City also publishes a CORS-friendly hosted copy on its ArcGIS Online org (geohub-
+  // lakelandflorida, item fb8478386bbf4d58a5c815395a16c237) that can be swapped in (same LABEL/
+  // DESIGNATIO fields). If neither resolves, queryZoning() falls back to the Polk county / Municode.
+  LAKELAND: { label:"City of Lakeland Zoning", codeField:"LABEL", descField:"DESIGNATIO", urls:[
+    "https://gismims.lakelandgov.net/portal/rest/services/Public/Lakeland10_Zoning/MapServer/0/query"
+  ]},
+  // ✅ City of Bradenton zoning — the City's OWN hosted layer "Zoning_CoB" (Zoning, City of Bradenton)
+  // on its ArcGIS Online org (services6.arcgis.com/wl0q8tN2gn8MMx1p), the same org that serves the
+  // city's boundary/flood layers. CORS-open, token-free. Field-verified from a live sample record:
+  // ZONLABEL = district code (e.g. "SCC", "R-1"), ZON_DESC = readable name ("Suburban Commercial
+  // Corridor"). codeField/descField pinned. Bonus: this layer carries the city's Form-Based Code
+  // districts too (an "FBC" y/n flag field marks them), so downtown FBC-area parcels resolve here — an
+  // advantage over Manatee County's layer. IMPORTANT: do NOT confuse this with the Manatee COUNTY
+  // zoning layer at services.arcgis.com/f4rR7WnIfGBdVYFd (Zoning_Districts, codes CBD/SF-10/RE-4/RA-5/
+  // GU-1 with airport-noise & groundwater overlays) — that one covers the county's rural districts and
+  // is NOT the City's scheme. Replaces the BR_-prefixed value the Manatee county parcel layer
+  // (ZONING_LIVE.MANATEE) returns, which stays wired as the automatic fallback.
+  BRADENTON: { label:"City of Bradenton Zoning", codeField:"ZONLABEL", descField:"ZON_DESC", urls:[
+    "https://services6.arcgis.com/wl0q8tN2gn8MMx1p/arcgis/rest/services/Zoning_CoB/FeatureServer/0/query"
+  ]},
+  // ✅ City of Palmetto zoning — the City's OWN hosted "Zoning" layer on its ArcGIS Online org
+  // (services1.arcgis.com/L2Neyx2ylSeTBS0F = palmettofl.maps.arcgis.com), the layer its public
+  // Planning & Zoning web app queries. CORS-open, token-free. Fields confirmed from the layer's own
+  // request: ZONE = district code, DESC_ = readable description (other fields are ORD/NOTES/ACRES/
+  // edit-tracking). codeField/descField pinned. Replaces the PA_-prefixed value the Manatee county
+  // parcel layer (ZONING_LIVE.MANATEE) returns for Palmetto parcels, which stays as the fallback.
+  PALMETTO: { label:"City of Palmetto Zoning", codeField:"ZONE", descField:"DESC_", urls:[
+    "https://services1.arcgis.com/L2Neyx2ylSeTBS0F/arcgis/rest/services/Zoning/FeatureServer/0/query"
   ]}
 };
 
