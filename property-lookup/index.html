@@ -1454,10 +1454,11 @@ const COUNTY_LIVE = {
   LEE     : { label:"Lee County (Property Appraiser)", urls:[
     // ✅ confirmed: Lee's hosted parcels layer on ArcGIS Online (CORS-friendly).
     // Fields: O_NAME (owner), STRAP (parcel), SITEADDR/SITECITY, JUST (value), HEATEDAREA, S_1AMOUNT/S_1DATE (sale).
-    "https://services2.arcgis.com/LvWGAAhHwbCJ2GMP/arcgis/rest/services/Lee_County_Parcels/FeatureServer/0/query",
-    // Secondary candidates on Lee's enterprise server (CORS not guaranteed):
-    "https://leegis.leegov.com/arcgis/rest/services/LeeParcels/MapServer/0/query",
-    "https://leegis.leegov.com/arcgis/rest/services/AGOL/AGOL_Layers_LCGIS/MapServer/0/query"
+    // NOTE: the county's own leegis.leegov.com parcel layers (LeeParcels/MapServer/0 and
+    // AGOL/AGOL_Layers_LCGIS/MapServer/0) were REMOVED as fallbacks — that enterprise server is
+    // CORS-blocked, so a browser fetch can never read it; keeping it only added two failing round-trips
+    // per lookup. This AGOL layer carries the same data (owner + STRAP), current, and is the sole source.
+    "https://services2.arcgis.com/LvWGAAhHwbCJ2GMP/arcgis/rest/services/Lee_County_Parcels/FeatureServer/0/query"
   ]},
   CHARLOTTE: { label:"Charlotte County GIS (live parcel layer)", urls:[
     // ✅ verified live: the parcel layer Charlotte's own public GIS viewer queries — layer 17 of the
@@ -2072,7 +2073,22 @@ const ZONING_LIVE = {
     // reference, not the district — codeField is pinned to ZN_TYPE so detection can't drift to it.
     "https://mapping.pascopa.com/arcgis/rest/services/Land_Use/MapServer/1/query"
   ]},
-  LEE: { label:"Lee County DCD Zoning", urls:[
+  LEE: { label:"Lee County DCD Zoning",
+    // POINT LOOKUP is jurisdiction-aware: DCD_Zoning is split into per-municipality sublayers, and only
+    // the sublayer containing this parcel can ever match — so queryZoning fires the SINGLE sublayer keyed
+    // by the parcel's city (norm form) below, instead of all six (no more querying Estero/Bonita on a
+    // Cape Coral lookup). "" = unincorporated Lee, the default when the parcel isn't in a mapped city.
+    // The flat urls list is kept for the MAP OVERLAY and the connectivity diagnostic, which legitimately
+    // need every sublayer (the overlay draws all districts in view).
+    byCity: {
+      "":               "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/0/query",
+      "CAPECORAL":      "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/1/query",
+      "FORTMYERS":      "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/2/query",
+      "ESTERO":         "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/5/query",
+      "FORTMYERSBEACH": "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/6/query",
+      "BONITASPRINGS":  "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/7/query"
+    },
+    urls:[
     "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/0/query", // unincorporated Lee
     "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/1/query", // City of Cape Coral
     "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/2/query", // City of Fort Myers
@@ -2296,11 +2312,13 @@ const ZONING_LIVE_CITY = {
     "https://gis.cityofmarcoisland.com/arcgis/rest/services/General/Zoning/MapServer/3/query",
     "https://gis.cityofmarcoisland.com/arcgis/rest/services/General/DataHub/MapServer/3/query"
   ]},
-  // City of Cape Coral's OWN DCD zoning layer carries the EXACT per-parcel code (R-1A vs R-1B,
-  // etc.) in LMLUZN — finer than the Lee County layer, which groups them. Prefer it; if it's
-  // CORS-blocked or down, fall back to the Lee layer (grouped label) so detection still works.
+  // City of Cape Coral's OWN zoning layer carries the EXACT per-parcel code (R-1A vs R-1B, etc.) in
+  // LMLUZN — finer than the Lee County layer, which groups them. Prefer it; if it's down or the path
+  // moves, fall back to the Lee layer (grouped label) so detection still works.
+  // PATH FIX (Aug 2026): the old OpenData/DCD/MapServer/3 path now returns "Service not found". The live
+  // Cape Coral zoning layer is layer 32 ("Zoning", display field LMLUZN) of the IMS AGOL MapServer.
   CAPECORAL: { label:"City of Cape Coral Zoning", codeField:"LMLUZN", descField:"Zoning_Desc", urls:[
-    "https://capeims.capecoral.gov/arcgis/rest/services/OpenData/DCD/MapServer/3/query",
+    "https://capeims.capecoral.gov/arcgis/rest/services/IMS/City_of_Cape_Coral_IMS_AGOL/MapServer/32/query",
     "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/1/query"
   ]},
   // City of Sanibel runs its OWN ArcGIS Online org (services7.arcgis.com/OnCt8XFWOgmkvMJE) — service
@@ -2420,14 +2438,24 @@ async function queryZoning(lat,lng, cityName, countyName){
   else {
     const cityReg = cityName ? ZONING_LIVE_CITY[norm(cityName)] : null;   // city is its own zoning authority
     const cntyReg = countyName ? ZONING_LIVE[norm(countyName)] : null;
+    // Resolve an entry's POINT-LOOKUP urls. If the entry is partitioned by municipality (byCity map —
+    // e.g. Lee's per-city DCD_Zoning sublayers), only the sublayer that can actually contain this parcel
+    // is queried: the one keyed by the parcel's city, else the "" unincorporated default. This avoids
+    // firing every city's sublayer (Estero/Bonita/Fort Myers…) on a lookup that can only match one.
+    const lookupUrls = (r)=>{
+      if(!r) return [];
+      if(r.byCity){ const u = r.byCity[norm(cityName||'')] || r.byCity['']; if(u) return [u]; }
+      return r.urls || (r.url?[r.url]:[]);
+    };
     const reg = cityReg || cntyReg;
-    if(reg){ cands = reg.urls || (reg.url?[reg.url]:[]); pin = (reg.codeField||reg.descField||reg.extra) ? {codeField:reg.codeField, descField:reg.descField, extra:reg.extra} : null; }
-    // If the city has its OWN layer set AND the county also has one, append the county layers as a
+    if(reg){ cands = lookupUrls(reg); pin = (reg.codeField||reg.descField||reg.extra) ? {codeField:reg.codeField, descField:reg.descField, extra:reg.extra} : null; }
+    // If the city has its OWN layer set AND the county also has one, append the county layer(s) as a
     // fallback: a city's GIS endpoint may be down, moved, or not actually carry the district at this
     // point. The county/regional zoning service often still covers in-city parcels (e.g. Lee's
     // consolidated DCD_Zoning covers Sanibel/Cape Coral/Estero). Better a county-style code than
-    // nothing — the setback renderer keys on the code, so any valid code keeps the chain alive.
-    if(cityReg && cntyReg){ const cl = cntyReg.urls || (cntyReg.url?[cntyReg.url]:[]); for(const u of cl) if(!cands.includes(u)) cands.push(u); }
+    // nothing — the setback renderer keys on the code, so any valid code keeps the chain alive. The
+    // county fallback is resolved jurisdiction-aware too, so only the matching sublayer is appended.
+    if(cityReg && cntyReg){ for(const u of lookupUrls(cntyReg)) if(!cands.includes(u)) cands.push(u); }
   }
   const multi = cands.length>1;                    // probing several layers → be stricter about what we trust
   const folio = v => v!=null && /^[0-9]{6,}$/.test(String(v).trim());   // parcel-folio numbers aren't districts
