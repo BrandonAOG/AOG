@@ -3375,7 +3375,7 @@ map.on('moveend zoomend', ()=>{
    debounce on pan/zoom — exactly like the city-limit layer above. */
 const PARCEL_FS = "https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query";
 const parcelLinesLayer = L.geoJSON(null, { renderer:canvasRenderer,
-  style:{ color:'#39d3ff', weight:1, opacity:.7, fill:false } });
+  style:{ color:'#ff8a3c', weight:1, opacity:.7, fill:false } });
 let parcelLinesOn=false, parcelBusy=false, parcelKey='';
 async function refreshParcelLines(){
   if(!parcelLinesOn) return;
@@ -10246,8 +10246,8 @@ function drawParcel(g, info){
       // how the individual unit numbers get drawn, so we must NOT suppress points there.
       setSubjectRings(oversized ? null : g);
       const latlngs=g.rings.map(r=>r.map(p=>[p[1],p[0]]));
-      // Shared tract → ORANGE dashed outline (context). Normal home lot → solid BLUE.
-      const col = oversized ? '#ff8c1a' : '#39d3ff';
+      // Shared tract → dashed orange outline (context). Normal home lot → solid brand orange.
+      const col = oversized ? '#ff8c1a' : '#ff8a3c';
       parcelLayer=L.polygon(latlngs,{renderer:canvasRenderer,color:col,weight:oversized?3.5:2,
         fillColor:col,fillOpacity:oversized?.05:.12,
         dashArray:oversized?'6 5':null,opacity:oversized?.85:1}).addTo(map);
@@ -10311,8 +10311,8 @@ async function drawHomeWithinTract(lat, lng, tractAcres, info){
     // same-lot gap-fill suppression (a home here can still carry a second street frontage).
     setSubjectRings(best.geometry);
     const latlngs=best.geometry.rings.map(rr=>rr.map(p=>[p[1],p[0]]));
-    homeParcelLayer=L.polygon(latlngs,{renderer:canvasRenderer,color:'#39d3ff',weight:2.5,
-      fillColor:'#39d3ff',fillOpacity:.14,opacity:1}).addTo(map);
+    homeParcelLayer=L.polygon(latlngs,{renderer:canvasRenderer,color:'#ff8a3c',weight:2.5,
+      fillColor:'#ff8a3c',fillOpacity:.14,opacity:1}).addTo(map);
     // give the blue home lot the same hover card as the main parcel, when we have one
     const tip=parcelTooltipHTML(info);
     if(tip){
