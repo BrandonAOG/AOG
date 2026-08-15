@@ -3730,6 +3730,12 @@ async function refreshZoning(){
     }
     return s||null;
   };
+  // A COUNTY zoning layer marks incorporated land with a MUNICIPALITY PLACEHOLDER ("CITY OF MARCO
+  // ISLAND", "TOWN OF ...", "VILLAGE OF ...") instead of a real district — the city's own layer (drawn
+  // on top) carries the actual zoning there. Drawing that placeholder just paints a redundant blob and
+  // adds a useless legend row ("COLLIER COUNTY → CITY OF MARCO ISLAND"), so we drop county features
+  // whose "district" is a City/Town/Village-of name. City layers are never filtered.
+  const isMunicipalityPlaceholder = (v)=> v!=null && /^\s*(city|town|village)\s+of\b/i.test(String(v));
   const ordered = [...results.filter(r=>!r.a.isCity), ...results.filter(r=>r.a.isCity)];
   const merged = { type:'FeatureCollection', features:[] };
   const legendGroups=[];
@@ -3738,6 +3744,7 @@ async function refreshZoning(){
     if(!gj || !gj.features || !gj.features.length) continue;
     const kept=[];
     for(const f of gj.features){
+      if(!a.isCity && isMunicipalityPlaceholder(zoneCodeOf(f.properties, a.reg))) continue;  // county placeholder over an incorporated city — skip
       const sig = geomSig(f.geometry);
       if(sig && seenGeom.has(sig)) continue;   // coincident footprint already painted — skip this copy
       if(sig) seenGeom.add(sig);
