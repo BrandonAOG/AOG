@@ -2185,6 +2185,36 @@ const ZONING_LIVE_CITY = {
   CLEARWATER: { label:"City of Clearwater Zoning", codeField:"ZONING", descField:"ZONING_DESC", urls:[
     "https://gis.myclearwater.com/arcgis/rest/services/ArcGISMapServices/Zoning_WGS84/MapServer/1/query"
   ]},
+  // City of Largo — Largo has NO traditional zoning layer. Its Comprehensive Development Code (CDC)
+  // ties development standards directly to the FUTURE LAND USE category, so the FLU district IS the
+  // regulatory district (same model as Polk County's land-use districts, handled the same way here).
+  // Verified from the layer: field Future_Land_Use_Code = the district (CG, CN, CR, I, IG, IL, P,
+  // R/O/R, R/OG, R/OL, R/OS, RE, RH, RL, RLM, RM, RR, RS, RU, T/U, plus CLR-CRD / WBD-CRD corridor
+  // districts), Future_Land_Use_Description = readable name. codeField/descField pinned. Layer 241 of
+  // the city's self-hosted Largo_GIS_Viewer_Map (maps.largo.com); SR 2882, arcQuery sends 4326 and the
+  // server reprojects. ⚠️ self-hosted server — verify CORS with the diagnostic; if blocked it falls
+  // back to the Pinellas county layer (unincorporated-only, so likely nothing) / Municode links.
+  LARGO: { label:"City of Largo Land Use District (= zoning)", codeField:"Future_Land_Use_Code", descField:"Future_Land_Use_Description", urls:[
+    "https://maps.largo.com/arcgis/rest/services/Largo_GIS_Viewer_Map/MapServer/241/query"
+  ]},
+  // ✅ City of Pinellas Park zoning — the City's OWN hosted layer, the zoning polygon (layer 19) of its
+  // "Planning_Development_2_WFL1" feature service on its ArcGIS Online org (services6.arcgis.com/
+  // fH2ZwfxOgb5eaBS4), the layer its public GIS Viewer queries. CORS-open, token-free. Fields confirmed
+  // from a live sample: CATEGORY = district code (alias "Zoning Category"; e.g. "B-1", "R-1"), DESCRIPTION
+  // = readable name (alias "Zoning Description"; e.g. "General Commercial"). codeField/descField pinned.
+  PINELLASPARK: { label:"City of Pinellas Park Zoning", codeField:"CATEGORY", descField:"DESCRIPTION", urls:[
+    "https://services6.arcgis.com/fH2ZwfxOgb5eaBS4/arcgis/rest/services/Planning_Development_2_WFL1/FeatureServer/19/query"
+  ]},
+  // City of Dunedin zoning — the City's OWN "ZoningDistrict" layer (layer 0) on its self-hosted GIS
+  // server (gis.dunedingov.com), the layer behind the city's Zoning & Land Use GIS. Fields confirmed
+  // from a live sample: ZONECLASS = district code (alias "Zoning Classification"; e.g. "MPL", "R-100"),
+  // ZONEDESC = readable name (alias "Zoning Description"; e.g. "Municipal Public Lands"). codeField/
+  // descField pinned. ⚠️ self-hosted server — verify CORS with the diagnostic (esp. older iOS); if it's
+  // blocked, Dunedin also has an ArcGIS Online org (dunedin-gis) that may carry a CORS-friendly copy to
+  // swap in. Falls back to the Pinellas county layer (unincorporated-only) / Municode links otherwise.
+  DUNEDIN: { label:"City of Dunedin Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
+    "https://gis.dunedingov.com/server/rest/services/CommunityDevelopment/ZoningDistrict/MapServer/0/query"
+  ]},
   NAPLES: { label:"City of Naples Zoning", codeField:"Layer", descField:"Descript", urls:[
     // ✅ verified: City of Naples public GIS (backs the official city zoning map viewer)
     "https://g.naplesgov.com/arcgis/rest/services/Planning/Zoning/FeatureServer/0/query"
