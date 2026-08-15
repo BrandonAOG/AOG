@@ -1819,7 +1819,8 @@ const ZONING_CITY = {
   NORTHPORT:{code:"https://library.municode.com/fl/north_port/codes/code_of_ordinances", permit:"https://www.northportfl.gov/government/neighborhood-development-services"},
   BRADENTON:{code:"https://library.municode.com/fl/bradenton/codes/code_of_ordinances", permit:"https://www.cityofbradenton.com/162/Planning-Community-Development"},
   PALMETTO:{code:"https://library.municode.com/fl/palmetto/codes/code_of_ordinances", permit:"https://www.palmettofl.org/152/Planning-Zoning"},
-  MOOREHAVEN:{code:"https://library.municode.com/fl/moore_haven/codes/code_of_ordinances", permit:"https://moorehaven.org/zoning-building-code-enforcement/"}
+  MOOREHAVEN:{code:"https://library.municode.com/fl/moore_haven/codes/code_of_ordinances", permit:"https://moorehaven.org/zoning-building-code-enforcement/"},
+  CLEARWATER:{code:"https://library.municode.com/fl/clearwater/codes/community_development_code", zoningCh:"https://library.municode.com/fl/clearwater/codes/community_development_code?nodeId=PTICODECO_ART2ZODI", permit:"https://www.myclearwater.com/Business-Development/Permits-and-Inspections"}  // City of Clearwater — zoning lives in the Community Development Code (Art. 2), NOT the county code
 };
 /* Resolve zoning config: city first (by municipality), else county. */
 function resolveZoning(cityName, countyName){
@@ -2077,12 +2078,14 @@ const ZONING_LIVE = {
     urls:[
     "https://agis.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGIS_Web_Layers2022/MapServer/17/query"
   ]},
-  // Sarasota County's public "CountyZoning" polygon layer (Enterprise GIS / ArcGIS Hub item
-  // e720c251e6f145708b584eeb20fb13e8). Returns the UDC district per parcel. Field names aren't pinned;
-  // detectZoningFields() resolves the code/description columns (typically ZONE/ZONING/ZONELABEL). If
-  // this host path changes, the lookup degrades gracefully to the Municode/permit links below.
+  // ✅ Sarasota County's "CountyZoning" polygon layer — returns the UDC district per parcel. Served
+  // from the county's OWN ArcGIS Server (ags3.scgov.net), LIVE-TESTED reachable + CORS-OK + queryable.
+  // Field names aren't pinned; detectZoningFields() resolves the code/description columns (typically
+  // ZONE/ZONING/ZONELABEL). NOTE: the AGOL-org copy (services1.arcgis.com/RatJUQXQHIYjpRMG/.../
+  // CountyZoning) tested BAD PATH (host + CORS OK but the service isn't published there), so it's been
+  // removed — only the working ags3 endpoint is listed. Degrades gracefully to the Municode/permit
+  // links below if it's ever down.
   SARASOTA: { label:"Sarasota County Zoning (UDC)", urls:[
-    "https://services1.arcgis.com/RatJUQXQHIYjpRMG/arcgis/rest/services/CountyZoning/FeatureServer/0/query",
     "https://ags3.scgov.net/server/rest/services/Hosted/CountyZoning/FeatureServer/0/query"
   ]},
   // ✅ Glades County zoning — hosted on the shared HCPAO GIS server (Glades + Hendry share GIS).
@@ -2163,9 +2166,36 @@ const ZONING_LIVE_CITY = {
   SAINTPETERSBURG: { label:"City of St. Petersburg Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
     "https://egis.stpete.org/arcgis/rest/services/ServicesDSD/Zoning/MapServer/2/query"
   ]},
+  // ✅ City of Clearwater zoning — Clearwater runs its OWN Community Development Code (CDC) and is an
+  // incorporated city, so its parcels are NOT in the Pinellas County unincorporated zoning layer. The
+  // city's own GIS (gis.myclearwater.com) publishes the zoning polygons; LIVE-VERIFIED from the REST
+  // directory: service ArcGISMapServices/Zoning_WGS84, layer 1 ("Zoning" — layer 0 is "Zoning
+  // Original", the superseded copy, so it's deliberately not used). Fields confirmed on the layer:
+  // ZONING = district code (LDR, LMDR, MDR, MHDR, HDR, MHP, O, T, C, D, IRT, I, OS/R, P, US 19, plus
+  // "-NCOD <name>" neighborhood-conservation-overlay variants), ZONING_DESC = full district name,
+  // SPECIAL = overlay flag. codeField/descField pinned so detection can't drift to the
+  // created_user/last_edited columns. Public MapServer, token-free, JSON query supported.
+  CLEARWATER: { label:"City of Clearwater Zoning", codeField:"ZONING", descField:"ZONING_DESC", urls:[
+    "https://gis.myclearwater.com/arcgis/rest/services/ArcGISMapServices/Zoning_WGS84/MapServer/1/query"
+  ]},
   NAPLES: { label:"City of Naples Zoning", codeField:"Layer", descField:"Descript", urls:[
     // ✅ verified: City of Naples public GIS (backs the official city zoning map viewer)
     "https://g.naplesgov.com/arcgis/rest/services/Planning/Zoning/FeatureServer/0/query"
+  ]},
+  // ✅ City of Sarasota zoning — the city runs its OWN code (it's incorporated and listed in
+  // SARASOTA_INCORP, so it must NOT inherit unincorporated Sarasota County's UDC districts). The
+  // "CitySarasotaZoning" polygon layer lives on the county's OWN ArcGIS Server (ags3.scgov.net),
+  // LIVE-TESTED reachable + CORS-OK + queryable. Fields are left to detectZoningFields() — the
+  // district-code column auto-detects (ZONE/ZONING). City codes are the RSF-1..4 / RMF-1..7 / RSM-9 /
+  // DT* (DTC, DTE, DTN, DTB, DTNE) / OP* / C* / NT / etc. set, distinct from the county UDC.
+  // NOTE: the AGOL-org copy (services1.arcgis.com/RatJUQXQHIYjpRMG/.../CitySarasotaZoning) tested BAD
+  // PATH (host reachable + CORS-OK but the service isn't published there), so it's intentionally NOT
+  // listed — only the working ags3 endpoint is. If it's ever down, queryZoning() appends the county
+  // SARASOTA layers as an automatic fallback. City parcels are already excluded from the county
+  // setback renderer via SARASOTA_INCORP, so a detected city district shows with the City of Sarasota
+  // Municode/permit links (ZONING_CITY.SARASOTA) rather than county numbers.
+  SARASOTA: { label:"City of Sarasota Zoning", urls:[
+    "https://ags3.scgov.net/server/rest/services/Hosted/CitySarasotaZoning/FeatureServer/0/query"
   ]},
   // ✅ City of Venice's OWN GIS (geoport.venicefl.gov — the server behind the city's Planning & Zoning
   // web-app viewer). Zoning is layer 10 of the bldg/TRAKiT MapServer; the classifying column is
