@@ -6095,18 +6095,11 @@ function renderBradentonGeneratorNote(){
   h+=`<a class="palink" href="https://library.municode.com/fl/bradenton/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Bradenton Zoning Code (Municode) — Ch. 5 Accessory Uses/Structures</a>`;
   return h;
 }
-function renderPalmettoGeneratorNote(){
-  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment placement · City of Palmetto Land Development Code</div>`;
-  h+=`<div class="note"><b>A standby generator is an accessory structure / mechanical equipment</b> — side or rear yard only, <b>not in the front yard</b>, and out of easements. <b>⚠️ Confirm the exact side/rear setback number in Palmetto's LDC before quoting the job</b> — it was not verified here (do not assume the common 5 ft without checking the accessory-structure / supplementary-district section).</div>`;
-  h+=`<div class="note">Statewide layer still applies: NFPA 37 listing clearance, LP-tank (NFPA 58) distances, and FBC flood elevation on AE/VE lots (coastal city).</div>`;
-  h+=`<a class="palink" href="https://library.municode.com/fl/palmetto/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Palmetto Land Development Code (Municode)</a>`;
-  return h;
-}
 function renderMarcoGeneratorNote(){
-  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment encroachment · Marco Island LDC § 30-1004 / § 30-86(b)</div>`;
-  h+=`<div class="note"><b>Marco Island names generators specifically:</b> a generator <b>may encroach up to 4 ft into a required (side or rear) yard</b>. Pad-mounted A/C and pool equipment are likewise allowed in required yards. Not in the front yard, and not in easements.</div>`;
-  h+=`<div class="note"><b>Coastal / flood is usually the binding constraint:</b> in AE/VE zones the generator, its fuel and the transfer switch must be elevated above BFE (FBC/ASCE 24). Watch for a <b>Special Treatment (ST) overlay</b> on the parcel (extra environmental review). Plus NFPA 37 listing clearance and LP-tank (NFPA 58) distances.</div>`;
-  h+=`<a class="palink" href="https://library.municode.com/fl/marco_island/codes/code_of_ordinances?nodeId=PTIICOOR_CH30LADECO" target="_blank" rel="noopener" style="margin-top:6px">↗ Marco Island LDC (Municode) — Ch. 30, § 30-1004 Setback Encroachments</a>`;
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment encroachment · Marco Island LDC § 30-1004(a)(4)</div>`;
+  h+=`<div class="note"><b>Marco Island names generators in its code.</b> Ground-, wall-, pad-, cube-mounted or cantilevered <b>generators</b> — plus swimming-pool equipment, A/C units, above-ground LP-gas tanks and other mounted mechanical equipment — <b>may project up to 4 ft into any required yard (front, side OR rear).</b> The rest of the required yard must stay open and unobstructed above 30 inches. Equipment set within a recorded easement is allowed but is <b>subject to removal at the owner's expense</b> if a utility must enter the easement.</div>`;
+  h+=`<div class="note"><b>Coastal / flood is usually the binding constraint:</b> in AE/VE zones the generator, its fuel and the transfer switch must be elevated above BFE (FBC/ASCE 24). Watch for a <b>Special Treatment (ST) overlay</b> on the parcel. Plus NFPA 37 listing clearance and LP-tank (NFPA 58) distances.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/marco_island/codes/code_of_ordinances?nodeId=PTIICOOR_CH30LADECO" target="_blank" rel="noopener" style="margin-top:6px">↗ Marco Island LDC (Municode) — § 30-1004 Exceptions to Required Yards</a>`;
   return h;
 }
 function renderLargoGeneratorNote(){
@@ -6128,13 +6121,6 @@ function renderDunedinGeneratorNote(){
   h+=`<div class="note">A generator is mechanical equipment; its permitted <b>setback encroachment is set per district in Table 103-50.1</b> — check that table for the parcel's district rather than assuming a flat number. Not in the front yard, and not in easements. On <b>waterfront</b> lots, equipment more than <b>12 in above grade is prohibited in the waterfront view triangle</b>.</div>`;
   h+=`<div class="note"><b>Coastal:</b> AE/VE lots require the generator, fuel and transfer switch elevated above BFE (FBC/ASCE 24). Plus NFPA 37 listing clearance and LP-tank (NFPA 58) distances.</div>`;
   h+=`<a class="palink" href="https://library.municode.com/fl/dunedin/codes/code_of_ordinances?nodeId=SPBLADECO_CH103ZO" target="_blank" rel="noopener" style="margin-top:6px">↗ Dunedin Zoning Code (Municode) — Ch. 103, § 103-50</a>`;
-  return h;
-}
-function renderLongboatGeneratorNote(){
-  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> equipment placement · Longboat Key Zoning Ch. 158, Art. V</div>`;
-  h+=`<div class="note"><b>The hardest to fit.</b> A generator (mechanical equipment) must <b>meet the district's setback requirements AND be raised above the flood elevation.</b> On the Key's narrow lots there's often little compliant space; relief requires a <b>variance from the Zoning Board of Adjustment</b> (hardship finding). Not in the front yard, not in easements. A parcel not shown on the official zoning map defaults to <b>R-1SF</b>.</div>`;
-  h+=`<div class="note">Plan siting early. Then apply NFPA 37 listing clearance, LP-tank (NFPA 58) distances, and — this is the controlling item here — FBC/ASCE 24 flood elevation above BFE for the generator, fuel and transfer switch.</div>`;
-  h+=`<a class="palink" href="https://library.municode.com/fl/longboat_key/codes/code_of_ordinances?nodeId=TIT15LADECO_CH158ZOCO" target="_blank" rel="noopener" style="margin-top:6px">↗ Longboat Key Zoning Code (Municode) — Ch. 158, Art. V</a>`;
   return h;
 }
 function renderTarponGeneratorNote(){
@@ -11954,12 +11940,10 @@ async function runLookup(lat,lng,searchCtx){
   // in that city, whether or not a district code was read. (Marco Island's setback table renders above;
   // this adds its 4-ft generator encroachment rule specifically.)
   if(norm(cityName)==='BRADENTON'){ html += renderBradentonGeneratorNote(); }
-  if(norm(cityName)==='PALMETTO'){ html += renderPalmettoGeneratorNote(); }
   if(norm(cityName)==='MARCOISLAND'){ html += renderMarcoGeneratorNote(); }
   if(norm(cityName)==='LARGO'){ html += renderLargoGeneratorNote(); }
   if(norm(cityName)==='PINELLASPARK'){ html += renderPinellasParkGeneratorNote(); }
   if(norm(cityName)==='DUNEDIN'){ html += renderDunedinGeneratorNote(); }
-  if(norm(cityName)==='LONGBOATKEY'){ html += renderLongboatGeneratorNote(); }
   if(norm(cityName)==='TARPONSPRINGS'){ html += renderTarponGeneratorNote(); }
   if(norm(cityName)==='CAPECORAL'){ html += renderCapeCoralGeneratorRules(zhit && zhit.code ? zhit.code : null); }
   // City of Sanibel: ecological-zone setbacks + the Ch. 126 Div. 16 generator ordinance. Rendered
