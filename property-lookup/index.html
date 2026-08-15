@@ -1512,6 +1512,24 @@ const COUNTY_LIVE = {
     // Verified Aug 2026 (owner "HUDSON FISH CAMP LLC", JUST_VALUE 32674).
     "https://pascogis.pascocountyfl.net/giswebmm/rest/services/Tile_Caches/Parcels_MM/MapServer/3/query"
   ]},
+  POLK : { label:"Polk County (SWFWMD regional parcel roll · PA data)", urls:[
+    // ✅ verified queryable public layer — "Polk County Parcels" (layer 78) on the Southwest Florida
+    // Water Management District's public LocationInfo service (www25.swfwmd.state.fl.us). SWFWMD
+    // republishes the Property Appraiser's own roll (SOURCEAGENT="POLK COUNTY PROPERTY APPRAISER")
+    // as a public, token-free mirror — Polk's OWN appraiser map (map.polkflpa.gov) only exposes parcel
+    // data through an internal-hostname proxy (gissrvr) that isn't reachable outside their network, so
+    // this SWFWMD mirror is the usable public path. National-standard parcel schema (shared across many
+    // FL water-district parcel mirrors): owner=OWNNAME/OWNERNAME, mailing=MAILADD/OWNERCITY/OWNERSTATE/
+    // OWNERZIP, site=SITUSADD1/SCITY/SZIP, parcel=PARCELID (also PARNO/FOLIONUM/PIN), value=ASSD_TOT
+    // (market total; JV_HMSTD is homestead-only, used only if ASSD_TOT is blank), land=LANDVAL, year
+    // built=YRBLT_ACT (effective YRBLT_EFF), living area=TOT_LVG_AREA, use=PARUSEDESC (readable text),
+    // sale=SALE1_AMT/SALE1_YEAR, legal=LEGDECFULL, acreage=ACRES, subdivision=SUBDIV_NM. Also carries
+    // ZONING directly on the parcel record (no separate polygon layer needed for Polk) — surfaced via
+    // the __zoning custom key. NOTE: some records (esp. large/vacant/split parcels) come back with many
+    // null fields — that's a data-quality trait of this specific record, not a wiring problem. Verified
+    // Aug 2026 (owner "OVERSTREET MARK F", ASSD_TOT 1624237, ZONING field present).
+    "https://www25.swfwmd.state.fl.us/arcgiswmis/rest/services/r27/LocationInfo/MapServer/78/query"
+  ]},
   PINELLAS : { label:"Pinellas County (PAO ParcelPropertyInfo)", urls:[
     // ✅ verified queryable public layer on ArcGIS Online (services.arcgis.com/f5HgUpxURgEzTccH),
     // discovered via the Pinellas Property Appraiser's own Experience-app network trace — this is the
@@ -1970,6 +1988,17 @@ function municodeSection(sec){ return "https://library.municode.com/fl/naples/co
    cities, etc.) paste that jurisdiction's zoning layer URL in the Advanced
    panel — it takes priority over this table and auto-detects the field. */
 const ZONING_LIVE = {
+  POLK: { label:"Polk County Land Use District (= zoning, per LDC § 203)", codeField:"FLU_LDC", descField:"FLUNAME", urls:[
+    // ✅ IMPORTANT CONTEXT: Polk County's LDC (§ 203) does NOT have a separate "zoning district" system —
+    // "the unincorporated County is divided into LAND USE DISTRICTS... shown on... the Future Land Use
+    // Map Series (FLUMS)" and §§ 204/205/208 tie density/dimensional/setback standards DIRECTLY to
+    // these FLUMS district codes (RL-4, RH, A/RR, etc.). So the "Future Land Use" layer IS Polk's
+    // regulatory zoning-equivalent — confirmed against the user-supplied LDC text. Layer: "2030 Future
+    // Land Use" (id 10) on gis.polk-county.net's public All-In-One_Viewer service. FLU_LDC carries the
+    // specific district code (e.g. "RL-4"); FLU_CP is the broader Comp Plan category (e.g. "RL") —
+    // codeField pinned to FLU_LDC since it matches Table 2.2's column headers exactly.
+    "https://gis.polk-county.net/hosting/rest/services/All-In-One_Viewer/Land_Use_and_Zoning/MapServer/10/query"
+  ]},
   PINELLAS: { label:"Pinellas County Zoning (Unincorporated, 2019)", codeField:"ZONECLASS", urls:[
     // ✅ verified queryable public layer — discovered via F12 on Pinellas County's own public WebGIS
     // Experience app (same trick that found the parcel/owner data). Service "Pinellas_Zoning2019_view"
@@ -4679,8 +4708,8 @@ function detectFields(fields){
     owner2:find([/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^OWN2$/,/^NAME2$/,/^OWNERLINE2$/,/OWNER_?LINE_?2/,/OWN.*NAME2/,/^OWNER_NAME_2$/]),
     pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/,/^PARCEL$/,/^HPARCEL$/]),
     site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/]),
-    city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/,/^STR_CITY$/,/^SITE_MAILING_CITY$/]),
-    jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/]),
+    city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/,/^STR_CITY$/,/^SITE_MAILING_CITY$/,/^SCITY$/]),
+    jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/,/^ASSD_TOT$/,/^JV_HMSTD$/]),
     land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/,/^JUST_LAND$/]),
     // /^ACT$/ is Hillsborough (Tampa-hosted) "Actual Year Built"; /^EFF$/ is its remodel year (fallback).
     yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/,/^ACTUAL_YEAR_BUILT$/]),
@@ -4691,9 +4720,9 @@ function detectFields(fields){
     liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^RESUSESF$/,/^USE_SF$/,/^BLD1_SF$/,/^HEAT_?AR$/]),
     saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/,/^AMT$/,/^SALE_AMOUNT$/]),
     saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/,/^SALE_DATE$/]),
-    mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/,/^ADD_1$/]),
+    mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/,/^ADD_1$/,/^MAILADD$/]),
     mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/^O_CITY$/,/OWNER_?CITY/,/^ADD_3$/,/^MAILING_CITY$/]),
-    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/,/^DOR_C$/,/^PROPERTY_USE$/,/^LAND_USE_DESC$/,/^LAND_USE_CODE$/]),
+    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/,/^DOR_C$/,/^PROPERTY_USE$/,/^LAND_USE_DESC$/,/^LAND_USE_CODE$/,/^PARUSEDESC$/]),
     lotSqft: find([/^LND_?SQFOOT$/,/^LOT_?SQ/,/^LOTSQFT$/,/^LAND_?SQFT$/,/^SQFT_?LND$/,/^LOTSF$/,/^LOT_?SIZE$/,/LOTSQUARE/,/^LAND_?SQ/])
   };
 }
@@ -6764,6 +6793,183 @@ function renderOcalaSetbacks(districtCode){
   h+=`<a class="palink" href="https://library.municode.com/fl/ocala/codes/code_of_ordinances?nodeId=PTIICOOR_CH122ZO_ARTVDIRE_DIV2SCDIRE_S122-286LORE" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify ${esc(secRef)} — City of Ocala dimensional table (Municode)</a>`;
   h+=`<div class="note warnbox">District read live from the City of Ocala zoning GIS; the per-district feet come from the adopted LDC § 122-286 master table. Verify any historic-district (RBH/OH), FBC frontage, buffer (§ 122-260) or approved-plan conditions before relying on these.</div>`;
   h+=renderOcalaGeneratorNote();
+  return h;
+}
+
+/* ============================ POLK COUNTY ============================
+   Polk County Land Development Code, Chapter 2, §§ 203-209, Table 2.2 (Density and Dimensional
+   Regulations for Standard Districts). Verified against the user-supplied LDC PDF (through Ord.
+   2025-074, 12-16-2025).
+
+   KEY STRUCTURAL FACT: Polk has NO separate "zoning district" system layered on top of land use —
+   § 203: "the unincorporated County is divided into land use districts... shown on... the Future Land
+   Use Map Series (FLUMS)," and §§ 204/205/208 tie density/use/dimensional standards DIRECTLY to these
+   FLUMS codes. So the district read from the live GIS layer (FLU_LDC) is the actual regulatory
+   district — this is Polk's functional zoning, not a separate policy overlay.
+
+   Table 2.2 gives front setback by ROAD TYPE the parcel fronts (Limited Access/Arterial/Collector/
+   Local, each with ROW / centerline pairs) — `front` below uses the common "Local, 60 ft ROW or
+   greater" figure (the typical residential-street case); the note flags that a busier road frontage
+   requires a larger setback per the table. `side`/`rear` are the PRINCIPAL-structure figures;
+   `accSide`/`accRear` are the ACCESSORY-structure figures from the same table cells (format "P / A"),
+   which govern generator placement per § 209.
+
+   GENERATOR SITING (§§ 208, 209): Polk has no dedicated generator ordinance. A permanent generator is
+   an ACCESSORY STRUCTURE: § 209.D requires it in the side or rear yard meeting the district's
+   accessory-structure setback (front-yard accessory placement is reserved for bona-fide agricultural
+   uses in the A/RR district only). § 208.B.4 allows mechanical equipment to project up to 3 ft into a
+   required setback (more generous than most counties' 2 ft chimney-only allowance) but not onto
+   adjacent property. That note rides on every unincorporated-Polk result. */
+const POLK_SETBACKS = {
+  // ---- Residential / Agricultural districts (Table 2.2, first half) ----
+  "A/RR": { name:"Agricultural/Residential Rural (A/RR)", secRef:"Table 2.2",
+            front:25, side:15, rear:20, accSide:10, accRear:10, height:50, minLot:"5 acres", density:"1 du/5 ac",
+            note:"Rural agricultural/very-low-density residential. Min lot 5 acres. Front 25 ft (local 60 ft+ ROW — busier roads require more, see Table 2.2); interior side 15 ft (10 ft accessory); interior rear 20 ft (10 ft accessory). Max height 50 ft. Only in A/RR may a bona-fide agricultural accessory structure sit in any yard incl. front (§ 209.D.1)." },
+  "RCC-R":{ name:"Rural Cluster Center – Residential (RCC-R)", secRef:"Table 2.2",
+            front:25, side:15, rear:20, accSide:10, accRear:10, height:50, minLot:20000, density:"2 du/ac",
+            note:"Rural community residential. Min lot 20,000 sq ft. Front 25 ft (local); interior side 15 ft (10 ft accessory); interior rear 20 ft (10 ft accessory). Max height 50 ft." },
+  "RS":   { name:"Residential Suburban (RS)", secRef:"Table 2.2",
+            front:20, side:10, rear:15, accSide:5, accRear:10, height:50, minLot:"5 acres", density:"1 du/5 ac",
+            note:"Suburban-density single-family. Min lot 5 acres. Front 20 ft (local); interior side 10 ft (5 ft accessory); interior rear 15 ft (10 ft accessory). Max height 50 ft." },
+  "RL-1": { name:"Residential Low-1 (RL-1)", secRef:"Table 2.2",
+            front:15, side:10, rear:15, accSide:5, accRear:10, height:50, minLot:40000, density:"1 du/ac",
+            note:"Large-lot low density. Min lot 40,000 sq ft. Front 15 ft (local); interior side 10 ft (5 ft accessory); interior rear 15 ft (10 ft accessory). Max height 50 ft." },
+  "RL-2": { name:"Residential Low-2 (RL-2)", secRef:"Table 2.2",
+            front:15, side:7, rear:10, accSide:5, accRear:5, height:50, minLot:15000, density:"2 du/ac",
+            note:"Low density. Min lot 15,000 sq ft. Front 15 ft (local); interior side 7 ft (5 ft accessory); interior rear 10 ft (5 ft accessory). Max height 50 ft." },
+  "RL-3": { name:"Residential Low-3 (RL-3)", secRef:"Table 2.2",
+            front:15, side:7, rear:10, accSide:5, accRear:5, height:50, minLot:10000, density:"3 du/ac",
+            note:"Low density, smaller lots. Min lot 10,000 sq ft. Front 15 ft (local); interior side 7 ft (5 ft accessory); interior rear 10 ft (5 ft accessory). Max height 50 ft." },
+  "RL-4": { name:"Residential Low-4 (RL-4)", secRef:"Table 2.2",
+            front:15, side:7, rear:10, accSide:5, accRear:5, height:50, minLot:6000, density:"4 du/ac",
+            note:"Low density, smallest RL lots. Min lot 6,000 sq ft. Front 15 ft (local); interior side 7 ft (5 ft accessory); interior rear 10 ft (5 ft accessory). Max height 50 ft." },
+  "RM":   { name:"Residential Medium (RM)", secRef:"Table 2.2",
+            front:15, side:7, rear:10, accSide:5, accRear:5, height:50, minLot:6000, density:"7 du/ac",
+            note:"Medium density (single-family, duplex, multi-family). Min lot 6,000 sq ft. Front 15 ft (local); interior side 7 ft (5 ft accessory); interior rear 10 ft (5 ft accessory). Max height 50 ft." },
+  "RH":   { name:"Residential High (RH)", secRef:"Table 2.2",
+            front:15, side:7, rear:10, accSide:5, accRear:5, height:75, minLot:5000, density:"10 du/ac",
+            note:"High density (single-family through multi-family; retail/personal-service uses permitted within multi-family structures). Min lot 5,000 sq ft. Front 15 ft (local); interior side 7 ft (5 ft accessory); interior rear 10 ft (5 ft accessory). Max height 75 ft." },
+  // ---- Non-residential activity centers ----
+  "RCC":  { name:"Rural Cluster Center (RCC)", secRef:"Table 2.2", commercial:true,
+            front:15, side:7, rear:15, accSide:5, accRear:5, height:50, minLot:"N/A",
+            note:"Rural commercial center. Front 15 ft (local); interior side 7 ft (5 ft accessory); interior rear 15 ft (5 ft accessory). Max height 50 ft." },
+  "OC":   { name:"Office Center (OC)", secRef:"Table 2.2", commercial:true,
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:50, minLot:"N/A",
+            note:"Small professional offices; all development requires Level 3 Review. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 50 ft." },
+  "CC":   { name:"Convenience Center (CC)", secRef:"Table 2.2", commercial:true,
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:50, minLot:4500,
+            note:"Convenience shopping (offices, convenience stores, gas stations). Min lot 4,500 sq ft. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 50 ft." },
+  "NAC":  { name:"Neighborhood Activity Center (NAC)", secRef:"Table 2.2", commercial:true,
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:50, minLot:4000,
+            note:"Neighborhood shopping. Min lot 4,000 sq ft. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 50 ft." },
+  "CAC":  { name:"Community Activity Center (CAC)", secRef:"Table 2.2", commercial:true,
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:75, minLot:3500, density:"25/15 du/ac",
+            note:"Community shopping + special residential. Min lot 3,500 sq ft. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 75 ft." },
+  "RAC":  { name:"Regional Activity Center (RAC)", secRef:"Table 2.2", commercial:true,
+            front:30, side:15, rear:30, accSide:15, accRear:10, height:75, minLot:"N/A", density:"25 du/ac",
+            note:"Regional shopping + special residential. Front 30 ft (local); interior side 15 ft (15 ft accessory); interior rear 30 ft (10 ft accessory). Max height 75 ft." },
+  // ---- Other standard districts ----
+  "LCC":  { name:"Linear Commercial Corridor (LCC)", secRef:"Table 2.2", commercial:true,
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:35, minLot:"N/A",
+            note:"Existing linear commercial/office/institutional/industrial concentrations along roadways. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 35 ft." },
+  "BPC-1":{ name:"Business Park Center-1 (BPC-1)", secRef:"Table 2.2", commercial:true,
+            front:30, side:20, rear:20, accSide:20, accRear:20, height:75, minLot:"N/A", density:"15 du/ac",
+            note:"Office/business park (R&D, distribution, wholesaling; some retail). Front 30 ft (local); interior side/rear 20 ft (20 ft accessory). Max height 75 ft." },
+  "BPC-2":{ name:"Business Park Center-2 (BPC-2)", secRef:"Table 2.2", commercial:true,
+            front:30, side:20, rear:20, accSide:20, accRear:20, height:100, minLot:"N/A", density:"10.01 du/ac",
+            note:"Light-industrial park (manufacturing, fabrication, assembly, distribution; some retail). Front 30 ft (local); interior side/rear 20 ft (20 ft accessory). Max height 100 ft." },
+  "HIC":  { name:"Highway Interchange Center (HIC)", secRef:"Table 2.2", commercial:true,
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:50, minLot:"N/A",
+            note:"Highway-interchange commercial. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 50 ft." },
+  "TCC":  { name:"Town Center Commercial (TCC)", secRef:"Table 2.2", commercial:true,
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:100, minLot:"N/A",
+            note:"Town-center commercial. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 100 ft." },
+  "CE":   { name:"Commercial Enclave (CE)", secRef:"Table 2.2", commercial:true,
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:35, minLot:"N/A",
+            note:"Commercial enclave. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 35 ft." },
+  "IND":  { name:"Industrial (IND)", secRef:"Table 2.2", commercial:true,
+            front:25, side:15, rear:30, accSide:15, accRear:10, height:null, minLot:"N/A",
+            note:"General industrial. Front 25 ft (local); interior side 15 ft (15 ft accessory); interior rear 30 ft (10 ft accessory). Height governed by footnote 18 (airport/FAA-related limits) — confirm with Planning." },
+  "PM":   { name:"Phosphate Mining (PM)", secRef:"Table 2.2", commercial:true,
+            front:25, side:15, rear:30, accSide:15, accRear:10, height:null, minLot:"N/A",
+            note:"Phosphate mining. Front 25 ft (local); interior side 15 ft (15 ft accessory); interior rear 30 ft (10 ft accessory). Height governed by footnote 18 — confirm with Planning." },
+  "L/R":  { name:"Lakes/Rivers (L/R)", secRef:"Table 2.2",
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:50, minLot:"N/A",
+            note:"Lakes/rivers overlay district. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 50 ft." },
+  "INST1":{ name:"Institutional-1 (INST1)", secRef:"Table 2.2",
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:50, minLot:"N/A",
+            note:"Institutional. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 50 ft." },
+  "INST2":{ name:"Institutional-2 (INST2)", secRef:"Table 2.2",
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:160, minLot:"N/A",
+            note:"Institutional (higher-intensity, e.g. hospitals). Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 160 ft." },
+  "ROS":  { name:"Recreation/Open Space (ROS)", secRef:"Table 2.2",
+            front:30, side:15, rear:15, accSide:15, accRear:15, height:25, minLot:"N/A",
+            note:"Recreation/open space. Front 30 ft (local); interior side/rear 15 ft (15 ft accessory). Max height 25 ft (footnote 19 may apply — confirm with Planning)." },
+  "PRESV":{ name:"Preservation (PRESV)", secRef:"Table 2.2",
+            front:25, side:15, rear:30, accSide:15, accRear:10, height:25, minLot:"N/A",
+            note:"Conservation/preservation district — new development is very limited. Front 25 ft (local); interior side 15 ft (15 ft accessory); interior rear 30 ft (10 ft accessory). Max height 25 ft. Confirm any buildable area with Planning before siting anything." }
+};
+const POLK_DISTRICT_ALIASES = {
+  "AGRICULTURALRESIDENTIALRURAL":"A/RR","RURAL":"A/RR",
+  "RURALCLUSTERCENTERRESIDENTIAL":"RCC-R","RESIDENTIALSUBURBAN":"RS",
+  "RESIDENTIALLOW1":"RL-1","RESIDENTIALLOW2":"RL-2","RESIDENTIALLOW3":"RL-3","RESIDENTIALLOW4":"RL-4",
+  "RESIDENTIALMEDIUM":"RM","RESIDENTIALHIGH":"RH","RURALCLUSTERCENTER":"RCC","OFFICECENTER":"OC",
+  "CONVENIENCECENTER":"CC","NEIGHBORHOODACTIVITYCENTER":"NAC","COMMUNITYACTIVITYCENTER":"CAC",
+  "REGIONALACTIVITYCENTER":"RAC","LINEARCOMMERCIALCORRIDOR":"LCC","BUSINESSPARKCENTER1":"BPC-1",
+  "BUSINESSPARKCENTER2":"BPC-2","HIGHWAYINTERCHANGECENTER":"HIC","TOWNCENTERCOMMERCIAL":"TCC",
+  "COMMERCIALENCLAVE":"CE","INDUSTRIAL":"IND","PHOSPHATEMINING":"PM","LAKESRIVERS":"L/R",
+  "INSTITUTIONAL1":"INST1","INSTITUTIONAL2":"INST2","RECREATIONOPENSPACE":"ROS","PRESERVATION":"PRESV"
+};
+function polkSetbacks(districtCode){
+  if(!districtCode) return null;
+  const raw=String(districtCode).toUpperCase().trim();
+  if(POLK_SETBACKS[raw]) return POLK_SETBACKS[raw];
+  const alpha=raw.replace(/[^A-Z0-9]/g,'');
+  if(POLK_DISTRICT_ALIASES[alpha]) return POLK_SETBACKS[POLK_DISTRICT_ALIASES[alpha]];
+  // A/RR sometimes rendered without the slash; RL-x/BPC-x sometimes without hyphen
+  if(raw==='ARR') return POLK_SETBACKS['A/RR'];
+  let k=raw.replace(/\s+/g,'').replace(/^(RL|BPC)(\d)$/,'$1-$2');
+  if(POLK_SETBACKS[k]) return POLK_SETBACKS[k];
+  return null;
+}
+/* Polk treats a generator as an accessory structure — no dedicated generator ordinance exists.
+   Rule is § 209.D (accessory placement) + § 208.B.4 (3 ft mechanical-equipment encroachment). */
+function renderPolkGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> placement · Polk County LDC §§ 208–209</div>`;
+  h+=`<div class="note"><b>Polk County has no dedicated generator ordinance.</b> A permanently installed generator is an <b>accessory structure</b>: per § 209.D it must sit in the <b>side or rear yard</b>, meeting the district's <b>accessory-structure setback</b> (the second number in "Principal / Accessory" above) — never in a required front yard, except a bona-fide agricultural accessory use on <b>A/RR</b> land, which may sit in any yard.</div>`;
+  h+=`<div class="note">Per § 208.B.4, mechanical equipment (including a generator) may project up to <b>3 ft</b> into a required setback, but may not extend over an adjacent property. Above-ground LP tanks follow the same accessory-structure setbacks plus Fire Code separation. Confirm placement with Polk County Planning &amp; Development (Planner-on-Call, 863-534-6084) before siting.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/polk_county/codes/land_development_code" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify §§ 208–209 &amp; Table 2.2 — Polk County LDC (Municode)</a>`;
+  return h;
+}
+/* Render required setbacks for an unincorporated Polk County land use district (= zoning per § 203). */
+function renderPolkSetbacks(districtCode){
+  const s=polkSetbacks(districtCode);
+  if(!s){
+    let g=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> Polk County — district not detected</div>`;
+    g+=`<div class="note">No land use district could be read for this parcel. Polk County has no separate zoning-district system — the Future Land Use / land use district IS the regulatory district (LDC § 203). Look it up via Polk County Planning &amp; Development, then read that district's setbacks in Table 2.2. The generator placement rule below applies countywide.</div>`;
+    g+=renderPolkGeneratorNote();
+    return g;
+  }
+  const setVal=v=>{ if(v==null) return null; if(typeof v==='number') return v===0?'0 ft':v+' ft'; const t=String(v).trim(); if(!t) return null; return /[a-zA-Z]/.test(t)?t:t+' ft'; };
+  const secRef=s.secRef||'Table 2.2';
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(s.name||String(districtCode))} (Polk LDC ${esc(secRef)})</div>`;
+  h+=fieldRow('Front', esc(setVal(s.front)), 'big');
+  h+=fieldRow('Side', esc(setVal(s.side)));
+  h+=fieldRow('Rear', esc(setVal(s.rear)));
+  if(s.accSide!=null || s.accRear!=null){
+    const parts=[];
+    if(s.accSide!=null) parts.push('side '+setVal(s.accSide));
+    if(s.accRear!=null) parts.push('rear '+setVal(s.accRear));
+    h+=fieldRow('Accessory (generator)', esc(parts.join(' / ')));
+  }
+  if(s.height!=null) h+=fieldRow('Max building height', esc(setVal(s.height)));
+  if(s.minLot!=null){ const lv=(typeof s.minLot==='number')?(fmtNum(s.minLot)+' sq ft'):String(s.minLot); h+=fieldRow('Minimum lot', esc(lv)); }
+  if(s.density) h+=fieldRow('Max density', esc(s.density));
+  if(s.note) h+=`<div class="note">${esc(s.note)}</div>`;
+  h+=`<div class="note">Front setback shown is for a <b>local road, 60 ft ROW or greater</b> — narrower local ROWs and busier road classes (collector/arterial) require MORE front setback per Table 2.2; verify the parcel's actual road frontage. Setbacks are measured from the property line to the base of the structure (§ 208.B.1); corner/multi-frontage lots have front setbacks on every street frontage (§ 208.B.3).</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/polk_county/codes/land_development_code" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify ${esc(secRef)} — Polk County LDC (Municode)</a>`;
+  h+=`<div class="note warnbox">District read live from Polk County's Future Land Use GIS layer, which functions as the regulatory zoning district (LDC § 203 — Polk has no separate zoning-district system). Verify Green Swamp Area of Critical State Concern (Ch. 5), Selected Area Plan (Ch. 4), or any recorded-plat/PUD conditions before relying on these — those can override Table 2.2.</div>`;
+  h+=renderPolkGeneratorNote();
   return h;
 }
 
@@ -10815,6 +11021,17 @@ async function runLookup(lat,lng,searchCtx){
       if(_la.__legal==null && _la.LEGAL_DESCRIPTION!=null && String(_la.LEGAL_DESCRIPTION).trim()!=='') _la.__legal=String(_la.LEGAL_DESCRIPTION).trim();
       if(_la.__zoning==null && _la.ZONING!=null && String(_la.ZONING).trim()!=='') _la.__zoning=String(_la.ZONING).trim();
     }
+    // Polk's SWFWMD-mirrored roll carries a legal description, subdivision name, and a ZONING field
+    // directly on the parcel record — surfaced the same way as Pasco (ZONING here is a per-parcel
+    // ATTRIBUTE, not a spatial polygon lookup, so it's shown via __zoning as "Zoning (per parcel roll)"
+    // rather than the "● LIVE zoning polygon" badge; no setback table is attached). ASSD_TOT can be
+    // null on sparse/edge records — the JV_HMSTD fallback (homestead-only) in detectFields covers that
+    // case, so no additional value gap-fill is needed here. Gap-only; guarded to Polk.
+    if(norm(countyName)==='POLK'){
+      const _la=liveRes.features[0].attributes;
+      if(_la.__legal==null && _la.LEGDECFULL!=null && String(_la.LEGDECFULL).trim()!=='') _la.__legal=String(_la.LEGDECFULL).trim();
+      if(_la.__zoning==null && _la.ZONING!=null && String(_la.ZONING).trim()!=='') _la.__zoning=String(_la.ZONING).trim();
+    }
     const le=liveMeta&&liveMeta.lastEdit;
     html += `<div class="freshline"><span class="badge live">● LIVE</span> ${esc((liveMeta&&liveMeta.name)||'county parcel service')}${le?' · updated '+esc(le.toLocaleDateString()):' · real-time query'}</div>`;
     html += renderParcelGeneric(liveRes.features[0].attributes, det);
@@ -11233,6 +11450,16 @@ async function runLookup(lat,lng,searchCtx){
   // --- LIVE zoning-district detection (point-in-polygon against a county/city zoning layer) ---
   const zhit = await pZoning;
   if(myId!==runId) return;
+  // Polk County's countywide Future Land Use layer (used as the zoning-equivalent — see POLK notes)
+  // codes land INSIDE incorporated cities (Lakeland, Winter Haven, Bartow, Mulberry, Auburndale, etc.)
+  // with a placeholder value like "City" rather than a real land-use district, since the county doesn't
+  // set FLU categories for land it doesn't have jurisdiction over. Showing "City" as if it were a zoning
+  // district would be misleading, so intercept it here with a clear explanation instead of a bare code.
+  if(zhit && norm(countyName)==='POLK' && zhit.code!=null && /^CITY$/i.test(String(zhit.code).trim())){
+    html += `<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> Inside an incorporated city — not unincorporated Polk County</div>`;
+    html += `<div class="note">This parcel is inside a Polk County <b>municipality</b>${cityName?(' ('+esc(cityName)+')'):''} , which administers its <b>own</b> zoning code — Polk County's Table 2.2 land use districts don't apply here (LDC § 203 only governs unincorporated land). Look up this parcel's zoning with the city's own planning department or GIS.</div>`;
+    html += renderPolkGeneratorNote();
+  } else
   if(zhit && ((zhit.code!=null&&String(zhit.code).trim()!=='') || (zhit.desc!=null&&String(zhit.desc).trim()!=='') || (zhit.extras&&zhit.extras.length))){
     html += `<div class="freshline snap" style="margin-top:10px"><span class="badge live">● LIVE</span> zoning polygon at this point${zhit.layerName?' · '+esc(zhit.layerName):''}</div>`;
     if(zhit.code!=null && String(zhit.code).trim()!==''){ html += fieldRow('Zoning district', esc(String(zhit.code)), 'big'); if(window.__exportData) window.__exportData.zoning=String(zhit.code).trim(); }
@@ -11308,6 +11535,13 @@ async function runLookup(lat,lng,searchCtx){
   // Dunnellon, McIntosh & Reddick are incorporated and run their own codes (excluded via
   // MARION_INCORP). Always renders the county generator note even when no district code was detected.
   if(norm(countyName)==='MARION' && !MARION_INCORP.has(norm(cityName))){ html += renderMarionSetbacks(zhit && zhit.code ? zhit.code : null); }
+  // Unincorporated Polk County — LDC has no separate zoning-district system (§ 203), so the Future
+  // Land Use / land use district (read live via ZONING_LIVE.POLK, field FLU_LDC) IS the regulatory
+  // district. Cities (Lakeland, Winter Haven, Bartow, Auburndale, etc.) run their own codes; without a
+  // POLK_INCORP exclusion list yet, this dispatches for the whole county — acceptable since city
+  // parcels won't return a district code from this unincorporated-only GIS layer, so they'll correctly
+  // fall through to the "district not detected" note rather than showing a wrong county district.
+  if(norm(countyName)==='POLK' && !(zhit && zhit.code!=null && /^CITY$/i.test(String(zhit.code).trim()))){ html += renderPolkSetbacks(zhit && zhit.code ? zhit.code : null); }
   // City of Ocala — a Marion County city with its OWN code (Chapter 122, § 122-286), excluded from the
   // county renderer via MARION_INCORP. Rendered for any Ocala parcel (not gated on a detected code);
   // renderOcalaSetbacks falls back to a citywide generator note + district guide when the code is null.
