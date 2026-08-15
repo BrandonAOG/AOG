@@ -1605,9 +1605,13 @@ const COUNTY_LIVE = {
    cosmetic at worst. Coordinates come back as 4326 via outSR; source layers may be in state-plane. */
 const COUNTY_FOOTPRINTS = {
   // Lee County Property Appraiser building footprints (authoritative, maintained by LeePA GIS).
-  LEE: "https://gismapserver.leegov.com/gisserver910/rest/services/DataExplorer/LandRecords/MapServer/8/query",
-  // Charlotte County building structures (AGIS_CHARCO layer 39, from county ortho/LiDAR).
-  CHARLOTTE: "https://agis3.charlottecountyfl.gov/arcgis/rest/services/Essentials/AGIS_CHARCO/MapServer/39/query"
+  LEE: "https://gismapserver.leegov.com/gisserver910/rest/services/DataExplorer/LandRecords/MapServer/8/query"
+  // Charlotte: REMOVED. Its footprints live ONLY in Essentials/AGIS_CHARCO/MapServer/39 on
+  // agis3.charlottecountyfl.gov, and the county currently has that service STOPPED ("not started") — so
+  // every Charlotte lookup was firing a request that could only fail. No live copy exists on the working
+  // agis. host (CCGIS_Web_Layers2022 carries parcels/zoning, not footprints). The marker just falls back
+  // to the parcel centroid, which is cosmetic-only. Re-add the /39/query URL here if the county restarts
+  // AGIS_CHARCO (or point it at a confirmed buildings layer in agis3's CCGISLayers service).
   // Sarasota & Collier: add their footprint layer /query URLs here when confirmed.
 };
 
