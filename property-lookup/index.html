@@ -1994,7 +1994,12 @@ function naplesSetbacks(districtCode){
   return null;
 }
 /* Deep link to a specific Ch. 58 section in Naples Municode. */
-function municodeSection(sec){ return "https://library.municode.com/fl/naples/codes/code_of_ordinances?nodeId="+encodeURIComponent("PTIICOOR_CH58ZO_S"+String(sec).replace(/[^0-9-]/g,'')); }
+// Naples recodified zoning into Chapter 58 (2026 codification). Municode's deep section nodeIds now
+// require the full article+division path (e.g. ...CH58ZO_ARTIIZODI_DIV8R1REDI_S58-236MIYA), and the
+// district-name abbreviation in that path ("R1REDI") isn't reliably derivable per district — so a
+// per-section deep link can't be built without 404 risk. Land on the stable Zoning chapter node instead;
+// the § number is shown in the link text, so the district's "Minimum yards" is one expand away.
+function municodeSection(sec){ return "https://library.municode.com/fl/naples/codes/code_of_ordinances?nodeId=PTIICOOR_CH58ZO"; }
 
 /* ---------- LIVE zoning-district detection (point → zoning polygon) ----------
    Same idea as COUNTY_LIVE, but for zoning districts. Each jurisdiction lists
@@ -9909,6 +9914,8 @@ function renderNaplesGeneratorRules(yearBuilt){
   g+=`<div class="note"><b>Auto-cycling window:</b> automatic exercise/self-test may only run <b>9:00 a.m.–4:00 p.m., Monday–Thursday.</b></div>`;
   g+=`<div class="note"><b>Screening:</b> all new and replaced equipment must be screened from view to its full height, per applicable fencing/landscaping rules and the manufacturer's specs.</div>`;
   g+=`<div class="note"><b>New construction / major work:</b> equipment installed with new construction, or with additions/alterations exceeding 50% of the structure's assessed value, may <b>not</b> sit in a required yard at all.</div>`;
+  g+=`<div class="note"><b>Noise (§ 22-37):</b> the code names generators specifically — noise is presumed excessive if it exceeds the Table 1 dBA limit measured at the <b>receiving (neighbor's) property line</b>; equipment installed before Dec 2006 is capped at 60 dBA. Worth siting away from a neighbor's bedroom wall.</div>`;
+  g+=`<div class="note"><b>R1-15A district (§ 56-54):</b> stricter than the rest — a generator may <b>not</b> encroach into any required setback at all (no 36″ side-yard allowance here). Where equipment sits on the side of the residence, its <b>base must be no more than 6 inches above</b> the FEMA/DEP first-habitable-floor elevation, and all mechanical equipment must be permanently screened from the street, neighbors and waterways.</div>`;
   // Year-gated 36" side-yard allowance
   if(haveYear && yNum < NAPLES_56_41_CUTOFF_YEAR){
     g+=`<div class="note warnbox"><b>Possible 36″ side-yard allowance.</b> County records show this structure built <b>${esc(String(yNum))}</b>. For a single-family home <i>permitted and constructed before the § 56-41 ordinance's effective date</i>, a new generator may encroach up to <b>36 inches into a required SIDE yard</b> (side yard only — not front or rear). <b>Verify before relying on this:</b> the year shown is the assessor's build year, not the permit date, and the exact ordinance effective date is not confirmed here. Confirm both with the City of Naples Building Dept (239) 213-5020.</div>`;
@@ -9917,7 +9924,8 @@ function renderNaplesGeneratorRules(yearBuilt){
   } else {
     g+=`<div class="note warnbox"><b>Build year unknown — side-yard allowance can't be assessed.</b> § 56-41 lets a new generator encroach up to 36″ into a required <b>side</b> yard only for single-family homes permitted and built before the ordinance's effective date. No reliable build/permit year is available here — confirm with the City of Naples Building Dept (239) 213-5020.</div>`;
   }
-  g+=`<a class="palink" href="https://library.municode.com/fl/naples/codes/code_of_ordinances?nodeId=PTIICOOR_CH56SUST_ARTIISTAPALDI_S56-41MEEQ" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify § 56-41 — live in Municode</a>`;
+  g+=`<a class="palink" href="https://www.naplesgov.com/building/page/installing-mechanical-equipment" target="_blank" rel="noopener" style="margin-top:6px">↗ City of Naples — Installing Mechanical Equipment (§ 56-41: generators, HVAC, pool)</a>`;
+  g+=`<a class="palink" href="https://library.municode.com/fl/naples/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:4px">↗ Full Naples code (Municode) — search "56-41" for the generator ordinance text</a>`;
   return g;
 }
 
