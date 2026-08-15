@@ -1102,6 +1102,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       <div style="color:var(--signal);font-family:var(--disp);font-weight:600;letter-spacing:.08em;margin-bottom:6px">ALWAYS ON GENERATORS · PROPERTY LOOKUP</div>
       Sources: FL Dept. of Revenue statewide cadastral (county appraiser rolls) · FEMA National Flood Hazard Layer · FDOT administrative boundaries · HIFLD Electric Retail Service Territories · US Census / OSM geocoding. Data reflects the most recent official rolls and <i>effective</i> FEMA maps — always verify with the county property appraiser before any legal, financial, or permitting decision.
       <div id="swStatus" style="margin-top:7px;color:var(--faint)"></div>
+      <div id="lookupTiming"></div>
     </div>
   </footer>
 </div>
@@ -11009,8 +11010,42 @@ let runId=0;
    address after the user has already typed and launched a NEW one. */
 let searchSeq=0;
 function newSearch(){ return ++searchSeq; }
+/* Render the per-source lookup timing breakdown into the "Sources & details" footer. Sources are
+   listed slowest-first (so the bottleneck is at the top), errored sources marked, the single slowest
+   source highlighted, and the milestones (first paint / total) shown below a divider. */
+function renderLookupTiming(timings){
+  const el=document.getElementById('lookupTiming'); if(!el) return;
+  if(!timings || !timings.length){ el.innerHTML=''; return; }
+  const src  = timings.filter(t=>!t.milestone).slice().sort((a,b)=>b.ms-a.ms);
+  const mile = timings.filter(t=>t.milestone);
+  const slowest = src.reduce((m,t)=>Math.max(m,t.ms),0);
+  const row = t=>{
+    const col = t.err ? 'var(--warn)' : (t.ms===slowest && t.ms>0 ? 'var(--signal)' : 'inherit');
+    return `<div style="display:flex;justify-content:space-between;gap:14px;color:${col}"><span>${esc(t.label)}${t.err?' ✕':''}</span><span>${t.ms} ms</span></div>`;
+  };
+  const mrow = t=>`<div style="display:flex;justify-content:space-between;gap:14px;color:var(--faint)"><span>${esc(t.label)}</span><span>${t.ms} ms</span></div>`;
+  el.innerHTML =
+    `<div style="margin-top:9px;border-top:1px solid rgba(255,255,255,.12);padding-top:7px">`
+    + `<div style="color:var(--signal);font-family:var(--mono);font-size:10px;letter-spacing:.12em;margin-bottom:4px">⏱ LOOKUP TIMING · per source (parallel)</div>`
+    + `<div style="font-family:var(--mono);font-size:11px;line-height:1.5">`
+    + src.map(row).join('')
+    + `<div style="border-top:1px dashed rgba(255,255,255,.14);margin:5px 0"></div>`
+    + mile.map(mrow).join('')
+    + `</div>`
+    + `<div style="color:var(--faint);font-size:9.5px;margin-top:5px;line-height:1.4">Sources run in parallel — total ≈ the slowest source, not the sum. <span style="color:var(--signal)">Highlighted</span> = slowest; <span style="color:var(--warn)">red ✕</span> = failed/timed out.</div>`
+    + `</div>`;
+}
 async function runLookup(lat,lng,searchCtx){
   const myId=++runId;
+  // ── LOOKUP TIMING (debug) ─────────────────────────────────────────────────────────────────────
+  // Each source is timed individually (they run in parallel, so these are latencies, not additive).
+  // Shown in the "Sources & details" footer via renderLookupTiming() so slow feeds are easy to spot.
+  const _T0 = performance.now();
+  const _timings = [];
+  window.__lookupTimings = _timings;
+  const _timed = (label,p)=>{ const t0=performance.now();
+    return p.then(v=>{ _timings.push({label, ms:Math.round(performance.now()-t0), err:!!(v&&v.__err)}); return v; },
+                  e=>{ _timings.push({label, ms:Math.round(performance.now()-t0), err:true}); throw e; }); };
   window.__parcelMeta=null;   // cleared each lookup; set when a parcel renders
   window.__addrPtMeta=null;   // cleared each lookup; set by the Collier address-point resolver
   // Collected for the "Export to Excel" feature (imports into the Estimate sheet).
@@ -11030,14 +11065,14 @@ async function runLookup(lat,lng,searchCtx){
   if(window.Sheet) Sheet.setState('full');   // bring results into view on mobile
 
   // Fire all queries in parallel; each degrades independently.
-  const pParcel  = arcQueryRetry(EP.parcel, lat, lng, '*', true).catch(e=>({__err:e.message}));
-  const pFlood   = arcQueryRetry(EP.flood, lat, lng, 'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, FLOOD_TIMEOUT).catch(e=>({__err:e.message}));
-  const pCity    = arcQuery(EP.city,    lat, lng, 'NAME', false).catch(e=>({__err:e.message}));
-  const pCounty  = arcQuery(EP.county,  lat, lng, 'NAME', false).catch(e=>({__err:e.message}));
-  const pLive    = liveSource.url ? arcQuery(liveSource.url, lat, lng, '*', true).catch(e=>({__err:e.message})) : Promise.resolve(null);
+  const pParcel  = _timed('parcel (state roll)', arcQueryRetry(EP.parcel, lat, lng, '*', true)).catch(e=>({__err:e.message}));
+  const pFlood   = _timed('flood (FEMA)', arcQueryRetry(EP.flood, lat, lng, 'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, FLOOD_TIMEOUT)).catch(e=>({__err:e.message}));
+  const pCity    = _timed('city boundary', arcQuery(EP.city,    lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
+  const pCounty  = _timed('county boundary', arcQuery(EP.county,  lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
+  const pLive    = liveSource.url ? _timed('live parcel feed', arcQuery(liveSource.url, lat, lng, '*', true)).catch(e=>({__err:e.message})) : Promise.resolve(null);
   const _utilUrl = await resolveUtilQueryUrl();
   const pUtil    = _utilUrl
-    ? arcQuery(_utilUrl, lat, lng, '*', false).catch(e=>({__err:e.message}))
+    ? _timed('utility territory', arcQuery(_utilUrl, lat, lng, '*', false)).catch(e=>({__err:e.message}))
     : Promise.resolve(null);
 
   // Gate the render on the FAST core queries only (parcel, city, county, live feed). Flood and utility
@@ -11046,6 +11081,7 @@ async function runLookup(lat,lng,searchCtx){
   // them. This lets parcel/owner/jurisdiction paint as soon as they're ready.
   let [parcel,city,county,live] = await Promise.all([pParcel,pCity,pCounty,pLive]);
   if(myId!==runId) return; // a newer query superseded this one
+  _timings.push({label:'▸ first paint (core ready)', ms:Math.round(performance.now()-_T0), milestone:true});
   let flood, util;   // resolved later, at their card
 
   let html='';
@@ -11064,10 +11100,10 @@ async function runLookup(lat,lng,searchCtx){
 
   // Kick off the slower enrichment lookups NOW, in parallel, so they overlap instead of
   // stacking serially. Each is awaited later where it's rendered; all fail-fast (short timeout).
-  const pZoning      = queryZoning(lat, lng, cityName, countyName).catch(()=>null);
-  const pWind        = queryWindSpeed(lat, lng).catch(()=>null);   // live ASCE 7-22 Risk Cat II; null → county fallback
+  const pZoning      = _timed('zoning', queryZoning(lat, lng, cityName, countyName)).catch(()=>null);
+  const pWind        = _timed('wind (ASCE 7-22)', queryWindSpeed(lat, lng)).catch(()=>null);   // live ASCE 7-22 Risk Cat II; null → county fallback
   const pCountyFlood = (countyName && COUNTY_FLOOD_LIVE[norm(countyName)])
-                         ? queryCountyFlood(lat, lng, countyName).catch(()=>null) : Promise.resolve(null);
+                         ? _timed('county flood', queryCountyFlood(lat, lng, countyName)).catch(()=>null) : Promise.resolve(null);
   const pCountyLive  = (!liveSource.url && countyName && COUNTY_LIVE[norm(countyName)])
     ? (async()=>{
         const reg=COUNTY_LIVE[norm(countyName)]; const cands=reg.urls||(reg.url?[reg.url]:[]);
@@ -12346,6 +12382,8 @@ async function runLookup(lat,lng,searchCtx){
   results.innerHTML = setStatus('ok','Done — '+(new Date()).toLocaleTimeString())
     + _bc + _sum + '<div class="cardflow">' + html + '</div>';
   tabifyResults(results);
+  _timings.push({label:'▸ total (to full render)', ms:Math.round(performance.now()-_T0), milestone:true});
+  renderLookupTiming(_timings);
   document.body.classList.add('has-results');   // hides the intro disclaimer now that the breadcrumb/summary carry context
 
   /* ---- LIVE WIND UPGRADE (non-blocking) --------------------------------------------------------
@@ -12356,6 +12394,7 @@ async function runLookup(lat,lng,searchCtx){
      failure/miss simply leaves the county figure showing (exactly the old fallback). */
   pWind.then(liveWind=>{
     if(myId!==runId) return;                     // a newer search superseded this one
+    renderLookupTiming(_timings);                // wind is non-blocking; refresh timing once it lands
     if(!liveWind || typeof liveWind.v!=='number') return;   // no live value → keep county figure
     if(window.__exportData) window.__exportData.windVult=liveWind.v;   // keep export in sync
     // Find the rendered Wind card by its heading (survives tabify, which keys off the h2 text).
