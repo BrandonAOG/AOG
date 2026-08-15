@@ -4806,10 +4806,17 @@ async function geocodeAll(q){
   const esriU=`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates`+
     `?SingleLine=${encodeURIComponent(qq)}&f=json&outFields=*&maxLocations=6&outSR=4326`+
     `&searchExtent=${encodeURIComponent('-87.6,24.4,-80.0,31.0')}`+near;   // Florida bbox + nearby bias
+  // Each geocoder gets its OWN timeout. These run in parallel via allSettled, which waits for ALL
+  // three to settle — so without a per-fetch cap, one slow service (Nominatim/OSM is the usual
+  // offender — a free public server that's often slow or rate-limited) stalls the ENTIRE search even
+  // when Census + Esri already answered. A bounded fetch lets a slow one abort and the search proceed
+  // on whatever returned. Census/Esri are the reliable pair; OSM gets the shortest leash.
+  const _gfetch=(u,ms)=>{ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),ms);
+    return fetch(u,{signal:ctrl.signal}).then(r=>{clearTimeout(t);return r.json();}).catch(e=>{clearTimeout(t);throw e;}); };
   const [cRes,oRes,eRes]=await Promise.allSettled([
-    fetch(censusU).then(r=>r.json()),
-    fetch(osmU).then(r=>r.json()),
-    fetch(esriU).then(r=>r.json())
+    _gfetch(censusU,7000),
+    _gfetch(osmU,4500),
+    _gfetch(esriU,7000)
   ]);
   const out=[];
   if(cRes.status==='fulfilled'){
@@ -12147,9 +12154,14 @@ async function fetchSuggestions(q, signal){
     `?SingleLine=${encodeURIComponent(qq)}&f=json&outFields=*&maxLocations=6&outSR=4326`+
     `&searchExtent=${encodeURIComponent('-87.6,24.4,-80.0,31.0')}`;
   const fopt = signal ? {signal} : {};
+  // Bounded per-fetch (see geocodeAll): a slow geocoder must not stall the search. Honor an external
+  // abort signal if one was passed, but always apply an internal cap too.
+  const _gf=(u,ms)=>{ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),ms);
+    if(signal){ try{ signal.addEventListener('abort',()=>ctrl.abort(),{once:true}); }catch(e){} }
+    return fetch(u,{signal:ctrl.signal}).then(r=>{clearTimeout(t);return r.json();}).catch(e=>{clearTimeout(t);throw e;}); };
   const [cR,eR]=await Promise.allSettled([
-    fetch(censusU,fopt).then(r=>r.json()),
-    fetch(esriU,fopt).then(r=>r.json())
+    _gf(censusU,7000),
+    _gf(esriU,7000)
   ]);
   if(cR.status==='fulfilled'){
     const ms=(cR.value&&cR.value.result&&cR.value.result.addressMatches)||[];
@@ -12169,7 +12181,7 @@ async function fetchSuggestions(q, signal){
   if(out.length<5){
     try{
       const u=`https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=us&q=${encodeURIComponent(qq)}`;
-      const j=await (await fetch(u, signal?{signal}:{})).json();
+      const j=await _gf(u,4500);   // bounded — a slow OSM fallback must not hang the search
       for(const m of (j||[])){
         if(out.length>=6) break;
         const lbl=tidyOsmLabel(m.display_name);   // strip "Ridgeview Lakes, …, Collier County, …, United States"
