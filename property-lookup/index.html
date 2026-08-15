@@ -1495,6 +1495,17 @@ const COUNTY_LIVE = {
     // web map 13630fbe10054c46982f5b3117323f6c.
     "https://services6.arcgis.com/90Aakxb3SLGcQGor/arcgis/rest/services/glades_parcels_2026_06_01/FeatureServer/0/query"
   ]},
+  MARION  : { label:"Marion County (City of Ocala GIS · PA parcels)", urls:[
+    // ✅ verified queryable (capabilities:"Query") public layer on the City of Ocala's own ArcGIS
+    // server (gis.ocalafl.org). Covers ALL of Marion County — "Public facing parcel layer … data
+    // updated weekly from the Property Appraiser's office." Token-free, loads unauthenticated. Rich
+    // roll: owner=name, parcel=parcel (alt_key = appraiser AltKey), site=situs_1/situs_2, market
+    // value=tot_val (land tot_lnd_va / bldg tot_bld_va), year built=yrblt1, living area=bld1_sf/
+    // resusesf, acres, beds/baths, use=pc, last sale yr1/pr_1, owner mailing add_1..add_4 — all
+    // mapped via detectFields' Marion aliases. Source layer SR 2237 (FL State Plane ft); tool sends
+    // inSR=4326 and the server reprojects. Ocala Public/Parcels service, layer 0.
+    "https://gis.ocalafl.org/arcgis/rest/services/Public/Parcels/FeatureServer/0/query"
+  ]},
   HENDRY  : { label:"Hendry County (Property Appraiser parcel layer)", urls:[
     // ✅ verified queryable (capabilities:"Query") public AGOL layer on Hendry County's own org
     // (services7.arcgis.com/8l7Qq5t0CPLAJwJK). The "Matix" parcel layer (layer name BASEMAP) behind the
@@ -1980,6 +1991,18 @@ const ZONING_LIVE = {
   HENDRY: { label:"Hendry County Zoning", codeField:"Current_Zo", descField:"Current_Zo", urls:[
     "https://services7.arcgis.com/8l7Qq5t0CPLAJwJK/arcgis/rest/services/Zoning/FeatureServer/1/query"
   ]},
+  // ✅ Marion County zoning — the county's OWN public Open Data layer, "ZoningClassifications",
+  // published by Growth Services / Planning & Zoning and updated daily (~19,995 parcel-level records).
+  // Hosted on ArcGIS Online (services1.arcgis.com/oMGpBoZpy1Db2sAl), token-free & CORS-open — this is
+  // the open republish of the county's zoning (the primary gis.marionfl.org service requires a token).
+  // Field "ZONECLASS" = the district code (A-1, A-2, A-3, RR-1, R-E, R-1..R-4, MH, P-MH, B-1..B-5,
+  // R-O, RC-1, RAC, RR, P-RV, I-C, M-1, M-2, R-I, G-U, PUD — matching MARION_SETBACKS). codeField is
+  // pinned to ZONECLASS so detection can't drift to a description/ordinance column. Covers the whole
+  // county; incorporated-city parcels (Ocala, Belleview, Dunnellon, McIntosh, Reddick) are excluded
+  // from county setbacks via MARION_INCORP in the renderer.
+  MARION: { label:"Marion County Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
+    "https://services1.arcgis.com/oMGpBoZpy1Db2sAl/arcgis/rest/services/ZoningClassifications/FeatureServer/0/query"
+  ]},
   // ✅ Manatee County — the district rides on the county's public "Parcels" FeatureServer (the same
   // denormalized parcel layer that carries flood zone, year built, trash pickup, etc.). Field
   // "ZONING" holds the code; it's namespaced by jurisdiction — UNINCORPORATED parcels are bare
@@ -2058,6 +2081,17 @@ const ZONING_LIVE_CITY = {
   // to the proven fields. SR is 2882 (FL State Plane ft); arcQuery sends 4326 and the server reprojects.
   NORTHPORT: { label:"City of North Port Zoning", codeField:"zone_abbr", descField:"zone_des", urls:[
     "https://npgis.northportfl.gov/cnpserver/rest/services/Hosted/Current_Zoning/FeatureServer/241/query"
+  ]},
+  // ✅ City of Ocala zoning — layer 15 "Zoning" of the city's public GrowthManagement service on
+  // gis.ocalafl.org (the same public server that hosts the Marion parcel feed). Token-free, CORS-open.
+  // Fields ZONECLASS = city district code, ZONEDESC = district name. Ocala runs its OWN code (Land
+  // Development Code), so its codes DIFFER from Marion County's despite sharing letters — e.g. Ocala
+  // B-4 = "General Business" while county B-4 = "Regional Business", and Ocala has city-only codes like
+  // SC (Shopping Center). Pinned codeField/descField so detection can't drift to the Development_Name /
+  // ordinance columns. This layer is CITY-LIMITS ONLY (an in-county rural point returns no feature);
+  // unincorporated Marion parcels are served by the county ZoningClassifications layer instead.
+  OCALA: { label:"City of Ocala Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
+    "https://gis.ocalafl.org/arcgis/rest/services/Public/GrowthManagement/FeatureServer/15/query"
   ]}
 };
 
@@ -4578,20 +4612,22 @@ function detectFields(fields){
   const F=fields.map(f=>({raw:f,U:String(f).toUpperCase()}));
   const find=(res)=>{ for(const re of res){ const m=F.find(f=>re.test(f.U)); if(m) return m.raw; } return null; };
   return {
-    owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^OWN1$/,/^NAME1$/,/^ONAME$/,/^O_NAME/,/^OWNERLINE1$/,/OWN.*NAME/,/OWNER_?LINE_?1/,/^GRANTEE/]),
+    // /^NAME$/ (last) is Marion County's Ocala-hosted parcel layer; fully anchored so it can't false-match.
+    owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^OWN1$/,/^NAME1$/,/^ONAME$/,/^O_NAME/,/^OWNERLINE1$/,/OWN.*NAME/,/OWNER_?LINE_?1/,/^GRANTEE/,/^NAME$/]),
     owner2:find([/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^OWN2$/,/^NAME2$/,/^OWNERLINE2$/,/OWNER_?LINE_?2/,/OWN.*NAME2/]),
-    pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/]),
+    pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/,/^PARCEL$/]),
     site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/]),
-    city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/]),
-    jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/]),
-    land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/]),
+    city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/]),
+    jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/]),
+    land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/]),
     yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/]),
-    liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/]),
-    saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/]),
-    saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/]),
-    mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/]),
-    mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/^O_CITY$/,/OWNER_?CITY/]),
-    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/]),
+    // /^BLD1_SF$/ and /^RESUSESF$/ are Marion's Ocala-hosted layer (building 1 sqft / residential use sqft).
+    liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^BLD1_SF$/,/^RESUSESF$/]),
+    saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/]),
+    saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/]),
+    mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/,/^ADD_1$/]),
+    mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/^O_CITY$/,/OWNER_?CITY/,/^ADD_3$/]),
+    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/]),
     lotSqft: find([/^LND_?SQFOOT$/,/^LOT_?SQ/,/^LOTSQFT$/,/^LAND_?SQFT$/,/^SQFT_?LND$/,/^LOTSF$/,/^LOT_?SIZE$/,/LOTSQUARE/,/^LAND_?SQ/])
   };
 }
@@ -6250,6 +6286,405 @@ function renderHendrySetbacks(districtCode){
   h+=`<a class="palink" href="https://library.municode.com/fl/hendry_county/codes/code_of_ordinances" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify ${esc(secRef)} — Hendry County LDC (Municode)</a>`;
   h+=`<div class="note warnbox">District read live from Hendry County's zoning GIS. The per-district setback feet come from the adopted LDC's Table 53-2 (a graphic table, not a queryable number). Verify overlays (esp. the Airglades AOPD), corner-lot rules and any PUD/DSAP terms before relying on these.</div>`;
   h+=renderHendryGeneratorNote();
+  return h;
+}
+
+/* ============================ MARION COUNTY ============================
+   Marion County Land Development Code (Ord. 17-08, as amended through Ord. 25-10), Article 4,
+   Division 2 (Zoning). UNLIKE Hendry, Marion publishes its dimensional standards as MACHINE-READABLE
+   tables (Table 4.2-2 agricultural, Table 4.2-4 residential, plus per-section commercial/industrial
+   standards), so exact front/side/rear feet are carried here and verified against the user-supplied
+   LDC PDF (Supp. No. 7).
+
+   GENERATOR SITING: Marion County has NO dedicated emergency-/standby-generator ordinance and no
+   special mechanical-equipment yard-encroachment allowance (only eaves/overhangs/chimneys may
+   protrude 2 ft — § 4.2.6.C.4 — and that does NOT extend to a generator). A permanently installed
+   generator is therefore an ACCESSORY STRUCTURE, governed by the "General Accessory" setback row for
+   its district and the accessory-placement rule in § 4.2.6.C.(8): accessory structures go in the
+   REAR or SIDE yard only; for lots one (1) acre or less, minimum 8 ft rear & side. That note rides on
+   every Marion result. (Ag districts A-1/A-2/A-3 carry a 25 ft general-accessory setback.)
+
+   RESIDENTIAL front/side/rear below use Table 4.2-4's PRINCIPAL-structure row (the "with central
+   water & sewer / new subdivision" column, the common case); `accFront/accSide/accRear` carry the
+   General-Accessory row (what a generator uses). Where the two principal columns differ (e.g. R-1
+   rear 25 vs 20), the note explains.
+
+   CITIES: Ocala, Belleview, Dunnellon, McIntosh & Reddick are incorporated and run their OWN
+   zoning/setbacks — excluded via MARION_INCORP so a city parcel doesn't inherit county standards. */
+const MARION_INCORP = new Set(['OCALA','BELLEVIEW','DUNNELLON','MCINTOSH','REDDICK']);
+const MARION_SETBACKS = {
+  // ---- Agricultural (Table 4.2-2). Principal & general-accessory both 25/25/25. ----
+  "A-1": { name:"General Agriculture (A-1)", secRef:"§ 4.2.3 / Table 4.2-2",
+           front:25, side:25, rear:25, accFront:25, accSide:25, accRear:25, height:50,
+           minLot:"10 acres", lotWidth:150,
+           note:"Min lot 10 ac (150 ft wide), 1 du/10 ac. Accessory housing for livestock 75 ft front / 25 side / 25 rear; poultry 100 ft front. A generator (general accessory) uses 25 ft front/side/rear." },
+  "A-2": { name:"Improved Agriculture (A-2)", secRef:"§ 4.2.4 / Table 4.2-2",
+           front:25, side:25, rear:25, accFront:25, accSide:25, accRear:25, height:50,
+           minLot:"10 acres", lotWidth:150,
+           note:"Min lot 10 ac (150 ft wide), 1 du/10 ac. Accessory housing for livestock 75 ft front / 25 side / 25 rear; poultry 100 ft front. A generator (general accessory) uses 25 ft front/side/rear." },
+  "A-3": { name:"Residential Agriculture Estate (A-3)", secRef:"§ 4.2.5 / Table 4.2-2",
+           front:25, side:25, rear:25, accFront:25, accSide:25, accRear:25, height:50,
+           minLot:"10 acres", lotWidth:150,
+           note:"Min lot 10 ac (150 ft wide), 1 du/10 ac. Poultry limited to 12 birds (personal use). Accessory housing for livestock 50 ft front / 25 side / 25 rear; poultry 50 ft front. A generator (general accessory) uses 25 ft front/side/rear." },
+  // ---- Residential (Table 4.2-4). front/side/rear = principal (central-water/sewer column). ----
+  "RR-1": { name:"Rural Residential (RR-1)", secRef:"§ 4.2.7 / Table 4.2-4",
+            front:25, side:25, rear:8, accFront:25, accSide:8, accRear:8, height:40,
+            minLot:"1 du/acre", lotWidth:"existing",
+            note:"1 du/acre. Principal 25 ft front / 25 side / 8 rear. Generator (general accessory) 25 ft front / 8 side / 8 rear — rear/side yards only; ≤1-acre lots keep a min 8 ft rear & side (§ 4.2.6.C.8)." },
+  "R-E":  { name:"Residential Estate (R-E)", secRef:"§ 4.2.8 / Table 4.2-4",
+            front:25, side:25, rear:25, accFront:25, accSide:25, accRear:25, height:40,
+            minLot:32670, lotWidth:150,
+            note:"Low-density estate. Min lot 32,670 sq ft (150 ft wide). Principal & general accessory both 25 ft front/side/rear. Generator sits in rear/side yard at 25 ft." },
+  "R-1":  { name:"Single Family Dwelling (R-1)", secRef:"§ 4.2.9 / Table 4.2-4",
+            front:20, side:8, rear:20, accFront:25, accSide:8, accRear:8, height:40,
+            minLot:7700, lotWidth:85,
+            note:"Medium density. With central water & sewer: min lot 7,700 sq ft (85 ft wide), principal 20 ft front / 8 side / 20 rear. Without central service: 10,000 sq ft, front 25 / side 8 / rear 25. Generator (general accessory) 25 ft front / 8 side / 8 rear — rear/side only; ≤1-acre lots min 8 ft rear & side." },
+  "R-2":  { name:"One & Two-Family Dwelling (R-2)", secRef:"§ 4.2.10 / Table 4.2-4",
+            front:25, side:8, rear:15, accFront:25, accSide:8, accRear:8, height:40,
+            minLot:10000, lotWidth:85,
+            note:"Single-family min lot 10,000 sq ft (85 ft wide, 4 du/ac); two-family 7,700 sq ft (100 ft wide, 6 du/ac). Principal 25 ft front / 8 side / 15 rear. Generator (general accessory) 25 ft front / 8 side / 8 rear — rear/side only; ≤1-acre lots min 8 ft rear & side." },
+  "R-3":  { name:"Multiple-Family Dwelling (R-3)", secRef:"§ 4.2.11 / Table 4.2-4",
+            front:20, side:8, rear:20, accFront:25, accSide:8, accRear:8, height:40,
+            minLot:7500, lotWidth:85,
+            note:"High density (8–16 du/ac w/ central water & sewer). Single-family min lot 7,500 sq ft (85 ft wide); multi-family per note. Principal 20 ft front / 8 side / 20 rear. Multi-family within 100 ft of single-family zoning has an added height step-down (§ 4.2.11.D). Generator (general accessory) 25 ft front / 8 side / 8 rear." },
+  "R-4":  { name:"Mixed Residential (R-4)", secRef:"§ 4.2.12 / Table 4.2-4",
+            front:20, side:8, rear:20, accFront:25, accSide:8, accRear:8, height:40,
+            minLot:5000, lotWidth:75,
+            note:"Mix of manufactured & conventional homes. Single-family min lot 5,000 sq ft (75 ft wide) w/ central service; two-family 7,700 sq ft. Principal 20 ft front / 8 side / 20 rear. Generator (general accessory) 25 ft front / 8 side / 8 rear." },
+  "MH":   { name:"Manufactured Housing (MH)", secRef:"§ 4.2.13 / Table 4.2-4",
+            front:25, side:8, rear:25, accFront:25, accSide:8, accRear:8, height:40,
+            minLot:10000, lotWidth:85,
+            note:"Manufactured-home district (HUD Code units). Min lot 10,000 sq ft (85 ft wide). Principal 25 ft front / 8 side / 25 rear. Generator (general accessory) 25 ft front / 8 side / 8 rear. Also see § 4.3.6 (manufactured-home regs)." },
+  "P-MH": { name:"Manufactured Housing Park (P-MH)", secRef:"§ 4.2.14 / Table 4.2-4",
+            front:25, side:15, rear:25, accFront:25, accSide:8, accRear:8, height:40,
+            minLot:"per park plan", lotWidth:85,
+            note:"Rental manufactured-home park. Principal 25 ft front / 15 side / 25 rear (park perimeter). Individual-site separations are set by the approved park plan (figures 4.2-2/4.2-3). Confirm the generator's site placement with the park plan and Marion Growth Services." },
+  // ---- Commercial / office / industrial (per-section standards; generator = accessory, rear/side). ----
+  "R-O":  { name:"Residential Office (R-O)", secRef:"§ 4.2.16",
+            front:25, side:8, rear:15, accFront:25, accSide:8, accRear:8, height:40,
+            note:"Transitional residential/office. Read the exact per-use setbacks in § 4.2.16; a generator sits in the rear/side yard as an accessory structure." },
+  "B-1":  { name:"Neighborhood Business (B-1)", secRef:"§ 4.2.17", commercial:true,
+            note:"Neighborhood business. Front-setback landscaping applies; the front setback increases where merchandise/display is in the front setback (§ 4.2.17). Read § 4.2.17 for exact yards; a generator is an accessory structure in the rear/side yard." },
+  "B-2":  { name:"Community Business (B-2)", secRef:"§ 4.2.18", commercial:true,
+            note:"Community business. Read § 4.2.18 for exact yards. A generator is an accessory structure in the rear/side yard, out of any required front yard and easements." },
+  "B-3":  { name:"Specialty Business (B-3)", secRef:"§ 4.2.19", commercial:true,
+            note:"Specialty business. Read § 4.2.19 for exact yards; a generator is an accessory structure in the rear/side yard." },
+  "B-4":  { name:"Regional Business (B-4)", secRef:"§ 4.2.20", commercial:true,
+            note:"Regional business. A vehicle/merchandise display in the front setback increases the required front setback (§ 4.2.20). Read § 4.2.20 for exact yards; a generator is an accessory structure in the rear/side yard." },
+  "B-5":  { name:"Heavy Business (B-5)", secRef:"§ 4.2.21", commercial:true,
+            note:"Heavy business. Read § 4.2.21 for exact yards; a generator is an accessory structure in the rear/side yard." },
+  "RC-1": { name:"Rural Commercial (RC-1)", secRef:"§ 4.2.23", commercial:true,
+            note:"Rural commercial. Read § 4.2.23 for exact yards; a generator is an accessory structure in the rear/side yard." },
+  "RAC":  { name:"Rural Activity Center (RAC)", secRef:"§ 4.2.24", commercial:true,
+            note:"Rural activity center. Read § 4.2.24 for exact yards; a generator is an accessory structure in the rear/side yard." },
+  "RR":   { name:"Recreational Resort (RR)", secRef:"§ 4.2.22",
+            front:20, side:15, rear:10, accFront:null, accSide:10, accRear:10, height:40,
+            note:"Recreational resort (RV/park-model/manufactured sites). Front 20 ft (8 ft if parking is elsewhere; 8 ft for RV parks built before 6/11/1992), 15 ft unit separation, 10 ft rear. Accessory uses require 10 ft separation, side/rear only. Confirm generator placement against the site/park plan." },
+  "P-RV": { name:"Recreation Vehicle Park (P-RV)", secRef:"§ 4.2.25",
+            note:"RV park. Site & separation standards come from the approved park plan (§ 4.2.25), not a single district row. Confirm the generator's placement with the park plan and Marion Growth Services." },
+  "I-C":  { name:"Industrial Complex (I-C)", secRef:"§ 4.2.26", commercial:true,
+            note:"Industrial complex. Read § 4.2.26 for exact yards; a generator is an accessory structure in the rear/side yard." },
+  "M-1":  { name:"Light Industrial (M-1)", secRef:"§ 4.2.27", commercial:true,
+            note:"Light industrial. Read § 4.2.27 for exact yards; a generator is an accessory structure in the rear/side yard." },
+  "M-2":  { name:"Heavy Industrial (M-2)", secRef:"§ 4.2.28", commercial:true,
+            note:"Heavy industrial. Read § 4.2.28 for exact yards; a generator is an accessory structure in the rear/side yard." },
+  "R-I":  { name:"Rural Industrial (R-I)", secRef:"§ 4.2.29", commercial:true,
+            note:"Rural industrial. Read § 4.2.29 for exact yards; a generator is an accessory structure in the rear/side yard." },
+  "G-U":  { name:"Government Use (G-U)", secRef:"§ 4.2.30",
+            front:40, side:10, rear:25, accFront:40, accSide:10, accRear:10, height:null,
+            note:"Government use. Min front 40 ft / rear 25 ft / side 10 ft (§ 4.2.30). A generator is an accessory structure in the rear/side yard." },
+  "PUD":  { name:"Planned Unit Development (PUD)", secRef:"§ 4.2.31", pud:true,
+            note:"Stand-alone PUD. All setbacks, lot, height & density come from this parcel's approved PUD ordinance & master plan — not the district tables." }
+};
+const MARION_DISTRICT_ALIASES = {
+  "GENERALAGRICULTURE":"A-1","IMPROVEDAGRICULTURE":"A-2","RESIDENTIALAGRICULTUREESTATE":"A-3",
+  "RESIDENTIALAGRICULTURALESTATE":"A-3","AGRICULTUREESTATE":"A-3",
+  "RURALRESIDENTIAL":"RR-1","RESIDENTIALESTATE":"R-E",
+  "SINGLEFAMILYDWELLING":"R-1","SINGLEFAMILY":"R-1","ONEANDTWOFAMILYDWELLING":"R-2","ONETWOFAMILYDWELLING":"R-2",
+  "MULTIPLEFAMILYDWELLING":"R-3","MULTIPLEFAMILY":"R-3","MULTIFAMILY":"R-3","MIXEDRESIDENTIAL":"R-4",
+  "MANUFACTUREDHOUSING":"MH","MANUFACTUREDHOUSINGPARK":"P-MH",
+  "RESIDENTIALOFFICE":"R-O","NEIGHBORHOODBUSINESS":"B-1","COMMUNITYBUSINESS":"B-2","SPECIALTYBUSINESS":"B-3",
+  "REGIONALBUSINESS":"B-4","HEAVYBUSINESS":"B-5","RURALCOMMERCIAL":"RC-1","RURALACTIVITYCENTER":"RAC",
+  "RECREATIONALRESORT":"RR","RECREATIONVEHICLEPARK":"P-RV","RECREATIONALVEHICLEPARK":"P-RV",
+  "INDUSTRIALCOMPLEX":"I-C","LIGHTINDUSTRIAL":"M-1","HEAVYINDUSTRIAL":"M-2","RURALINDUSTRIAL":"R-I",
+  "GOVERNMENTUSE":"G-U","PLANNEDUNITDEVELOPMENT":"PUD"
+};
+function marionSetbacks(districtCode){
+  if(!districtCode) return null;
+  const raw=String(districtCode).toUpperCase().trim();
+  if(MARION_SETBACKS[raw]) return MARION_SETBACKS[raw];
+  // Layer-specific variants not in the base table: R-1A is a single-family sub-variant → use R-1's
+  // standards (labeled so the user sees the variant); R-PUD is a residential PUD → PUD handling.
+  if(raw==='R-1A') return Object.assign({}, MARION_SETBACKS["R-1"], { name:"Single Family Dwelling (R-1A)" });
+  if(raw==='R-PUD'||raw==='RPUD') return Object.assign({}, MARION_SETBACKS["PUD"], { name:"Residential Planned Unit Development (R-PUD)" });
+  const alpha=raw.replace(/[^A-Z]/g,'');
+  if(MARION_DISTRICT_ALIASES[alpha]) return MARION_SETBACKS[MARION_DISTRICT_ALIASES[alpha]];
+  // normalize hyphen between letters and a number: R1 -> R-1, A2 -> A-2, B4 -> B-4, RR1 -> RR-1
+  let k=raw.replace(/\s+/g,'').replace(/^([A-Z]+)[- ]?(\d)/,'$1-$2');
+  if(MARION_SETBACKS[k]) return MARION_SETBACKS[k];
+  // letters+letters variants: PMH -> P-MH, PRV -> P-RV, RO -> R-O, IC -> I-C, RC -> RC-1
+  const ll={ "PMH":"P-MH","PRV":"P-RV","RO":"R-O","IC":"I-C","RE":"R-E","GU":"G-U","RC":"RC-1","RI":"R-I" };
+  if(ll[alpha]) return MARION_SETBACKS[ll[alpha]];
+  const base=raw.split(/[\s(/]/)[0].replace(/^([A-Z]+)[- ]?(\d)/,'$1-$2');
+  if(MARION_SETBACKS[base]) return MARION_SETBACKS[base];
+  const baseAlpha=base.replace(/[^A-Z]/g,'');
+  if(MARION_DISTRICT_ALIASES[baseAlpha]) return MARION_SETBACKS[MARION_DISTRICT_ALIASES[baseAlpha]];
+  return null;
+}
+/* Marion treats a generator as an accessory structure — no dedicated generator ordinance exists.
+   This note rides on every unincorporated-Marion result so the siting rule is explicit. */
+function renderMarionGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> placement · Marion County LDC § 4.2.6.C.(8)</div>`;
+  h+=`<div class="note"><b>Marion County has no dedicated generator ordinance and no special yard-encroachment allowance for mechanical equipment.</b> A permanently installed generator is treated as an <b>accessory structure</b>: it must sit in a <b>rear or side yard — never in a required front yard</b> — at the district's <b>General Accessory</b> setback, and for lots <b>one (1) acre or less</b> a minimum <b>8 ft from the rear &amp; side lot lines</b> (§ 4.2.6.C.8).</div>`;
+  h+=`<div class="note">Only eaves, roof overhangs, pilasters, chimneys and fireplaces may protrude 2 ft into a required setback (§ 4.2.6.C.4) — that allowance does <b>not</b> extend to a generator. No structure may be placed over an easement without the easement holder's written approval (§ 4.2.6.C.3). Above-ground LP tanks follow the same accessory-structure setbacks plus Fire Code separation distances. Confirm placement with Marion County Growth Services (352-438-2600) before siting.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/marion_county/codes/land_development_code" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify § 4.2.6 &amp; the district section — Marion County LDC (Municode)</a>`;
+  return h;
+}
+/* Render required setbacks for an unincorporated Marion County district (Article 4, Div. 2). */
+function renderMarionSetbacks(districtCode){
+  const s=marionSetbacks(districtCode);
+  if(!s){
+    let g=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> Marion County — district not detected</div>`;
+    g+=`<div class="note">No zoning district could be read for this parcel. Look it up via Marion County Growth Services (352-438-2600) or the county zoning map, then read that district's front/side/rear setbacks in Article 4, Division 2 of the LDC. The generator placement rule below applies countywide.</div>`;
+    g+=renderMarionGeneratorNote();
+    return g;
+  }
+  const setVal=v=>{ if(v==null) return null; if(typeof v==='number') return v===0?'0 ft':v+' ft'; const t=String(v).trim(); if(!t) return null; return /[a-zA-Z]/.test(t)?t:t+' ft'; };
+  const secRef=s.secRef||'Art. 4, Div. 2';
+  // PUD: setbacks come from the approved PUD ordinance, not a fixed table.
+  if(s.pud){
+    let p=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ PUD</span> ${esc(s.name||String(districtCode))} · setbacks set by the approved PUD ordinance (Marion LDC ${esc(secRef)})</div>`;
+    if(s.note) p+=`<div class="note">${esc(s.note)}</div>`;
+    p+=`<div class="note warnbox">Look up this parcel's specific PUD ordinance &amp; master plan for its exact setbacks before siting a generator or LP tank. Confirm with Marion County Growth Services (352-438-2600).</div>`;
+    p+=renderMarionGeneratorNote();
+    return p;
+  }
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(s.name||String(districtCode))} (Marion LDC ${esc(secRef)})</div>`;
+  const haveNums = (s.front!=null || s.side!=null || s.rear!=null);
+  if(haveNums){
+    h+=fieldRow('Front', esc(setVal(s.front)), 'big');
+    h+=fieldRow('Side', esc(setVal(s.side)));
+    h+=fieldRow('Rear', esc(setVal(s.rear)));
+  } else if(s.commercial){
+    h+=fieldRow('Front / side / rear', '<span class="muted">per use — see '+esc(secRef)+'</span>', 'big');
+  }
+  // Generator-relevant accessory setbacks, when the district table carries them.
+  if(s.accFront!=null || s.accSide!=null || s.accRear!=null){
+    const parts=[];
+    if(s.accFront!=null) parts.push('front '+setVal(s.accFront));
+    if(s.accSide!=null) parts.push('side '+setVal(s.accSide));
+    if(s.accRear!=null) parts.push('rear '+setVal(s.accRear));
+    h+=fieldRow('Accessory (generator)', esc(parts.join(' / ')));
+  }
+  if(s.height!=null) h+=fieldRow('Max building height', esc(setVal(s.height)));
+  if(s.minLot!=null){ const lv=(typeof s.minLot==='number')?(fmtNum(s.minLot)+' sq ft'):String(s.minLot); h+=fieldRow('Minimum lot', esc(lv)+(s.lotWidth?(' · '+s.lotWidth+' ft wide'):'')); }
+  if(s.coverage) h+=fieldRow('Max lot coverage', esc(s.coverage));
+  if(s.note) h+=`<div class="note">${esc(s.note)}</div>`;
+  h+=`<div class="note">All setbacks are measured from the foundation/wall (§ 4.2.6.C.4). Accessory structures — including a permanently installed generator — go in the <b>rear or side yard only</b>; on lots ≤ 1 acre they keep a minimum <b>8 ft rear &amp; side</b> (§ 4.2.6.C.8). "Without central water &amp; sewer" columns can require larger yards — see the district note above.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/marion_county/codes/land_development_code" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify ${esc(secRef)} — Marion County LDC (Municode)</a>`;
+  h+=`<div class="note warnbox">District read live from Marion County's zoning GIS; the per-district feet come from the adopted LDC (Article 4, Div. 2, Tables 4.2-2 &amp; 4.2-4). Where a district sets different standards per use or by central-service status, the headline figures are the common case and variations are noted. Verify overlays (e.g. Springs Protection, ESOZ), corner-lot rules and any PUD terms before relying on these.</div>`;
+  h+=renderMarionGeneratorNote();
+  return h;
+}
+
+/* ============================ CITY OF OCALA ============================
+   City of Ocala Land Development Code / Code of Ordinances, Chapter 122 (Zoning), Article V, Division 2,
+   § 122-286 (the master dimensional table for ALL districts) + Division 1 general rules. Verified against
+   the user-supplied live Municode text (codified through Ord. 2026-01, Supp. No. 109).
+
+   Ocala runs its OWN code — its district letters OVERLAP the county's but mean different things
+   (Ocala B-4 = "General Business"; Marion County B-4 = "Regional Business"), and Ocala has city-only
+   codes (SC Shopping Center, RBH, OH, FBC, B-3C). So this table is fully independent — no borrowing.
+
+   NUMBERS below carry the § 122-286 SINGLE-FAMILY-dwelling row (front / interior side / interior rear),
+   which is the governing case for a generator install; street-side and nonresidential variations are
+   noted where they differ. `front/side/rear` = single-family principal; `streetSide` = street side yard
+   (corner lots); `height` = max building height; `minLotK` = min lot area in 1,000s sq ft; `lotWidth` ft.
+   Blank cells in the code = use not permitted in that district; "0" = no requirement.
+
+   GENERATOR SITING (§ 122-254 + § 122-252): Ocala has NO dedicated generator ordinance. A permanent
+   generator is an ACCESSORY STRUCTURE. Per § 122-254(2): in the REAR yard it must sit ≥ 3 ft from the
+   rear property line, ≥ 5 ft from any main building, AND meet the district's required INTERIOR SIDE
+   setback; per § 122-254(1) a side-yard location must provide the full required side setback. Per
+   § 122-250, on corner/through lots accessory structures may NOT be in either front yard. Per § 122-252
+   the yard-encroachment list (chimneys 2 ft, awnings 3 ft, sills 12 in) does NOT include mechanical
+   equipment, so a generator gets no setback intrusion. That note rides on every Ocala result.
+
+   OCALA is in MARION_INCORP, so it's already excluded from the county setback renderer. */
+const OCALA_SETBACKS = {
+  // ---- Residential ----
+  "R-1":  { name:"Single-Family Residential (R-1)", secRef:"§ 122-286",
+            front:25, side:10, rear:25, streetSide:25, height:35, minLotK:13.5, lotWidth:100,
+            note:"Established single-family. Front 25 ft / interior side 10 ft / interior rear 25 ft; street side 25 ft. Min lot 13,500 sq ft, 100 ft wide (see § 122-314(1) for reduced-frontage lots of record). Max height 35 ft, coverage 35%." },
+  "R-1A": { name:"Single-Family Residential (R-1A)", secRef:"§ 122-286",
+            front:20, side:8, rear:15, streetSide:20, height:35, minLotK:8, lotWidth:80,
+            note:"Front 20 ft / interior side 8 ft / interior rear 15 ft; street side 20 ft. Min lot 8,000 sq ft, 80 ft wide. Max height 35 ft, coverage 40%." },
+  "R-1AA":{ name:"Single-Family Residential (R-1AA)", secRef:"§ 122-286",
+            front:20, side:8, rear:15, streetSide:20, height:35, minLotK:6, lotWidth:60,
+            note:"Front 20 ft / interior side 8 ft / interior rear 15 ft; street side 20 ft. Min lot 6,000 sq ft, 60 ft wide. Max height 35 ft, coverage 40%." },
+  "R-2":  { name:"Two-Family Residential (R-2)", secRef:"§ 122-286",
+            front:20, side:8, rear:15, streetSide:20, height:35, minLotK:7, lotWidth:70,
+            note:"Single-family: front 20 / interior side 8 / interior rear 15 ft (min lot 7,000 sq ft, 70 ft wide). Two-family/other residential: same yards, min lot 10,000 sq ft, 100 ft wide. Max height 35 ft, coverage 40%." },
+  "R-3":  { name:"Multiple-Family Residential (R-3)", secRef:"§ 122-286",
+            front:20, side:8, rear:25, streetSide:20, height:50, minLotK:7.5, lotWidth:75,
+            note:"Single-family: front 20 / interior side 8 / interior rear 25 ft (min lot 7,500 sq ft, 75 ft wide). Multi-family/other residential: interior rear 25 ft, min lot 10,000 sq ft, 100 ft wide. Max height 50 ft, coverage 35%." },
+  "RZL":  { name:"Residential Zero Lot Line (RZL)", secRef:"§ 122-286",
+            front:20, side:10, rear:25, streetSide:15, height:35, minLotK:5, lotWidth:45,
+            sideNote:"Interior side 10 ft (see § 122-398(2) for the zero-lot-line configuration — one side may be placed on the lot line with the opposite side carrying the full separation). Interior rear 25 ft (§ 122-398).",
+            note:"Zero-lot-line single-family. Front 20 ft; street side 15 ft. Min lot 5,000 sq ft, 45 ft wide. Max height 35 ft (2-story max), coverage 50%. Confirm which side is the zero line before siting a generator — it must sit on the setback side, not the zero-line side." },
+  "RBH":  { name:"Residential Business Historic (RBH)", secRef:"§ 122-286",
+            front:20, side:8, rear:25, streetSide:20, height:35, lotWidth:0,
+            note:"Historic residential/business. Front 20 / interior side 8 / interior rear 25 ft; street side 20 ft. Lot width/area governed by the historic-district context (0 in the table). Max height 35 ft. Applies to RBH-1/RBH-2/RBH-3. Historic-district review may add conditions — confirm with Planning before siting." },
+  "MH":   { name:"Mobile Home Park / Subdivision (MH)", secRef:"§ 122-286",
+            front:null, side:null, rear:null, height:null,
+            note:"Mobile home park/subdivision. Individual-site setbacks are governed by the approved park/subdivision plan rather than a single § 122-286 row. Confirm the site's placement with the park plan and City of Ocala Growth Management before siting a generator." },
+  // ---- Agricultural ----
+  "A-1":  { name:"Agricultural (A-1)", secRef:"§ 122-286",
+            front:25, side:8, rear:25, streetSide:25, height:150, minLotK:217.8, lotWidth:150,
+            note:"Front 25 / interior side 8 / interior rear 25 ft (single-family); street side 25 ft. Min lot 217,800 sq ft (~5 ac), 150 ft wide. Nonresidential uses take a 20 ft interior side. Max height 150 ft, coverage 25%. (A-1 rezoning is annexation-linked, § 122-244(b) note.)" },
+  // ---- Office ----
+  "RO":   { name:"Residential Office (RO)", secRef:"§ 122-286",
+            front:25, side:10, rear:25, streetSide:25, height:35, minLotK:12.5, lotWidth:100,
+            note:"Residential-office. Front 25 / interior side 10 / interior rear 25 ft; street side 25 ft. Min lot 12,500 sq ft, 100 ft wide. Max height 35 ft, coverage 30%." },
+  "O-1":  { name:"Office (O-1)", secRef:"§ 122-286",
+            front:25, side:4, rear:20, streetSide:25, height:35, minLotK:12.5, lotWidth:100,
+            note:"Office. Front 25 / interior side 4 / interior rear 20 ft; street side 25 ft. Min lot 12,500 sq ft, 100 ft wide. Max height 35 ft, coverage 35%." },
+  "OP":   { name:"Office Park (OP)", secRef:"§ 122-286",
+            front:25, side:4, rear:2, streetSide:25, height:60, lotWidth:100,
+            note:"Office park (nonresidential figures; see § 122-545). Front 25 (see note 1) / interior side 4 / interior rear 2 ft; street side 25 ft. Lot width 100 ft. Max height 60 ft, coverage 40%. Several yards are governed by § 122-545 — verify before siting." },
+  "OH":   { name:"Office Historic (OH)", secRef:"§ 122-286",
+            front:20, side:8, rear:25, streetSide:20, height:35, minLotK:30, lotWidth:100,
+            note:"Office-historic. Front 20 / interior side 8 / interior rear 25 ft; street side 20 ft. Min lot per note 3 (§ 122-606(5)). Max height 35 ft, coverage 30%. Historic-district review may add conditions." },
+  // ---- Business (nonresidential figures; most carry 0-ft interior yards unless abutting residential) ----
+  "B-1":  { name:"Neighborhood Business (B-1)", secRef:"§ 122-286 / § 122-585", commercial:true,
+            front:0, side:0, rear:0, height:35,
+            note:"Neighborhood business. Front 0 ft for nonresidential (see note 5, § 122-585(5)); interior side/rear 0 ft (§ 122-585(4)). Min lot 7,500 sq ft, 75 ft wide. Max height 35 ft. A generator is an accessory structure — but note buffer/yard rules apply where B-1 abuts a residential district (§ 122-260). Read § 122-585 before siting." },
+  "B-1A": { name:"Limited Neighborhood Business (B-1A)", secRef:"§ 122-286 / § 122-606", commercial:true,
+            front:0, side:0, rear:0, height:35,
+            note:"Limited neighborhood business. Nonresidential front 0 ft (note 3), interior side 0 ft (note 7, § 122-606(4)), interior rear 0 ft. Min lot 10,000 sq ft, 100 ft wide. Max height 35 ft. Buffer rules apply against abutting residential (§ 122-260). Read § 122-606 before siting." },
+  "B-2":  { name:"Community Business (B-2)", secRef:"§ 122-286", commercial:true,
+            front:25, side:0, rear:0, height:50,
+            note:"Community business. Residential-use front 25 ft; nonresidential front 0 ft; interior side/rear 0 ft. Min lot 7,500 sq ft, 75 ft wide. Max height 50 ft. A generator is an accessory structure in the rear/side; buffer rules apply where B-2 abuts residential (§ 122-260)." },
+  "B-2A": { name:"Limited Community Business (B-2A)", secRef:"§ 122-286", commercial:true,
+            front:25, side:0, rear:0, height:50,
+            note:"Limited community business. Residential-use front 25 ft; nonresidential front/side/rear 0 ft. Min lot 7,500 sq ft, 75 ft wide. Max height 50 ft. Buffer rules apply against abutting residential (§ 122-260)." },
+  "B-4":  { name:"General Business (B-4)", secRef:"§ 122-286", commercial:true,
+            front:0, side:0, rear:0, height:60,
+            note:"General business. Nonresidential front/interior side/interior rear all 0 ft; residential uses in B-4 take a 25 ft front (see § 122-1194). Max height 60 ft. A generator is an accessory structure in the rear/side; buffer rules apply against abutting residential (§ 122-260)." },
+  "B-5":  { name:"Wholesale Business (B-5)", secRef:"§ 122-286", commercial:true,
+            front:20, side:8, rear:15, height:60,
+            note:"Wholesale business. Front 20 / interior side 8 / interior rear 15 ft (residential row); nonresidential yards 0 ft. Lot width 70 ft. Max height 60 ft. Buffer rules apply against abutting residential (§ 122-260)." },
+  "SC":   { name:"Shopping Center (SC)", secRef:"§ 122-286 / Art. V Div. 29", commercial:true,
+            height:35,
+            note:"Shopping center. Dimensional standards are governed by Chapter 122, Article V, Division 29 (note 9) and the approved site plan rather than a single § 122-286 row; a 25 ft landscaped buffer applies where SC abuts a less-intensive district (§ 122-260(c)(11)). Confirm the generator's placement with the site plan and City of Ocala Growth Management." },
+  // ---- Industrial (nonresidential, 0-ft interior yards; buffers govern where abutting less-intensive) ----
+  "M-1":  { name:"Light Industrial (M-1)", secRef:"§ 122-286", commercial:true,
+            front:0, side:0, rear:0, height:60,
+            note:"Light industrial. Interior front/side/rear all 0 ft. Min lot width 100 ft. Max height 60 ft. A generator is an accessory structure; industrial-to-residential buffers apply (§ 122-260(c)(7),(8)). Read the district section before siting." },
+  "M-2":  { name:"Medium Industrial (M-2)", secRef:"§ 122-286", commercial:true,
+            front:0, side:0, rear:0, height:60,
+            note:"Medium industrial. Interior front/side/rear all 0 ft. Min lot width 100 ft. Max height 60 ft. Industrial-to-residential buffers apply (§ 122-260). A generator is an accessory structure in the rear/side." },
+  "M-3":  { name:"Heavy Industrial (M-3)", secRef:"§ 122-286", commercial:true,
+            front:0, side:0, rear:0, height:150,
+            note:"Heavy industrial. Interior front/side/rear all 0 ft. Min lot width 200 ft. Max height 150 ft. A 40 ft (or 25 ft + wall) buffer applies where M-3 abuts residential (§ 122-260(c)(7)). A generator is an accessory structure in the rear/side." },
+  // ---- Institutional / Government ----
+  "INST": { name:"Institutional (INST)", secRef:"§ 122-286 / § 122-505", commercial:true,
+            front:25, side:10, rear:20, streetSide:25, height:50,
+            note:"Institutional. Front 25 / interior side 10 / interior rear 20 ft; street side 25 ft (see note 13, § 122-505). Min lot 44,000 sq ft. Max height 50 ft. A generator is an accessory structure in the rear/side; buffer rules may apply." },
+  "G-U":  { name:"Governmental Use (G-U)", secRef:"§ 122-286", commercial:true,
+            note:"Governmental use. § 122-286 lists no fixed yard row for G-U (government facilities are sited by their approved plan). Confirm setbacks and generator placement with the City of Ocala and the facility's site plan." },
+  // ---- Planned / form-based (no fixed table → approved plan/code governs) ----
+  "PD":   { name:"Planned Development (PD)", secRef:"§ 122-286 / Art. V Div. 30", pud:true,
+            note:"Planned Development. All setbacks, height, lot & density come from this parcel's approved PD ordinance & master plan (note 10, Art. V Div. 30) — not the § 122-286 table." },
+  "FBC":  { name:"Form-Based Code (FBC)", secRef:"§§ 122-961, 122-962", formbased:true,
+            note:"Form-Based Code district. Setbacks (build-to lines), height and frontage come from the FBC transect/street-type standards in §§ 122-961–122-962 (note 8), not conventional yards. Confirm the generator's placement against the applicable FBC frontage & the approved plan." },
+  "B-3C": { name:"CRA Mixed Use 2 (B-3C)", secRef:"§ 122-286", formbased:true,
+            note:"Community Redevelopment Area Mixed Use 2. § 122-286 carries no conventional yard row for B-3C — standards come from the CRA/mixed-use plan for the parcel. Confirm setbacks and generator placement with City of Ocala Growth Management and the CRA plan." }
+};
+const OCALA_DISTRICT_ALIASES = {
+  "SINGLEFAMILYRESIDENTIAL":"R-1","TWOFAMILYRESIDENTIAL":"R-2","MULTIPLEFAMILYRESIDENTIAL":"R-3",
+  "MULTIFAMILYRESIDENTIAL":"R-3","RESIDENTIALOFFICE":"RO","RESIDENTIALZEROLOTLINE":"RZL",
+  "RESIDENTIALBUSINESSHISTORIC":"RBH","MOBILEHOMEPARK":"MH","MOBILEHOME":"MH","AGRICULTURAL":"A-1",
+  "GOVERNMENTALUSE":"G-U","GOVERNMENTUSE":"G-U","INSTITUTIONAL":"INST","OFFICE":"O-1","OFFICEPARK":"OP",
+  "OFFICEHISTORIC":"OH","NEIGHBORHOODBUSINESS":"B-1","LIMITEDNEIGHBORHOODBUSINESS":"B-1A",
+  "COMMUNITYBUSINESS":"B-2","LIMITEDCOMMUNITYBUSINESS":"B-2A","GENERALBUSINESS":"B-4",
+  "WHOLESALEBUSINESS":"B-5","LIGHTINDUSTRIAL":"M-1","MEDIUMINDUSTRIAL":"M-2","HEAVYINDUSTRIAL":"M-3",
+  "SHOPPINGCENTER":"SC","PLANNEDDEVELOPMENT":"PD","FORMBASEDCODE":"FBC"
+};
+function ocalaSetbacks(districtCode){
+  if(!districtCode) return null;
+  const raw=String(districtCode).toUpperCase().trim();
+  if(OCALA_SETBACKS[raw]) return OCALA_SETBACKS[raw];
+  // RBH-1/RBH-2/RBH-3 → RBH; PUD-* / PUD-RO / expired PUD → PD handling
+  if(/^RBH-?\d?$/.test(raw)) return Object.assign({}, OCALA_SETBACKS["RBH"], { name:"Residential Business Historic ("+raw+")" });
+  if(/^PUD/.test(raw)) return Object.assign({}, OCALA_SETBACKS["PD"], { name:"Planned Unit Development ("+raw+")" });
+  if(raw==='GU') return OCALA_SETBACKS["G-U"];
+  const alpha=raw.replace(/[^A-Z]/g,'');
+  if(OCALA_DISTRICT_ALIASES[alpha]) return OCALA_SETBACKS[OCALA_DISTRICT_ALIASES[alpha]];
+  // normalize hyphen between letters and a number: R1->R-1, B2->B-2, M1->M-1
+  let k=raw.replace(/\s+/g,'').replace(/^([A-Z]+)[- ]?(\d)/,'$1-$2');
+  if(OCALA_SETBACKS[k]) return OCALA_SETBACKS[k];
+  const base=raw.split(/[\s(/]/)[0].replace(/^([A-Z]+)[- ]?(\d)/,'$1-$2');
+  if(OCALA_SETBACKS[base]) return OCALA_SETBACKS[base];
+  const baseAlpha=base.replace(/[^A-Z]/g,'');
+  if(OCALA_DISTRICT_ALIASES[baseAlpha]) return OCALA_SETBACKS[OCALA_DISTRICT_ALIASES[baseAlpha]];
+  return null;
+}
+/* Ocala treats a generator as an accessory structure — no dedicated generator ordinance exists.
+   Rule is § 122-254 (accessory placement) + § 122-252 (no mechanical-equipment yard encroachment). */
+function renderOcalaGeneratorNote(){
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">⚡ GENERATOR</span> placement · City of Ocala LDC § 122-254</div>`;
+  h+=`<div class="note"><b>The City of Ocala has no dedicated generator ordinance and no yard-encroachment allowance for mechanical equipment.</b> A permanently installed generator is an <b>accessory structure</b>. In the <b>rear yard</b> it must sit <b>≥ 3 ft from the rear property line</b>, <b>≥ 5 ft from any main building</b>, and still meet the district's required <b>interior side setback</b> (§ 122-254(2)). A side-yard location must provide the <b>full required side setback</b> (§ 122-254(1)). On corner / through lots it may <b>not</b> sit in either front yard (§ 122-250).</div>`;
+  h+=`<div class="note">The § 122-252 yard-encroachment list (chimneys/pilasters 2 ft, awnings 3 ft, sills 12 in) does <b>not</b> include mechanical equipment, so a generator gets <b>no</b> setback intrusion. Above-ground LP tanks follow the same accessory-structure setbacks plus Fire Code separation distances. Confirm placement with City of Ocala Growth Management (Planning) before siting.</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/ocala/codes/code_of_ordinances?nodeId=PTIICOOR_CH122ZO" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify §§ 122-252 &amp; 122-254 — City of Ocala Ch. 122 (Municode)</a>`;
+  return h;
+}
+/* Render required setbacks for a City of Ocala district (Chapter 122, § 122-286). */
+function renderOcalaSetbacks(districtCode){
+  const s=ocalaSetbacks(districtCode);
+  if(!s){
+    let g=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> City of Ocala — district not detected</div>`;
+    g+=`<div class="note">No zoning district could be read for this parcel. Look it up via City of Ocala Growth Management or the city zoning map, then read that district's front/side/rear in the § 122-286 dimensional table. The generator placement rule below applies citywide.</div>`;
+    g+=renderOcalaGeneratorNote();
+    return g;
+  }
+  const setVal=v=>{ if(v==null) return null; if(typeof v==='number') return v===0?'0 ft':v+' ft'; const t=String(v).trim(); if(!t) return null; return /[a-zA-Z]/.test(t)?t:t+' ft'; };
+  const secRef=s.secRef||'§ 122-286';
+  // PD / PUD: setbacks come from the approved plan.
+  if(s.pud){
+    let p=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ PD</span> ${esc(s.name||String(districtCode))} · setbacks set by the approved plan (Ocala LDC ${esc(secRef)})</div>`;
+    if(s.note) p+=`<div class="note">${esc(s.note)}</div>`;
+    p+=`<div class="note warnbox">Look up this parcel's approved PD/PUD ordinance &amp; master plan for its exact setbacks before siting a generator or LP tank. Confirm with City of Ocala Growth Management (Planning).</div>`;
+    p+=renderOcalaGeneratorNote();
+    return p;
+  }
+  // FBC / B-3C: form-based / CRA — build-to lines, not conventional yards.
+  if(s.formbased){
+    let p=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ${esc(districtCode.toUpperCase().indexOf('FBC')>=0?'FORM-BASED':'CRA')}</span> ${esc(s.name||String(districtCode))} (Ocala LDC ${esc(secRef)})</div>`;
+    if(s.note) p+=`<div class="note">${esc(s.note)}</div>`;
+    p+=`<div class="note warnbox">This district uses build-to lines / plan-based standards, not conventional front/side/rear yards. Read the governing sections and the approved plan before siting a generator or LP tank; confirm with City of Ocala Growth Management.</div>`;
+    p+=renderOcalaGeneratorNote();
+    return p;
+  }
+  let h=`<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ REQUIRED</span> setbacks · ${esc(s.name||String(districtCode))} (Ocala LDC ${esc(secRef)})</div>`;
+  const haveNums = (s.front!=null || s.side!=null || s.rear!=null);
+  if(haveNums){
+    h+=fieldRow('Front', esc(setVal(s.front)), 'big');
+    h+=fieldRow('Side', esc(setVal(s.side)));
+    h+=fieldRow('Rear', esc(setVal(s.rear)));
+    if(s.streetSide!=null) h+=fieldRow('Corner lot · street side', esc(setVal(s.streetSide)));
+  } else if(s.commercial){
+    h+=fieldRow('Front / side / rear', '<span class="muted">per use — see '+esc(secRef)+'</span>', 'big');
+  }
+  if(s.height!=null) h+=fieldRow('Max building height', esc(setVal(s.height)));
+  if(s.minLotK!=null){ h+=fieldRow('Minimum lot', esc(fmtNum(s.minLotK*1000))+' sq ft'+(s.lotWidth?(' · '+s.lotWidth+' ft wide'):'')); }
+  else if(s.lotWidth){ h+=fieldRow('Minimum lot width', esc(s.lotWidth)+' ft'); }
+  if(s.sideNote) h+=`<div class="note"><b>Side detail:</b> ${esc(s.sideNote)}</div>`;
+  if(s.note) h+=`<div class="note">${esc(s.note)}</div>`;
+  h+=`<div class="note">Numbers are the § 122-286 <b>single-family-dwelling</b> row (the governing case for a generator). "Other residential" and "nonresidential" uses in the same district can carry different yards — see the note above. All yards are measured per Ch. 122; corner/through lots have <b>two front yards</b> (§ 122-250) and a 25 ft (residential) / 15 ft (business) corner-visibility triangle applies (§ 122-253).</div>`;
+  h+=`<a class="palink" href="https://library.municode.com/fl/ocala/codes/code_of_ordinances?nodeId=PTIICOOR_CH122ZO_ARTVDIRE_DIV2SCDIRE_S122-286LORE" target="_blank" rel="noopener" style="margin-top:6px">↗ Verify ${esc(secRef)} — City of Ocala dimensional table (Municode)</a>`;
+  h+=`<div class="note warnbox">District read live from the City of Ocala zoning GIS; the per-district feet come from the adopted LDC § 122-286 master table. Verify any historic-district (RBH/OH), FBC frontage, buffer (§ 122-260) or approved-plan conditions before relying on these.</div>`;
+  h+=renderOcalaGeneratorNote();
   return h;
 }
 
@@ -8131,7 +8566,9 @@ async function queryFeedByAddress(feedUrl, ctx, lat, lng){
 /* Address fields a parcel layer might carry, in priority order, joined into one string. */
 function parcelAddrText(a){
   if(!a) return '';
-  const direct = a.SITEADDR||a.PHY_ADDR1||a.SITE_ADDR||a.SITUS||a.FULLADDR||a.ADDRESS;
+  // Marion County's Ocala-hosted layer uses lowercase situs_1 (street) / situs_2 (city-state-zip);
+  // JS keys are case-sensitive so these must be listed explicitly alongside the uppercase names.
+  const direct = a.SITEADDR||a.PHY_ADDR1||a.SITE_ADDR||a.SITUS||a.FULLADDR||a.ADDRESS||a.situs_1;
   if(direct) return String(direct);
   const parts=[a.SITENUMBER,a.SITESTREET,a.SITEUNIT].filter(Boolean);
   if(parts.length) return parts.join(' ');
@@ -10156,7 +10593,7 @@ async function runLookup(lat,lng,searchCtx){
       const _wantToks=new Set(streetTokens(searchCtx.raw||''));
       const _scoreFeat=(f)=>{
         const a=f.attributes||{};
-        const addr=a.SiteStreetAddress||a.SITEADDR||a.PHY_ADDR1||a.SITUS||a.FULLADDR||'';
+        const addr=a.SiteStreetAddress||a.SITEADDR||a.PHY_ADDR1||a.SITUS||a.FULLADDR||a.situs_1||'';
         if(!addr) return -1;
         if(houseNum(addr)!==_wantHN) return -1;
         if(_wantToks.size){
@@ -10762,6 +11199,14 @@ async function runLookup(lat,lng,searchCtx){
   // self-guards if the zoning layer handed back a "LABELLE"/"CLEWISTON" city placeholder as the code.
   // Always renders the county generator note even when no district code was detected.
   if(norm(countyName)==='HENDRY' && !HENDRY_INCORP.has(norm(cityName))){ html += renderHendrySetbacks(zhit && zhit.code ? zhit.code : null); }
+  // Unincorporated Marion County (LDC Article 4, Div. 2, Tables 4.2-2 & 4.2-4). Ocala, Belleview,
+  // Dunnellon, McIntosh & Reddick are incorporated and run their own codes (excluded via
+  // MARION_INCORP). Always renders the county generator note even when no district code was detected.
+  if(norm(countyName)==='MARION' && !MARION_INCORP.has(norm(cityName))){ html += renderMarionSetbacks(zhit && zhit.code ? zhit.code : null); }
+  // City of Ocala — a Marion County city with its OWN code (Chapter 122, § 122-286), excluded from the
+  // county renderer via MARION_INCORP. Rendered for any Ocala parcel (not gated on a detected code);
+  // renderOcalaSetbacks falls back to a citywide generator note + district guide when the code is null.
+  if(norm(cityName)==='OCALA'){ html += renderOcalaSetbacks(zhit && zhit.code ? zhit.code : null); }
   // City of Venice — a Sarasota County city with its OWN code (LDC Ch. 87), excluded from the county
   // renderer via SARASOTA_INCORP. Rendered for any Venice parcel (not gated on a detected code);
   // renderVeniceSetbacks falls back to a general Venice reference + district picker when none.
