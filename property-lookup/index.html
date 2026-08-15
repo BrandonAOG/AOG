@@ -11051,6 +11051,7 @@ function renderLookupTiming(timings){
   const src  = timings.filter(t=>!t.milestone).slice().sort((a,b)=>b.ms-a.ms);
   const mile = timings.filter(t=>t.milestone);
   const slowest = src.reduce((m,t)=>Math.max(m,t.ms),0);
+  const open = !!window.__timingOpen;   // remember expand state across re-renders (wind lands late)
   const row = t=>{
     const col = t.err ? 'var(--warn)' : (t.ms===slowest && t.ms>0 ? 'var(--signal)' : 'inherit');
     return `<div style="display:flex;justify-content:space-between;gap:14px;color:${col}"><span>${esc(t.label)}${t.err?' ✕':''}</span><span>${t.ms} ms</span></div>`;
@@ -11058,14 +11059,20 @@ function renderLookupTiming(timings){
   const mrow = t=>`<div style="display:flex;justify-content:space-between;gap:14px;color:var(--faint)"><span>${esc(t.label)}</span><span>${t.ms} ms</span></div>`;
   el.innerHTML =
     `<div style="margin-top:9px;border-top:1px solid rgba(255,255,255,.12);padding-top:7px">`
-    + `<div style="color:var(--signal);font-family:var(--mono);font-size:10px;letter-spacing:.12em;margin-bottom:4px">⏱ LOOKUP TIMING · per source (parallel)</div>`
-    + `<div style="font-family:var(--mono);font-size:11px;line-height:1.5">`
-    + src.map(row).join('')
-    + `<div style="border-top:1px dashed rgba(255,255,255,.14);margin:5px 0"></div>`
-    + mile.map(mrow).join('')
+    + `<button type="button" class="wbtn" id="timingToggle"><span class="wchev">${open?'▾':'▸'}</span> ⏱ Lookup timing · per source (${src.length})</button>`
+    + `<div id="timingBody" ${open?'':'hidden'} style="font-family:var(--mono);font-size:11px;line-height:1.6;border-left:2px solid rgba(255,255,255,.14);padding:6px 9px;margin:6px 0 4px">`
+    +   src.map(row).join('')
+    +   `<div style="border-top:1px dashed rgba(255,255,255,.14);margin:5px 0"></div>`
+    +   mile.map(mrow).join('')
+    +   `<div style="color:var(--faint);font-size:9.5px;margin-top:6px;line-height:1.4">Sources run in parallel — total ≈ the slowest source, not the sum. <span style="color:var(--signal)">Highlighted</span> = slowest; <span style="color:var(--warn)">red ✕</span> = failed/timed out.</div>`
     + `</div>`
-    + `<div style="color:var(--faint);font-size:9.5px;margin-top:5px;line-height:1.4">Sources run in parallel — total ≈ the slowest source, not the sum. <span style="color:var(--signal)">Highlighted</span> = slowest; <span style="color:var(--warn)">red ✕</span> = failed/timed out.</div>`
     + `</div>`;
+  const btn=document.getElementById('timingToggle');
+  if(btn) btn.addEventListener('click',()=>{
+    const body=document.getElementById('timingBody'); if(!body) return;
+    const opening=body.hidden; body.hidden=!opening; window.__timingOpen=opening;
+    const ch=btn.querySelector('.wchev'); if(ch) ch.textContent=opening?'▾':'▸';
+  });
 }
 async function runLookup(lat,lng,searchCtx){
   const myId=++runId;
