@@ -299,10 +299,11 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     box-shadow:0 4px 14px var(--shadow-soft);pointer-events:none}
   .radarclock.show{display:block}
   .zoning-legend{position:absolute;z-index:1000;bottom:18px;left:14px;display:none;
-    background:var(--search-bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;
-    font-family:var(--disp);font-size:11px;color:var(--dim);box-shadow:0 6px 20px var(--shadow-soft);line-height:1.5;
-    max-width:180px;max-height:50vh;overflow:auto}
-  .zoning-legend.show{display:block}
+    flex-direction:column;gap:8px;max-height:50vh;overflow:auto;align-items:flex-start}
+  .zoning-legend.show{display:flex}
+  .zoning-legend .zl-card{background:var(--search-bg);border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;font-family:var(--disp);font-size:11px;color:var(--dim);
+    box-shadow:0 6px 20px var(--shadow-soft);line-height:1.5;max-width:180px}
   .zoning-legend .zl-title{font-weight:700;color:#dff6ff;margin-bottom:3px;letter-spacing:.04em;text-transform:uppercase;font-size:10px}
   .zoning-legend .zl-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:3px}
   .zoning-legend .zl-head .zl-title{margin-bottom:0}
@@ -311,7 +312,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     text-transform:uppercase;padding:2px 6px;border-radius:5px;cursor:pointer;white-space:nowrap}
   .zoning-legend .zl-refresh:hover{background:rgba(57,211,255,.28)}
   .zoning-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px;opacity:.85}
-  @media (max-width:640px){ .zoning-legend{top:auto;bottom:12px;left:12px;font-size:10px;max-width:150px;max-height:40vh;overflow:auto} }
+  @media (max-width:640px){ .zoning-legend{top:auto;bottom:12px;left:12px;font-size:10px;max-height:40vh}
+    .zoning-legend .zl-card{max-width:150px} }
   @media (max-width:640px){ .radarclock{bottom:auto;top:54px;right:12px} }
   /* ---- Weather info panel (NHC storm details + NWS warning legend).
      Shares the lower-left slot with the zoning legend; higher z-index so that when both
@@ -991,19 +993,9 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <div class="crosshair" id="coordReadout">click the map to query a point</div>
 <div class="radarclock" id="radarClock">◵ Radar</div>
 <div class="zoning-legend" id="zoningLegend">
+  <div class="zl-card" id="zoningLegendDefault">
   <div class="zl-title">Zoning</div>
-  <div id="zoningLegendBody">
-    <div><i style="background:#34d399"></i>Estate / rural res.</div>
-    <div><i style="background:#0ea5e9"></i>Single-family</div>
-    <div><i style="background:#2563eb"></i>Dense single-family</div>
-    <div><i style="background:#7c6cff"></i>Multi-family</div>
-    <div><i style="background:#06b6d4"></i>Mobile / manufactured</div>
-    <div><i style="background:#ff6b6b"></i>Commercial</div>
-    <div><i style="background:#b06b3a"></i>Industrial</div>
-    <div><i style="background:#5fc26a"></i>Agricultural</div>
-    <div><i style="background:#ffb000"></i>Planned / mixed</div>
-    <div><i style="background:#9aa7b3"></i>Public / civic</div>
-    <div><i style="background:#c08cff"></i>Other</div>
+  <div id="zoningLegendBody" style="opacity:.7">No zoning districts loaded here yet — pan/zoom, or this area may not have a zoning layer wired.</div>
   </div>
 </div>
 <button class="sheet-tab" id="sheetTab" aria-label="Show property panel">⌃ Property panel</button>
@@ -1512,6 +1504,22 @@ const COUNTY_LIVE = {
     // Verified Aug 2026 (owner "HUDSON FISH CAMP LLC", JUST_VALUE 32674).
     "https://pascogis.pascocountyfl.net/giswebmm/rest/services/Tile_Caches/Parcels_MM/MapServer/3/query"
   ]},
+  HERNANDO : { label:"Hernando County (Property Appraiser CAMA export)", urls:[
+    // ✅ verified queryable public layer — discovered via F12 on the county's public "Parcels" service
+    // on ArcGIS Online (services2.arcgis.com/x5zvhhxfUuRDntRe), one of ~50 public services under the
+    // same org. Token-free. This is the FULL Property Appraiser CAMA (Computer Assisted Mass Appraisal)
+    // export — one of the richest rolls wired all session: owner=OWNER_NAME(+OWNER_NAME2), mailing=
+    // MAIL_ADDR1/MAIL_CITY/MAIL_STATE/MAIL_POSTALCODE, site=SITUS_ADDRESS/SITUS_CITY/SITUS_ZIP5,
+    // parcel=PARCEL_NUMBER, just value=CER_JUST_VALUE, land=CER_LAND_VALUE, building=CER_BLDG_VALUE,
+    // assessed=CER_ASSESSED_CNTY, taxable=CER_TAXABLE_CNTY, year built=STRUCT1_ACT_YEAR (effective
+    // STRUCT1_EFF_YEAR), living area=STRUCT1_BASE_SQFT (heated — verified base+aux=CER_STRU_SQFT, e.g.
+    // 9382+250=9632, so CER_STRU_SQFT is the inflated total and is deliberately not used), use=
+    // CER_DOR_CODE (standard statewide FL DOR code, reads correctly through the existing DOR_USE
+    // table — verified: code 1→single-family on an owner-occupied home, code 11→stores on a commercial
+    // LLC parcel), sale=LSALE_PRICE/LSALE_DATE, legal=LEGAL1-4, acreage=ACRES, lot sqft=LAND_SQFT.
+    // Verified Aug 2026 (Weeki Wachee & Brooksville sample parcels, real owner/value/structure data).
+    "https://services2.arcgis.com/x5zvhhxfUuRDntRe/arcgis/rest/services/Parcels/FeatureServer/0/query"
+  ]},
   POLK : { label:"Polk County (SWFWMD regional parcel roll · PA data)", urls:[
     // ✅ verified queryable public layer — "Polk County Parcels" (layer 78) on the Southwest Florida
     // Water Management District's public LocationInfo service (www25.swfwmd.state.fl.us). SWFWMD
@@ -1988,6 +1996,31 @@ function municodeSection(sec){ return "https://library.municode.com/fl/naples/co
    cities, etc.) paste that jurisdiction's zoning layer URL in the Advanced
    panel — it takes priority over this table and auto-detects the field. */
 const ZONING_LIVE = {
+  HILLSBOROUGH: { label:"Hillsborough County Zoning", codeField:"NZONE", descField:"NZONE_DESC", urls:[
+    // ✅ confirmed via the layer's own REST metadata (found by direct web search, no F12 needed this
+    // time): "Current, adopted zoning districts, Hillsborough County, Florida. Adheres to Land
+    // Development Code. This data is the official Zoning Atlas for Hillsborough County." Display field
+    // is NZONE itself. Public query endpoint (the login/token links on the REST directory page are
+    // standard ArcGIS boilerplate for the browsable directory, not a requirement for /query calls — same
+    // pattern as every other county server here). codeField/descField pinned to NZONE/NZONE_DESC.
+    // CATEGORY and OVERLAY fields are also present (not yet surfaced); Status ("Active"/"Withdrawn")
+    // exists — a future refinement could filter to Status='Active' only. NOT YET LIVE-TESTED against a
+    // real point (my fetch tool couldn't execute the parameterized query) — verify with a real address
+    // before fully trusting a "no live zoning" gap here.
+    "https://maps.hillsboroughcounty.org/arcgis/rest/services/DSD_Viewer_Services/DSD_Viewer_Zoning_Regulatory/MapServer/0/query"
+  ]},
+  HERNANDO: { label:"Hernando County Zoning", codeField:"ZONING", descField:"LABEL", urls:[
+    // ✅ verified queryable public layer — same "Zoning_Flu" service found via the org's public service
+    // directory (services2.arcgis.com/x5zvhhxfUuRDntRe), which also hosts the Hernando parcel feed.
+    // Token-free. Layer carries BOTH the true zoning district (ZONING, e.g. "AG", "C2", "PDP(GC)") and
+    // the broader Future Land Use category (FLU: "res"/"com"/"rur"; LABEL is its readable name) as
+    // SEPARATE fields — codeField pinned to ZONING so detection reads the real zoning district, not the
+    // FLU category. SPLIT_ZONE1/SPLIT_ZONE2 carry a second district on split-zoned parcels (not yet
+    // surfaced). Verified Aug 2026 with real codes (AG, C2, PDP(GC)) on named streets (Lori Dr, Hunters
+    // Lake Rd). NOTE: large background FLU polygons (rural/residential area shapes with no parcel tie)
+    // return ZONING=null — that's expected on those, not a data gap; parcel-level records carry it.
+    "https://services2.arcgis.com/x5zvhhxfUuRDntRe/arcgis/rest/services/Zoning_Flu/FeatureServer/0/query"
+  ]},
   POLK: { label:"Polk County Land Use District (= zoning, per LDC § 203)", codeField:"FLU_LDC", descField:"FLUNAME", urls:[
     // ✅ IMPORTANT CONTEXT: Polk County's LDC (§ 203) does NOT have a separate "zoning district" system —
     // "the unincorporated County is divided into LAND USE DISTRICTS... shown on... the Future Land Use
@@ -2105,6 +2138,31 @@ const ZONING_LIVE = {
    zoning authority). Entries may pin codeField/descField when the layer's field names
    aren't obvious to the auto-detector. Keyed by normalized municipality name. */
 const ZONING_LIVE_CITY = {
+  TAMPA: { label:"City of Tampa Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
+    // ⚠️ CORRECTED Aug 2026: the layer moved services — was OpenData/Boundary/MapServer/11 (confirmed
+    // dead via the app's own live diagnostic: "Layer not found" / BAD PATH), now lives at
+    // OpenData/PLANNING/MapServer/28 on the same public server (arcgis.tampagov.net). Still the same
+    // "Zoning District" layer, same City of Tampa GIS. codeField/descField unchanged (ZONECLASS/
+    // ZONEDESC) — only the service/layer path shifted. NOT yet live-tested at this corrected path;
+    // verify with the diagnostic tool before fully trusting.
+    "https://arcgis.tampagov.net/arcgis/rest/services/OpenData/Planning/MapServer/28/query"
+  ]},
+  STPETERSBURG: { label:"City of St. Petersburg Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
+    // ✅ verified with real sample data — service "ServicesDSD/Zoning", layer 2 "Zoning Districts"
+    // (correctly split from layer 4 "Future Land Use" in the same service — no Polk-style FLU/zoning
+    // conflation). Maintained by Planning & Economic Development, City of St. Petersburg. Public,
+    // token-free. Coincidentally shares Tampa's ZONECLASS/ZONEDESC field naming. Bonus: PDFURL links
+    // straight to the district's exact Municode section (verified: "NT-2" → LDC § 16.20.010) — worth
+    // surfacing as a verify-link if a setback table gets built for this city later. "WATER" is a real
+    // non-buildable code (open water), not a data error — expect it near the coastline/bay.
+    "https://egis.stpete.org/arcgis/rest/services/ServicesDSD/Zoning/MapServer/2/query"
+  ]},
+  // Alias in case the FDOT city-boundary layer returns the full "Saint Petersburg" spelling rather
+  // than "St. Petersburg" — norm() strips punctuation/spaces, so the two normalize differently
+  // (STPETERSBURG vs SAINTPETERSBURG). Points at the identical registry entry either way.
+  SAINTPETERSBURG: { label:"City of St. Petersburg Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
+    "https://egis.stpete.org/arcgis/rest/services/ServicesDSD/Zoning/MapServer/2/query"
+  ]},
   NAPLES: { label:"City of Naples Zoning", codeField:"Layer", descField:"Descript", urls:[
     // ✅ verified: City of Naples public GIS (backs the official city zoning map viewer)
     "https://g.naplesgov.com/arcgis/rest/services/Planning/Zoning/FeatureServer/0/query"
@@ -3259,9 +3317,32 @@ function zoneSpecificColor(code, cat){
   const sat=Math.max(8,Math.min(92, base.s-(satJit/2)+((hsh>>11)%(satJit+1))));
   return _hsl2hex(hue,sat,light);
 }
+/* Exact-code category overrides — checked BEFORE the regex ladder below. The regex ladder's bare
+   "R" and "P" prefixes are necessarily greedy (they have to catch R1/R2/RS/... and P/PU/GOV/... as
+   families), which mis-sorts a handful of REAL codes from counties wired this session: rural/
+   activity-center commercial districts starting with R (RC-1, RAC, RCC, OC, NAC, HIC, LCC all read
+   as residential or fall to "other"), mobile-home districts starting with P (P-MH, P-RV read as
+   public), an I/C ambiguity (I-C industrial reads as commercial since "IC" sits in both lists), and
+   a few counties' agricultural/estate codes that don't fit the AG/A1-3 or RE/RR pattern at all
+   (Pasco's AC/AR-*, Polk's A/RR). Verified against each county's actual live GIS codes — not
+   hypothetical. Keyed on the SAME normalized form zoneCategory() computes (uppercase, non-alnum
+   stripped), so e.g. "RC-1" and "RC1" both key as "RC1". */
+const ZONE_CATEGORY_OVERRIDE = {
+  // Marion County
+  "PMH":"mobile", "PRV":"mobile", "IC":"industrial", "RC1":"commercial", "RAC":"commercial", "RI":"industrial",
+  // City of Ocala
+  "SC":"commercial", "FBC":"mixed",
+  // Polk County (RCC = non-residential Rural Cluster Center; RCCR — Residential — is a different key,
+  // so no collision with the residential RCC-R district)
+  "ARR":"agricultural", "RCC":"commercial", "RH":"multifamily", "OC":"commercial", "NAC":"commercial",
+  "LCC":"commercial", "HIC":"commercial", "PM":"industrial", "ROS":"public", "INST1":"public", "INST2":"public",
+  // Pasco County
+  "AC":"agricultural", "AR1":"agricultural", "AR5":"agricultural", "AR5MH":"mobile", "ER":"estate", "ER2":"estate"
+};
 function zoneCategory(code){
   const c = String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   if(!c) return 'other';
+  if(ZONE_CATEGORY_OVERRIDE[c]) return ZONE_CATEGORY_OVERRIDE[c];
   // planned / mixed-use first (PUD, MPUD, MU, PD, etc.)
   if(/^(M?P?UD|PD|MU|MX|PUD|MPUD|RPUD|CPUD|TND|VR)/.test(c)) return 'mixed';
   // mobile / manufactured home
@@ -3342,31 +3423,74 @@ function gladesColor(code){
   const c=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   return GLADES_ZONE_COLOR[c] || null;
 }
-const ZL_GENERIC=[["#34d399","Estate / rural res."],["#0ea5e9","Single-family"],["#2563eb","Dense single-family"],
-  ["#7c6cff","Multi-family"],["#06b6d4","Mobile / manufactured"],["#ff6b6b","Commercial"],
-  ["#b06b3a","Industrial"],["#5fc26a","Agricultural"],["#ffb000","Planned / mixed"],
-  ["#9aa7b3","Public / civic"],["#c08cff","Other"]];
-const ZL_NAPLES=[["#10b981","R1-E / RE (estate)"],["#14b8a6","R1-15"],["#0ea5e9","R1-10"],
-  ["#2563eb","R1-7.5 (small lot)"],["#a78bfa","R3-6 / R3-12"],["#6d28d9","R3-15 / R3-18"],
-  ["#e879f9","R3T (tourist MF)"],["#ef4444","C1 / C2 commercial"],["#fbbf24","D — Downtown"],
-  ["#f59e0b","PD — Planned"],["#9aa7b3","Public / civic"]];
-const ZL_GLADES=[["#0d9488","OUFP — open-use floodplain"],["#4d7c0f","OUA — open-use agriculture"],
-  ["#84cc16","AR / ARS — ag-residential"],["#bef264","RF-1 — rural family"],["#0ea5e9","RS — single-family"],
-  ["#2563eb","RG — general residential"],["#7c6cff","RM — residential mixed"],["#06b6d4","RMH — mobile home"],
-  ["#fca5a5","C-1 / C-2 — commercial"],["#fb923c","C-RV — RV park"],["#b08968","ID-1 / ID-2 — industrial"],
-  ["#f59e0b","PD — planned dev."],["#9aa7b3","PS — public service"]];
-function setZoningLegend(reg){
-  const body=document.getElementById('zoningLegendBody'); if(!body) return;
-  const title=document.querySelector('#zoningLegend .zl-title');
-  const isNaples = reg && /naples/i.test(reg.label||'');
-  const isGlades = reg && /glades/i.test(reg.label||'');
-  const rows = isNaples ? ZL_NAPLES : (isGlades ? ZL_GLADES : ZL_GENERIC);
-  if(title) title.textContent = isNaples ? 'Naples Zoning' : (isGlades ? 'Glades Zoning' : 'Zoning');
-  let out = rows.map(([c,l])=>`<div><i style="background:${c}"></i>${l}</div>`).join('');
-  if(!isNaples && !isGlades){
-    out += `<div style="margin-top:5px;padding-top:5px;border-top:1px solid var(--line);opacity:.72;font-size:9px;line-height:1.35">Each district gets its own shade within its family color — hover any polygon for its district code.</div>`;
+/* The legend is built DYNAMICALLY from whatever zoning polygons are actually on screen, using each
+   jurisdiction's own district name straight from its live GIS data (via reg.descField when pinned,
+   else auto-detected the same way zoningDistrictOf() does) — so every county/city shows its EXACT
+   real district names rather than a generic category label, and the legend only ever lists districts
+   that are actually present in the current view. Colors match the polygons exactly (same
+   zoningStyleFor() call used to paint them), so Naples/Glades' curated palettes and every other
+   jurisdiction's category-family colors both flow through this one path — no more separate static
+   per-city arrays to keep in sync by hand. */
+function districtDescOf(props, reg){
+  if(!props) return null;
+  let descF = reg && reg.descField;
+  let v = descF ? props[descF] : null;
+  if(v==null || String(v).trim()===''){
+    const det = detectZoningFields(Object.keys(props));
+    if(det.desc && props[det.desc]!=null && String(props[det.desc]).trim()!=='') v = props[det.desc];
   }
-  body.innerHTML = out;
+  return (v==null || String(v).trim()==='') ? null : String(v).trim();
+}
+function shortJurisdictionLabel(reg){
+  return (reg && reg.label) ? reg.label.replace(/\s*\(.*$/,'').replace(/\s*(Zoning|Land Use District).*$/i,'') : 'Zoning';
+}
+/* Builds one INDEPENDENT legend card per jurisdiction, all stacked inside the #zoningLegend
+   container — so a view spanning two jurisdictions (a city and its surrounding county, or two
+   counties near a shared border) gets two separate boxes, each headed with that jurisdiction's own
+   name, rather than one shared box with sub-sections. Each card gets its own per-jurisdiction
+   district budget (ZONING_LEGEND_MAX_PER_CARD rows) so one dense jurisdiction doesn't crowd out the other. */
+const ZONING_LEGEND_MAX_PER_CARD = 16;
+function setZoningLegend(groups){
+  const container=document.getElementById('zoningLegend'); if(!container) return;
+  const defaultCard=document.getElementById('zoningLegendDefault');
+  groups = (groups||[]).filter(g=>g && g.reg);
+  // Remove any previously-built dynamic cards (keep the static default card, just hidden/shown).
+  container.querySelectorAll('.zl-card[data-dynamic]').forEach(el=>el.remove());
+  if(!groups.length){
+    if(defaultCard) defaultCard.style.display='';
+    return;
+  }
+  if(defaultCard) defaultCard.style.display='none';
+  for(const g of groups){
+    const reg=g.reg, features=g.features||[];
+    const byCode = new Map();   // normalized code -> {code, desc, color}
+    for(const f of features){
+      const props = f.properties || f.attributes || null;
+      const code = zoneCodeOf(props, reg);
+      if(code==null || String(code).trim()==='') continue;
+      const key = String(code).trim();
+      if(byCode.has(key)) continue;
+      const desc = districtDescOf(props, reg);
+      const color = zoningStyleFor(props, reg).fillColor;
+      byCode.set(key, { code:key, desc, color });
+    }
+    const rows = [...byCode.values()].sort((a,b)=>a.code.localeCompare(b.code, undefined, {numeric:true}));
+    if(!rows.length) continue;
+    const shown = rows.slice(0, ZONING_LEGEND_MAX_PER_CARD);
+    const hidden = rows.length - shown.length;
+    let body = shown.map(r=>{
+      const label = (r.desc && norm(r.desc)!==norm(r.code)) ? `<b>${esc(r.code)}</b> — ${esc(r.desc)}` : `<b>${esc(r.code)}</b>`;
+      return `<div><i style="background:${r.color}"></i>${label}</div>`;
+    }).join('');
+    if(hidden>0) body += `<div style="margin-top:4px;opacity:.65;font-size:9px">+ ${hidden} more — zoom in to separate them</div>`;
+    const card=document.createElement('div');
+    card.className='zl-card'; card.setAttribute('data-dynamic','1');
+    card.innerHTML = `<div class="zl-title">${esc(shortJurisdictionLabel(reg))}</div><div>${body}</div>`;
+    container.appendChild(card);
+  }
+  // Every group's district list came back empty (e.g. the layer answered but had no code field this
+  // feature set could resolve) — fall back to the default legend rather than showing an empty stack.
+  if(!container.querySelector('.zl-card[data-dynamic]') && defaultCard) defaultCard.style.display='';
 }
 /* Resolve a feature's district code resiliently: try the registry's pinned codeField first, but if
    that field is missing/empty for this feature (e.g. the pinned name is slightly off, or the layer
@@ -3407,71 +3531,98 @@ function zoningDistrictOf(props, reg){
 }
 const ZONING_MINZOOM = 13;          // try zoning this early; the density guard below protects dense views
 const ZONING_MAXRECORDS = 1200;     // if a view returns this many polygons it's too dense → ask to zoom in
-let _zjCache={lat:null,lng:null,city:'',county:'',t:0};
-// Detect the city/county under the CURRENT map center (cached ~0.01° / 30s so panning doesn't
-// re-query the boundary constantly). This is what makes zoning follow the view instead of sticking
-// to whatever the last property search/click set.
-async function jurisdictionAtCenter(){
-  const c=map.getCenter();
-  // reuse cache if center barely moved and it's recent
-  if(_zjCache.lat!=null && Math.abs(c.lat-_zjCache.lat)<0.01 && Math.abs(c.lng-_zjCache.lng)<0.01
-     && (Date.now()-_zjCache.t)<30000){
-    return {city:_zjCache.city, county:_zjCache.county};
+let _zjCache={key:null,cities:[],counties:[],t:0};
+// Detect EVERY city/county touched by the CURRENT view (not just whatever sits at dead-center), by
+// sampling the four corners + center as a single multipoint query per boundary layer. This is what
+// lets a view spanning a jurisdiction line — a city edge, or two counties near a shared border — pick
+// up BOTH sides instead of only whichever one happens to be under the exact middle of the map.
+// Cached ~30s per rounded viewport so panning slightly doesn't re-query constantly.
+async function jurisdictionsInView(){
+  const b=map.getBounds();
+  const key=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(n=>n.toFixed(3)).join(',');
+  if(_zjCache.key===key && (Date.now()-_zjCache.t)<30000){
+    return {cities:_zjCache.cities, counties:_zjCache.counties};
   }
-  const pt=encodeURIComponent(JSON.stringify({x:c.lng,y:c.lat,spatialReference:{wkid:4326}}));
-  const q=`?geometry=${pt}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects`+
+  const pts=[[b.getWest(),b.getSouth()],[b.getEast(),b.getSouth()],[b.getWest(),b.getNorth()],
+    [b.getEast(),b.getNorth()],[map.getCenter().lng,map.getCenter().lat]];
+  const geom=encodeURIComponent(JSON.stringify({points:pts,spatialReference:{wkid:4326}}));
+  const q=`?geometry=${geom}&geometryType=esriGeometryMultipoint&inSR=4326&spatialRel=esriSpatialRelIntersects`+
     `&where=1%3D1&outFields=NAME&returnGeometry=false&f=json`;
   const get=u=>fetch(u).then(r=>r.ok?r.json():null).catch(()=>null);
-  let city='', county='';
+  let cities=[], counties=[];
   try{
     const [cy,co]=await Promise.all([ get(EP.city+q), get(EP.county+q) ]);
-    city  =(cy&&cy.features&&cy.features[0])?(cy.features[0].attributes.NAME||''):'';
-    county=(co&&co.features&&co.features[0])?(co.features[0].attributes.NAME||''):'';
+    cities  = [...new Set((cy&&cy.features||[]).map(f=>(f.attributes&&f.attributes.NAME||'').trim()).filter(Boolean))];
+    counties= [...new Set((co&&co.features||[]).map(f=>(f.attributes&&f.attributes.NAME||'').trim()).filter(Boolean))];
   }catch(e){}
-  _zjCache={lat:c.lat,lng:c.lng,city,county,t:Date.now()};
-  return {city,county};
+  _zjCache={key,cities,counties,t:Date.now()};
+  return {cities,counties};
 }
 async function refreshZoning(){
   if(!zoningOn){ zoningLayer.clearLayers(); return; }
   if(map.getZoom() < ZONING_MINZOOM){ zoningLayer.clearLayers(); zoningKey=''; return; }   // too far out
-  // Detect jurisdiction from the VIEW (not the last search), so it always matches what's on screen.
-  const j = await jurisdictionAtCenter();
-  const city=(j.city||'').toString(), cty=(j.county||'').toString();
-  const reg = (city && ZONING_LIVE_CITY[norm(city)]) ? ZONING_LIVE_CITY[norm(city)]
-            : (cty ? ZONING_LIVE[norm(cty)] : null);
-  if(!reg || !reg.urls || !reg.urls.length){ zoningLayer.clearLayers(); return; } // no zoning wired here
+  const j = await jurisdictionsInView();
+  // Build the list of active registries: every wired city touched, plus every wired county touched.
+  // Cities are queried FIRST in the list but drawn LAST (after counties) below, so where a city and its
+  // surrounding county both have data at the same spot, the city's own polygon wins visually — matching
+  // the same city-over-county priority the single-point address lookup already uses.
+  const activeRegs=[];
+  const seen=new Set();
+  for(const c of j.cities){ const reg=ZONING_LIVE_CITY[norm(c)];
+    if(reg && !seen.has('C:'+norm(c))){ seen.add('C:'+norm(c)); activeRegs.push({reg, isCity:true}); } }
+  for(const c of j.counties){ const reg=ZONING_LIVE[norm(c)];
+    if(reg && !seen.has('K:'+norm(c))){ seen.add('K:'+norm(c)); activeRegs.push({reg, isCity:false}); } }
+  if(!activeRegs.length){ zoningLayer.clearLayers(); setZoningLegend([]); zoningKey=''; return; } // no zoning wired here
   const b=map.getBounds();
-  const key=norm(city||cty)+'|'+[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(n=>n.toFixed(4)).join(',');
+  const key=activeRegs.map(a=>norm(a.reg.label)).sort().join('+')+'|'+[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(n=>n.toFixed(4)).join(',');
   if(key===zoningKey || zoningBusy) return;
   zoningBusy=true;
   const env=`${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
   const qs=`?geometry=${encodeURIComponent(env)}&geometryType=esriGeometryEnvelope&inSR=4326`+
     `&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=*&returnGeometry=true&outSR=4326`+
     `&resultRecordCount=${ZONING_MAXRECORDS}&f=geojson`;
-  // try the county's layer URLs in order until one returns features
-  for(const baseUrl of reg.urls){
-    try{
-      const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
-      const r=await fetch(baseUrl+qs,{signal:ctrl.signal}); clearTimeout(t);
-      if(!r.ok) continue;
-      const gj=await r.json();
-      if(gj && gj.features && gj.features.length){
-        // DENSITY GUARD: if the view returned the max records, it's a dense area (likely truncated &
-        // heavy). At low zoom, skip drawing and ask the user to zoom in rather than lag the map.
-        if(gj.features.length >= ZONING_MAXRECORDS && map.getZoom() < 15){
-          zoningLayer.clearLayers(); zoningKey='';
-          mapToast('Too many zoning districts here — zoom in a little to show them.',2600);
-          break;
-        }
-        zoningLayer.clearLayers(); zoningLayer.addData(gj);
-        setZoningLegend(reg);
-        zoningLayer.eachLayer(ly=>{ const p=ly.feature&&ly.feature.properties;
-          try{ ly.setStyle(zoningStyleFor(p,reg)); }catch(e){}
-          ly.bindTooltip(zoningDistrictOf(p,reg),{sticky:true,direction:'top',className:'parcel-tip',opacity:1}); });
-        zoningKey=key; break;
-      }
-    }catch(e){ /* try next url */ }
+  // Fetch every active jurisdiction's zoning IN PARALLEL — each reg tries its own urls in order until
+  // one returns features, same fallback pattern as the single-jurisdiction path used before.
+  const fetchOne = async (a) => {
+    for(const baseUrl of (a.reg.urls||[])){
+      try{
+        const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
+        const r=await fetch(baseUrl+qs,{signal:ctrl.signal}); clearTimeout(t);
+        if(!r.ok) continue;
+        const gj=await r.json();
+        if(gj && gj.features && gj.features.length) return {a, gj};
+      }catch(e){ /* try next url */ }
+    }
+    return {a, gj:null};
+  };
+  const results = await Promise.all(activeRegs.map(fetchOne));
+  // DENSITY GUARD: if ANY jurisdiction's view returned the max records at a low zoom, it's too dense
+  // to draw usefully — ask the user to zoom in rather than lag the map with a huge merged layer.
+  const tooDense = results.some(({gj})=>gj && gj.features.length>=ZONING_MAXRECORDS) && map.getZoom()<15;
+  if(tooDense){
+    zoningLayer.clearLayers(); setZoningLegend([]); zoningKey='';
+    mapToast('Too many zoning districts here — zoom in a little to show them.',2600);
+    zoningBusy=false; return;
   }
+  // Merge: counties first (drawn underneath), cities last (drawn on top). Tag each feature with which
+  // reg it came from so per-feature styling/tooltips/legend use the RIGHT jurisdiction's field names.
+  const ordered = [...results.filter(r=>!r.a.isCity), ...results.filter(r=>r.a.isCity)];
+  const merged = { type:'FeatureCollection', features:[] };
+  const legendGroups=[];
+  for(const {a, gj} of ordered){
+    if(!gj || !gj.features || !gj.features.length) continue;
+    for(const f of gj.features){ f.properties = f.properties || {}; f.properties.__zreg = a; merged.features.push(f); }
+    legendGroups.push({ reg:a.reg, features:gj.features });
+  }
+  if(!merged.features.length){ zoningLayer.clearLayers(); setZoningLegend([]); zoningKey=key; zoningBusy=false; return; }
+  zoningLayer.clearLayers(); zoningLayer.addData(merged);
+  setZoningLegend(legendGroups);
+  zoningLayer.eachLayer(ly=>{
+    const p=ly.feature&&ly.feature.properties; const reg=(p&&p.__zreg&&p.__zreg.reg)||null;
+    try{ ly.setStyle(zoningStyleFor(p,reg)); }catch(e){}
+    ly.bindTooltip(zoningDistrictOf(p,reg),{sticky:true,direction:'top',className:'parcel-tip',opacity:1});
+  });
+  zoningKey=key;
   zoningBusy=false;
 }
 const btnZoning=document.getElementById('btnZoning');
@@ -3498,14 +3649,15 @@ if(btnZoningRefresh) btnZoningRefresh.onclick=(e)=>{
   try{ closeLayersMenu(); }catch(_){}
 };
 let zoningTimer=null;
-// Re-detect which city/county is under the CURRENT map center and reload zoning for it. Lets the
-// user pan from (say) City of Naples into unincorporated Collier and pull the right zoning without
-// running a new property search. Point-queries the same FDOT boundary layers the lookup uses.
+// Re-detect every city/county touched by the CURRENT map view and reload zoning for all of them.
+// Lets the user pan from (say) City of Naples into unincorporated Collier — or across a county line —
+// and pull the right zoning (possibly more than one jurisdiction) without a new property search.
 async function redetectZoningJurisdiction(){
-  _zjCache={lat:null,lng:null,city:'',county:'',t:0};  // force a fresh jurisdiction lookup
+  _zjCache={key:null,cities:[],counties:[],t:0};  // force a fresh jurisdiction lookup
   zoningKey='';
-  const j=await jurisdictionAtCenter();
-  const jur = j.city || j.county || 'this area';
+  const j=await jurisdictionsInView();
+  const names=[...j.cities, ...j.counties];
+  const jur = names.length ? names.join(' + ') : 'this area';
   mapToast('Zoning set to '+titleCase(jur), 2000);
   refreshZoning();
 }
@@ -4660,19 +4812,27 @@ async function diagnoseLiveFeeds(){
   const out=document.getElementById('diagStatus');
   if(!lastLoc){ out.innerHTML='<span style="color:var(--warn)">Click a point on the map first, then diagnose.</span>'; return; }
   const cn = (window.__lastCounty||'').trim();
+  const ctyName = (window.__lastCity||'').trim();
   const reg = cn ? COUNTY_LIVE[norm(cn)] : null;
   const targets=[];
   if(reg){ (reg.urls||(reg.url?[reg.url]:[])).forEach(u=>targets.push({label:reg.label,url:u})); }
   // Also probe the authoritative address-point resolver layer (address→folio) and the building
   // footprint layer (marker-on-structure), if this county has them wired. These aren't in COUNTY_LIVE
-  // — they power resolution and marker placement — but health-checking them here is exactly what you
-  // want when a Collier address resolves oddly or the dot won't sit on the house.
+  // but power resolution and marker placement — health-checking them here is exactly what you want
+  // when a Collier address resolves oddly or the dot won't sit on the house.
   const _res = cn ? COUNTY_PARCEL_RESOLVERS[norm(cn)] : null;
   if(_res && _res.addrPointUrl) targets.push({label:'address-point resolver (address→folio)',url:_res.addrPointUrl});
   const _fp = cn ? COUNTY_FOOTPRINTS[norm(cn)] : null;
   if(_fp) targets.push({label:'building footprints (marker→structure)',url:_fp});
   const _pj = cn ? COUNTY_PROJECTS[norm(cn)] : null;
   if(_pj && _pj.url) targets.push({label:'development projects (build status)',url:_pj.url});
+  // Zoning feeds (county AND city — city takes priority the same way queryZoning() does) were
+  // previously invisible to this diagnostic entirely, so a broken/misconfigured zoning layer for any
+  // jurisdiction looked identical to "nothing wired" with no way to tell them apart. Probe both here.
+  const _zCity = ctyName ? ZONING_LIVE_CITY[norm(ctyName)] : null;
+  const _zCnty = cn ? ZONING_LIVE[norm(cn)] : null;
+  const _zReg = _zCity || _zCnty;
+  if(_zReg){ (_zReg.urls||(_zReg.url?[_zReg.url]:[])).forEach(u=>targets.push({label:'zoning — '+_zReg.label,url:u,isZoning:true})); }
   const manual=document.getElementById('liveUrl').value.trim();
   if(manual) targets.push({label:'your pasted URL',url:manual});
   if(!targets.length){ out.innerHTML='<span style="color:var(--faint)">No pre-wired feed for '+(cn?esc(titleCase(cn))+' County':'this point')+'. Paste a candidate URL above to test it.</span>'; return; }
@@ -4684,9 +4844,9 @@ async function diagnoseLiveFeeds(){
     const p=await probeEndpoint(t.url);
     const tag=({ok:'LIVE-OK',badpath:'BAD PATH',cors:'CORS-BLOCKED',unreachable:'UNREACHABLE'})[p.verdict];
     const mark=({ok:'✓',badpath:'△',cors:'⊘',unreachable:'✗'})[p.verdict];
-    // Address-point / footprint layers aren't parcel feeds, so don't report them by owner/parcel —
-    // just confirm they're reachable & queryable, prefixed with their role.
-    const _isAux = /address-point|footprint|development projects/i.test(t.label||'');
+    // Address-point / footprint / zoning layers aren't parcel feeds, so don't report them by
+    // owner/parcel — just confirm they're reachable & queryable, prefixed with their role.
+    const _isAux = /address-point|footprint|development projects/i.test(t.label||'') || t.isZoning;
     let extra='';
     if(p.verdict==='ok'){
       if(_isAux) extra=' · '+esc(t.label)+(p.name?' ('+esc(p.name)+')':'')+(p.lastEdit?' · updated '+p.lastEdit.toLocaleDateString():'');
@@ -4709,20 +4869,23 @@ function detectFields(fields){
     pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/,/^PARCEL$/,/^HPARCEL$/]),
     site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/]),
     city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/,/^STR_CITY$/,/^SITE_MAILING_CITY$/,/^SCITY$/]),
-    jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/,/^ASSD_TOT$/,/^JV_HMSTD$/]),
-    land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/,/^JUST_LAND$/]),
+    jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/,/^ASSD_TOT$/,/^JV_HMSTD$/,/^CER_JUST_VALUE$/]),
+    land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/,/^JUST_LAND$/,/^CER_LAND_VALUE$/]),
     // /^ACT$/ is Hillsborough (Tampa-hosted) "Actual Year Built"; /^EFF$/ is its remodel year (fallback).
-    yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/,/^ACTUAL_YEAR_BUILT$/]),
+    yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/,/^ACTUAL_YEAR_BUILT$/,/^STRUCT1_ACT_YEAR$/]),
     // Marion's Ocala-hosted layer: RESUSESF = heated/living (residential use) sq ft — the TRUE living
     // area; USE_SF matches it. BLD1_SF / RESTOTSF are the larger TOTAL under-roof figure (incl.
     // garage/porch), so they must rank BELOW resusesf/use_sf or living area over-reports. Verified
     // Aug 2026 on real parcels (e.g. 1504 heated vs 1940 under-roof).
-    liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^RESUSESF$/,/^USE_SF$/,/^BLD1_SF$/,/^HEAT_?AR$/]),
-    saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/,/^AMT$/,/^SALE_AMOUNT$/]),
-    saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/,/^SALE_DATE$/]),
+    // /^STRUCT1_BASE_SQFT$/ is Hernando's heated/living area — verified base+aux(STRUCT1_AUX_SQFT)=
+    // CER_STRU_SQFT (e.g. 9382+250=9632), so CER_STRU_SQFT is the inflated total incl. non-heated aux
+    // area and is deliberately NOT added here (same over-reporting trap fixed for Marion's bld1_sf).
+    liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^RESUSESF$/,/^USE_SF$/,/^BLD1_SF$/,/^HEAT_?AR$/,/^STRUCT1_BASE_SQFT$/]),
+    saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/,/^AMT$/,/^SALE_AMOUNT$/,/^LSALE_PRICE$/]),
+    saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/,/^SALE_DATE$/,/^LSALE_DATE$/]),
     mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/,/^ADD_1$/,/^MAILADD$/]),
     mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/^O_CITY$/,/OWNER_?CITY/,/^ADD_3$/,/^MAILING_CITY$/]),
-    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/,/^DOR_C$/,/^PROPERTY_USE$/,/^LAND_USE_DESC$/,/^LAND_USE_CODE$/,/^PARUSEDESC$/]),
+    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/,/^DOR_C$/,/^PROPERTY_USE$/,/^LAND_USE_DESC$/,/^LAND_USE_CODE$/,/^PARUSEDESC$/,/^CER_DOR_CODE$/]),
     lotSqft: find([/^LND_?SQFOOT$/,/^LOT_?SQ/,/^LOTSQFT$/,/^LAND_?SQFT$/,/^SQFT_?LND$/,/^LOTSF$/,/^LOT_?SIZE$/,/LOTSQUARE/,/^LAND_?SQ/])
   };
 }
@@ -11031,6 +11194,15 @@ async function runLookup(lat,lng,searchCtx){
       const _la=liveRes.features[0].attributes;
       if(_la.__legal==null && _la.LEGDECFULL!=null && String(_la.LEGDECFULL).trim()!=='') _la.__legal=String(_la.LEGDECFULL).trim();
       if(_la.__zoning==null && _la.ZONING!=null && String(_la.ZONING).trim()!=='') _la.__zoning=String(_la.ZONING).trim();
+    }
+    // Hernando's CAMA export splits the legal description across LEGAL1-4 (each ~30 chars); join the
+    // populated ones into a single readable line. Gap-only; guarded to Hernando.
+    if(norm(countyName)==='HERNANDO'){
+      const _la=liveRes.features[0].attributes;
+      if(_la.__legal==null){
+        const _lj=[_la.LEGAL1,_la.LEGAL2,_la.LEGAL3,_la.LEGAL4].filter(v=>v!=null&&String(v).trim()!=='').map(v=>String(v).trim());
+        if(_lj.length) _la.__legal=_lj.join(' ');
+      }
     }
     const le=liveMeta&&liveMeta.lastEdit;
     html += `<div class="freshline"><span class="badge live">● LIVE</span> ${esc((liveMeta&&liveMeta.name)||'county parcel service')}${le?' · updated '+esc(le.toLocaleDateString()):' · real-time query'}</div>`;
