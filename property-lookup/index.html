@@ -50,6 +50,9 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="dns-prefetch" href="https://www25.swfwmd.state.fl.us">             <!-- SWFWMD parcel roll: Citrus + Sumter (also Polk family) -->
 <link rel="dns-prefetch" href="https://maps.citrusbocc.com">                 <!-- Citrus zoning + LandDevelopment setbacks -->
 <link rel="dns-prefetch" href="https://gis.sumtercountyfl.gov">              <!-- Sumter County zoning (unincorporated + cities) -->
+<link rel="dns-prefetch" href="https://vgispublic.ocpafl.org">               <!-- Orange County (OCPA) parcels -->
+<link rel="dns-prefetch" href="https://ocgis4.ocfl.net">                     <!-- Orange County zoning (unincorporated) -->
+<link rel="dns-prefetch" href="https://gis.lakecountyfl.gov">                <!-- Lake County zoning -->
 <link rel="dns-prefetch" href="https://unpkg.com">
 <link rel="dns-prefetch" href="https://tile.openstreetmap.org">
 <link rel="dns-prefetch" href="https://geocode.arcgis.com">
@@ -1059,7 +1062,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
     <div class="kick">Florida Parcel &amp; Flood Instrument</div>
     <h1>Property Lookup</h1>
-    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
+    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Lake, DeSoto, Hardee, Highlands) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
   </header>
 
   <div class="search">
@@ -1637,6 +1640,64 @@ const COUNTY_LIVE = {
     // window and the same automatic statewide-roll fallback off-hours. SR 2882; tool sends inSR=4326.
     // Verified Aug 2026 (shares the Citrus sublayer's confirmed schema on one service).
     "https://www25.swfwmd.state.fl.us/arcgis12/rest/services/BaseVector/parcel_search/MapServer/16/query"
+  ]},
+  LEVY    : { label:"Levy County (SWFWMD regional parcel roll · PA data)", urls:[
+    // ✅ verified queryable public layer — "Levy County Parcels" (sublayer 9) on the SAME SWFWMD
+    // parcel_search MapServer as Citrus/Sumter (www25.swfwmd.state.fl.us), so it shares the identical
+    // national-standard schema: owner=OWNERNAME/OWNNAME, parcel=PARCELID/PARNO/FOLIONUM/PIN, site=SITUSADD1
+    // (SITEADD fallback), value=ASSD_TOT (JV_HMSTD fallback), land=LANDVAL, year built=YRBLT_ACT/EFF, living
+    // area=TOT_LVG_AREA, use=PARUSEDESC, sale=SALE1_AMT/SALE1_YEAR, legal=LEGDECFULL, acreage=ACRES, and
+    // ZONING on the parcel record (surfaced via __zoning in the guard below as an INTERIM until Levy's
+    // dedicated zoning polygon layer is wired). Same 6 A.M.–10 P.M. availability window and the same
+    // automatic statewide-roll fallback off-hours. SR 2882; tool sends inSR=4326. Verified Aug 2026.
+    "https://www25.swfwmd.state.fl.us/arcgis12/rest/services/BaseVector/parcel_search/MapServer/9/query"
+  ]},
+  ORANGE  : { label:"Orange County (Property Appraiser · OCPA)", urls:[
+    // ✅ verified queryable public layer — Orange County Property Appraiser's own ArcGIS Server
+    // (vgispublic.ocpafl.org), "DynamicForJs/PARCEL" MapServer, Parcels sublayer 4. Token-free (vgisPUBLIC
+    // host), polygon, SR 2236 (FL State Plane East ftUS; tool sends inSR=4326 and the server reprojects).
+    // NOT a SWFWMD county (Orange is outside that district) — this is the appraiser's own rich roll. Fields:
+    // owner=NAME1(+NAME2), parcel=PARCEL, site=SITUS/SITUS_CITY/SITUS_ZIP, value=TOTAL_MKT (market total;
+    // assessed TOTAL_ASSD, taxable TAXABLE also present), land=LAND_MKT, year built=AYB (effective EYB),
+    // living area=LIVING_AREA (gross GROSS_AREA), use=DOR_CODE (standard FL DOR code → DOR_USE table), sale=
+    // SALE_ADJ_VALUE/SALE_DATE, acreage=ACREAGE, beds/baths=BEDS/BATH, zoning=ZONING_CODE on the parcel
+    // record (surfaced via __zoning in the guard below as an INTERIM until a dedicated Orange zoning polygon
+    // layer is wired — Orange spans unincorporated + many cities, each its own zoning authority). Value/land/
+    // year/use are mapped via the Orange aliases added to detectFields (TOTAL_MKT/LAND_MKT/AYB/EYB/DOR_CODE);
+    // owner/parcel/site/living-area auto-detect. Verified Aug 2026 (full field schema on sublayer 4).
+    "https://vgispublic.ocpafl.org/server/rest/services/DynamicForJs/PARCEL/MapServer/4/query"
+  ]},
+  LAKE    : { label:"Lake County (SWFWMD regional parcel roll · PA data)", urls:[
+    // ✅ verified queryable public layer — "Lake County Parcels" (sublayer 8) on the SAME SWFWMD
+    // parcel_search MapServer as Citrus/Sumter/Levy (www25.swfwmd.state.fl.us), so it shares the identical
+    // national-standard schema: owner=OWNERNAME/OWNNAME, parcel=PARCELID/PARNO/FOLIONUM/PIN, site=SITUSADD1
+    // (SITEADD fallback), value=ASSD_TOT (JV_HMSTD fallback), land=LANDVAL, year built=YRBLT_ACT/EFF, living
+    // area=TOT_LVG_AREA, use=PARUSEDESC, sale=SALE1_AMT/SALE1_YEAR, legal=LEGDECFULL, acreage=ACRES. Zoning
+    // comes from Lake's OWN dedicated polygon layer (ZONING_LIVE), so no roll-zoning splice is needed here.
+    // Same 6 A.M.–10 P.M. availability window and the same automatic statewide-roll fallback off-hours. SR
+    // 2882; tool sends inSR=4326. Verified Aug 2026 (shares the confirmed SWFWMD sublayer schema).
+    "https://www25.swfwmd.state.fl.us/arcgis12/rest/services/BaseVector/parcel_search/MapServer/8/query"
+  ]},
+  DESOTO  : { label:"DeSoto County (SWFWMD regional parcel roll · PA data)", urls:[
+    // ✅ "DeSoto County Parcels" (sublayer 3) on the SAME SWFWMD parcel_search MapServer as Citrus/Sumter/
+    // Levy/Lake (www25.swfwmd.state.fl.us) — identical national-standard schema (owner=OWNERNAME/OWNNAME,
+    // parcel=PARCELID, site=SITUSADD1/SITEADD, value=ASSD_TOT/JV_HMSTD, land=LANDVAL, yr=YRBLT_ACT/EFF,
+    // liv=TOT_LVG_AREA, use=PARUSEDESC, sale=SALE1_AMT/SALE1_YEAR, legal=LEGDECFULL, acres=ACRES). Same
+    // 6 A.M.–10 P.M. window; if this feed is down/off-hours the app AUTO-falls back to the always-on statewide
+    // FDOR roll (services9.arcgis.com), so the site card still answers. SR 2882; tool sends inSR=4326.
+    "https://www25.swfwmd.state.fl.us/arcgis12/rest/services/BaseVector/parcel_search/MapServer/3/query"
+  ]},
+  HARDEE  : { label:"Hardee County (SWFWMD regional parcel roll · PA data)", urls:[
+    // ✅ "Hardee County Parcels" (sublayer 4) on the SAME SWFWMD parcel_search MapServer — identical schema
+    // to the other SWFWMD counties above. Same 6 A.M.–10 P.M. window with automatic statewide-roll fallback
+    // off-hours/if down. SR 2882; tool sends inSR=4326. Verified Aug 2026.
+    "https://www25.swfwmd.state.fl.us/arcgis12/rest/services/BaseVector/parcel_search/MapServer/4/query"
+  ]},
+  HIGHLANDS: { label:"Highlands County (SWFWMD regional parcel roll · PA data)", urls:[
+    // ✅ "Highlands County Parcels" (sublayer 6) on the SAME SWFWMD parcel_search MapServer — identical schema
+    // to the other SWFWMD counties above. Same 6 A.M.–10 P.M. window with automatic statewide-roll fallback
+    // off-hours/if down. SR 2882; tool sends inSR=4326. Verified Aug 2026.
+    "https://www25.swfwmd.state.fl.us/arcgis12/rest/services/BaseVector/parcel_search/MapServer/6/query"
   ]}
 };
 
@@ -2141,6 +2202,45 @@ const ZONING_LIVE = {
     "https://gis.sumtercountyfl.gov/sumtergis/rest/services/DevelopmentServices/Development_Services/MapServer/8/query",
     "https://gis.sumtercountyfl.gov/sumtergis/rest/services/DevelopmentServices/Development_Services/MapServer/9/query"
   ]},
+  LEVY: { label:"Levy County Zoning", codeField:"LEZN2d", urls:[
+    // ✅ VERIFIED queryable public layer — Levy County's hosted "Zoning" FeatureServer, sublayer 0
+    // (services.arcgis.com/Y6ubaOgtVe9iI9sU). Token-free, polygon, SR 2237 (FL State Plane ft; tool sends
+    // inSR=4326 and the server reprojects). codeField=LEZN2d — CONFIRMED via the layer's unique-value
+    // renderer (Field 1 = LEZN2d), its Type ID Field = LEZN2d, and its type templates, which set LEZN2d to
+    // the district on every type: R-1, R-2, C-1..C-4, RMU, RR-3C, "Agricultural / Rural Residential",
+    // "Forestry / Rural Residential", "Rural Residential", Industrial, "Conservation-Natural Reservation",
+    // Recreation, Public, Municipality. (The "Zoning" free-text field is a 254-char duplicate; "Name" is the
+    // parcel owner, NOT the district — do not use either.) Runs code-only; some Levy values are already
+    // long-form names so no separate description column is needed. This layer is the parcel-joined zoning the
+    // county's own zoning map uses; last edited May 2026. Verified Aug 2026.
+    "https://services.arcgis.com/Y6ubaOgtVe9iI9sU/ArcGIS/rest/services/Zoning/FeatureServer/0/query"
+  ]},
+  LAKE: { label:"Lake County Zoning", codeField:"Zoning", descField:"ZoningNm", urls:[
+    // ✅ VERIFIED queryable public layer — Lake County's "InteractiveMap" MapServer, Zoning sublayer 50
+    // (gis.lakecountyfl.gov/lakegis). Token-free, polygon, SR 2881 (FL State Plane East ftUS; tool sends
+    // inSR=4326 and the server reprojects). codeField=Zoning — CONFIRMED: it is the layer's Display Field,
+    // its unique-value renderer field, AND its label expression [ZONING]; the coded values are the real
+    // districts: A, AR, RA, R-1..R-7, RP, RMRP, RM, RV, C-1..C-3, CP, LM, HM, MP, CFD, PUD. descField=ZoningNm
+    // = the readable district name ("Agriculture District", "Agricultural Residential", "Community Commercial
+    // District", …), shown as the "District name" row. (ZoningDist is a broad category — Agr/Res/Wekiva River
+    // Protection Area — not the district; OrdNum/OrdDate are the adopting ordinance.) Verified Aug 2026.
+    "https://gis.lakecountyfl.gov/lakegis/rest/services/InteractiveMap/MapServer/50/query"
+  ]},
+  ORANGE: { label:"Orange County Zoning (unincorporated)", codeField:"ZONING", overlayOnly:true, urls:[
+    // ✅ queryable public layer — Orange County GIS "InfoMap_Public_Layers" MapServer, Zoning sublayer 138
+    // (ocgis4.ocfl.net). Token-free, polygon, SR 2236 (FL State Plane East ftUS; tool sends inSR=4326 and the
+    // server reprojects). Covers UNINCORPORATED Orange County only (Ch. 38 of the County Code).
+    // ⚠️ overlayOnly:true — this host answers the point-in-polygon query slowly and gates the site-card paint,
+    // so it is used ONLY for the map ZONING OVERLAY (toggle), NOT for the per-parcel site-card lookup. The
+    // site card instead shows the OCPA roll ZONING_CODE (surfaced via __zoning) — same district, from the fast
+    // OCPA host the parcel data already uses, so Orange parcels load instantly. queryZoning() skips any
+    // overlayOnly county entry; refreshZoning() (the overlay) still draws it. codeField=ZONING is the readable
+    // district field the layer LABELS with (renderer colors by the numeric ZONETYPE category); PD_NAME is the
+    // planned-development name for PD zones. The equivalent AGOL_Open_Data/MapServer/51 (same host, same data)
+    // and the ArcGIS Hub copy (hub.arcgis.com/datasets/06178e45…_51) both federate back to THIS server, so
+    // neither is a faster live-query alternative — the overlayOnly split is the real fix. Verified Aug 2026.
+    "https://ocgis4.ocfl.net/arcgis/rest/services/InfoMap_Public_Layers/MapServer/138/query"
+  ]},
   POLK: { label:"Polk County Land Use District (= zoning, per LDC § 203)", codeField:"FLU_LDC", descField:"FLUNAME", urls:[
     // ✅ IMPORTANT CONTEXT: Polk County's LDC (§ 203) does NOT have a separate "zoning district" system —
     // "the unincorporated County is divided into LAND USE DISTRICTS... shown on... the Future Land Use
@@ -2532,7 +2632,11 @@ async function queryZoning(lat,lng, cityName, countyName){
   if(zoningSource.url){ cands = [zoningSource.url]; isOverride=true; }   // manual paste wins
   else {
     const cityReg = cityName ? ZONING_LIVE_CITY[norm(cityName)] : null;   // city is its own zoning authority
-    const cntyReg = countyName ? ZONING_LIVE[norm(countyName)] : null;
+    let   cntyReg = countyName ? ZONING_LIVE[norm(countyName)] : null;
+    // overlayOnly entries (e.g. Orange County — slow host that gates the site-card paint) are wired ONLY for
+    // the map zoning OVERLAY, not the per-parcel point lookup. Drop it here so the site card doesn't call that
+    // host on every lookup; the parcel's own roll zoning (__zoning) carries the district instead.
+    if(cntyReg && cntyReg.overlayOnly) cntyReg = null;
     // Resolve an entry's POINT-LOOKUP urls. If the entry is partitioned by municipality (byCity map —
     // e.g. Lee's per-city DCD_Zoning sublayers), only the sublayer that can actually contain this parcel
     // is queried: the one keyed by the parcel's city, else the "" unincorporated default. This avoids
@@ -5441,10 +5545,10 @@ function detectFields(fields){
     pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/,/^PARCEL$/,/^HPARCEL$/]),
     site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/]),
     city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/,/^STR_CITY$/,/^SITE_MAILING_CITY$/,/^SCITY$/]),
-    jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/,/^ASSD_TOT$/,/^JV_HMSTD$/,/^CER_JUST_VALUE$/]),
-    land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/,/^JUST_LAND$/,/^CER_LAND_VALUE$/]),
+    jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/,/^ASSD_TOT$/,/^JV_HMSTD$/,/^CER_JUST_VALUE$/,/^TOTAL_MKT$/]),
+    land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/,/^JUST_LAND$/,/^CER_LAND_VALUE$/,/^LAND_MKT$/]),
     // /^ACT$/ is Hillsborough (Tampa-hosted) "Actual Year Built"; /^EFF$/ is its remodel year (fallback).
-    yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/,/^ACTUAL_YEAR_BUILT$/,/^STRUCT1_ACT_YEAR$/]),
+    yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/,/^ACTUAL_YEAR_BUILT$/,/^STRUCT1_ACT_YEAR$/,/^AYB$/,/^EYB$/]),
     // Marion's Ocala-hosted layer: RESUSESF = heated/living (residential use) sq ft — the TRUE living
     // area; USE_SF matches it. BLD1_SF / RESTOTSF are the larger TOTAL under-roof figure (incl.
     // garage/porch), so they must rank BELOW resusesf/use_sf or living area over-reports. Verified
@@ -5453,11 +5557,13 @@ function detectFields(fields){
     // CER_STRU_SQFT (e.g. 9382+250=9632), so CER_STRU_SQFT is the inflated total incl. non-heated aux
     // area and is deliberately NOT added here (same over-reporting trap fixed for Marion's bld1_sf).
     liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^RESUSESF$/,/^USE_SF$/,/^BLD1_SF$/,/^HEAT_?AR$/,/^STRUCT1_BASE_SQFT$/]),
-    saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/,/^AMT$/,/^SALE_AMOUNT$/,/^LSALE_PRICE$/]),
+    saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/,/^AMT$/,/^SALE_AMOUNT$/,/^LSALE_PRICE$/,/^SALE_ADJ_VALUE$/]),
     saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/,/^SALE_DATE$/,/^LSALE_DATE$/]),
     mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/,/^ADD_1$/,/^MAILADD$/]),
     mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/^O_CITY$/,/OWNER_?CITY/,/^ADD_3$/,/^MAILING_CITY$/]),
-    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/,/^DOR_C$/,/^PROPERTY_USE$/,/^LAND_USE_DESC$/,/^LAND_USE_CODE$/,/^PARUSEDESC$/,/^CER_DOR_CODE$/]),
+    // /^DOR_CODE$/ (last) is Orange County's OCPA roll — the primary FL DOR use code (reads through the
+    // DOR_USE table). Anchored so it can't match LAND_DOR_CODE / BLDG_DOR_CODE / DOR_CODE_OVR on the same roll.
+    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/,/^DOR_C$/,/^PROPERTY_USE$/,/^LAND_USE_DESC$/,/^LAND_USE_CODE$/,/^PARUSEDESC$/,/^CER_DOR_CODE$/,/^DOR_CODE$/]),
     lotSqft: find([/^LND_?SQFOOT$/,/^LOT_?SQ/,/^LOTSQFT$/,/^LAND_?SQFT$/,/^SQFT_?LND$/,/^LOTSF$/,/^LOT_?SIZE$/,/LOTSQUARE/,/^LAND_?SQ/])
   };
 }
@@ -11972,20 +12078,37 @@ async function runLookup(lat,lng,searchCtx){
       if(_la.__legal==null && _la.LEGDECFULL!=null && String(_la.LEGDECFULL).trim()!=='') _la.__legal=String(_la.LEGDECFULL).trim();
       if(_la.__zoning==null && _la.ZONING!=null && String(_la.ZONING).trim()!=='') _la.__zoning=String(_la.ZONING).trim();
     }
-    // Citrus & Sumter both ride the SWFWMD parcel_search mirror (www25), which shares Polk's national-
+    // Citrus, Sumter & Levy all ride the SWFWMD parcel_search mirror (www25), which shares Polk's national-
     // standard schema: legal in LEGDECFULL and a ZONING field directly on the parcel record. Site address:
     // the canonical "Full Site Address" lives in SITEADD, while detectFields keys site to SITUSADD1 (matched
     // via /SITUS/); if SITUSADD1 is blank but SITEADD is populated, copy it across so the card still shows a
     // site address. The renderer reads these attributes at render time (after this guard). Gap-only.
-    // ZONING handling differs by county: CITRUS has its OWN dedicated zoning POLYGON layer wired in
-    // ZONING_LIVE (maps.citrusbocc.com sublayer 53), which yields the authoritative "● LIVE zoning polygon"
-    // result — so we do NOT also surface the roll ZONING for Citrus (avoids a duplicate "per parcel roll"
-    // row). SUMTER likewise now has a verified dedicated zoning layer (FLU_Zoning sublayer 11, Zone_Type),
-    // so neither county surfaces the roll ZONING; both resolve through ZONING_LIVE point-in-polygon.
-    if(norm(countyName)==='CITRUS' || norm(countyName)==='SUMTER'){
+    // ZONING handling: CITRUS, SUMTER, LEVY and LAKE each have a verified dedicated zoning POLYGON layer wired
+    // in ZONING_LIVE (Citrus maps.citrusbocc.com/53; Sumter FLU_Zoning/11, Zone_Type; Levy hosted Zoning/0,
+    // LEZN2d; Lake InteractiveMap/50, Zoning), each yielding the authoritative "● LIVE zoning polygon" result —
+    // so none surface the roll ZONING; all resolve through ZONING_LIVE point-in-polygon.
+    if(norm(countyName)==='CITRUS' || norm(countyName)==='SUMTER' || norm(countyName)==='LEVY' || norm(countyName)==='LAKE'){
       const _la=liveRes.features[0].attributes;
       if(_la.__legal==null && _la.LEGDECFULL!=null && String(_la.LEGDECFULL).trim()!=='') _la.__legal=String(_la.LEGDECFULL).trim();
       if((_la.SITUSADD1==null || String(_la.SITUSADD1).trim()==='') && _la.SITEADD!=null && String(_la.SITEADD).trim()!=='') _la.SITUSADD1=String(_la.SITEADD).trim();
+    }
+    // DeSoto, Hardee & Highlands ride the same SWFWMD parcel_search schema but have NO dedicated zoning layer
+    // wired yet, so — like Levy/Sumter were initially — their roll ZONING is surfaced via __zoning as "Zoning
+    // (per parcel roll)" (informational) until a county zoning polygon layer is added. Same legal/site harden.
+    if(norm(countyName)==='DESOTO' || norm(countyName)==='HARDEE' || norm(countyName)==='HIGHLANDS'){
+      const _la=liveRes.features[0].attributes;
+      if(_la.__legal==null && _la.LEGDECFULL!=null && String(_la.LEGDECFULL).trim()!=='') _la.__legal=String(_la.LEGDECFULL).trim();
+      if(_la.__zoning==null && _la.ZONING!=null && String(_la.ZONING).trim()!=='') _la.__zoning=String(_la.ZONING).trim();
+      if((_la.SITUSADD1==null || String(_la.SITUSADD1).trim()==='') && _la.SITEADD!=null && String(_la.SITEADD).trim()!=='') _la.SITUSADD1=String(_la.SITEADD).trim();
+    }
+    // Orange County's OCPA roll carries the appraiser-recorded ZONING_CODE directly on the parcel record.
+    // Surfaced via __zoning as "Zoning (per parcel roll)". This is now Orange's PRIMARY site-card zoning: the
+    // dedicated county zoning polygon layer (ZONING_LIVE, InfoMap 138) is marked overlayOnly because that host
+    // is slow, so the site card relies on this fast OCPA-roll code instead (same district, same fast host as
+    // the parcel data). The polygon layer is still used for the map zoning OVERLAY. Gap-only; guarded to Orange.
+    if(norm(countyName)==='ORANGE'){
+      const _la=liveRes.features[0].attributes;
+      if(_la.__zoning==null && _la.ZONING_CODE!=null && String(_la.ZONING_CODE).trim()!=='') _la.__zoning=String(_la.ZONING_CODE).trim();
     }
     // Hernando's CAMA export splits the legal description across LEGAL1-4 (each ~30 chars); join the
     // populated ones into a single readable line. Gap-only; guarded to Hernando.
