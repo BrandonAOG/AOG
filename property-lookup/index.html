@@ -46,6 +46,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="dns-prefetch" href="https://agis3.charlottecountyfl.gov">           <!-- Charlotte parcels + footprints -->
 <link rel="dns-prefetch" href="https://ags.colliergov.net">                  <!-- county flood cross-check queries -->
 <link rel="dns-prefetch" href="https://gis.asce.org">                        <!-- ASCE 7-22 Risk Cat II design wind speed (live) -->
+<link rel="dns-prefetch" href="https://services6.arcgis.com">                <!-- Hernando LDC 2026 zoning-district layer -->
+<link rel="dns-prefetch" href="https://www25.swfwmd.state.fl.us">             <!-- SWFWMD parcel roll: Citrus + Sumter (also Polk family) -->
+<link rel="dns-prefetch" href="https://maps.citrusbocc.com">                 <!-- Citrus zoning + LandDevelopment setbacks -->
+<link rel="dns-prefetch" href="https://gis.sumtercountyfl.gov">              <!-- Sumter County zoning (unincorporated + cities) -->
 <link rel="dns-prefetch" href="https://unpkg.com">
 <link rel="dns-prefetch" href="https://tile.openstreetmap.org">
 <link rel="dns-prefetch" href="https://geocode.arcgis.com">
@@ -1055,7 +1059,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
     <div class="kick">Florida Parcel &amp; Flood Instrument</div>
     <h1>Property Lookup</h1>
-    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
+    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
   </header>
 
   <div class="search">
@@ -1605,6 +1609,34 @@ const COUNTY_LIVE = {
     // SR 2881 (FL State Plane ft); tool sends inSR=4326 and the server reprojects. Source: Hendry FLU&Zoning
     // app 1646b3dc60244981802b689b0b30f9c9.
     "https://services7.arcgis.com/8l7Qq5t0CPLAJwJK/arcgis/rest/services/Matix/FeatureServer/0/query"
+  ]},
+  CITRUS  : { label:"Citrus County (SWFWMD regional parcel roll · PA data)", urls:[
+    // ✅ verified queryable public layer — "Citrus County Parcels" (sublayer 2) on the Southwest Florida
+    // Water Management District's public parcel_search MapServer (www25.swfwmd.state.fl.us). SWFWMD
+    // republishes each county Property Appraiser's roll as a token-free public mirror. National-standard
+    // SWFWMD parcel schema (identical to the Sumter sublayer and the same family used elsewhere): owner=
+    // OWNERNAME (also OWNNAME "Full Owner Name"), parcel=PARCELID (also PARNO/FOLIONUM/PIN/ALTKEY), site=
+    // SITUSADD1/SCITY/SZIP (SITEADD = "Full Site Address" fallback, spliced in the guard below), value=
+    // ASSD_TOT ("Market Total Value"; JV_HMSTD homestead-only fallback), land=LANDVAL, year built=YRBLT_ACT
+    // (effective YRBLT_EFF), living area=TOT_LVG_AREA, use=PARUSEDESC (readable text), sale=SALE1_AMT/
+    // SALE1_YEAR, legal=LEGDECFULL, acreage=ACRES, subdivision=SUBDIV_NM. Carries ZONING directly on the
+    // parcel record (surfaced via __zoning — see the Citrus/Sumter guard in the render path). All map via
+    // detectFields' existing aliases (same set that serves the SWFWMD-schema counties). Source layer SR 2882
+    // (FL State Plane ft); tool sends inSR=4326 and the server reprojects. NOTE: this SWFWMD service is only
+    // up 6 A.M.–10 P.M. daily — off-hours the app falls back to the dated statewide roll automatically.
+    // Verified Aug 2026 (full field schema incl. ZONING confirmed on the live Citrus sublayer).
+    "https://www25.swfwmd.state.fl.us/arcgis12/rest/services/BaseVector/parcel_search/MapServer/2/query"
+  ]},
+  SUMTER  : { label:"Sumter County (SWFWMD regional parcel roll · PA data)", urls:[
+    // ✅ verified queryable public layer — "Sumter County Parcels" (sublayer 16) on the SAME SWFWMD
+    // parcel_search MapServer as Citrus (www25.swfwmd.state.fl.us), so it shares the identical national-
+    // standard schema: owner=OWNERNAME/OWNNAME, parcel=PARCELID/PARNO/FOLIONUM/PIN, site=SITUSADD1 (SITEADD
+    // fallback), value=ASSD_TOT (JV_HMSTD fallback), land=LANDVAL, year built=YRBLT_ACT/EFF, living area=
+    // TOT_LVG_AREA, use=PARUSEDESC, sale=SALE1_AMT/SALE1_YEAR, legal=LEGDECFULL, acreage=ACRES, and ZONING
+    // on the parcel record (surfaced via __zoning in the guard below). Same 6 A.M.–10 P.M. availability
+    // window and the same automatic statewide-roll fallback off-hours. SR 2882; tool sends inSR=4326.
+    // Verified Aug 2026 (shares the Citrus sublayer's confirmed schema on one service).
+    "https://www25.swfwmd.state.fl.us/arcgis12/rest/services/BaseVector/parcel_search/MapServer/16/query"
   ]}
 };
 
@@ -2058,17 +2090,56 @@ const ZONING_LIVE = {
     // before fully trusting a "no live zoning" gap here.
     "https://maps.hillsboroughcounty.org/arcgis/rest/services/DSD_Viewer_Services/DSD_Viewer_Zoning_Regulatory/MapServer/0/query"
   ]},
-  HERNANDO: { label:"Hernando County Zoning", codeField:"ZONING", descField:"LABEL", urls:[
-    // ✅ verified queryable public layer — same "Zoning_Flu" service found via the org's public service
-    // directory (services2.arcgis.com/x5zvhhxfUuRDntRe), which also hosts the Hernando parcel feed.
-    // Token-free. Layer carries BOTH the true zoning district (ZONING, e.g. "AG", "C2", "PDP(GC)") and
-    // the broader Future Land Use category (FLU: "res"/"com"/"rur"; LABEL is its readable name) as
-    // SEPARATE fields — codeField pinned to ZONING so detection reads the real zoning district, not the
-    // FLU category. SPLIT_ZONE1/SPLIT_ZONE2 carry a second district on split-zoned parcels (not yet
-    // surfaced). Verified Aug 2026 with real codes (AG, C2, PDP(GC)) on named streets (Lori Dr, Hunters
-    // Lake Rd). NOTE: large background FLU polygons (rural/residential area shapes with no parcel tie)
-    // return ZONING=null — that's expected on those, not a data gap; parcel-level records carry it.
-    "https://services2.arcgis.com/x5zvhhxfUuRDntRe/arcgis/rest/services/Zoning_Flu/FeatureServer/0/query"
+  HERNANDO: { label:"Hernando County Zoning (LDC 2026)", codeField:"ZONING", urls:[
+    // ✅ verified queryable public layer — Hernando County's dedicated Land Development Code service
+    // "LDC_HC_2026" (services6.arcgis.com/HIgwINUB3SYLTb14), layer 6. Token-free, polygon, Web Mercator
+    // (wkid 102100). This is PURE adopted zoning districts — NOT blended with Future Land Use — so every
+    // polygon carries a real district code in ZONING (e.g. "C2", "AG", "R-1B", "PDP..."). codeField pinned
+    // to ZONING (alias "Zoning District"); NO separate readable-name field exists on this layer, so it runs
+    // code-only (ZONE_NOTES is a sparse annotation field, not a district name — deliberately not used).
+    // REPLACED the old Zoning_Flu layer (services2.arcgis.com/x5zvhhxfUuRDntRe/.../Zoning_Flu/0): that layer
+    // MIXED zoning with FLU rural/residential background polygons (ZONING=null on those), which over-reported
+    // "rural" on lookups that landed on an FLU shape. This LDC layer has no such background polygons.
+    // BONUS: this layer also carries the full dimensional/use ruleset per district as string fields —
+    // PermittedUse_1, SpecialException_1, MinLotArea_1, MinFrontYardSetback_1, MinSideYardSetback_1,
+    // MinRearYardSetback_1, MaxBuildingHeight_1, AccessoryStructures_1, etc. — usable later for a live
+    // setback table (not yet surfaced). KEY_NUMBER ties each polygon to the appraiser's key number.
+    // Verified Aug 2026 (real code "C2" with full permitted-use/setback text on a sample parcel).
+    "https://services6.arcgis.com/HIgwINUB3SYLTb14/arcgis/rest/services/LDC_HC_2026_WFL1/FeatureServer/6/query"
+  ]},
+  CITRUS: { label:"Citrus County Zoning", codeField:"HANSEN__PRCLZON_ZONING", descField:"HANSEN_TBL302_DESCRIPT", urls:[
+    // ✅ verified queryable public layer — Citrus County BOCC's own ArcGIS Server (maps.citrusbocc.com),
+    // "PublicData/GeneralParcel" MapServer, ZONING sublayer 53. Token-free, polygon, SR 2882 (tool sends
+    // inSR=4326 and the server reprojects). This is the county's adopted zoning-district layer, so it gives
+    // a true point-in-polygon "● LIVE zoning polygon" result — better than the roll-level ZONING that the
+    // SWFWMD parcel feed also carries. codeField=HANSEN__PRCLZON_ZONING (alias ZONING, e.g. "AGR","RUR",
+    // "CLR","CRR","LDR","MDR","HDR","GNC","NEC","PSO","IND","LIND","MHP","RVP","PDR","PDO","EXT","CON",
+    // "REC","TCU"; "* MH" variants = mobile-home-allowed), descField=HANSEN_TBL302_DESCRIPT (readable name,
+    // e.g. "AGRICULTURAL","GENERAL COMMERCIAL","RURAL RESIDENTIAL"). Also carries ORDINANCE and a PROPOSED
+    // flag (not surfaced). NOTE: Citrus zoning is genuinely rural-heavy (AGR/RUR/CLR/CRR dominate the
+    // unincorporated county) — a rural result is usually correct, not a bug. Verified Aug 2026 (full field
+    // schema + coded district list confirmed live on sublayer 53).
+    "https://maps.citrusbocc.com/server/rest/services/PublicData/GeneralParcel/MapServer/53/query"
+  ]},
+  SUMTER: { label:"Sumter County Zoning", codeField:"Zone_Type", urls:[
+    // ✅ VERIFIED queryable public layer — Sumter County's "Interactive/FLU_Zoning" FeatureServer, Zoning
+    // sublayer 11 (gis.sumtercountyfl.gov/sumtergis). Token-free, polygon, SR 2237 (FL State Plane ft; tool
+    // sends inSR=4326 and the server reprojects). codeField=Zone_Type — CONFIRMED via the layer's unique-
+    // value renderer (Field 1 = Zone_Type) and its Type/template definitions, which set Zone_Type to the
+    // real district code on every type: A10/A10C (agriculture), RR1/RR1C/RR2.5/RR2.5C/RR5/RR5C (rural
+    // residential by min acreage), R2C/R2M/R4C/R4M/R6C/R6M (residential density), HDR24 (high-density),
+    // CH/CL/CN/CP/CR (commercial), ID/IP (industrial), MPD/RPUD/RVPUD (planned developments), MUNC
+    // (municipal), PIE (public/institutional/edu). No separate readable-name column exists (ZONING_CAS is a
+    // case field, null on the type templates; ZONING_C_1/C_2 secondary; ZONING_TYP a numeric id), so it runs
+    // code-only. Candidates tried in order, first polygon at the point wins: the countywide FLU_Zoning layer
+    // first, then the four incorporated cities from the Development_Services MapServer — Bushnell (6),
+    // Center Hill (7), Coleman (8), Webster (9) — as a fallback for in-city parcels (their columns may
+    // differ; the Zone_Type pin only applies where present, else the app auto-detects). Verified Aug 2026.
+    "https://gis.sumtercountyfl.gov/sumtergis/rest/services/Interactive/FLU_Zoning/FeatureServer/11/query",
+    "https://gis.sumtercountyfl.gov/sumtergis/rest/services/DevelopmentServices/Development_Services/MapServer/6/query",
+    "https://gis.sumtercountyfl.gov/sumtergis/rest/services/DevelopmentServices/Development_Services/MapServer/7/query",
+    "https://gis.sumtercountyfl.gov/sumtergis/rest/services/DevelopmentServices/Development_Services/MapServer/8/query",
+    "https://gis.sumtercountyfl.gov/sumtergis/rest/services/DevelopmentServices/Development_Services/MapServer/9/query"
   ]},
   POLK: { label:"Polk County Land Use District (= zoning, per LDC § 203)", codeField:"FLU_LDC", descField:"FLUNAME", urls:[
     // ✅ IMPORTANT CONTEXT: Polk County's LDC (§ 203) does NOT have a separate "zoning district" system —
@@ -11208,6 +11279,72 @@ function injectProjectBadge(ps){
     else { container.insertAdjacentElement('afterbegin', badge); }
   }catch(e){}
 }
+/* ---------- Citrus County per-parcel setbacks + max height (LandDevelopment LOTS layer) ----------
+   Citrus's "PublicData/LandDevelopment" MapServer carries a LOTS layer (mapLayerId 0) with the parcel's
+   dimensional envelope baked in: front / 2nd-front (corner) / left / right / rear / waterfront / wetland
+   setbacks and max building height, plus a planned-development flag. This is exactly what a generator
+   placement needs. The layer isn't exposed as a standalone sublayer path, so we query the service's
+   dynamicLayer endpoint (same route Citrus's own viewer uses) with a point-in-polygon at the resolved
+   location; SR 4326 in, the server reprojects. Best-effort ONLY: any failure (down, CORS, no hit) returns
+   null and the card simply omits the setback block — never blocks render. Values are surfaced as-is from
+   the county layer and labeled "verify"; they are NOT a substitute for confirming against the adopted
+   Citrus LDC before a permit. Guarded to Citrus at the call site. */
+async function citrusLDCInfo(lat,lng){
+  const base='https://maps.citrusbocc.com/server/rest/services/PublicData/LandDevelopment/MapServer/dynamicLayer/query';
+  const geom=encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}));
+  const layer=encodeURIComponent(JSON.stringify({source:{type:'mapLayer',mapLayerId:0}}));
+  const of=encodeURIComponent('PARCELID,USECODE,STBKFRT,STBKFRT2,STBKLFT,STBKRGT,STBKREAR,STBKWTR,STBKWET,MAXHT,PD,INSP_ZONE');
+  const url=base+'?f=json&geometry='+geom+'&geometryType=esriGeometryPoint&inSR=4326'
+    +'&spatialRel=esriSpatialRelIntersects&returnGeometry=false&outFields='+of+'&layer='+layer;
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), ENRICH_TIMEOUT);
+  try{
+    const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(t);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(j && j.error) throw new Error('service error');
+    if(j && j.features && j.features[0] && j.features[0].attributes) return j.features[0].attributes;
+    return null;
+  }catch(e){ clearTimeout(t); return null; }
+}
+/* Render the Citrus setback/height block and inject it into the parcel card. Shows only fields that come
+   back populated; renders nothing if none do. Idempotent (dupe-guarded) so it's safe to call from either
+   the live-feed or the roll render path. Numeric values are shown as "N ft"; non-numeric text is shown
+   verbatim (in case a field carries a coded value). */
+function injectCitrusSetbacks(a){
+  try{
+    if(!a) return;
+    const container=document.getElementById('results'); if(!container) return;
+    if(container.querySelector('[data-ldcsetback]')) return;   // avoid dupes on re-entry
+    const val=v=>{ if(v==null) return null; const s=String(v).trim(); if(s===''||/^n\/?a$/i.test(s)) return null;
+      const n=Number(s.replace(/[^0-9.\-]/g,'')); if(isFinite(n)&&n>0) return n+' ft'; return /[a-z]/i.test(s)?esc(s):null; };
+    const rows=[];
+    const front=val(a.STBKFRT), front2=val(a.STBKFRT2);
+    if(front) rows.push(['Front', front + (front2?(' &nbsp;/&nbsp; '+front2+' (2nd front)'):'')]);
+    const sideL=val(a.STBKLFT), sideR=val(a.STBKRGT);
+    if(sideL||sideR) rows.push(['Sides', [sideL,sideR].filter(Boolean).join(' &nbsp;/&nbsp; ')]);
+    const rear=val(a.STBKREAR); if(rear) rows.push(['Rear', rear]);
+    const wtr=val(a.STBKWTR);  if(wtr)  rows.push(['Waterfront', wtr]);
+    const wet=val(a.STBKWET);  if(wet)  rows.push(['Wetland', wet]);
+    const mh=val(a.MAXHT);     if(mh)   rows.push(['Max building height', mh]);
+    if(!rows.length) return;
+    const _pdRaw = a.PD!=null ? String(a.PD).trim() : '';
+    const pd = (_pdRaw!=='' && !/^n(o|\/?a)?$/i.test(_pdRaw) && _pdRaw!=='0') ? _pdRaw : null;
+    const html='<div class="field" data-ldcsetback="1" style="display:block">'
+      +'<div class="k">Setbacks &amp; height <span class="muted" style="font-size:10px">(Citrus LDC · verify)</span></div>'
+      +'<div class="v" style="font-size:12px;line-height:1.55">'
+      + rows.map(r=>'<b>'+esc(r[0])+':</b> '+r[1]).join('<br>')
+      + (pd?'<br><span class="muted" style="font-size:11px">Planned development: '+esc(pd)+'</span>':'')
+      +'</div></div>';
+    // Anchor after the "Parcel & Owner" card header (same approach as the project badge); fall back to
+    // top-of-results if that header isn't present.
+    let anchor=null;
+    const h2=[...container.querySelectorAll('h2')].find(el=>/parcel\s*&\s*owner/i.test(el.textContent||''));
+    if(h2){ anchor=h2.closest('.ch')||h2; }
+    const node=document.createElement('div'); node.innerHTML=html; const el=node.firstChild;
+    if(anchor && anchor.parentNode){ anchor.parentNode.insertBefore(el, anchor.nextSibling); }
+    else container.insertAdjacentElement('afterbegin', el);
+  }catch(e){}
+}
 /* Build a small informational badge from the Collier address-point layer's STATUS + POINTTYPE for the
    parcel currently shown (matched by folio digits). Shows ONLY when noteworthy — a non-Current status
    (Temporary/Pending/Retired/etc.) or a POINTTYPE worth flagging (Vacant Land, Multi Family, etc.).
@@ -11835,6 +11972,21 @@ async function runLookup(lat,lng,searchCtx){
       if(_la.__legal==null && _la.LEGDECFULL!=null && String(_la.LEGDECFULL).trim()!=='') _la.__legal=String(_la.LEGDECFULL).trim();
       if(_la.__zoning==null && _la.ZONING!=null && String(_la.ZONING).trim()!=='') _la.__zoning=String(_la.ZONING).trim();
     }
+    // Citrus & Sumter both ride the SWFWMD parcel_search mirror (www25), which shares Polk's national-
+    // standard schema: legal in LEGDECFULL and a ZONING field directly on the parcel record. Site address:
+    // the canonical "Full Site Address" lives in SITEADD, while detectFields keys site to SITUSADD1 (matched
+    // via /SITUS/); if SITUSADD1 is blank but SITEADD is populated, copy it across so the card still shows a
+    // site address. The renderer reads these attributes at render time (after this guard). Gap-only.
+    // ZONING handling differs by county: CITRUS has its OWN dedicated zoning POLYGON layer wired in
+    // ZONING_LIVE (maps.citrusbocc.com sublayer 53), which yields the authoritative "● LIVE zoning polygon"
+    // result — so we do NOT also surface the roll ZONING for Citrus (avoids a duplicate "per parcel roll"
+    // row). SUMTER likewise now has a verified dedicated zoning layer (FLU_Zoning sublayer 11, Zone_Type),
+    // so neither county surfaces the roll ZONING; both resolve through ZONING_LIVE point-in-polygon.
+    if(norm(countyName)==='CITRUS' || norm(countyName)==='SUMTER'){
+      const _la=liveRes.features[0].attributes;
+      if(_la.__legal==null && _la.LEGDECFULL!=null && String(_la.LEGDECFULL).trim()!=='') _la.__legal=String(_la.LEGDECFULL).trim();
+      if((_la.SITUSADD1==null || String(_la.SITUSADD1).trim()==='') && _la.SITEADD!=null && String(_la.SITEADD).trim()!=='') _la.SITUSADD1=String(_la.SITEADD).trim();
+    }
     // Hernando's CAMA export splits the legal description across LEGAL1-4 (each ~30 chars); join the
     // populated ones into a single readable line. Gap-only; guarded to Hernando.
     if(norm(countyName)==='HERNANDO'){
@@ -11890,6 +12042,13 @@ async function runLookup(lat,lng,searchCtx){
           if(_myIdP!==runId) return;
           injectProjectBadge(ps);
         }).catch(()=>{});
+      }
+      // CITRUS SETBACKS (informational): pull the parcel's front/side/rear/waterfront/wetland setbacks +
+      // max height from Citrus's LandDevelopment LOTS layer and inject them into the card. Async — never
+      // blocks render; if the layer is down or the point misses, nothing is added. Guarded to Citrus.
+      if(norm(countyName)==='CITRUS'){
+        const _myIdSB=myId;
+        citrusLDCInfo(lat,lng).then(sb=>{ if(_myIdSB!==runId) return; injectCitrusSetbacks(sb); }).catch(()=>{});
       }
       // Neighbor house-number labels: anchor on the subject's number (from its address) + the
       // matched point so the right lot is highlighted. Runs after fitBounds so the view is settled.
@@ -12032,6 +12191,12 @@ async function runLookup(lat,lng,searchCtx){
     if(_subjRings && COUNTY_PROJECTS[norm(countyName)]){
       const _myId3=myId;
       projectStatusForParcel(countyName, _subjRings).then(ps=>{ if(_myId3!==runId) return; injectProjectBadge(ps); }).catch(()=>{});
+    }
+    // CITRUS SETBACKS on the roll path too (e.g. off-hours when the SWFWMD live feed is down) — the
+    // setback query is independent of the parcel source. Async, dupe-guarded, Citrus-only.
+    if(norm(countyName)==='CITRUS'){
+      const _myIdSB2=myId;
+      citrusLDCInfo(lat,lng).then(sb=>{ if(_myIdSB2!==runId) return; injectCitrusSetbacks(sb); }).catch(()=>{});
     }
     try{
       const _sHN = houseNum(site||'') || (searchCtx&&searchCtx.hn) || null;
