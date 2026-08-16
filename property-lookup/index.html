@@ -1020,7 +1020,6 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       <button data-bm="sat" class="active">Satellite</button>
       <button data-bm="aerial" title="Aerial imagery with no place labels — unobstructed photo view">Aerial (clean)</button>
       <button data-bm="sarco" title="Local high-res county aerials — auto-switches to whichever county you're viewing (Sarasota, Lee, Charlotte, Collier, Manatee). Falls back to Esri imagery elsewhere.">📷 Local HD</button>
-      <button data-bm="collier2026" title="Collier County 2026 imagery (experimental). Decoded client-side from the county's LERC2D cache — only covers a small area around Naples/North Naples and may be slightly misaligned. Falls back to Esri imagery outside its coverage.">🆕 Collier 2026 (experimental)</button>
       <button id="localAerialRefresh" class="zl-refresh-row" title="Reload the local aerial for the county you're currently viewing (use after panning across a county line)">⟳ Refresh aerial to this view</button>
       <button data-bm="street">Street</button>
       <button data-bm="gray" title="Minimal light-gray basemap — makes parcel / flood / city overlays read clearly">Gray</button>
@@ -1124,7 +1123,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
-<!-- SPEED: defer — the LERC decoder is only needed if/when the user picks the experimental
+<!-- SPEED: defer — the LERC decoder is only needed for Collier's 2026 imagery in Local HD (loaded on demand)
      "Collier 2026" basemap. Loading it synchronously here forced the ENTIRE app (map init, search,
      everything below) to wait on an unpkg round-trip before running. lercEnsureLoaded() now
      tolerates it arriving late. -->
@@ -2152,16 +2151,16 @@ const ZONING_LIVE = {
   SARASOTA: { label:"Sarasota County Zoning (UDC)", urls:[
     "https://ags3.scgov.net/server/rest/services/Hosted/CountyZoning/FeatureServer/0/query"
   ]},
-  // ✅ Glades County zoning — hosted on the shared HCPAO GIS server (Glades + Hendry share GIS).
-  // Layer 2 "county_zoning" is the countywide layer: field "Zoning" = district code (AR, ARS, C-1,
-  // C-2, CRV, ID-1, ID-2, OUA, OUFP, PD, PS, RG, RM, RMH, RS — matching the §125-158 table), and
-  // "ZonDistNam" = the full district name. Layer 1 "MH_Zoning" is the Moore Haven municipal area
-  // (its own R1/R2/R3/C1/C2/M-* scheme) — listed second as a fallback. Service is SR 2881 (FL State
-  // Plane ft); arcQuery sends the point as 4326 and the server reprojects. codeField/descField are
-  // pinned so detection can't drift to the petition-number / notes columns.
+  // ✅ Glades County zoning. PRIMARY is the county's OWN ArcGIS Online feature layer (services6 —
+  // reachable everywhere + CORS-open, edited Mar 2026): field "Zoning" = district code, "ZonDistNam" =
+  // full district name (Open Use Agricultural, Agricultural Residential, Residential Single-family, …).
+  // The old hcpao.org MapServer is kept as a fallback, but it lives on an institutional server that some
+  // networks/VPNs can't resolve — which is exactly why Glades was showing "no zoning". SR 2237 (FL West
+  // ft); arcQuery sends the point as 4326 and the server reprojects. codeField/descField pinned so
+  // detection can't drift to the petition-number / notes columns.
   GLADES: { label:"Glades County Zoning", codeField:"Zoning", descField:"ZonDistNam", urls:[
-    "https://gis1.hcpao.org/arcgiscv/rest/services/Glades/GladesCounty_Zoning/MapServer/2/query",
-    "https://gis1.hcpao.org/arcgiscv/rest/services/Glades/GladesCounty_Zoning/MapServer/1/query"
+    "https://services6.arcgis.com/90Aakxb3SLGcQGor/ArcGIS/rest/services/GladesCounty_Zoning_03192026/FeatureServer/4/query",
+    "https://gis1.hcpao.org/arcgiscv/rest/services/Glades/GladesCounty_Zoning/MapServer/2/query"
   ]},
   // ✅ Hendry County zoning — the dedicated "Zoning" feature service on Hendry's own AGOL org
   // (services7.arcgis.com/8l7Qq5t0CPLAJwJK), the polygon layer behind the county's Future Land Use &
@@ -2585,7 +2584,7 @@ const canvasRenderer = L.canvas({ padding:2, tolerance:4 });   // shared canvas 
 // Access-Control-Allow-Origin:*), which is what lets the MAP PNG capture (html2canvas useCORS)
 // actually draw the basemap instead of leaving it blank. No effect on normal display speed.
 const sat = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
-  {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
+  {maxZoom:23,maxNativeZoom:20,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});   // maxNativeZoom 20: Esri's ~0.5m tiles (sharper than the old 19, covered across developed US). 21 was too deep — Esri's 0.3m z21 only exists in select metros, so elsewhere it returned "Map data not yet available" placeholders. For the deepest sharp view use Local HD.
 const labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
   {maxZoom:23,maxNativeZoom:19,opacity:.9,updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
 const street = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -2598,12 +2597,12 @@ const topo = L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/U
 // Clean aerial: the same Esri imagery as Satellite but WITHOUT the place-label overlay, for an
 // unobstructed photo view of roofs / pads / setbacks.
 const aerialClean = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
-  {maxZoom:23,maxNativeZoom:19,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
+  {maxZoom:23,maxNativeZoom:20,attribution:"Imagery &copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});   // matches Satellite's 20 cap
 // Light gray canvas: minimal, low-noise basemap so parcel lines / flood / city overlays read clearly.
 const gray = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
   {maxZoom:23,maxNativeZoom:16,attribution:"&copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
 
-// =================== COLLIER 2026 (EXPERIMENTAL — LERC2D client-side decode) ===================
+// =================== COLLIER 2026 (LERC2D client-side decode — live in Local HD) ===================
 // Collier's ImageryAll2026 service publishes its newest flight ONLY as a LERC2D pre-cached raster
 // (singleFusedMapCache, format LERC2D, max LOD 11) — NOT png/jpg, so a normal <img> tile layer
 // shows nothing even though /tile/{z}/{y}/{x} returns 200. This layer fetches the LERC blob,
@@ -2644,7 +2643,7 @@ window.__collier2026Debug = [];
 let _lercReady = null;
 function lercEnsureLoaded(){
   if(!_lercReady){
-    // LercDecode.js is loaded with `defer` (it's only needed for this experimental basemap), so it
+    // LercDecode.js is loaded with `defer` (only needed for Collier's 2026 imagery in Local HD), so it
     // may not have arrived yet when the first tile is requested — wait briefly for the global.
     // On failure, reset so a later tile request can retry instead of being wedged forever on one
     // rejected promise (e.g. a flaky connection at first click).
@@ -2663,7 +2662,7 @@ function lercEnsureLoaded(){
 }
 const Collier2026Layer = L.GridLayer.extend({
   options: { maxZoom:23, minZoom:11, maxNativeZoom:20, tileSize:256, updateWhenZooming:false, keepBuffer:4,
-             attribution:"Imagery © Collier County (2026, experimental)" },
+             attribution:"" },
   createTile: function(coords, done){
     const tile = document.createElement('canvas');
     tile.width = 256; tile.height = 256;
@@ -2760,7 +2759,7 @@ const LOCAL_AERIAL = {
     candidates:[ "https://ags3.scgov.net/agsfed/rest/services/ImageServices/SC2025/ImageServer",
                  "https://ags3.scgov.net/agsfed/rest/services/ImageServices/SC2024/ImageServer",
                  "https://ags3.scgov.net/agsfed/rest/services/ImageServices/SC2023/ImageServer" ] },
-  LEE:      { label:"Lee County (3-in)", bounds:[-82.30,26.30,-81.55,26.85], kind:"export",
+  LEE:      { label:"Lee County (3-in)", bounds:[-82.30,26.33,-81.55,26.85], kind:"export",
     candidates:[ "https://gisimageserver.leegov.com/imageserver/rest/services/Aerials/Aerials2025/ImageServer",
                  "https://gisimageserver.leegov.com/imageserver/rest/services/Aerials/Aerials2024/ImageServer",
                  "https://gisimageserver.leegov.com/imageserver/rest/services/Aerials/Aerials2023/ImageServer" ] },
@@ -2803,7 +2802,29 @@ const LOCAL_AERIAL = {
   HENDRY:   { label:"Hendry County (FL statewide ortho)", bounds:[-81.57,26.32,-80.78,26.95], kind:"export",
     candidates:[ "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer",
                  "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2021/ImageServer",
-                 "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2019/ImageServer" ] }
+                 "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2019/ImageServer" ] },
+  // Central-FL / Tampa Bay live counties. No per-county aerial servers wired/verified yet, so all use the
+  // VERIFIED statewide FDEP/FDOT ortho (public, high-res, dynamic ImageServer → exportImage reproject).
+  // Because every one draws from the same statewide source, box overlaps at their shared borders are
+  // harmless (identical imagery either way). Newest confirmed-pattern year first.
+  HERNANDO:    { label:"Hernando County (FL statewide ortho)", bounds:[-82.70,28.42,-82.03,28.76], kind:"export",
+    candidates:[ "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer",
+                 "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2021/ImageServer" ] },
+  HILLSBOROUGH:{ label:"Hillsborough County (3-in, 2025)", bounds:[-82.66,27.62,-82.05,28.18], kind:"export",
+    candidates:[ "https://maps.hillsboroughcounty.org/arcgis/rest/services/AerialsNew/Aerials2025_3_inch_MrSid/ImageServer",
+                 "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer" ] },
+  MARION:      { label:"Marion County (2023)", bounds:[-82.53,28.90,-81.63,29.51], kind:"export",
+    candidates:[ "https://gis.marionfl.org/image/rest/services/Aerials/Aerials_2023/ImageServer",
+                 "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer" ] },
+  PASCO:       { label:"Pasco County (2023)", bounds:[-82.82,28.15,-82.03,28.66], kind:"export",
+    candidates:[ "https://pascogis.pascocountyfl.net/giswebi/rest/services/Aerials/Pasco_2023/ImageServer",
+                 "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer" ] },
+  PINELLAS:    { label:"Pinellas County (2024)", bounds:[-82.87,27.56,-82.53,28.18], kind:"export",
+    candidates:[ "https://egis.pinellas.gov/gis/rest/services/Aerials/Aerials2024/ImageServer",
+                 "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer" ] },
+  POLK:        { label:"Polk County (FL statewide ortho)", bounds:[-82.13,27.62,-81.11,28.37], kind:"export",
+    candidates:[ "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer",
+                 "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2021/ImageServer" ] }
 };
 // Resolved-at-runtime state: which counties' services actually responded, and their working URLs.
 // ✅ COLLIER is pre-seeded here (not left to the async probe below): the ImageryAll2026 tile
@@ -2821,6 +2842,17 @@ const LOCAL_AERIAL = {
 // side) or a server-side conversion, not a Leaflet tile URL. Until that's built, COLLIER falls
 // through to the export-kind candidates below (FDEP ortho), which serve real JPEG/PNG.
 const LOCAL_AERIAL_ACTIVE = {};        // KEY -> { url, kind, label }
+// Pre-seed EVERY export-kind county with its primary candidate. The async probe below does a ?f=json
+// check that CORS-fails on many county servers (gisimageserver.leegov.com, ca.dep.state.fl.us, etc.),
+// silently leaving those counties INACTIVE — which is why Local HD wasn't switching to Lee or Collier.
+// The aerials still DISPLAY fine as <img> via exportImage (an <img> needs no CORS), so seeding each
+// county guarantees it's selectable immediately; the probe can still upgrade a seed to a sharper/newer
+// source when it does succeed. Manatee is the one exception — it's a pre-cached 'tilexyz' MapServer, so
+// it needs the probe to confirm its cache projection before use, and is left to the probe.
+Object.keys(LOCAL_AERIAL).forEach(function(k){
+  if((LOCAL_AERIAL[k].kind||"export")!=="export") return;   // skip tilexyz (Manatee → probe confirms cache SR)
+  LOCAL_AERIAL_ACTIVE[k] = { kind:"export", label:LOCAL_AERIAL[k].label, url:LOCAL_AERIAL[k].candidates[0] };
+});
 // The mutable URL the layer is currently drawing from (auto-switcher repoints this).
 const LOCAL_URL_REF = { url:null, kind:"export" };
 function localCountyForCenter(){
@@ -2872,26 +2904,47 @@ const localAerial = new LocalAerial("", {
   // Native z20 holds essentially all the 3-inch detail; z21–23 are upscaled by the browser (free, no
   // extra requests). This is the single biggest speed win vs. the old maxNativeZoom:23.
   maxZoom:23, maxNativeZoom:20, minZoom:11,
-  attribution:"Local county aerial", updateWhenIdle:false,   // update during pan too → feels snappier
+  updateWhenIdle:false,   // update during pan too → feels snappier (county credit set dynamically below)
   updateWhenZooming:false, keepBuffer:6, crossOrigin:true    // keep more off-screen tiles so panning back is instant
 });
 // Esri imagery sits UNDER the local aerial so any gap (outside a wired county, or a not-yet-loaded
 // tile) still shows photography rather than blank. It caps at native z19 and upsamples to fill.
 const localEsriBase = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?_cb=1",
   {maxZoom:23,maxNativeZoom:19,updateWhenIdle:false,updateWhenZooming:false,keepBuffer:6,crossOrigin:true});
-const sarcoGroup = L.layerGroup([localEsriBase, localAerial, labels]);   // the "Local HD" basemap
+// TEMP (evaluating): layer Collier's 2026 imagery (LERC-decoded, self-limits to its Naples/N.Naples
+// extent — transparent elsewhere) ON TOP of the county aerials inside Local HD. Over that 2026 box you
+// get the 2026 imagery; everywhere else it's transparent and the county aerial beneath shows through.
+// Confirmed a pixel match with the source and promoted into Local HD; the standalone basemap was retired.
+const localCollier2026 = new Collier2026Layer();
+const sarcoGroup = L.layerGroup([localEsriBase, localAerial, localCollier2026, labels]);   // the "Local HD" basemap
 // Switch the local layer to the county under the current map center; returns the active key (or null).
 let _localActiveKey = "__init__";
+// Single, dynamic county-aerial credit — replaces the per-layer attributions that used to STACK and go
+// stale when panning across county lines. Shows exactly ONE "Aerial © <county>" for the county under the
+// view, and only while Local HD is active; cleared on every other basemap.
+let _aerialAttr = null;
+function setAerialAttribution(text){
+  text = text || null;
+  if(_aerialAttr === text) return;
+  if(_aerialAttr){ try{ map.attributionControl.removeAttribution(_aerialAttr); }catch(e){} }
+  _aerialAttr = text;
+  if(_aerialAttr){ try{ map.attributionControl.addAttribution(_aerialAttr); }catch(e){} }
+}
+function refreshAerialAttribution(){
+  if(_curBasemap==='sarco' && _localActiveKey && LOCAL_AERIAL_ACTIVE[_localActiveKey])
+    setAerialAttribution("Aerial &copy; " + LOCAL_AERIAL_ACTIVE[_localActiveKey].label);
+  else setAerialAttribution(null);
+}
 function _applyLocalKey(key){
   if(key===_localActiveKey) return;
   _localActiveKey = key;
   if(key && LOCAL_AERIAL_ACTIVE[key]){
     LOCAL_URL_REF.url  = LOCAL_AERIAL_ACTIVE[key].url;
     LOCAL_URL_REF.kind = LOCAL_AERIAL_ACTIVE[key].kind;
-    localAerial.options.attribution = "Aerial &copy; " + LOCAL_AERIAL_ACTIVE[key].label;
   } else {
     LOCAL_URL_REF.url = null;     // no wired county here → Esri base shows through
   }
+  refreshAerialAttribution();
   if(map.hasLayer(localAerial)) localAerial.redraw();
   if(basemapLbl && _curBasemap==='sarco'){
     basemapLbl.textContent = key && LOCAL_AERIAL_ACTIVE[key] ? LOCAL_AERIAL_ACTIVE[key].label : "Local HD (Esri)";
@@ -2921,10 +2974,10 @@ function updateLocalAerial(force){
 const btnBasemap=document.getElementById('btnBasemap');
 const basemapMenu=document.getElementById('basemapMenu');
 const basemapLbl=document.getElementById('basemapLbl');
-const BM_LABEL={sat:'Satellite',street:'Street',topo:'⛰ Topo',aerial:'Aerial',gray:'Gray',sarco:'Local HD',collier2026:'Collier 2026 (exp.)'};
+const BM_LABEL={sat:'Satellite',street:'Street',topo:'⛰ Topo',aerial:'Aerial',gray:'Gray',sarco:'Local HD'};
 // The basemaps are mutually exclusive; overlays (city limits / flood / parcels / radar) sit on top.
 // All basemaps live in the low tilePane, so they always render beneath the overlays regardless of order.
-const BM_LAYER={sat:satGroup,street:street,topo:topo,aerial:aerialClean,gray:gray,sarco:sarcoGroup,collier2026:collier2026Group};
+const BM_LAYER={sat:satGroup,street:street,topo:topo,aerial:aerialClean,gray:gray,sarco:sarcoGroup};
 let _curBasemap='sat';
 function setBasemap(which){
   Object.values(BM_LAYER).forEach(l=>{ if(map.hasLayer(l)) map.removeLayer(l); });
@@ -2933,6 +2986,13 @@ function setBasemap(which){
   basemapLbl.textContent = (BM_LABEL[which]||'Satellite').replace('⛰ ','');
   basemapMenu.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.bm===which));
   if(which==='sarco') updateLocalAerial(true);   // pick the county under the current view immediately
+  // Time-lapse pulls from Esri Wayback + a couple county aerials — a DIFFERENT source stack than Local
+  // HD's sharp per-county imagery, so offering it on Local HD is misleading. Hide the button there (and
+  // close the panel if it's open); it stays available on Satellite / Aerial / Street / Gray / Topo.
+  var _tlB=document.getElementById('tlBtn');
+  if(_tlB) _tlB.style.display = (which==='sarco') ? 'none' : '';
+  if(which==='sarco' && window.__tlClose) window.__tlClose();
+  refreshAerialAttribution();   // set the one county credit on Local HD, clear it on every other basemap
 }
 function closeBasemapMenu(){ basemapMenu.hidden=true; }
 function openBasemapMenu(){
@@ -2958,6 +3018,190 @@ basemapMenu.querySelectorAll('button[data-bm]').forEach(b=>{
 })();
 // click anywhere else closes the menu
 document.addEventListener('click', closeBasemapMenu);
+
+/* ================= FLORIDA COUNTY NAME LABELS (always on, all basemaps) ==========================
+   Draws each FL county's name at its centroid — pulled once from the FDOT county boundary layer (the
+   same source used for county detection). Shown across regional/city zooms and hidden at state-wide
+   zoom (too dense) and deep parcel zoom (a big county name over one lot is clutter). Non-interactive. */
+(function(){
+  const css=document.createElement('style');
+  css.textContent=`.county-lbl span{color:#fff;font-family:var(--disp,sans-serif);font-size:13px;font-weight:700;
+    letter-spacing:.09em;text-transform:uppercase;white-space:nowrap;opacity:.9;display:inline-block;
+    transform:translate(-50%,-50%);text-shadow:0 0 3px rgba(0,0,0,.95),0 1px 2px rgba(0,0,0,.95)}`;
+  document.head.appendChild(css);
+  map.createPane('countyLbls'); const pane=map.getPane('countyLbls');
+  pane.style.zIndex=620; pane.style.pointerEvents='none';
+  const group=L.layerGroup(); const MINZ=8, MAXZ=14;
+  let _built=false, _shown=false;
+  function nameOf(a){
+    for(const k of ['NAME','COUNTY','COUNTYNAME','CONAME','COUNTY_NAM','DESCRIPT','COUNTYNM']) if(a[k]) return a[k];
+    for(const k in a){ if(/name|county/i.test(k) && typeof a[k]==='string' && a[k].length<40) return a[k]; }
+    return null;
+  }
+  function ctr(f){
+    if(f.centroid && isFinite(f.centroid.x)) return [f.centroid.y, f.centroid.x];
+    const g=f.geometry;
+    if(g && g.rings){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+      g.rings.forEach(r=>r.forEach(p=>{ if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0]; if(p[1]<y0)y0=p[1]; if(p[1]>y1)y1=p[1]; }));
+      if(x1>-1e9) return [(y0+y1)/2,(x0+x1)/2]; }
+    return null;
+  }
+  function toggle(){
+    const z=map.getZoom(), want = _built && z>=MINZ && z<=MAXZ;
+    if(want && !_shown){ group.addTo(map); _shown=true; }
+    else if(!want && _shown){ map.removeLayer(group); _shown=false; }
+  }
+  (async function build(){
+    try{
+      const base=EP.county.replace(/\/query\s*$/i,'')+'/query';
+      const u=base+'?where=1%3D1&outFields=*&returnGeometry=true&returnCentroid=true&maxAllowableOffset=0.02&outSR=4326&f=json';
+      const r=await fetch(u).then(x=>x.json());
+      (r.features||[]).forEach(f=>{
+        const nm=nameOf(f.attributes||{}), c=ctr(f);
+        if(nm&&c) L.marker(c,{ pane:'countyLbls', interactive:false, keyboard:false,
+          icon:L.divIcon({className:'county-lbl',html:'<span>'+String(nm).replace(/</g,'')+'</span>',iconSize:[0,0]}) }).addTo(group);
+      });
+      _built=true; toggle();
+    }catch(e){}
+  })();
+  map.on('zoomend', toggle);
+})();
+
+/* ================= ⏱ IMAGERY TIME-LAPSE ==========================================================
+   Dated scrub/play through historical imagery at the current view:
+   • Esri World Imagery WAYBACK — free public archive, one frame per year back to 2014 (in-stack, no key)
+   • Local county aerials (LOCAL_AERIAL) — the sharp 3-inch recent years folded in, overriding Wayback
+     for the years they cover. Online-only (streams tiles). Self-contained: injects its own button/panel
+     and a top imagery layer; nothing else in the app depends on it. */
+(function(){
+  const WAYBACK_CFG = "https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json";
+  let _wbFrames=null, _tlFrames=[], _tlIdx=0, _playing=false, _timer=null;
+
+  // top imagery layer: renders whichever frame is active (Wayback tile OR county exportImage)
+  const TL_REF = { frame:null };
+  const TLLayer = L.TileLayer.extend({
+    getTileUrl:function(coords){
+      const f=TL_REF.frame; if(!f) return L.Util.emptyImageUrl;
+      if(f.type==='wayback') return f.tpl.replace('{z}',coords.z).replace('{y}',coords.y).replace('{x}',coords.x);
+      const n=Math.pow(2,coords.z), t=2*R_MERC/n;
+      const xmin=-R_MERC+coords.x*t, xmax=-R_MERC+(coords.x+1)*t, ymax=R_MERC-coords.y*t, ymin=R_MERC-(coords.y+1)*t;
+      return f.base+"/exportImage?f=image&format=jpeg&bbox="+[xmin,ymin,xmax,ymax].join(",")+"&bboxSR=3857&imageSR=3857&size=256,256";
+    }
+  });
+  const tlLayer = new TLLayer("", { maxZoom:23, maxNativeZoom:20, minZoom:11, updateWhenIdle:false,
+    updateWhenZooming:false, keepBuffer:4, crossOrigin:true });
+
+  async function waybackFrames(){
+    if(_wbFrames) return _wbFrames;
+    try{
+      const cfg = await fetch(WAYBACK_CFG,{cache:'force-cache'}).then(r=>r.json());
+      const rows=[];
+      for(const rel in cfg){
+        const it=cfg[rel]||{}, title=it.itemTitle||it.itemName||'';
+        const m=title.match(/(\d{4})-(\d{2})-(\d{2})/); if(!m) continue;
+        let url=it.itemURL||''; if(!url) continue;
+        url=url.replace('{level}','{z}').replace('{row}','{y}').replace('{col}','{x}');
+        rows.push({ date:m[0], year:+m[1], tpl:url });
+      }
+      const byYear={};
+      for(const r of rows){ if(!byYear[r.year]||r.date>byYear[r.year].date) byYear[r.year]=r; }
+      _wbFrames = Object.keys(byYear).map(y=>({type:'wayback',date:byYear[y].date,year:+y,tpl:byYear[y].tpl,label:'Esri Wayback'}));
+    }catch(e){ _wbFrames=[]; }
+    return _wbFrames;
+  }
+  // probe a county exportImage service by actually loading a tiny tile (no CORS needed; an error
+  // response is JSON and fails to load as an <img>, so onload===valid service).
+  function probeExport(base,lat,lng){
+    return new Promise(res=>{
+      const mx=lng*R_MERC/180, my=Math.log(Math.tan((90+lat)*Math.PI/360))*R_MERC/180, d=60;
+      const im=new Image(); let done=false; const fin=v=>{ if(!done){done=true;res(v);} };
+      im.onload=()=>fin(im.width>4); im.onerror=()=>fin(false);
+      im.src=base+"/exportImage?f=image&format=jpeg&bbox="+[mx-d,my-d,mx+d,my+d].join(",")+"&bboxSR=3857&imageSR=3857&size=32,32";
+      setTimeout(()=>fin(false), 5000);
+    });
+  }
+  async function countyFrames(lat,lng){
+    let key=null;
+    for(const k in LOCAL_AERIAL){ const b=LOCAL_AERIAL[k].bounds;
+      if(lng>=b[0]&&lng<=b[2]&&lat>=b[1]&&lat<=b[3]){ key=k; break; } }
+    if(!key) return [];
+    const seen={}, out=[];
+    for(const url of LOCAL_AERIAL[key].candidates){
+      const ym=url.match(/(20\d{2})/); if(!ym) continue; const yr=+ym[1]; if(seen[yr]) continue;
+      if(await probeExport(url,lat,lng)){ seen[yr]=1; out.push({type:'export',date:yr+'-06-30',year:yr,base:url,label:LOCAL_AERIAL[key].label}); }
+    }
+    return out;
+  }
+  async function buildFrames(lat,lng){
+    const r = await Promise.all([waybackFrames(), countyFrames(lat,lng)]);
+    const byYear={};
+    for(const f of r[0]) byYear[f.year]=f;
+    for(const f of r[1]) byYear[f.year]=f;   // county 3-inch overrides Wayback for that year
+    return Object.keys(byYear).map(y=>byYear[y]).sort((a,b)=>a.date.localeCompare(b.date));
+  }
+
+  // ---- UI ----
+  const css=document.createElement('style');
+  css.textContent=`
+    #tlBtn{position:absolute;z-index:1200;left:10px;bottom:24px;background:#12181f;color:#dff6ff;border:1px solid #2a3a46;
+      font-family:var(--disp,monospace);font-size:12px;padding:6px 10px;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.45)}
+    #tlBtn:hover{background:#1b2530}
+    #tlPanel{position:absolute;z-index:1200;left:50%;transform:translateX(-50%);bottom:22px;width:min(560px,92%);
+      background:rgba(10,16,22,.95);border:1px solid #2a3a46;border-radius:9px;padding:9px 12px;color:#dff6ff;
+      font-family:var(--disp,monospace);display:none;box-shadow:0 6px 20px rgba(0,0,0,.55)}
+    #tlPanel.show{display:block}
+    #tlPanel .tlrow{display:flex;align-items:center;gap:10px}
+    #tlDate{font-size:15px;font-weight:700;min-width:96px;letter-spacing:.02em}
+    #tlSlider{flex:1;accent-color:#39d3ff}
+    #tlPlay,#tlClose{background:transparent;border:1px solid #2a3a46;color:#dff6ff;border-radius:5px;cursor:pointer;font-size:13px;padding:2px 9px}
+    #tlPlay:hover,#tlClose:hover{background:#1b2530}
+    #tlMeta{display:flex;justify-content:space-between;margin-top:5px;font-size:10px;color:#7fbfd8}`;
+  document.head.appendChild(css);
+  const mapEl=map.getContainer();
+  const btn=document.createElement('button'); btn.id='tlBtn'; btn.textContent='⏱ Time-lapse'; mapEl.appendChild(btn);
+  const panel=document.createElement('div'); panel.id='tlPanel';
+  panel.innerHTML=`<div class="tlrow"><button id="tlPlay" title="Play / pause">▶</button>
+    <span id="tlDate">—</span><input id="tlSlider" type="range" min="0" max="0" value="0"><button id="tlClose" title="Close">✕</button></div>
+    <div id="tlMeta"><span id="tlSrc"></span><span>drag or ▶ to see this spot change over the years</span></div>`;
+  mapEl.appendChild(panel);
+  const elDate=panel.querySelector('#tlDate'), elSlider=panel.querySelector('#tlSlider'),
+        elPlay=panel.querySelector('#tlPlay'), elSrc=panel.querySelector('#tlSrc');
+  // Stop Leaflet from hijacking pointer events over the panel/button — otherwise dragging the slider
+  // registers as a map drag/click instead of moving the slider.
+  L.DomEvent.disableClickPropagation(panel); L.DomEvent.disableScrollPropagation(panel);
+  L.DomEvent.disableClickPropagation(btn);
+
+  function showFrame(i){
+    if(!_tlFrames.length) return;
+    _tlIdx=Math.max(0,Math.min(_tlFrames.length-1,i));
+    const f=_tlFrames[_tlIdx]; TL_REF.frame=f; tlLayer.redraw();
+    elDate.textContent=f.date; elSlider.value=_tlIdx;
+    elSrc.textContent=(f.type==='export'? f.label+' · 3-inch aerial' : 'Esri Wayback · ~1 m');
+  }
+  function stop(){ _playing=false; elPlay.textContent='▶'; if(_timer){clearInterval(_timer);_timer=null;} }
+  function play(){
+    if(_playing){ stop(); return; }
+    _playing=true; elPlay.textContent='⏸';
+    _timer=setInterval(()=>{ showFrame(_tlIdx>=_tlFrames.length-1?0:_tlIdx+1); }, 1000);
+  }
+  function closeTL(){ stop(); panel.classList.remove('show'); if(map.hasLayer(tlLayer)) map.removeLayer(tlLayer); TL_REF.frame=null; }
+  async function openTL(){
+    const c=map.getCenter();
+    panel.classList.add('show'); elDate.textContent='scanning…'; elSrc.textContent=''; elSlider.max=0;
+    if(map.getZoom()<15) map.setZoom(18);
+    let frames=[]; try{ frames=await buildFrames(c.lat,c.lng); }catch(e){}
+    _tlFrames=frames;
+    if(!frames.length){ elDate.textContent='no history'; elSrc.textContent='archive unavailable here'; return; }
+    tlLayer.addTo(map); tlLayer.setZIndex(350);
+    elSlider.min=0; elSlider.max=frames.length-1;
+    showFrame(frames.length-1);   // start at the most recent
+  }
+  elSlider.oninput=()=>{ stop(); showFrame(+elSlider.value); };
+  elPlay.onclick=play;
+  panel.querySelector('#tlClose').onclick=closeTL;
+  btn.onclick=()=>{ if(panel.classList.contains('show')) closeTL(); else openTL(); };
+  window.__tlClose = closeTL;   // let setBasemap() close the panel when switching to Local HD
+})();
 
 // ---- Verify the Sarasota aerial service on load; self-heal if the year-name guess is wrong ----
 // The service-name pattern is .../ImageServices/SCYYYY/ImageServer (confirmed for many past years),
@@ -13166,12 +13410,21 @@ async function chooseSuggestion(it){
     if(g && isFinite(g.lat) && isFinite(g.lng)){ qLat=g.lat; qLng=g.lng; }
     else { results.innerHTML=setStatus('err',"Couldn't place that address — try adding the city or ZIP, then press FIND."); return; }
   }
+  let snapDiffers=false;
   if(searchCtx.hn){
     try{
       const snap=await snapToParcelByAddress(basis, it.lat, it.lng);
       if(snap && isFinite(snap.lat) && isFinite(snap.lng)){
         qLat=snap.lat; qLng=snap.lng;
-        if(snap.matched) snapNote=` · snapped to ${esc(snap.matched)}`;
+        if(snap.matched){
+          // Only raise the red flag if the snap landed on a DIFFERENT address than searched (e.g.
+          // 5250 → 5242). When it's the same address (just case/format/punctuation), the alarming red
+          // "confirm the marker" note is pure noise — downgrade it to a quiet confirmation.
+          const _core=s=>String(s||'').toUpperCase().replace(/,/g,' ').replace(/\b(FLORIDA|FL|USA|UNITED STATES)\b/g,' ').replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+          const A=_core(it.label), B=_core(snap.matched);
+          snapDiffers = !!A && !!B && A!==B && !A.startsWith(B) && !B.startsWith(A);
+          if(snapDiffers) snapNote=` · snapped to <b style="color:var(--ink)">${esc(snap.matched)}</b>`;
+        }
       }
     }catch(e){}
   }
@@ -13179,7 +13432,9 @@ async function chooseSuggestion(it){
   map.setView([qLat,qLng], 18);
   await runLookup(qLat,qLng, searchCtx);
   if(stale()) return;
-  const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched: <b style="color:var(--ink)">${esc(it.label)}</b>${snapNote} — parcel resolved below; confirm the marker is on the right lot.</div>`;
+  const conf = snapDiffers
+    ? `<div class="note matchconf noprint" style="padding:2px 2px 4px">Heads up — you searched <b style="color:var(--ink)">${esc(it.label)}</b>${snapNote}. The nearest parcel resolved to a different address; confirm the marker is on the right lot before quoting.</div>`
+    : `<div class="note noprint" style="padding:2px 2px 4px">Matched <b style="color:var(--ink)">${esc(it.label)}</b> — parcel resolved below.</div>`;
   results.insertAdjacentHTML('afterbegin',conf);
 }
 
