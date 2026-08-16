@@ -1356,13 +1356,14 @@ let _utilUrlCache = undefined;
 async function resolveUtilQueryUrl(){
   const override = STORE.get('fl_util_url');
   if(override){ _utilUrlCache = override.trim().replace(/\/query\s*$/i,'') + '/query'; return _utilUrlCache; }
-  // No reliable live default. Tried HIFLD Electric Retail Service Territories (services3 ArcGIS Online,
-  // Aug 2025): host is fine, but the DATA is coarse and WRONG for cooperative enclaves — it returns a
-  // single 83-billion-m² "FLORIDA POWER & LIGHT" blanket over ALL of Cape Coral, which is LCEC territory
-  // (LCEC isn't even present at that point). No selection logic can fix data that omits the real server.
-  // The curated county-level FL_UTILITY table below is MORE accurate for FL (it knows Lee = LCEC), so we
-  // fall back to that. Paste a verified /query URL via the box (fl_util_url) to override per-session.
-  _utilUrlCache = null; return null;
+  // Live default: HIFLD Electric Retail Service Territories on ArcGIS Online (services3 — reliable DNS +
+  // CORS-open). Gives point-level coverage statewide, BUT it's COARSE: its giant investor-owned polygons
+  // (FPL/Duke) swallow cooperative enclaves (LCEC, Clay, Peace River, SECO, Sumter, Glades…). So the
+  // electric card checks the authoritative LCEC polygon FIRST (SW FL), consumes THIS only when LCEC
+  // didn't claim the point, and flags any HIFLD-sourced hit "≈ approximate — verify co-op territory".
+  // Override via the box (fl_util_url).
+  _utilUrlCache = "https://services3.arcgis.com/OYP7N6mAJJCyH6hd/arcgis/rest/services/Electric_Retail_Service_Territories_HIFLD/FeatureServer/0/query";
+  return _utilUrlCache;
 }
 function setUtilSource(){
   const el=document.getElementById('utilUrlIn'); if(!el) return;
@@ -12248,14 +12249,15 @@ async function runLookup(lat,lng,searchCtx){
      /query override the user supplies. Real provider, or an honest "no data" + a loader. */
   const localProps = findUtilityAt(lat,lng);                       // local data first (offline, reliable)
   util = await pUtil; if(myId!==runId) return;                     // deferred: awaited here, not in the fast-core batch
-  let restHit      = (util && !util.__err && util.features && util.features[0]) ? util.features[0].attributes : null;
-  // SW-Florida precision: query Lee County GIS's authoritative LCEC service-territory polygon. It covers
-  // LCEC's FULL multi-county footprint — Cape Coral, Sanibel, Pine Island, N. Fort Myers, Lehigh AND
-  // Marco Island / Immokalee / Everglades City over in Collier. A point-in-territory hit = LCEC, which
-  // is more accurate than the county default (Collier's default is FPL, but its coastal/eastern corners
-  // are LCEC). Host gismapserver.leegov.com is already CORS-proven here (Lee zoning uses it). Gated to
-  // LCEC's service counties so it adds no query elsewhere; silent fallback to the county hint on failure.
-  if(!localProps && !restHit && countyName && ['LEE','COLLIER','CHARLOTTE','HENDRY'].includes(norm(countyName))){
+  // ── Electric provider resolution, in PRIORITY order ───────────────────────────────────────────────
+  // (1) local territory file  (2) authoritative LCEC polygon (SW FL)  (3) HIFLD statewide (approximate)
+  // (4) county hint. LCEC is checked BEFORE HIFLD on purpose: HIFLD's coarse investor-owned polygons
+  // swallow co-op enclaves, so trusting it first would wrongly stamp FPL over Cape Coral / Marco / etc.
+  let restHit = null, restApprox = false;
+  // (2) LCEC — Lee County GIS's authoritative polygon covers LCEC's FULL multi-county footprint: Cape
+  // Coral, Sanibel, Pine Island, N. Fort Myers, Lehigh AND Marco Island / Immokalee / Everglades City in
+  // Collier. Host gismapserver.leegov.com is CORS-proven here (Lee zoning uses it). Gated to LCEC counties.
+  if(!localProps && countyName && ['LEE','COLLIER','CHARLOTTE','HENDRY'].includes(norm(countyName))){
     try{
       const _l = await arcQuery("https://gismapserver.leegov.com/gisserver910/rest/services/Layers/Boundaries/MapServer/21/query", lat, lng, "NAME_R", false);
       if(myId!==runId) return;
@@ -12263,6 +12265,11 @@ async function runLookup(lat,lng,searchCtx){
         restHit = { NAME:"Lee County Electric Cooperative (LCEC)", TYPE:"COOPERATIVE", TELEPHONE:"(239) 656-2300", WEBSITE:"https://www.lcec.net" };
       }
     }catch(e){}
+  }
+  // (3) HIFLD — statewide point-in-territory, but COARSE: its IOU blankets can read a co-op enclave as
+  // FPL/Duke. Only used when LCEC didn't claim the point; flagged approximate so it's never trusted blind.
+  if(!localProps && !restHit && util && !util.__err && util.features && util.features[0]){
+    restHit = util.features[0].attributes; restApprox = true;
   }
   const utilHit    = localProps || restHit;
   const hitSource  = localProps ? 'local' : (restHit ? 'rest' : null);
@@ -12281,13 +12288,17 @@ async function runLookup(lat,lng,searchCtx){
     const uCust    = ciPick(utilHit,'CUSTOMERS','CUST');
     const uVintage = ciPick(utilHit,'SOURCEDATE','VAL_DATE','YEAR');
 
-    html += `<div class="freshline"><span class="badge live">● MATCH</span> ${hitSource==='local'?'point inside this territory polygon (local data)':'point-in-territory (live query)'}</div>`;
+    html += `<div class="freshline">${restApprox?'<span class="badge unk">≈ LIKELY</span> point-in-territory · HIFLD national data (approximate)':(hitSource==='local'?'<span class="badge live">● MATCH</span> point inside this territory polygon (local data)':'<span class="badge live">● MATCH</span> point-in-territory (live query)')}</div>`;
     html += fieldRow('Utility', esc(uName), 'big');
     if(uType)  html += fieldRow('Type', esc(uType));
     if(uPhone) html += fieldRow('Phone', esc(String(uPhone)));
     if(uCust && Number(uCust)>0) html += fieldRow('Customers served', fmtNum(uCust));
     if(uWeb)   html += `<a class="palink" href="${esc(uWeb)}" target="_blank" rel="noopener">↗ ${esc(uName)} website</a>`;
-    html += `<div class="note">The point sits inside this provider's real service-territory polygon${uVintage?' (data vintage '+esc(String(uVintage))+')':''}. Right at a boundary seam or for brand-new construction, confirm with the provider before quoting.</div>`;
+    if(restApprox){
+      html += `<div class="note warnbox"><b>⚠ Approximate — verify the provider.</b> This comes from HIFLD's national territory data, whose broad investor-owned polygons (FPL/Duke) can mis-cover cooperative enclaves (LCEC, Clay, Peace River, SECO, Sumter, Glades, etc.). Confirm with the utility for this address, especially near a co-op boundary.</div>`;
+    } else {
+      html += `<div class="note">The point sits inside this provider's real service-territory polygon${uVintage?' (data vintage '+esc(String(uVintage))+')':''}. Right at a boundary seam or for brand-new construction, confirm with the provider before quoting.</div>`;
+    }
     html += `<div class="note" style="font-size:10px">Data source: ${hitSource==='local'?'your loaded territory file':'live REST source'}. <a href="#" onclick="clearTerritoryData();return false;" style="color:var(--blueprint)">Replace/clear data</a></div>`;
   } else if(TERRITORIES){
     // We HAVE data, the point just isn't inside any polygon.
