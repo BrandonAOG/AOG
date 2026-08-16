@@ -1232,7 +1232,7 @@ const FL_UTILITY = {
   JEFFERSON:  { name:"Talquin Electric Cooperative", type:"Electric cooperative", phone:"(850) 627-7651", web:"https://www.talquinelectric.com" },
   LAFAYETTE:  { name:"Florida Power & Light (FPL)", type:"Investor-owned", phone:"1-800-226-3545", web:"https://www.fpl.com" },
   LAKE:       { name:"Duke Energy Florida", type:"Investor-owned", phone:"1-800-700-8744", web:"https://www.duke-energy.com/home/products/florida", note:"Utilities Commission of New Smyrna Beach and city utilities serve some areas." },
-  LEE:        { name:"Lee County Electric Cooperative (LCEC)", type:"Electric cooperative", phone:"(239) 656-2300", web:"https://www.lcec.net", note:"LCEC serves  Coral, Sanibel, Pine Island, North Fort Myers, Lehigh Acres & much of the county. FPL serves the City of Fort Myers and some adjacent areas — the two split Lee, so confirm by address." },
+  LEE:        { name:"Lee County Electric Cooperative (LCEC)", type:"Electric cooperative", phone:"(239) 656-2300", web:"https://www.lcec.net", note:"LCEC serves Cape Coral, Sanibel, Pine Island, North Fort Myers, Lehigh Acres & much of the county. FPL serves the City of Fort Myers and some adjacent areas — the two split Lee, so confirm by address." },
   LEON:       { name:"Talquin Electric Cooperative", type:"Electric cooperative", phone:"(850) 627-7651", web:"https://www.talquinelectric.com", note:"City of Tallahassee Electric Utility serves Tallahassee." },
   LEVY:       { name:"Duke Energy Florida", type:"Investor-owned", phone:"1-800-700-8744", web:"https://www.duke-energy.com/home/products/florida" },
   LIBERTY:    { name:"Gulf Power (now FPL/NextEra)", type:"Investor-owned", phone:"1-800-226-3545", web:"https://www.fpl.com" },
@@ -1356,7 +1356,13 @@ let _utilUrlCache = undefined;
 async function resolveUtilQueryUrl(){
   const override = STORE.get('fl_util_url');
   if(override){ _utilUrlCache = override.trim().replace(/\/query\s*$/i,'') + '/query'; return _utilUrlCache; }
-  _utilUrlCache = null; return null;   // no live default — all known public ones are dead/auth-walled
+  // No reliable live default. Tried HIFLD Electric Retail Service Territories (services3 ArcGIS Online,
+  // Aug 2025): host is fine, but the DATA is coarse and WRONG for cooperative enclaves — it returns a
+  // single 83-billion-m² "FLORIDA POWER & LIGHT" blanket over ALL of Cape Coral, which is LCEC territory
+  // (LCEC isn't even present at that point). No selection logic can fix data that omits the real server.
+  // The curated county-level FL_UTILITY table below is MORE accurate for FL (it knows Lee = LCEC), so we
+  // fall back to that. Paste a verified /query URL via the box (fl_util_url) to override per-session.
+  _utilUrlCache = null; return null;
 }
 function setUtilSource(){
   const el=document.getElementById('utilUrlIn'); if(!el) return;
@@ -1391,7 +1397,7 @@ const GAS_GEOJSON_FILE = 'fl_gas_territories.geojson';
    nearly all of SWFL; a few municipalities run their own systems. Confirm a main at the address. */
 const FL_GAS = {
   COLLIER:  { name:"TECO Peoples Gas", phone:"1-877-832-6747", web:"https://www.peoplesgas.com", note:"Peoples Gas is the franchised LDC across Collier (Naples/Marco/unincorporated). City of Naples also operates a municipal gas system in parts of the city." },
-  LEE:      { name:"Limited natural gas — mostly propane (LP)", phone:null, web:null, note:"Most of Lee County, including nearly all of  Coral, has NO piped natural gas — homes use propane (LP) from suppliers like Suburban, AmeriGas or Ferrellgas. Piped natural gas (TECO Peoples Gas) reaches only limited pockets, mainly parts of Fort Myers. Assume propane unless a gas main is confirmed at the address." },
+  LEE:      { name:"Limited natural gas — mostly propane (LP)", phone:null, web:null, note:"Most of Lee County, including nearly all of Cape Coral, has NO piped natural gas — homes use propane (LP) from suppliers like Suburban, AmeriGas or Ferrellgas. Piped natural gas (TECO Peoples Gas) reaches only limited pockets, mainly parts of Fort Myers. Assume propane unless a gas main is confirmed at the address." },
   CHARLOTTE:{ name:"TECO Peoples Gas", phone:"1-877-832-6747", web:"https://www.peoplesgas.com", note:"Peoples Gas is the franchised LDC in Charlotte County (Port Charlotte/Punta Gorda) where mains reach." },
   SARASOTA: { name:"TECO Peoples Gas", phone:"1-877-832-6747", web:"https://www.peoplesgas.com", note:"Peoples Gas serves much of Sarasota County; the City of Sarasota also has a municipal gas utility." },
   MANATEE:  { name:"TECO Peoples Gas", phone:"1-877-832-6747", web:"https://www.peoplesgas.com" },
@@ -2339,19 +2345,18 @@ const ZONING_LIVE_CITY = {
     "https://capeims.capecoral.gov/arcgis/rest/services/IMS/City_of_Cape_Coral_IMS_AGOL/MapServer/32/query",
     "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/1/query"
   ]},
-  // City of Sanibel runs its OWN ArcGIS Online org (services7.arcgis.com/OnCt8XFWOgmkvMJE) — service
-  // names verified live from the org's REST directory. Sanibel classifies land into ECOLOGICAL ZONES
-  // (A, B, E-1, E-2, D-1, D-2, F, C, G) + commercial districts (GC, TCG, TCL), governed by its own LDC
-  // Ch. 126 — NOT Lee County zoning. PRIMARY source is the Sanibel_Parcel_Address layer, which carries
-  // the per-parcel "Zoning Area Code" column (the city map's parcel popup; observed values like "COS").
-  // We PIN that field as the code via codeField so detection can't drift to a folio/other column. The
-  // 1989 Ecological Zones map-series layer is the polygon fallback (it carries the A/B/E/F/G zone). Lee
-  // County's consolidated layer is a last-ditch fallback. If none resolves, the lookup still falls
-  // through to the Municode/permit links and the Sanibel renderer shows its general reference.
-  SANIBEL: { label:"City of Sanibel Ecological Zones", codeField:"Zoning Area Code", urls:[
-    "https://services7.arcgis.com/OnCt8XFWOgmkvMJE/ArcGIS/rest/services/Sanibel_Parcel_Address/FeatureServer/0/query",
-    "https://services7.arcgis.com/OnCt8XFWOgmkvMJE/ArcGIS/rest/services/Sanibel_Future_Land_Use_Map_Series_Ecological_Zones_Map_1989/FeatureServer/0/query",
-    "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/0/query"
+  // City of Sanibel runs its OWN ArcGIS Online org (services7.arcgis.com/OnCt8XFWOgmkvMJE). Sanibel
+  // classifies land into ECOLOGICAL ZONES (A, B, E-1, E-2, D-1, D-2, F, C, G) + commercial districts
+  // (GC, TCG, TCL), governed by its own LDC Ch. 126 — NOT Lee County zoning.
+  // FIX (verified live from the layers): the ONLY layer that carries zoning is the 1989 Ecological Zones
+  // map-series polygon layer — it has ECO_ZONE (the Ch. 126 letter code that keys SANIBEL_SETBACKS) and
+  // ZONE_NAME (e.g. "Gulf Beach"). The Sanibel_Parcel_Address layer that used to be listed first has NO
+  // zoning field at all (only SITEADDR) — that's why every parcel read blank → one color / generic
+  // "zone". Dropped it, and dropped the Lee DCD_Zoning fallback (Sanibel isn't Lee zoning; a Lee district
+  // would be wrong here). If the ecological layer misses a point, the lookup falls through to the
+  // Municode/permit links and the Sanibel renderer's general reference. codeField pinned to ECO_ZONE.
+  SANIBEL: { label:"City of Sanibel Ecological Zones", codeField:"ECO_ZONE", descField:"ZONE_NAME", urls:[
+    "https://services7.arcgis.com/OnCt8XFWOgmkvMJE/ArcGIS/rest/services/Sanibel_Future_Land_Use_Map_Series_Ecological_Zones_Map_1989/FeatureServer/0/query"
   ]},
   // City of Moore Haven zoning — layer 1 "MH_Zoning" of the shared Glades service (gis1.hcpao.org).
   // Field Z010_ZONG = the CITY's district code (verified live: e.g. "M-MDR"). Codes: R1, R2, R3,
@@ -12243,7 +12248,22 @@ async function runLookup(lat,lng,searchCtx){
      /query override the user supplies. Real provider, or an honest "no data" + a loader. */
   const localProps = findUtilityAt(lat,lng);                       // local data first (offline, reliable)
   util = await pUtil; if(myId!==runId) return;                     // deferred: awaited here, not in the fast-core batch
-  const restHit    = (util && !util.__err && util.features && util.features[0]) ? util.features[0].attributes : null;
+  let restHit      = (util && !util.__err && util.features && util.features[0]) ? util.features[0].attributes : null;
+  // SW-Florida precision: query Lee County GIS's authoritative LCEC service-territory polygon. It covers
+  // LCEC's FULL multi-county footprint — Cape Coral, Sanibel, Pine Island, N. Fort Myers, Lehigh AND
+  // Marco Island / Immokalee / Everglades City over in Collier. A point-in-territory hit = LCEC, which
+  // is more accurate than the county default (Collier's default is FPL, but its coastal/eastern corners
+  // are LCEC). Host gismapserver.leegov.com is already CORS-proven here (Lee zoning uses it). Gated to
+  // LCEC's service counties so it adds no query elsewhere; silent fallback to the county hint on failure.
+  if(!localProps && !restHit && countyName && ['LEE','COLLIER','CHARLOTTE','HENDRY'].includes(norm(countyName))){
+    try{
+      const _l = await arcQuery("https://gismapserver.leegov.com/gisserver910/rest/services/Layers/Boundaries/MapServer/21/query", lat, lng, "NAME_R", false);
+      if(myId!==runId) return;
+      if(_l && !_l.__err && _l.features && _l.features[0]){
+        restHit = { NAME:"Lee County Electric Cooperative (LCEC)", TYPE:"COOPERATIVE", TELEPHONE:"(239) 656-2300", WEBSITE:"https://www.lcec.net" };
+      }
+    }catch(e){}
+  }
   const utilHit    = localProps || restHit;
   const hitSource  = localProps ? 'local' : (restHit ? 'rest' : null);
   const usingOverride = !!STORE.get('fl_util_url');
