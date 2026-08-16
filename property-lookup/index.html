@@ -1055,7 +1055,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
     <div class="kick">Florida Parcel &amp; Flood Instrument</div>
     <h1>Property Lookup</h1>
-    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> where wired (Collier, Lee, Charlotte, Manatee, Sarasota, Glades) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
+    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
   </header>
 
   <div class="search">
@@ -2081,13 +2081,14 @@ const ZONING_LIVE = {
     // codeField pinned to FLU_LDC since it matches Table 2.2's column headers exactly.
     "https://gis.polk-county.net/hosting/rest/services/All-In-One_Viewer/Land_Use_and_Zoning/MapServer/10/query"
   ]},
-  PINELLAS: { label:"Pinellas County Zoning (Unincorporated, 2019)", codeField:"ZONECLASS", urls:[
-    // ✅ verified queryable public layer — discovered via F12 on Pinellas County's own public WebGIS
-    // Experience app (same trick that found the parcel/owner data). Service "Pinellas_Zoning2019_view"
-    // on ArcGIS Online (services.arcgis.com/f5HgUpxURgEzTccH — same trusted org as the Pinellas parcel
-    // feed). Token-free. codeField pinned to ZONECLASS. Effective 1 Jan 2019 per the county's Open Data
-    // listing ("Planning Unincorporated Zoning") — covers UNINCORPORATED Pinellas only; incorporated
-    // cities (St. Petersburg, Clearwater, Largo, etc.) run their own zoning and are not in this layer.
+  PINELLAS: { label:"Pinellas County Zoning (Unincorporated)", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
+    // ✅ Pinellas County Planning Department's dedicated Zoning layer (AccelaAllDataUpdateSupp/10) on the
+    // county's own ArcGIS Online org (services.arcgis.com/f5HgUpxURgEzTccH). Data steward: Pinellas
+    // County Planning Dept; "Updated monthly." Carries ZONECLASS (code, e.g. R-3, C-2, RM) + ZONEDESC
+    // (full district name, e.g. "Single Family Residential (6,000 SF Min)"). Token-free, CORS-open.
+    // Newer + richer than the old Pinellas_Zoning2019_view (kept below as a fallback). UNINCORPORATED
+    // only — incorporated cities (St. Petersburg, Clearwater, Largo, …) run their own zoning.
+    "https://services.arcgis.com/f5HgUpxURgEzTccH/arcgis/rest/services/AccelaAllDataUpdateSupp/FeatureServer/10/query",
     "https://services.arcgis.com/f5HgUpxURgEzTccH/arcgis/rest/services/Pinellas_Zoning2019_view/FeatureServer/0/query"
   ]},
   PASCO: { label:"Pasco County BOCC Zoning", codeField:"ZN_TYPE", urls:[
@@ -5445,9 +5446,11 @@ const COUNTY_FEED_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mo
 const FLOOD_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 14000 : 9000;
 // The statewide DOR parcel roll normally answers in well under 1s. When a lookup lands on a marginal
 // point (a clicked house near a parcel edge, or an interpolated geocode) the request can instead HANG
-// until it times out — and because the parcel gates first paint, that froze the whole result for ~9s.
-// Give it a shorter leash: still generous for a legit slow response, but it fails over fast on a hang.
-const PARCEL_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 8000 : 5500;
+// until it times out — and because the parcel gates first paint, that froze the whole result (once ~9s,
+// then 5.5s). On a map CLICK the roll fires before the county is known, so in a live-feed county (Lee,
+// Collier, …) a hang stalls first paint even though the fast county feed is about to take over. Give it a
+// short leash: still well clear of a legit response (<1s) but it fails over to the county feed fast on a hang.
+const PARCEL_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 5000 : 3000;
 
 /* Retry wrapper: ArcGIS Online services occasionally fail transiently (a 5xx/CORS blip comes back
    fast). One quick retry clears most of these. But a *timeout* means the server is just slow —
@@ -11368,7 +11371,24 @@ async function runLookup(lat,lng,searchCtx){
   // are the slow ones (flood has a 9-14s timeout) and their cards appear lower in the panel — so we
   // await them individually right where they're consumed instead of holding the whole panel behind
   // them. This lets parcel/owner/jurisdiction paint as soon as they're ready.
-  let [parcel,city,county,live] = await Promise.all([pParcel,pCity,pCounty,pLive]);
+  // On a map CLICK the county isn't known when the state roll (pParcel) fires, so in a live-feed county
+  // (Lee, Collier, …) a state-roll HANG would gate first paint even though the fast county feed is about
+  // to supply the authoritative parcel — and the render below already prefers the live feed over the roll
+  // (the roll only contributes a minor "roll lists owner as X" footnote). So: resolve city+county first
+  // (fast ~0.4s), and once we know it's a wired county, give the state roll only a short grace to fill the
+  // `parcel` slot, then proceed — pCountyLive renders the card regardless. Normal roll responses (<1s) are
+  // unaffected (they win the race instantly); only a genuine hang trips the grace. Unwired counties (no
+  // live feed) still wait on the state roll as before, since it's their only parcel source.
+  let parcel, city, county, live;
+  { const _r = await Promise.all([pCity, pCounty, pLive]);
+    city=_r[0]; county=_r[1]; live=_r[2];
+    if(myId!==runId) return;
+    const _cn0 = (!county.__err && county.features && county.features[0]) ? county.features[0].attributes.NAME : null;
+    const _wiredClick = !liveSource.url && _cn0 && !!COUNTY_LIVE[norm(_cn0)];
+    parcel = _wiredClick
+      ? await Promise.race([ pParcel, new Promise(res=>setTimeout(()=>res({features:[],__graced:true}), 1200)) ])
+      : await pParcel;
+  }
   if(myId!==runId) return; // a newer query superseded this one
   _timings.push({label:'▸ first paint (core ready)', ms:Math.round(performance.now()-_T0), milestone:true});
   let flood, util;   // resolved later, at their card
@@ -11667,6 +11687,15 @@ async function runLookup(lat,lng,searchCtx){
       if(_bi>0 && _bs>=0){ const _f=liveRes.features.splice(_bi,1)[0]; liveRes.features.unshift(_f); }
     }
     const det=detectFields(Object.keys(liveRes.features[0].attributes));
+    // PARCEL-ID GUARD (Hernando): the county's CAMA export carries several parcel-ish columns —
+    // a short parcel number and an internal key — that can win detectFields' generic `pid` regex
+    // (e.g. /^PIN$/, /^PARID$/) over the full, human-readable PARCEL_NUMBER the Property Appraiser
+    // actually publishes. Pin it to PARCEL_NUMBER so the site card, address-point badge, appraiser
+    // verify link, AND the Excel export all show the real parcel number. Gap-only; guarded to Hernando.
+    if(norm(countyName)==='HERNANDO'){
+      const _pn=liveRes.features[0].attributes.PARCEL_NUMBER;
+      if(_pn!=null && String(_pn).trim()!=='') det.pid='PARCEL_NUMBER';
+    }
     // Some live county feeds are "lean" — they carry owner/value/zoning but NO living-area or
     // year-built (Charlotte's layer 17, Collier's similar layer). The dated statewide FDOR roll
     // DOES carry those (TOT_LVG_AR, ACT_YR_BLT). It's already fetched in parallel (pParcel →
@@ -12388,6 +12417,12 @@ async function runLookup(lat,lng,searchCtx){
   try{
     if(liveRes && liveRes.features && liveRes.features[0]){
       const det=detectFields(Object.keys(liveRes.features[0].attributes));
+      // Same Hernando parcel-id guard as the main render: prefer the published PARCEL_NUMBER over
+      // any short/alt parcel field that detectFields' generic regex might otherwise pick.
+      if(norm(countyName)==='HERNANDO'){
+        const _pn=liveRes.features[0].attributes.PARCEL_NUMBER;
+        if(_pn!=null && String(_pn).trim()!=='') det.pid='PARCEL_NUMBER';
+      }
       strap=det.pid?pick(liveRes.features[0].attributes,det.pid):null;
     }
     if(!strap && parcel && !parcel.__err && parcel.features && parcel.features[0]){
