@@ -1070,7 +1070,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
     <div class="kick">Florida Parcel &amp; Flood Instrument</div>
     <h1>Property Lookup</h1>
-    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Osceola, Brevard, Lake, DeSoto, Hardee, Highlands) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
+    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Osceola, Brevard, Miami-Dade, Lake, DeSoto, Hardee, Highlands) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
   </header>
 
   <div class="search">
@@ -1743,6 +1743,22 @@ const COUNTY_LIVE = {
     // (so the card still renders — just without the live BCPAO detail). Parcel id is pinned to the
     // hyphenated PID via the guard; TaxAcct is the API key, not shown as the parcel number.
     "https://www.bcpao.us/arcgis/rest/services/Brevard_Detailed_Dynamic/MapServer/24/query"
+  ]},
+  MIAMIDADE : { label:"Miami-Dade County (Property Appraiser · MDPA)", urls:[
+    // Miami-Dade Property Appraiser's own ArcGIS server (gisweb.miamidade.gov), "MD_LandInformation"
+    // MapServer, "Parcels @ PaParcel" sublayer 26. Rich FLAT layer (no join/table, no API) — one
+    // point-in-polygon returns everything. SR 2236 (FL State Plane East ftUS; tool sends inSR=4326
+    // and the server reprojects). Field schema confirmed from live layer metadata (currentVersion
+    // 11.1, 44 fields). Most fields auto-detect via detectFields: parcel=FOLIO (13-digit folio),
+    // site=TRUE_SITE_ADDR, value=TOTAL_VAL_CUR, land=LAND_VAL_CUR, year=YEAR_BUILT, living area=
+    // BUILDING_HEATED_AREA, use=DOR_DESC, lot=LOT_SIZE, mailing=TRUE_MAILING_ADDR1. Only owner
+    // (TRUE_OWNER1 — the TRUE_ prefix dodges the generic owner regex) and site city (TRUE_SITE_CITY)
+    // need the MIAMIDADE guard below; it also surfaces assessed/roll-year (ASSESSMENT_YEAR_CUR),
+    // building value, and beds/baths. Miami-Dade zoning is already wired separately (ZONING_LIVE.
+    // MIAMIDADE), so the parcel's PRIMARY_ZONE is informational only. ⚠️ CORS: verify gisweb.miamidade
+    // .gov allows cross-origin /query with the diagnostic — if blocked it falls back to the statewide
+    // FDOR roll automatically (this layer is otherwise a clean direct wire-up, no proxy).
+    "https://gisweb.miamidade.gov/arcgis/rest/services/MD_LandInformation/MapServer/26/query"
   ]}
 };
 
@@ -5853,20 +5869,26 @@ const FLOOD_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) 
 // then 5.5s). On a map CLICK the roll fires before the county is known, so in a live-feed county (Lee,
 // Collier, …) a hang stalls first paint even though the fast county feed is about to take over. Give it a
 // short leash: still well clear of a legit response (<1s) but it fails over to the county feed fast on a hang.
-const PARCEL_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 5000 : 3000;
+const PARCEL_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 9000 : 6000;
 
 /* Retry wrapper: ArcGIS Online services occasionally fail transiently (a 5xx/CORS blip comes back
    fast). One quick retry clears most of these. But a *timeout* means the server is just slow —
    retrying only makes the user wait the full timeout twice, so we bail out immediately on abort. */
-async function arcQueryRetry(url, lat, lng, outFields, withGeom, timeoutMs, tries){
+async function arcQueryRetry(url, lat, lng, outFields, withGeom, timeoutMs, tries, abortRetry){
   let lastErr=null;
   const n=tries||2;
+  let tmo=timeoutMs;
   for(let i=0;i<n;i++){
-    try{ return await arcQuery(url, lat, lng, outFields, withGeom, timeoutMs); }
+    try{ return await arcQuery(url, lat, lng, outFields, withGeom, tmo); }
     catch(e){
       lastErr=e;
-      if(e && (e.name==='AbortError' || /abort/i.test(e.message||''))) break;   // timed out — don't wait again
-      if(i<n-1) await new Promise(r=>setTimeout(r,250));
+      const aborted = e && (e.name==='AbortError' || /abort/i.test(e.message||''));
+      // By default a timeout (abort) stops retrying — the host is slow, waiting again rarely helps.
+      // But some callers (the big statewide FDOR roll, which is legitimately slow on a cold
+      // point-in-polygon) pass abortRetry:true — for them, a timeout is exactly when to try again,
+      // with a LONGER window each pass, instead of surfacing "signal aborted" to the user.
+      if(aborted && !abortRetry) break;
+      if(i<n-1){ if(aborted) tmo=Math.round((tmo||6000)*1.6); await new Promise(r=>setTimeout(r,250)); }
     }
   }
   throw lastErr;
@@ -11826,7 +11848,7 @@ async function runLookup(lat,lng,searchCtx){
   if(window.Sheet) Sheet.setState('full');   // bring results into view on mobile
 
   // Fire all queries in parallel; each degrades independently.
-  const pParcel  = _timed('parcel (state roll)', arcQueryRetry(EP.parcel, lat, lng, '*', true, PARCEL_TIMEOUT)).catch(e=>({__err:e.message}));
+  const pParcel  = _timed('parcel (state roll)', arcQueryRetry(EP.parcel, lat, lng, '*', true, PARCEL_TIMEOUT, 3, true)).catch(e=>({__err:e.message}));
   const pFlood   = _timed('flood (FEMA)', arcQueryRetry(EP.flood, lat, lng, 'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, FLOOD_TIMEOUT)).catch(e=>({__err:e.message}));
   const pCity    = _timed('city boundary', arcQuery(EP.city,    lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
   const pCounty  = _timed('county boundary', arcQuery(EP.county,  lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
@@ -12116,7 +12138,7 @@ async function runLookup(lat,lng,searchCtx){
   if(_rollAnchor){
     const _dd=(_rollAnchor.lat-lat)*(_rollAnchor.lat-lat)+(_rollAnchor.lng-lng)*(_rollAnchor.lng-lng);
     if(_dd > 1e-9){   // ~> a few metres: only re-fetch when the point actually moved
-      const _reParcel = await arcQueryRetry(EP.parcel, _rollAnchor.lat, _rollAnchor.lng, '*', true)
+      const _reParcel = await arcQueryRetry(EP.parcel, _rollAnchor.lat, _rollAnchor.lng, '*', true, PARCEL_TIMEOUT, 3, true)
         .catch(()=>null);
       if(_reParcel && !_reParcel.__err && _reParcel.features && _reParcel.features[0]){
         // Trust the re-anchored record only if its house number matches the authoritative address
@@ -12346,6 +12368,21 @@ async function runLookup(lat,lng,searchCtx){
     if(norm(countyName)==='ORANGE'){
       const _la=liveRes.features[0].attributes;
       if(_la.__zoning==null && _la.ZONING_CODE!=null && String(_la.ZONING_CODE).trim()!=='') _la.__zoning=String(_la.ZONING_CODE).trim();
+    }
+    // Miami-Dade's rich flat layer 26 auto-detects almost everything, but two fields use the MDPA
+    // "TRUE_" prefix that dodges the generic detectFields regexes: owner (TRUE_OWNER1) and site city
+    // (TRUE_SITE_CITY). Pin them here, and surface assessed roll-year + building value via the standard
+    // custom-key channels. Gap-only; guarded to Miami-Dade. Fields verified from live layer metadata.
+    if(norm(countyName)==='MIAMIDADE'){
+      const _la=liveRes.features[0].attributes;
+      const _n=v=>v!=null&&String(v).replace(/[^0-9.]/g,'')!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+      const _s=v=>v!=null&&String(v).trim()!=='';
+      if(!det.owner && _s(_la.TRUE_OWNER1)) det.owner='TRUE_OWNER1';
+      if(!det.city  && _s(_la.TRUE_SITE_CITY)) det.city='TRUE_SITE_CITY';
+      // roll year for the value label (ASSESSMENT_YEAR_CUR = current assessment year)
+      if(_la.__asmtYr==null && _n(_la.ASSESSMENT_YEAR_CUR)) _la.__asmtYr=_la.ASSESSMENT_YEAR_CUR;
+      // building count (renders "· N bldgs" next to year built when >1)
+      if(_la.__bldgCount==null && _n(_la.BUILDING_COUNT)) _la.__bldgCount=_la.BUILDING_COUNT;
     }
     // Brevard is a TWO-STEP feed. The BCPAO parcel layer (24) that resolved above is geometry + join
     // key only — it carries TaxAcct + Name(PID) + Acres and nothing else. The owner/value/living-area/
