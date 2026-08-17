@@ -1198,6 +1198,18 @@ function appraiserParcelLink(countyName, pid){
   }
   if(!pid) return home;
   const digits=String(pid).replace(/[^0-9]/g,'');
+  // Martin's own public map accepts the HYPHENATED PCN as a query parameter — verified live:
+  //   https://geoweb.martin.fl.us/general/?pcn=01-40-38-002-005-00300-8
+  // Handled BEFORE the digits-based switch below because that strips the hyphens, and the bare
+  // 18-digit string returns no results (the county/PA search only matches the formatted form).
+  // The MARTIN guard already formats det.pid to 2-2-2-3-3-5-1, so pid arrives hyphenated; re-format
+  // here anyway in case a raw value reaches this from another path.
+  if(c==='MARTIN'){
+    const _p = (digits.length===18)
+      ? digits.replace(/^(\d{2})(\d{2})(\d{2})(\d{3})(\d{3})(\d{5})(\d)$/,'$1-$2-$3-$4-$5-$6-$7')
+      : String(pid).trim();
+    return _p ? `https://geoweb.martin.fl.us/general/?pcn=${encodeURIComponent(_p)}` : home;
+  }
   switch(c){
     case 'COLLIER':  return digits?`https://www.collierappraiser.com/main_search/RecordDetail.html?FolioID=${digits}`:home;
     case 'LEE':      return `https://www.leepa.org/Search/PropertySearch.aspx`;            // STRAP search
@@ -1802,6 +1814,32 @@ const COUNTY_LIVE = {
     // they fail together — and it doubled the rows in the endpoint diagnostic, so only /arcgis/ is kept.
     // If this ever 404s, try the same path with /public/ before assuming the county pulled the data.
     "https://mcgis4.monroecounty-fl.gov/arcgis/rest/services/Parcels/MapServer/0/query"
+  ]},
+  MARTIN  : { label:"Martin County (Property Appraiser · county GIS)", urls:[
+    // ✅ Martin County's own ArcGIS Server (geoweb.martin.fl.us), "Administrative_Areas/base_map"
+    // MapServer sublayer 10 "Parcel Polygons" (inside the "Parcels" group layer, id 21). Token-free,
+    // capabilities "Map,Query,Data", maxRecordCount 5000, canModifyLayer:false (read-only
+    // publication — the good kind). relationships:[] so there is no joined attribute table to chase;
+    // this layer is FLAT and carries everything the county publishes.
+    // ⚠️ SR: source is 2236 (FL State Plane East ftUS) but the service publishes 102100/3857 WEB
+    // MERCATOR, same as Martin's zoning. arcQuery sends inSR=4326/outSR=4326; server reprojects.
+    // ⚠️ minScale 24000 affects DRAWING only, not /query.
+    // Carries: OWNER, MAIL_*, a six-part SITUS_* address, ACCOUNT + PCN + AIN (three different ids),
+    // DOR_CODE, AREA_ACRES, BOOK/PAGE (deed reference), TAX_DISTRICT_*, LAST_REVISION.
+    // NO VALUES, NO YEAR BUILT, NO SQUARE FOOTAGE — the guard leaves det.jv/land/yr/liv alone so the
+    // statewide FDOR roll fills them. Do NOT map SHAPE.AREA (lot area) or AREA_ACRES into living area.
+    // ⚠️ TWO AUTO-DETECT TRAPS the MARTIN guard below exists to correct — both would render a
+    // confident wrong value rather than a blank:
+    //   1. site → SITUS_HOUSE_ . The /SITUS/ pattern matches the HOUSE NUMBER field first, so the
+    //      card would show "1885" as the whole site address. The real address is six columns
+    //      (HOUSE_ + PREFIX + STREET + STREET_TYPE + POST_DIR + SUITE) and must be composed.
+    //   2. pid → ACCOUNT (an internal integer). PCN is the Parcel Control Number — the id Martin's
+    //      own parcel search and the Property Appraiser use, and the one a customer will recognize.
+    // ⚠️ Ch.119: Martin's own help page warns parcel search "results may not be complete due to
+    // public records exemptions" — i.e. exempt owners are WITHHELD upstream rather than flagged. There
+    // is no IsConfidential-style column here, so unlike St. Lucie there is nothing to suppress; an
+    // exempt parcel simply arrives with OWNER blank. The blank sweep drops the row.
+    "https://geoweb.martin.fl.us/arcgis/rest/services/Administrative_Areas/base_map/MapServer/10/query"
   ]},
   STLUCIE : { label:"St. Lucie County (Property Appraiser · county GIS)", urls:[
     // ✅ St. Lucie County's own ArcGIS Server (slcgis.stlucieco.gov/hosting). Token-free, polygon,
@@ -2701,6 +2739,52 @@ const ZONING_LIVE = {
   // columns. YRBLT feeds parcelYearBuilt; the parcels service is CORS-open and token-free.
   MANATEE: { label:"Manatee County Zoning", codeField:"ZONING", urls:[
     "https://www.mymanatee.org/gisits/rest/services/publicportal/publicportal/FeatureServer/0/query"
+  ]},
+  MARTIN: { label:"Martin County Zoning (unincorporated)", codeField:"ZONING", descField:"ZONING_DETAILS", urls:[
+    // ✅ Martin County's own ArcGIS Server (geoweb.martin.fl.us), "Administrative_Areas/
+    // Future_Landuse_Zoning" MapServer sublayer 1 "Zoning". Token-free, polygon, capabilities
+    // "Query,Map,Data", ArcGIS 11.5. Source data is FL State Plane East HARN (ftUS) but the service
+    // publishes as 102100/3857 WEB MERCATOR — arcQuery sends inSR=4326/outSR=4326 and the layer
+    // supports datum transformation, so reprojection is server-side either way.
+    // ⚠️ SUBLAYER 1 IS ZONING. The service is "Future_Landuse_Zoning" — sublayer 0 is the FUTURE LAND
+    // USE layer. Do NOT point this at 0: FLU is the comprehensive-plan designation, not the
+    // regulatory district, and the two look similar enough to pass a glance (the same conflation the
+    // Polk entry warns about).
+    // codeField=ZONING — confirmed three ways: unique-value renderer field1, displayField, AND a
+    // dedicated index. The field even carries a coded-value domain listing ~95 valid districts.
+    // descField=ZONING_DETAILS (75-char) — this is the layer's OWN pairing: its label expression is
+    // "[ZONING] CONCAT NEWLINE CONCAT [ZONING_DETAILS]", i.e. the county itself renders the district
+    // code above this field as its supporting line.
+    // ⚠️ SENTINEL VALUES IN THE DOMAIN — "NO DATA", "WATER" and "xxx" are real coded values, not
+    // errors. Expect them on submerged land, ROW and unassigned polygons; they render as districts
+    // unless filtered.
+    // ⚠️ MUNICIPAL PLACEHOLDERS — the domain also includes STUART, JUPITER ISLAND, OCEAN BREEZE,
+    // SEWALLS POINT and Indiantown as "district" values, marking incorporated land the county does
+    // NOT zone. refreshZoning()'s isMunicipalityPlaceholder() only matches "City/Town/Village of ..."
+    // patterns, so these BARE municipality names will NOT be filtered and will paint as if they were
+    // districts. Each of those five municipalities zones its own land; add ZONING_LIVE_CITY entries
+    // (or extend the placeholder regex) if they matter.
+    // Six named REDEVELOPMENT ZONING DISTRICTS (Jensen Beach, Rio, Hobe Sound, Port Salerno, Golden
+    // Gate, Old Palm City) are full district values here, not overlays — expect long labels.
+    // maxRecordCount is 1000 (lower than most) — the overlay's ZONING_MAXRECORDS density guard
+    // handles that by asking the user to zoom in rather than truncating silently.
+    "https://geoweb.martin.fl.us/arcgis/rest/services/Administrative_Areas/Future_Landuse_Zoning/MapServer/1/query",
+    // ↳ FALLBACK — the SAME FEATURE CLASS published a second time as sublayer 8 of the county's
+    // general-purpose "Administrative_Areas/Administrative_Areas" service. Verified identical, not
+    // merely similar: byte-identical extent, the same three index names (ZONING, ZONING_DETAILS and
+    // the database-generated A72_IX1 on SHAPE), the same startArchivingMoment (1494889528000, May
+    // 2017 — archiving can only have begun at one instant on one table), same fields, same renderer,
+    // same label expression, same ~95-value domain. Two map documents over one feature class.
+    // Schema-compatible, so codeField/descField above need no per-URL variation.
+    // WHY IT'S SECOND, not first: the primary reports canModifyLayer:false (a read-only publication)
+    // while this one is true (an editable working copy), and this one is defaultVisibility:false —
+    // an off-by-default reference layer inside a grab-bag service that also carries Public Property,
+    // Florida House Districts and street assets. The land-use service is the purposeful publication.
+    // Only cosmetic difference found: the coded-value domain is named "Zoning" on the primary and
+    // "WS1_Zoning" here — different domain objects, identical values.
+    // ⚠️ Costs one extra PARALLEL request per Martin lookup (queryZoning fires all candidates at
+    // once), so this is insurance against the primary service being retired, not free.
+    "https://geoweb.martin.fl.us/arcgis/rest/services/Administrative_Areas/Administrative_Areas/MapServer/8/query"
   ]},
   STLUCIE: { label:"St. Lucie County Zoning (unincorporated)", codeField:"Zoned",
     extra:[ {field:"Resolution", label:"Rezoning resolution"},
@@ -4425,7 +4509,34 @@ const ZONE_CATEGORY_OVERRIDE = {
   //     Non-Residential, Town or Village) — "mixed" reads truer than "public" for planned development.
   //   SPIS = Spoil Island, SUBM = Submerged — non-buildable; leaving them in "other" is correct.
   "CPUB":"public", "I":"public", "ROW":"other", "RF":"public", "RC":"public",
-  "PCS":"mixed", "PMUD":"mixed", "PNRD":"mixed", "PTV":"mixed"
+  "PCS":"mixed", "PMUD":"mixed", "PNRD":"mixed", "PTV":"mixed",
+  // Martin County (unincorporated) — its district naming diverges from the prefix heuristic more than
+  // most: ~25 codes landed in the "other" bucket without these. Keys are normalized (non-alphanumerics
+  // stripped), so "RE-1/2A" → "RE12A". Corrections:
+  //   AR-5A / AR-10A  Agricultural Ranchette — read as "other", are agricultural.
+  //   GI / HI / LI / LI-1 / M-3  General/Heavy/Limited Industrial — the L and M prefixes miss.
+  //   HB-1 / HB-1A / HB-1AA  Limited Business + Hotel/Motel — commercial.
+  //   HR-1 / HR-1A  Hutchinson-area single-family; HR-2 / HR-2A multi-family.
+  //   LC  Limited Commercial. WGC / WRC  Waterfront General/Resort Commercial.
+  //   WE-1  Waterfront Estates — an estate district despite the W prefix.
+  //   TP  Mobile Home Park (RT already lands on mobile via the R-T path, but TP does not).
+  //   SY  Salvage Yard — industrial in character.
+  //   ROW / WATER / NO DATA / xxx  non-district sentinels; "other" is correct, pinned so a future
+  //     heuristic change can't reclassify them into a real category.
+  //   E  is "Estates and Suburban Homes" here, NOT agricultural — the bare "E" currently reads as
+  //     agricultural and must be pinned to estate.
+  //   IZ  Interim Zoning — not industrial; unassigned pending a district.
+  // ⚠️ STUART / JUPITER ISLAND / OCEAN BREEZE / SEWALLS POINT / Indiantown are MUNICIPAL PLACEHOLDERS,
+  //   not districts — see the MARTIN note in ZONING_LIVE. Pinned to "other" so they at least render
+  //   neutrally rather than masquerading as a real category.
+  "AR5A":"agricultural", "AR10A":"agricultural", "E":"estate", "IZ":"other",
+  "GI":"industrial", "HI":"industrial", "LI":"industrial", "LI1":"industrial", "M3":"industrial",
+  "SY":"industrial", "HB1":"commercial", "HB1A":"commercial", "HB1AA":"commercial",
+  "LC":"commercial", "WGC":"commercial", "WRC":"commercial",
+  "HR1":"residential", "HR1A":"residential", "HR2":"multifamily", "HR2A":"multifamily",
+  "WE1":"estate", "TP":"mobile", "ROW":"other", "WATER":"other", "NODATA":"other", "XXX":"other",
+  "STUART":"other", "JUPITERISLAND":"other", "OCEANBREEZE":"other", "SEWALLSPOINT":"other",
+  "INDIANTOWN":"other"
 };
 function zoneCategory(code){
   const c = String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
@@ -6169,6 +6280,35 @@ async function fetchBrowardInfo(folio, timeoutMs){
            'SITUS_STREET_POST_DIR,SITUS_UNIT_NUMBER,SITUS_ZIP_CODE';
   const url=base+'?where='+encodeURIComponent("FOLIO_NUMBER='"+f+"'")+
             '&outFields='+encodeURIComponent(of)+'&orderByFields=FOLIO_NUMBER&returnGeometry=false&f=json';
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeoutMs||ENRICH_TIMEOUT);
+  try{
+    const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(t);
+    if(!r.ok) return null;
+    const j=await r.json();
+    return (j && j.features && j.features[0] && j.features[0].attributes) ? j.features[0].attributes : null;
+  }catch(e){ clearTimeout(t); return null; }
+}
+
+/* Fetch Martin County sales history by AIN. The county publishes "Land_Records/parcel_sales"
+   (layer 0 "Sales"), described as "Parcels with Sales as maintained by the Martin County Property
+   Appraiser" — the LAST THREE transactions per parcel, each with book/page, recording date and
+   consideration. Deeper than the single sale most county rolls expose.
+   Keyed on AIN, which the parcel layer (base_map/10) also carries — verified equal to ACCOUNT and to
+   the Property Appraiser's displayed "Account Number" on parcel 01-40-38-002-005-00300-8 (AIN 62958).
+   ⚠️ FILTERED SUBSET: only parcels that have transacted appear here, so a miss is NORMAL (never-sold
+   land) and must degrade silently — this is enrichment, never a parcel feed.
+   ⚠️ CONSIDERATION is the deed's stated consideration, NOT a verified market sale price. Quitclaims
+   into a trust or between family routinely read $10 or $100. The caller labels it accordingly and
+   does not treat small values as market signals.
+   Returns the attributes object or null on any failure. Never throws. */
+async function fetchMartinSales(ain, timeoutMs){
+  const a = String(ain==null?'':ain).replace(/[^0-9]/g,'');
+  if(!a) return null;
+  const base='https://geoweb.martin.fl.us/arcgis/rest/services/Land_Records/parcel_sales/MapServer/0/query';
+  const of='AIN,BOOK1,PAGE1,RECORD_DATE1,CONSIDERATION1,BOOK2,PAGE2,RECORD_DATE2,CONSIDERATION2,'+
+           'BOOK3,PAGE3,RECORD_DATE3,CONSIDERATION3';
+  const url=base+'?where='+encodeURIComponent('AIN='+a)+
+            '&outFields='+encodeURIComponent(of)+'&returnGeometry=false&f=json';
   const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeoutMs||ENRICH_TIMEOUT);
   try{
     const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(t);
@@ -13117,6 +13257,149 @@ async function runLookup(lat,lng,searchCtx){
       // BLANK SWEEP — same trap as Monroe: detectFields matches on field NAMES, so a present-but-
       // empty column (common on vacant land, ROW slivers and government parcels) would render an
       // empty row. Null the key instead so the row is omitted and the roll splice can fill it.
+      ['owner','owner2','pid','site','city','jv','land','yr','liv','saleP','saleY','mail','mailCity','use','lotSqft']
+        .forEach(_k=>{ if(det[_k] && !_s(_la[det[_k]])) det[_k]=null; });
+    }
+    // Martin County's parcel layer is flat and reasonably well-named, so most fields auto-detect —
+    // but TWO of them auto-detect to the WRONG column, which is worse than not detecting at all
+    // because the card renders a confident wrong value. This guard fixes both and composes the rest.
+    // ⚠️ NO VALUES / YEAR BUILT / LIVING AREA exist on this layer — det.jv/land/yr/liv are left alone
+    // so the FDOR roll fills them. AREA_ACRES and SHAPE.AREA are LOT size, never living area.
+    if(norm(countyName)==='MARTIN'){
+      const _la=liveRes.features[0].attributes;
+      const _n=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+      const _s=v=>v!=null&&String(v).trim()!=='';
+      // TRAP 1 — PARCEL ID. detectFields lands on ACCOUNT (an internal integer). PCN is the Parcel
+      // Control Number: the id Martin's own parcel search, the Property Appraiser and any customer
+      // use. Override unconditionally (not gap-only) because the wrong value is already in place.
+      // ⚠️ FORMAT IT. The layer stores PCN as a bare 18-digit string (014038002005003008) which
+      // returns NO RESULTS in the county/PA search — verified. The displayed form is 2-2-2-3-3-5-1:
+      //   01-40-38-002-005-00300-8  =  section 01, township 40, range 38, then subdivision/block/
+      //   lot/check digit. (Martin spans twp 37-40 S, rng 38-42 E, so the leading trio sanity-checks.)
+      // CONFIRMED against the Property Appraiser record for that parcel, which displays exactly
+      // "01-40-38-002-005-00300-8" as both PIN and Parcel ID.
+      // Martin's own help says to enter it WITH SPACES in their search; hyphens are the conventional
+      // display form and are trivially converted, so we show hyphens.
+      // Non-18-digit values (or anything with existing punctuation) pass through untouched rather
+      // than being mangled by a blind slice.
+      if(_s(_la.PCN)){
+        const _raw=String(_la.PCN).trim();
+        const _digits=_raw.replace(/[^0-9]/g,'');
+        _la.__martinPID = (_digits.length===18 && /^[0-9]+$/.test(_raw))
+          ? _digits.replace(/^(\d{2})(\d{2})(\d{2})(\d{3})(\d{3})(\d{5})(\d)$/,'$1-$2-$3-$4-$5-$6-$7')
+          : _raw;
+        det.pid='__martinPID';
+      }
+      // If PCN is blank, det.pid is still pointing at ACCOUNT from auto-detection — an internal
+      // integer that means nothing outside Martin's database and matches nothing in any public
+      // search. Drop the row instead of showing it. (The blank sweep at the end only nulls keys
+      // whose VALUE is empty; ACCOUNT has a value, it's just the wrong identifier.)
+      else det.pid=null;
+      // TRAP 2 — SITE ADDRESS. The /SITUS/ pattern matches SITUS_HOUSE_ (just the house number)
+      // before anything else, so the card would show "1885" as the full address. Compose the six
+      // situs parts in postal order. Also unconditional, for the same reason.
+      {
+        const _addr=[_la.SITUS_HOUSE_,_la.SITUS_PREFIX,_la.SITUS_STREET,_la.SITUS_STREET_TYPE,
+                     _la.SITUS_POST_DIR,_la.SITUS_SUITE]
+          .filter(_s).map(v=>String(v).trim()).join(' ').replace(/\s+/g,' ').trim();
+        if(_addr){ _la.__martinSite=_addr; det.site='__martinSite'; }
+        else det.site=null;   // situs genuinely empty (ROW, submerged) — omit rather than show a stray number
+      }
+      // USE CODE — DECODED. Martin's DOR_CODE is [1-digit category prefix][2-digit FL DOR code].
+      // The DOR code is the LAST TWO digits, not the first two. (An earlier attempt sliced the
+      // leading pair and rendered 102 as "Vacant commercial" on residential land — wrong end.)
+      // Established by sampling owner names across all 95 distinct codes; ~60 independent matches:
+      //   713 Dillards/JCPenney→13 dept store · 714 Publix→14 supermarket · 722 McDonalds→22
+      //   drive-in · 723 TD Bank/Seacoast→23 financial · 726 Stuart Petroleum→26 service station
+      //   728 mobile home parks→28 · 732 Barn Theatre/Lyric→32 theater · 738 Floridian National
+      //   Golf→38 · 739 motels→39 hotel · 671 churches→71 · 676 cemeteries→76 · 677 Masonic
+      //   lodge→77 club · 683 School Board→83 · 685 Martin Memorial→85 hospital · 686 Martin
+      //   County→86 · 987 State of FL→87 · 988 USA/USPS→88 federal · 989 Sewalls Point→89 municipal.
+      // ⚠️ This has NO relationship to the Property Appraiser's own 4-digit Use Code (that parcel
+      // reads 7100 Churches at the PA while this layer says 671). Two parallel schemes; don't mix.
+      // ⚠️ WHY THIS MATTERS HERE AND NOWHERE ELSE: Martin submits GEOMETRY ONLY to the DOR — the
+      // statewide roll returns literal single spaces for PARCEL_ID/DOR_UC/OWN_NAME and 0 for
+      // TOT_LVG_AR on Martin points (verified live). So unlike every other county there is NO roll
+      // fallback for use; if we don't decode it here, the row is simply absent.
+      if(_n(_la.DOR_CODE)){
+        const _d=Math.trunc(Number(_la.DOR_CODE));
+        const _dor=String(_d).padStart(3,'0').slice(-2);
+        // ⚠️ THE 9xx ASSOCIATION BLOCK IS *NOT* DOR-CODED. Codes 900-979 are Martin's own common-
+        // element / association / utility numbering, and running them through the DOR table produces
+        // confidently wrong labels — verified from owner samples:
+        //   900 CITY OF STUART        → 00 "Vacant residential"   ✗ (municipal)
+        //   910 BellSouth/Pinnacle Towers → 10 "Vacant commercial" ✗ (utility/tower)
+        //   914/944/994 condo assns  → 14 supermarket / 44 packing plant / 94 right-of-way ✗
+        //   919/949/954/959/974/979 HOAs → professional office / junk yard / timberland ✗
+        // 980-999 DO follow the DOR rule (980 railroad→80, 987 state→87, 988 federal→88,
+        // 989 municipal→89, 990→90, 991 utility→91, 995 submerged→95), so only 900-979 is excluded.
+        // Those get Martin-specific labels where the owner evidence is unambiguous, and are left
+        // UNMAPPED otherwise rather than mislabelled.
+        const MARTIN_9XX={
+          '900':'Municipal (city-owned)', '910':'Utility / communication tower',
+          '914':'Condominium common element', '919':'Association utility / common area',
+          '944':'Condominium common element', '949':'Homeowners association common area',
+          '954':'Association dock / recreation common area', '959':'Homeowners association common area',
+          '970':'Conservation / wildlife (non-profit)', '974':'Condominium common element',
+          '979':'Homeowners association common area', '994':'Condominium common element',
+          '995':'Association / district common area'
+        };
+        if(_d>=900 && _d<=979){
+          const _m=MARTIN_9XX[String(_d)];
+          if(_m){ _la.__martinUse=_m; det.use='__martinUse'; }
+          else { _la.__martinUse='Use code '+String(_d); det.use='__martinUse'; }
+        } else if(MARTIN_9XX[String(_d)]){
+          _la.__martinUse=MARTIN_9XX[String(_d)]; det.use='__martinUse';
+        } else {
+          _la.__martinUse=_dor; det.use='__martinUse';   // useLabel() resolves via DOR_USE
+        }
+      }
+      if(_la.__acres==null && _n(_la.AREA_ACRES)) _la.__acres=_la.AREA_ACRES;
+      // SALES — Martin is a TWO-STEP feed for transaction history. The parcel layer carries only a
+      // single BOOK/PAGE (the current deed), but "Land_Records/parcel_sales" (PA-maintained) holds
+      // the LAST THREE sales per parcel with recording dates and considerations. Keyed on AIN, which
+      // this layer already carries — no extra resolution step needed.
+      // Any failure (miss, timeout, service down) leaves the card exactly as it was: this is a
+      // never-sold parcel or a flaky host, neither of which should break a lookup.
+      // ⚠️ A MISS IS NORMAL — parcel_sales only contains parcels that have transacted.
+      if(_n(_la.AIN)){
+        const _sales = await fetchMartinSales(_la.AIN, ENRICH_TIMEOUT).catch(()=>null);
+        if(_sales){
+          // Pick the MOST RECENT by recording date rather than assuming slot 1 is newest — the same
+          // index-order trap that would have shown stale values on Monroe's three roll-year sets.
+          let _best=null;
+          for(const _i of [1,2,3]){
+            const _d=_sales['RECORD_DATE'+_i], _c=_sales['CONSIDERATION'+_i];
+            if(_d==null) continue;
+            const _t=Number(_d); if(!isFinite(_t)) continue;
+            if(!_best || _t>_best.t) _best={t:_t, amt:_c, bk:_sales['BOOK'+_i], pg:_sales['PAGE'+_i]};
+          }
+          if(_best){
+            try{
+              const _y=new Date(_best.t).getUTCFullYear();
+              if(_y>1900 && _y<2100 && _la.__saleY==null) _la.__saleY=String(_y);
+            }catch(e){}
+            // ⚠️ CONSIDERATION, not a verified sale price. Quitclaims into a trust or between family
+            // routinely record $10 or $100, so a tiny value is a legal formality and NOT a market
+            // signal. Surface anything > $100 as the sale figure; below that, keep the date only so
+            // the card shows "sold in 2024" without implying the house changed hands for $10.
+            if(_la.__saleP==null && _n(_best.amt) && Number(_best.amt)>100) _la.__saleP=Number(_best.amt);
+            // Prefer the SALE deed reference over the parcel layer's BOOK/PAGE — same recording,
+            // but this one is paired with a known date.
+            if(_s(_best.bk) && _s(_best.pg)) _la.__deed='OR '+String(_best.bk).trim()+'/'+String(_best.pg).trim();
+          }
+        }
+      }
+      // Deed reference (official record book/page) — fallback when the sales lookup found nothing.
+      if(_la.__deed==null && _s(_la.BOOK) && _s(_la.PAGE)) _la.__deed='OR '+String(_la.BOOK).trim()+'/'+String(_la.PAGE).trim();
+      // Mailing city line: MAIL_CITY alone auto-detects; append state + zip for a complete line.
+      if(det.mailCity==='MAIL_CITY' && (_s(_la.MAIL_STATE)||_s(_la.MAIL_ZIP))){
+        _la.__martinMailCity=[_la.MAIL_CITY,_la.MAIL_STATE,_la.MAIL_ZIP].filter(_s).map(v=>String(v).trim()).join(' ');
+        det.mailCity='__martinMailCity';
+      }
+      // BLANK SWEEP — same trap as Monroe/St. Lucie: detectFields matches on field NAMES, so a
+      // present-but-empty column renders an empty row. Ch.119-exempt parcels arrive here with OWNER
+      // blank (Martin withholds upstream rather than flagging), so this is what drops that row.
       ['owner','owner2','pid','site','city','jv','land','yr','liv','saleP','saleY','mail','mailCity','use','lotSqft']
         .forEach(_k=>{ if(det[_k] && !_s(_la[det[_k]])) det[_k]=null; });
     }
