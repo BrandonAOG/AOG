@@ -1070,7 +1070,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
     <div class="kick">Florida Parcel &amp; Flood Instrument</div>
     <h1>Property Lookup</h1>
-    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Osceola, Brevard, Miami-Dade, Broward, Lake, DeSoto, Hardee, Highlands) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
+    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Osceola, Brevard, Miami-Dade, Broward, Lake, DeSoto, Hardee, Highlands, Monroe, St. Lucie) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
   </header>
 
   <div class="search">
@@ -1775,6 +1775,102 @@ const COUNTY_LIVE = {
     // those still come from the statewide FDOR roll (the guard leaves them alone); if the table lookup
     // fails, the roll fills everything and the card degrades gracefully. SR 2236.
     "https://gisweb-adapters.bcpa.net/arcgis/rest/services/BCPA_EXTERNAL_JAN26/MapServer/16/query"
+  ]},
+  MONROE  : { label:"Monroe County (County GIS · MCPA roll)", urls:[
+    // ✅ Monroe County's OWN public ArcGIS server (mcgis4.monroecounty-fl.gov), "Parcels"
+    // MapServer sublayer 0 "Current Parcels". Token-free, polygon, MaxRecordCount 10000, advanced
+    // queries + pagination + statistics. RICH FLAT layer — the MIAMI-DADE pattern, NOT Brevard's:
+    // one point-in-polygon returns the entire MCPA roll (owner, mailing, three roll-year value sets,
+    // living area, year built, legal, two sales, subdivision, condo complex). NO second call, NO
+    // sibling table, NO API, NO proxy. Because the county runs its own server there is nothing to
+    // join to — everything is already on the wire.
+    // ⚠️ SR is 103022 (6438) at the LAYER level — NOT 2881 as the service-level listing implies; the
+    // layer overrides the service. Irrelevant either way: the tool sends inSR=4326 / outSR=4326 and
+    // the layer reports "Supports Datum Transformation: true", so the server reprojects both ways.
+    // Auto-detects via detectFields: NAME→owner (the anchored /^NAME$/ Marion added), LOCATION→site
+    // (/^LOCATION$/), YRBLT→year (/YRBLT/), PC→use (/^PC$/ — a DOR class code, so useLabel() maps it
+    // through DOR_USE). The MONROE guard in the live-feed block below maps the rest: RECHAR→parcel id,
+    // FLA→living area, PJUST*/PLAND*/PASSD*/PEXEM*→values (newest PYEAR of the three sets),
+    // SALE1/Y1→sale, ADD1+CITY/STATE/ZIP→mailing, LEGAL1-3→legal, NBRBLDG→building count.
+    // ⚠️ This host is FLAKY — a sibling service on it currently returns "Could not access any server
+    // machines". Every field above degrades to the statewide FDOR roll, so a dead server still renders
+    // a complete card, just roll-dated instead of live.
+    // ✅ LIVE-VERIFIED Aug 2026 through the app's own diagnostic: BOTH paths reachable, CORS-OK,
+    // queryable, owner→NAME detected. Clean DIRECT wire-up — NO proxy anywhere on mcgis4.
+    // ⚠️ /arcgis/ and /public/ are TWO WEB-ADAPTOR ALIASES FOR THE SAME SERVER SITE, not two servers.
+    // Both answer identically for Parcels. Wiring both was pointless redundancy — if the box goes down
+    // they fail together — and it doubled the rows in the endpoint diagnostic, so only /arcgis/ is kept.
+    // If this ever 404s, try the same path with /public/ before assuming the county pulled the data.
+    "https://mcgis4.monroecounty-fl.gov/arcgis/rest/services/Parcels/MapServer/0/query"
+  ]},
+  STLUCIE : { label:"St. Lucie County (Property Appraiser · county GIS)", urls:[
+    // ✅ St. Lucie County's own ArcGIS Server (slcgis.stlucieco.gov/hosting). Token-free, polygon,
+    // SR 2236 (FL State Plane East ftUS) with datum transformation — arcQuery sends inSR=4326/
+    // outSR=4326 and the server reprojects. CORS-OK (live-tested through the app's diagnostic).
+    // ⚠️ ROUTED AROUND A LOCKED FOLDER: the appraiser's own "PA" folder on this server returns
+    // ArcGIS error 499 (Token Required). These layers expose the SAME full assessment roll from the
+    // public "Property" folder — the presence of IsConfidential / HEX / HEXYear / AgCredit confirms
+    // it's the complete CAMA view, not a county-owned subset (no definitionExpression, full-county
+    // extent). Primary and fallback #1 are the SAME underlying table published twice (identical 41
+    // fields, identical index names R492_pk/S476_idx); ParcelBoundariesDetailed is preferred because
+    // it sits at a sane path, whereas vwParcelBoundaries is sublayer 3 of a service named
+    // "County_Owned_Parcels" — a name that invites someone to tighten its permissions later.
+    // ⚠️ NO LIVING AREA AND NO YEAR BUILT EXIST ON ANY PUBLIC ST. LUCIE LAYER. Verified across
+    // ParcelBoundariesDetailed, vwParcelBoundaries, ParcelsPublic and AddressMaster. Building
+    // characteristics live in the locked PA folder. The STLUCIE guard therefore deliberately LEAVES
+    // det.liv AND det.yr ALONE so the statewide FDOR roll fills them — do NOT map TotalAppraised-
+    // SFYIValue or Shape.STArea() into living area; the former is a VALUE (special-feature/yard-item
+    // dollars) and the latter is LOT area, and either would silently render a wrong square footage.
+    // Field notes for the guard below: owner is split across CuO1LastName/CuO1FirstName (+CuO2*);
+    // site address is split across StreetNumber/LocDirection/StreetName with LocationCity separate;
+    // values are TotalAppraisedValue / TotalAppraisedLandValue / TotalAppraisedBuildingValue;
+    // use is LandUseDescription (readable) with LUC the 4-char code; legal is LegalDescription;
+    // mailing is CuOStreet1/2 + CuOCity/CuOState/CuOPostal (OWNER'S address, never situs).
+    // IsConfidential flags Ch. 119 exempt owners — the guard suppresses owner + mailing for those.
+    // Only ParcelID auto-detects; everything else is mapped explicitly.
+    // Address anchoring: ADDRPOINT_FEEDS.STLUCIE (AddressMaster) resolves the authoritative point by
+    // house number first, so the point-in-polygon runs from the right house — this matters in Port
+    // St. Lucie, where tens of thousands of curvilinear platted lots defeat geocoders.
+    // ✅ PRIMARY — the PROPERTY APPRAISER'S OWN server (map.paslc.gov), "GISPublic/TaxMap" MapServer
+    // sublayer 9 "Parcels". A DIFFERENT HOST from the county's slcgis box, which is why it sidesteps
+    // the locked PA folder entirely. Token-free, capabilities "Map,Query,Data", maxRecordCount 20000.
+    // ⚠️ SR is 102100/3857 (WEB MERCATOR) here, not the 2236 every slcgis layer uses — arcQuery sends
+    // inSR=4326/outSR=4326 either way, so it reprojects; just don't assume 2236 when debugging.
+    // ⚠️ The parent service is TILE-CACHED (singleFusedMapCache:true) but sublayer 9 still reports
+    // Query, so /query works — verified live.
+    // RICHEST ST. LUCIE SOURCE. Carries what the county layers do NOT: YearBuilt, SalePrice/SaleDate,
+    // Grantor/Grantee, TransferBook/Page, BuildingCount, Beds/Baths, TotalAssessedValue,
+    // TotalExemptionValue, TotalTaxableValue, Subdivision, and a per-parcel Zoning code.
+    // Owner and site are PRE-COMPOSED here (Owner1/Owner2/Owner3, SiteAddress/SiteCity/SiteZIP), so
+    // they auto-detect — the STLUCIE guard's CuO*/StreetNumber composition simply doesn't fire on this
+    // URL (it's gap-only), and the guard's value/legal mappings still work because TotalAppraisedValue,
+    // TotalAppraisedLandValue and LegalDescription are named IDENTICALLY on both sources.
+    // ⚠️ STILL NO HEATED SQUARE FOOTAGE. TotalArea is LAND area — verified live: parcel
+    // 1107-111-0001-000-9 returns TotalArea 27,149,641 (≈623 acres). Do NOT map it to living area.
+    // det.liv stays unset; the FDOR roll fills it.
+    // ⚠️ THREE KNOWN GAPS on this URL vs the county fallbacks, deliberately left for a follow-up pass
+    // rather than silently mismapped:
+    //   1. use — this layer names it LandUseCodeDescription; the guard maps LandUseDescription (the
+    //      county spelling) and detectFields matches neither, so the use row falls back to the FDOR
+    //      roll. Harmless (correct value, just roll-dated) but easy to close later.
+    //   2. SaleDate is epoch-ms. Verified it matches NO saleY pattern, so it renders NOTHING rather
+    //      than a raw millisecond number — sale PRICE shows, sale YEAR doesn't. Convert it in the
+    //      guard (as Osceola does) if the year is wanted.
+    //   3. Isconfidential (lowercase 'c') — RESOLVED: the guard now matches the flag case-
+    //      insensitively and clears the pre-composed owner/mail keys, so Ch.119 records are safe on
+    //      both this source and the county ones. Verified against both schemas.
+    "https://map.paslc.gov/arcgis/rest/services/GISPublic/TaxMap/MapServer/9/query",
+    // ↳ fallback: county BOCC server (slcgis). Thinner — no year built, no sale, no beds/baths — but
+    // it IS the one the STLUCIE guard was written against (CuO* owner split, StreetNumber site split,
+    // capital-C IsConfidential), so a card from here is fully mapped and Ch.119-safe.
+    "https://slcgis.stlucieco.gov/hosting/rest/services/Property/ParcelBoundariesDetailed/MapServer/0/query",
+    // ↳ fallback: same table, buried path (sublayer 3 of County_Owned_Parcels). Proven CORS-OK.
+    "https://slcgis.stlucieco.gov/hosting/rest/services/Property/County_Owned_Parcels/MapServer/3/query",
+    // ↳ fallback: the county's deliberately-published sanitized public cut. THINNER — owner (Owner1/
+    // Owner2) and SiteAddress are pre-composed and auto-detect cleanly, but it carries NO values, no
+    // use code and no legal, so a card from this URL degrades to roll data for those. Confidential
+    // records are pre-stripped here (no IsConfidential field — the county already removed them).
+    "https://slcgis.stlucieco.gov/hosting/rest/services/Property/ParcelsPublic/MapServer/0/query"
   ]}
 };
 
@@ -2415,19 +2511,29 @@ const ZONING_LIVE = {
     "https://bcgishub.broward.org/pdm/rest/services/PDMD/BMSDParcels/MapServer/4/query"
   ]},
   MONROE: { label:"Monroe County Zoning (Land Use District, unincorporated Keys)", codeField:"ZONE_", descField:"Zone_Desc", urls:[
-    // ✅ VERIFIED public queryable layer — Monroe County's public "Planning_Environmental_Public" MapServer,
-    // sublayer 7 ("LUD - Zoning") on the county's own ArcGIS Server (mcgis4.monroecounty-fl.gov/public).
-    // Token-free, polygon, SR 2881 (FL State Plane East ftUS; tool sends inSR=4326 and the server reprojects).
+    // ✅ LIVE-VERIFIED Aug 2026 through the app's own diagnostic: reachable, CORS-OK, queryable.
+    // Monroe County's "APO_GIS" MapServer, sublayer 19 ("Land Use Districts (Zoning)"), on the county's
+    // own ArcGIS Server (mcgis4.monroecounty-fl.gov). Token-free, polygon, SR 103022 (6438) at the LAYER
+    // level (NOT the 2881 the service-level listing implies); arcQuery sends inSR=4326/outSR=4326 and the
+    // layer supports datum transformation, so reprojection is server-side.
     // In the Keys the regulatory zoning system is the "Land Use District" (LUD) map, per the county Land
-    // Development Code — this IS the zoning layer (the county's own map viewer labels it "MONROE COUNTY LUD
-    // (Zoning)"). codeField=ZONE_ (note trailing underscore) — CONFIRMED as the Display Field, unique-value
-    // renderer field (Field 1 = ZONE_), and label field. descField=Zone_Desc (50-char readable district name).
-    // Bonus: Zone_Label (short label), Muinicode_URL (link to the district's LDC section). Covers UNINCORPORATED
-    // Monroe (the vast majority of the Keys); the five incorporated municipalities (Key West, Marathon,
-    // Islamorada, Key Colony Beach, Layton) set their own zoning and are NOT in this county layer — an in-city
-    // parcel may return blank. Not yet live-point-tested through the app's parameterized query — verify a real
-    // unincorporated Keys parcel (e.g. Big Pine, Key Largo, Cudjoe) before fully trusting a "no live zoning" gap.
-    "https://mcgis4.monroecounty-fl.gov/public/rest/services/Planning_Environmental_Public/MapServer/7/query"
+    // Development Code — this IS the zoning layer. codeField=ZONE_ (trailing underscore) — CONFIRMED as
+    // both the layer's Display Field and its unique-value renderer Field 1.
+    // ⚠️ HISTORY — do NOT re-add Planning_Environmental_Public/MapServer/7. It was wired here first and
+    // is dead: the /public/ REST folder listing still ADVERTISES that service, but a live probe returns
+    // "Service Planning_Environmental_Public/MapServer not found" on BOTH the /arcgis/ and /public/
+    // paths. The folder listing is stale; the service is gone.
+    // ⚠️ /arcgis/ and /public/ are TWO ALIASES FOR THE SAME SERVER SITE, not two servers — APO_GIS/19
+    // answers identically on both. Only /arcgis/ is wired: zoning fires ALL candidates in PARALLEL, so
+    // a duplicate alias costs a real extra request on every Keys lookup and buys no failover.
+    // ⚠️ descField=Zone_Desc is INFERRED from the source dataset, not confirmed on this layer. It's safe
+    // either way: queryZoning falls back to detectZoningFields() for the description when the pinned
+    // field is absent, so a wrong guess degrades to auto-detection rather than a blank row. If the
+    // district name ever renders blank while the CODE still shows, this is the field to check.
+    // Covers UNINCORPORATED Monroe (the vast majority of the Keys); the five incorporated municipalities
+    // (Key West, Marathon, Islamorada, Key Colony Beach, Layton) set their own zoning and are NOT in this
+    // county layer — an in-city parcel may correctly return blank.
+    "https://mcgis4.monroecounty-fl.gov/arcgis/rest/services/APO_GIS/MapServer/19/query"
   ]},
   PALMBEACH: { label:"Palm Beach County Zoning (unincorporated)", codeField:"FCODE", descField:"FNAME", urls:[
     // ✅ VERIFIED public layer, fields CONFIRMED from a live query — Palm Beach County's "OpenData/
@@ -2595,6 +2701,36 @@ const ZONING_LIVE = {
   // columns. YRBLT feeds parcelYearBuilt; the parcels service is CORS-open and token-free.
   MANATEE: { label:"Manatee County Zoning", codeField:"ZONING", urls:[
     "https://www.mymanatee.org/gisits/rest/services/publicportal/publicportal/FeatureServer/0/query"
+  ]},
+  STLUCIE: { label:"St. Lucie County Zoning (unincorporated)", codeField:"Zoned",
+    extra:[ {field:"Resolution", label:"Rezoning resolution"},
+            {field:"Remarks",    label:"Remarks"} ],
+    urls:[
+    // ✅ St. Lucie County's own ArcGIS Server (slcgis.stlucieco.gov/hosting), "LandUse/Zoning"
+    // MapServer sublayer 0. Token-free, polygon, capabilities "Map,Query,Data", maxRecordCount 20000
+    // (high — good for the overlay's envelope fetch), SR 2236 (FL State Plane East ftUS) with datum
+    // transformation supported, so arcQuery's inSR=4326/outSR=4326 reprojects server-side.
+    // Layer description: "Zoning districts of the unincorporated portion of St. Lucie County, Florida".
+    // ⚠️ codeField=Zoned (NOT "Zoning" — that's the FORT PIERCE layer's field name; don't cross them).
+    // Confirmed as the unique-value renderer's field1. PINNED because the layer also carries
+    // PreviousZo / Previous_1..3 (prior zoning designations from past rezonings) which the generic
+    // detector could latch onto and render a STALE district as the current one.
+    // ⚠️ NO DESCRIPTION FIELD EXISTS. Unlike Fort Pierce (ZoningDesc) the readable district names
+    // ("IL, Industrial Light") live ONLY in the renderer's uniqueValueInfos — styling metadata, not
+    // data. A point query returns just the 6-char code. descField is therefore deliberately UNSET
+    // rather than pointed at a wrong field; the overlay colors + legend key off the code, which is all
+    // the map needs. If a readable name is wanted on the site card later, bake the 35 code→label pairs
+    // from the renderer into a static lookup (same shape as DOR_USE) — districts change slowly enough
+    // that a static table is safe.
+    // Extras surfaced: Resolution (the rezoning resolution number) and Remarks. ChangeDate /
+    // Previous_* carry full rezoning history if that's ever wanted.
+    // ⚠️ VINTAGE: derivative layers published from this same source (Low_Density_Zoning_In_SFHA,
+    // OpenSpacePreservation) both state "Zoning last updated January 2020" and "For general planning
+    // purposes only" — treat as a planning reference, not a regulatory determination.
+    // ⚠️ COVERAGE: UNINCORPORATED St. Lucie only. Fort Pierce is wired separately below. PORT ST.
+    // LUCIE — the county's largest city — runs its OWN GIS and is NOT on this server, so PSL addresses
+    // will correctly return blank here until a PSL entry is added. That's a coverage gap, not a bug.
+    "https://slcgis.stlucieco.gov/hosting/rest/services/LandUse/Zoning/MapServer/0/query"
   ]}
 };
 
@@ -2602,6 +2738,28 @@ const ZONING_LIVE = {
    zoning authority). Entries may pin codeField/descField when the layer's field names
    aren't obvious to the auto-detector. Keyed by normalized municipality name. */
 const ZONING_LIVE_CITY = {
+  FORTPIERCE: { label:"City of Fort Pierce Zoning", codeField:"Zoning", descField:"ZoningDesc",
+    extra:[ {field:"LandUseDes", label:"Future land use"} ],
+    urls:[
+    // ✅ Hosted by ST. LUCIE COUNTY (slcgis.stlucieco.gov/hosting), not by the city — service
+    // "LandUse/ForttPierceZoningFLU" sublayer 0. NOTE THE TYPO: "Fortt" with two t's is the actual
+    // service name; it must be spelled that way in the URL.
+    // Token-free, polygon, capabilities "Map,Query,Data", SR 2236 with datum transformation, so
+    // inSR=4326/outSR=4326 reprojects server-side. 29 districts (A-1 through R-5).
+    // codeField=Zoning (confirmed renderer field1), descField=ZoningDesc (80-char readable, e.g.
+    // "C-3, General Commercial"). Extra: LandUseDes = future land use description (FutureLand holds
+    // the FLU code) — same treatment as Broward's LAND_USE.
+    // ⚠️ Do NOT confuse this layer's "Zoning" field with the COUNTY layer's "Zoned" field above.
+    // ⚠️ This layer is PARCEL-BASED and unusually rich for a zoning layer — it also carries Owner1/
+    // Owner2, SiteAddres/SiteCSZ, Parcel_Num, Hyphen_PID, LegalDescr, AnnexDate, RezoneOrd/RezoneDate
+    // and SLC_Zoning (the county's code for the same parcel — useful on recently annexed land).
+    // The mailing block (OwnerAdd1/OwnerCSZ) is the OWNER'S address, NOT situs — situs is SiteAddres.
+    // ⚠️ STALE MIRROR: the county's own service description says this "needs to be updated regularly
+    // from City of Fort Pierce GIS", and the Portal item has not been modified since March 2022. It is
+    // a manual copy of the city's data, not a live feed from the city. Verify anything load-bearing
+    // against the city directly.
+    "https://slcgis.stlucieco.gov/hosting/rest/services/LandUse/ForttPierceZoningFLU/MapServer/0/query"
+  ]},
   TAMPA: { label:"City of Tampa Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
     // ⚠️ CORRECTED Aug 2026: the layer moved services — was OpenData/Boundary/MapServer/11 (confirmed
     // dead via the app's own live diagnostic: "Layer not found" / BAD PATH), now lives at
@@ -4253,7 +4411,21 @@ const ZONE_CATEGORY_OVERRIDE = {
   "ARR":"agricultural", "RCC":"commercial", "RH":"multifamily", "OC":"commercial", "NAC":"commercial",
   "LCC":"commercial", "HIC":"commercial", "PM":"industrial", "ROS":"public", "INST1":"public", "INST2":"public",
   // Pasco County
-  "AC":"agricultural", "AR1":"agricultural", "AR5":"agricultural", "AR5MH":"mobile", "ER":"estate", "ER2":"estate"
+  "AC":"agricultural", "AR1":"agricultural", "AR5":"agricultural", "AR5MH":"mobile", "ER":"estate", "ER2":"estate",
+  // St. Lucie County (unincorporated) — the prefix heuristic mis-files several of its codes, since it
+  // keys on the FIRST letter. Keys here are already normalized (non-alphanumerics stripped), so
+  // "R/C" → "RC" and "AG-2.5" → "AG25". Corrections:
+  //   CPUB = Conservation Public — a "C" prefix, but conservation land, not commercial.
+  //   I    = Institutional — an "I" prefix, but institutional/civic, not industrial.
+  //   ROW  = Right of Way — an "R" prefix, but road right-of-way, not residential.
+  //   RF   = Religious Facility — an "R" prefix, but a civic/institutional use.
+  //   RC   = Residential/Conservation (1 du/5 ac) — conservation-weighted, drawn as public/open.
+  //   RVP  = Recreational Vehicle Park — correctly lands on "mobile"; left alone.
+  //   PCS/PMUD/PNRD/PTV are St. Lucie's PLANNED districts (Country Subdivision, Mixed-Use,
+  //     Non-Residential, Town or Village) — "mixed" reads truer than "public" for planned development.
+  //   SPIS = Spoil Island, SUBM = Submerged — non-buildable; leaving them in "other" is correct.
+  "CPUB":"public", "I":"public", "ROW":"other", "RF":"public", "RC":"public",
+  "PCS":"mixed", "PMUD":"mixed", "PNRD":"mixed", "PTV":"mixed"
 };
 function zoneCategory(code){
   const c = String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
@@ -5907,15 +6079,51 @@ function detectFields(fields){
   };
 }
 /* Map common FL DOR use codes to readable labels (for "existing use"). Codes are strings like "01". */
+/* FULL Florida DOR land-use code list (F.A.C. 12D-8.008 / DOR Property Code Guide). Previously this
+   table held only ~35 of the 100 codes, so anything outside that subset fell through to the raw
+   "Use code NNN" passthrough — e.g. 028 (mobile home parks) and 049 (open storage / equipment yards),
+   both common on generator jobs. Codes are keyed as 2-digit strings; useLabel() normalizes 2-, 3- and
+   (via the Monroe guard) 4-digit county variants down to these before lookup. */
 const DOR_USE = {
+  // 00-09 residential
   '00':'Vacant residential','01':'Single family residence','02':'Mobile home','03':'Multi-family (10+ units)',
-  '04':'Condominium','05':'Cooperative','06':'Retirement / life-care','07':'Misc residential','08':'Multi-family (<10 units)',
-  '10':'Vacant commercial','11':'Stores, 1-story','12':'Mixed use (store + office/residential)','16':'Community shopping center',
-  '17':'Office, 1-story','18':'Office, multi-story','19':'Professional office','20':'Airport/marina/terminal',
-  '21':'Restaurant / cafeteria','22':'Drive-in restaurant','23':'Financial institution','27':'Auto sales/repair',
-  '39':'Hotel / motel','40':'Vacant industrial','41':'Light manufacturing','48':'Warehousing/distribution',
-  '70':'Vacant institutional','71':'Church','72':'Private school','83':'Public school','86':'County',
-  '90':'Government leasehold','99':'Acreage not zoned agricultural'
+  '04':'Condominium','05':'Cooperative','06':'Retirement / life-care','07':'Misc residential (migrant camp, boarding home)',
+  '08':'Multi-family (<10 units)','09':'Residential common element / undefined',
+  // 10-39 commercial
+  '10':'Vacant commercial','11':'Stores, 1-story','12':'Mixed use (store + office/residential)',
+  '13':'Department store','14':'Supermarket','15':'Regional shopping center','16':'Community shopping center',
+  '17':'Office, 1-story','18':'Office, multi-story','19':'Professional office','20':'Airport / marina / terminal',
+  '21':'Restaurant / cafeteria','22':'Drive-in restaurant','23':'Financial institution','24':'Insurance company office',
+  '25':'Repair service shop (non-auto)','26':'Service station','27':'Auto sales / repair / storage',
+  '28':'Parking lot / mobile home park','29':'Wholesale outlet / produce house','30':'Florist / greenhouse',
+  '31':'Drive-in theater / open stadium','32':'Enclosed theater / auditorium','33':'Nightclub / bar / lounge',
+  '34':'Bowling alley / skating rink / enclosed arena','35':'Tourist attraction / entertainment facility',
+  '36':'Camp','37':'Race track','38':'Golf course / driving range','39':'Hotel / motel',
+  // 40-49 industrial
+  '40':'Vacant industrial','41':'Light manufacturing','42':'Heavy industrial','43':'Lumber yard / sawmill',
+  '44':'Packing plant','45':'Cannery / bottler / distillery','46':'Food processing / bakery',
+  '47':'Mineral processing / refinery / cement plant','48':'Warehousing / distribution terminal',
+  '49':'Open storage / building supplies / junk yard',
+  // 50-69 agricultural
+  '50':'Improved agricultural','51':'Cropland (class I)','52':'Cropland (class II)','53':'Cropland (class III)',
+  '54':'Timberland (site index 90+)','55':'Timberland (site index 80-89)','56':'Timberland (site index 70-79)',
+  '57':'Timberland (site index 60-69)','58':'Timberland (site index 50-59)','59':'Timberland (not classified)',
+  '60':'Grazing land (class I)','61':'Grazing land (class II)','62':'Grazing land (class III)',
+  '63':'Grazing land (class IV)','64':'Grazing land (class V)','65':'Grazing land (class VI)',
+  '66':'Orchard / grove / citrus','67':'Poultry / bees / tropical fish','68':'Dairy / feed lot',
+  '69':'Ornamentals / misc agricultural',
+  // 70-79 institutional
+  '70':'Vacant institutional','71':'Church','72':'Private school / college','73':'Private hospital',
+  '74':'Home for the aged','75':'Orphanage / charitable service','76':'Mortuary / cemetery / crematorium',
+  '77':'Club / lodge / union hall','78':'Sanitarium / convalescent / rest home','79':'Cultural organization',
+  // 80-89 governmental
+  '80':'Vacant governmental','81':'Military','82':'Forest / park / recreational area','83':'Public county school',
+  '84':'College (public)','85':'Hospital (public)','86':'County','87':'State','88':'Federal','89':'Municipal',
+  // 90-99 miscellaneous
+  '90':'Government leasehold','91':'Utility (gas, electric, telephone, water, pipeline)',
+  '92':'Mining / petroleum / gas land','93':'Subsurface rights','94':'Right-of-way / street / road / ditch',
+  '95':'River / lake / submerged land','96':'Sewage disposal / solid waste / borrow pit / marsh',
+  '97':'Outdoor recreational / parkland','98':'Centrally assessed','99':'Acreage not zoned agricultural'
 };
 function useLabel(v){
   if(v==null||v==='') return null;
@@ -10197,6 +10405,17 @@ const ADDRPOINT_FEEDS = {
   // full-street/site field (FULLADDR/STUBADDRESS/ST_NAME). CORS-friendly (same org as parcels).
   COLLIER: "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Site_Address_Points_b/FeatureServer/3/query",
 
+  // St. Lucie — "AddressMaster" Site Address Points (layer 0) on the county's own ArcGIS Server.
+  // FULL NENA/NG911 schema, and the fields are LOWERCASE (addrnum, roadname, status, unitid,
+  // unittype, fulladdr, municipality) — both resolvers uppercase attribute keys before matching, so
+  // ADDRNUM/STATUS detection works unchanged. Points carry parcelnum (16-char, joins to the parcel
+  // layer's ParcelID), so this is a true address→parcel anchor, not just a better centroid.
+  // status is domain-coded Current/Pending/Retired/Temporary — the resolver already skips RETIRE*.
+  // pointtype separates Building / Parcel / "Unit, Condo, Office or Suite" / Mile Post / Utility
+  // Asset; unit rows multiply on Hutchinson Island condos, which the house-number + street match
+  // already narrows. Token-free; same host as the parcel feed (CORS-OK, live-tested Aug 2026).
+  STLUCIE: "https://slcgis.stlucieco.gov/hosting/rest/services/AddressMaster/MapServer/0/query",
+
   // ---- Paste new counties below this line (one per row) ----------------------
   // CHARLOTTE:  "https://.../FeatureServer/0/query",
   // SARASOTA:   "https://.../FeatureServer/0/query",
@@ -12739,6 +12958,167 @@ async function runLookup(lat,lng,searchCtx){
         const _lj=[_la.LEGAL1,_la.LEGAL2,_la.LEGAL3,_la.LEGAL4].filter(v=>v!=null&&String(v).trim()!=='').map(v=>String(v).trim());
         if(_lj.length) _la.__legal=_lj.join(' ');
       }
+    }
+    // Monroe County's own MCPA roll (mcgis4.monroecounty-fl.gov) is a RICH FLAT layer — no second
+    // call needed — but it uses terse legacy CAMA field names that detectFields only partly covers.
+    // NAME/LOCATION/YRBLT/PC auto-detect; everything below is mapped explicitly.
+    // ⚠️ TWO TRAPS this guard exists to avoid:
+    //  1. Values arrive as THREE roll-year sets (PYEAR1/2/3 with matching PJUST/PLAND/PASSD/PBLDG/
+    //     PEXEM/PTAX). Field ORDER is misleading — set 1 is appended LAST in the layer's field list.
+    //     We pick by MAX PYEAR, never by index, so a re-ordered export can't silently show old values.
+    //  2. ADD1/ADD2/UNIT/CITY/STATE/ZIP is the OWNER'S MAILING address, NOT situs. Bare CITY is the
+    //     owner's city — mapping it to det.city would print the wrong city on every Keys parcel held
+    //     by a mainland LLC or seasonal owner. Situs comes off LOCATION only (already auto-detected);
+    //     det.city is deliberately LEFT UNSET here, so the site line renders address-only.
+    // Gap-only (never overwrites an already-detected/spliced value); guarded to Monroe.
+    if(norm(countyName)==='MONROE'){
+      const _la=liveRes.features[0].attributes;
+      const _n=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+      const _s=v=>v!=null&&String(v).trim()!=='';
+      // Parcel id: RECHAR is MCPA's public "Property ID"; AK is the internal alternate key (fallback).
+      if(!det.pid && _s(_la.RECHAR)){ _la.__monroePID=String(_la.RECHAR).trim(); det.pid='__monroePID'; }
+      else if(!det.pid && _n(_la.AK)){ _la.__monroePID=String(_la.AK).trim(); det.pid='__monroePID'; }
+      // Newest of the three roll-year value sets (see trap 1 above).
+      let _i=null,_best=-1;
+      [1,2,3].forEach(k=>{ const _y=Number(_la['PYEAR'+k]); if(_y>1900&&_y<2100&&_y>_best){_best=_y;_i=k;} });
+      if(_i){
+        const _g=p=>_la[p+_i];
+        if(!det.jv   && _n(_g('PJUST'))){ _la.JV=_g('PJUST'); det.jv='JV'; }
+        if(!det.land && _n(_g('PLAND'))){ _la.LND_VAL=_g('PLAND'); det.land='LND_VAL'; }
+        if(_la.__assessedVal==null && _n(_g('PASSD'))) _la.__assessedVal=_g('PASSD');
+        if(_la.__taxableVal==null && _n(_g('PJUST'))){
+          const _j=Number(_g('PJUST'))||0, _ex=Number(_g('PEXEM'))||0, _tx=_j-_ex;
+          if(_tx>=0 && _tx<=_j) _la.__taxableVal=_tx;
+        }
+        if(_la.__asmtYr==null) _la.__asmtYr=_best;
+      }
+      // FLA = finished living area (heated) — the TRUE living figure, not total under-roof. Same
+      // distinction that bit Marion (bld1_sf) and Hernando (CER_STRU_SQFT); verify on a known house.
+      if(!det.liv && _n(_la.FLA)){ _la.TOT_LVG_AR=_la.FLA; det.liv='TOT_LVG_AR'; }
+      // Condos carry CONDO_YEARBLT instead of YRBLT (YRBLT is PRESENT BUT BLANK on condo units).
+      // ⚠️ detectFields matches on field NAMES, not values — so det.yr is already 'YRBLT' here even
+      // when that field is an empty string. Testing `!det.yr` alone would never fire this fallback
+      // and every Keys condo would render a blank year. Test the resolved VALUE, not just the key.
+      if(!_s(det.yr ? _la[det.yr] : null) && _s(_la.CONDO_YEARBLT)){
+        _la.__monroeYr=String(_la.CONDO_YEARBLT).trim(); det.yr='__monroeYr';
+      }
+      // Same trap for the blank-but-detected case with no condo year (vacant land): drop the key so
+      // the row is omitted entirely rather than rendering an empty "Year built:" line.
+      if(det.yr && !_s(_la[det.yr])) det.yr=null;
+      // Most recent sale is SALE1/Y1 (SALE2/Y2 is the prior sale, not surfaced).
+      if(!det.saleP && _n(_la.SALE1)){ _la.__monroeSaleP=_la.SALE1; det.saleP='__monroeSaleP'; }
+      if(!det.saleY && _s(_la.Y1)){ _la.__monroeSaleY=String(_la.Y1).trim(); det.saleY='__monroeSaleY'; }
+      // Mailing address — owner's, NOT situs (see trap 2 above).
+      if(!det.mail && _s(_la.ADD1)){
+        _la.__monroeMail=[_la.ADD1,_la.ADD2,_la.UNIT].filter(_s).map(v=>String(v).trim()).join(' ').replace(/\s+/g,' ').trim();
+        det.mail='__monroeMail';
+      }
+      if(!det.mailCity && _s(_la.CITY)){
+        _la.__monroeMailCity=[_la.CITY,_la.STATE,_la.ZIP].filter(_s).map(v=>String(v).trim()).join(' ');
+        det.mailCity='__monroeMailCity';
+      }
+      if(_la.__legal==null){
+        const _lg=[_la.LEGAL1,_la.LEGAL2,_la.LEGAL3].filter(_s).map(v=>String(v).trim()).join(' ').replace(/\s+/g,' ').trim();
+        if(_lg) _la.__legal=_lg;
+      }
+      // USE CODE: Monroe stores PC as a FOUR-digit code (e.g. "0100"), not the 2-digit DOR code the
+      // rest of the app assumes. Format is [2-digit DOR code][2-digit county sub-code]: 0100=01 single
+      // family, 0400=04 condo, 0000=00 vacant residential, 0800=08 multi-family <10 units. useLabel()
+      // normalizes by parseInt+pad2, which turns "0100" into "100" — not a DOR key, so it fell through
+      // to the raw "Use code 0100" passthrough. Slice the leading 2 digits so it resolves properly.
+      // Only fires on a clean 4-digit value; anything else is left for useLabel to handle as before.
+      if(det.use==='PC' && /^\d{4}$/.test(String(_la.PC||'').trim())){
+        _la.__monroeUse=String(_la.PC).trim().slice(0,2); det.use='__monroeUse';
+      }
+      // SPECUSE carries a readable special-use note (e.g. affordable housing, conservation) on some
+      // parcels; surface it as a supporting line rather than overriding the DOR classification.
+      if(_la.__specUse==null && _s(_la.SPECUSE)) _la.__specUse=String(_la.SPECUSE).trim();
+      if(_la.__bldgCount==null && _n(_la.NBRBLDG)) _la.__bldgCount=_la.NBRBLDG;
+      // BLANK SWEEP — same trap as the year above, applied to the other auto-detected keys. NAME,
+      // LOCATION and PC all EXIST on every row of this roll but are empty on some (government
+      // parcels, submerged land, ROW slivers, unassigned condo shells). detectFields matched them by
+      // name, so without this sweep those parcels render empty "Owner:" / "Site:" / "Use:" rows.
+      // Null the key instead so renderParcelGeneric omits the row and the statewide-roll splice can
+      // fill it. Runs LAST so it also catches anything the mappings above left pointing at a blank.
+      ['owner','owner2','pid','site','city','jv','land','yr','liv','saleP','saleY','mail','mailCity','use','lotSqft']
+        .forEach(_k=>{ if(det[_k] && !_s(_la[det[_k]])) det[_k]=null; });
+      // Zoning: Monroe has a dedicated live LUD polygon layer already wired (ZONING_LIVE.MONROE),
+      // so nothing is spliced through __zoning here — the polygon path stays the single source.
+    }
+    // St. Lucie County's public parcel view (Property folder — see the COUNTY_LIVE note about the
+    // locked PA folder). Only ParcelID auto-detects; owner and site address are SPLIT across several
+    // columns and everything else uses distinctive names, so this guard maps them.
+    // ⚠️ NO LIVING AREA / YEAR BUILT EXISTS ON ANY PUBLIC ST. LUCIE LAYER — det.liv and det.yr are
+    // deliberately NOT touched here so the statewide FDOR roll fills them. Do not be tempted by
+    // TotalAppraisedSFYIValue (a special-feature/yard-item VALUE in dollars) or Shape.STArea()
+    // (LOT area, not heated area) — mapping either would render a confidently wrong square footage.
+    // ⚠️ Ch. 119 CONFIDENTIALITY: IsConfidential flags owners exempt from public disclosure (law
+    // enforcement, judges, etc.). The county publishes a separate pre-stripped layer (ParcelsPublic)
+    // precisely because these records shouldn't show an owner, so when the flag is set we suppress
+    // owner AND mailing address while keeping geometry, values and use — the parcel is still public,
+    // the person isn't. Gap-only elsewhere; guarded to St. Lucie.
+    if(norm(countyName)==='STLUCIE'){
+      const _la=liveRes.features[0].attributes;
+      const _n=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+      const _s=v=>v!=null&&String(v).trim()!=='';
+      // ⚠️ FIELD IS SPELLED DIFFERENTLY PER SOURCE: the county (slcgis) layers use IsConfidential
+      // (capital C); the property appraiser's own layer (map.paslc.gov/9) uses Isconfidential
+      // (lowercase c). Reading only one spelling would let a Ch.119-exempt owner render on the other
+      // source, so match case-insensitively across whatever key is actually present.
+      let _conf=false;
+      for(const _k in _la){ if(_k.toLowerCase()==='isconfidential'){ _conf = Number(_la[_k])===1; break; } }
+      // CONFIDENTIAL SUPPRESSION — must run BEFORE the mapping below. On the paslc layer owner and
+      // mailing are PRE-COMPOSED (Owner1/Owner2, MailAddress1/MailCity), so detectFields has already
+      // filled det.owner/det.mail by the time this guard runs — the "if(!det.owner)" gaps below would
+      // never fire and the suppression would be a no-op. Clear the already-detected keys directly.
+      if(_conf){ ['owner','owner2','mail','mailCity'].forEach(_k=>{ det[_k]=null; }); }
+      // OWNER — split across last/first for up to two owners. An LLC/trust usually sits entirely in
+      // CuO1LastName with CuO1FirstName blank, so join in "First Last" order and collapse the gap
+      // rather than emitting a leading space. ParcelsPublic (fallback #3) has Owner1/Owner2 instead,
+      // which auto-detect, so this only fires on the primary/secondary URLs.
+      if(!det.owner && !_conf){
+        const _o1=[_la.CuO1FirstName,_la.CuO1LastName].filter(_s).map(v=>String(v).trim()).join(' ').replace(/\s+/g,' ').trim();
+        if(_o1){ _la.__slcOwner=_o1; det.owner='__slcOwner'; }
+      }
+      if(!det.owner2 && !_conf){
+        const _o2=[_la.CuO2FirstName,_la.CuO2LastName].filter(_s).map(v=>String(v).trim()).join(' ').replace(/\s+/g,' ').trim();
+        if(_o2){ _la.__slcOwner2=_o2; det.owner2='__slcOwner2'; }
+      }
+      // SITE ADDRESS — composed from number + directional + street name (LocationCity is separate,
+      // and IS situs city here, unlike the CuO* mailing block).
+      if(!det.site){
+        const _addr=[_la.StreetNumber,_la.LocDirection,_la.StreetName].filter(_s)
+          .map(v=>String(v).trim()).join(' ').replace(/\s+/g,' ').trim();
+        if(_addr){ _la.__slcSite=_addr; det.site='__slcSite'; }
+      }
+      if(!det.city && _s(_la.LocationCity)){ _la.__slcCity=String(_la.LocationCity).trim(); det.city='__slcCity'; }
+      // VALUES — just / land; building value and the homestead flag ride along as extras.
+      if(!det.jv   && _n(_la.TotalAppraisedValue)){     _la.JV=_la.TotalAppraisedValue; det.jv='JV'; }
+      if(!det.land && _n(_la.TotalAppraisedLandValue)){ _la.LND_VAL=_la.TotalAppraisedLandValue; det.land='LND_VAL'; }
+      if(_la.__bldgVal==null && _n(_la.TotalAppraisedBuildingValue)) _la.__bldgVal=_la.TotalAppraisedBuildingValue;
+      // USE — LandUseDescription is already readable text; LUC is the 4-char code behind it.
+      if(!det.use && _s(_la.LandUseDescription)){ _la.__slcUse=String(_la.LandUseDescription).trim(); det.use='__slcUse'; }
+      // MAILING — owner's address. Suppressed with the owner on confidential records.
+      if(!det.mail && !_conf && _s(_la.CuOStreet1)){
+        _la.__slcMail=[_la.CuOStreet1,_la.CuOStreet2].filter(_s).map(v=>String(v).trim()).join(' ').replace(/\s+/g,' ').trim();
+        det.mail='__slcMail';
+      }
+      if(!det.mailCity && !_conf && _s(_la.CuOCity)){
+        _la.__slcMailCity=[_la.CuOCity,_la.CuOState,_la.CuOPostal].filter(_s).map(v=>String(v).trim()).join(' ');
+        det.mailCity='__slcMailCity';
+      }
+      if(_la.__legal==null && _s(_la.LegalDescription)) _la.__legal=String(_la.LegalDescription).trim();
+      // ACREAGE — prefer the deeded figure, else the county's calculated one.
+      if(_la.__acres==null){
+        if(_n(_la.TOTAL_ACRE)) _la.__acres=_la.TOTAL_ACRE;
+        else if(_n(_la.DEED_ACRE)) _la.__acres=_la.DEED_ACRE;
+        else if(_n(_la.CALC_ACRE)) _la.__acres=_la.CALC_ACRE;
+      }
+      // BLANK SWEEP — same trap as Monroe: detectFields matches on field NAMES, so a present-but-
+      // empty column (common on vacant land, ROW slivers and government parcels) would render an
+      // empty row. Null the key instead so the row is omitted and the roll splice can fill it.
+      ['owner','owner2','pid','site','city','jv','land','yr','liv','saleP','saleY','mail','mailCity','use','lotSqft']
+        .forEach(_k=>{ if(det[_k] && !_s(_la[det[_k]])) det[_k]=null; });
     }
     const le=liveMeta&&liveMeta.lastEdit;
     html += `<div class="freshline"><span class="badge live">● LIVE</span> ${esc((liveMeta&&liveMeta.name)||'county parcel service')}${le?' · updated '+esc(le.toLocaleDateString()):' · real-time query'}</div>`;
