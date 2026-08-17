@@ -2394,6 +2394,26 @@ const ZONING_LIVE = {
     "https://gisweb.miamidade.gov/arcgis/rest/services/LandManagement/MD_Zoning/MapServer/1/query",
     "https://gisweb.miamidade.gov/arcgis/rest/services/LandManagement/MD_Zoning/MapServer/2/query"
   ]},
+  // ✅ CORS-open (live-tested Aug 2026). Broward County only zones the UNINCORPORATED Broward Municipal
+  // Services District (BMSD) under Code of Ordinances Chapter 39 — every incorporated city zones its own
+  // land, so this layer covers ONLY unincorporated parcels and correctly returns nothing inside a city
+  // (that's expected, not a gap). Source: Broward Planning & Development Mgmt (PDMD) server, "PDMD/
+  // BMSDParcels" MapServer sublayer 4 — a parcel layer with zoning + future-land-use joined ON each
+  // parcel (BCPA parcels filtered to SITUS_CITY='BC', spatially joined to ZCS.ZoningOfficial +
+  // BPC.FutureLandUse). SR 2881 (FL State Plane East ftUS; arcQuery sends inSR=4326, server reprojects).
+  // codeField=ZONING (district code, e.g. "RS-4"); descField=TITLESESCR (readable, e.g. "RS-4, One
+  // Family Detached, 4 du/ac"). Extras surfaced: AREANAME (BMSD neighborhood) + LAND_USE (future land
+  // use). Fields PINNED (verified from a live record, folio 474231030160). Service banner says updated
+  // Aug 2022 / annual cycle, but record EDITED stamps are Oct 2024 — zoning districts change slowly so
+  // the vintage is acceptable. NOTE: for CITY parcels, Broward county has no zoning to show — the city's
+  // own layer would be needed (see per-city entries if/when added).
+  BROWARD: { label:"Broward County Zoning (unincorporated BMSD · Ch. 39)",
+    codeField:"ZONING", descField:"TITLESESCR",
+    extra:[ {field:"AREANAME", label:"BMSD neighborhood"},
+            {field:"LAND_USE", label:"Future land use"} ],
+    urls:[
+    "https://bcgishub.broward.org/pdm/rest/services/PDMD/BMSDParcels/MapServer/4/query"
+  ]},
   MONROE: { label:"Monroe County Zoning (Land Use District, unincorporated Keys)", codeField:"ZONE_", descField:"Zone_Desc", urls:[
     // ✅ VERIFIED public queryable layer — Monroe County's public "Planning_Environmental_Public" MapServer,
     // sublayer 7 ("LUD - Zoning") on the county's own ArcGIS Server (mcgis4.monroecounty-fl.gov/public).
@@ -2668,6 +2688,56 @@ const ZONING_LIVE_CITY = {
     // ✅ verified: City of Naples public GIS (backs the official city zoning map viewer)
     "https://g.naplesgov.com/arcgis/rest/services/Planning/Zoning/FeatureServer/0/query"
   ]},
+  // ✅ City of Fort Lauderdale zoning (Broward's largest city; the county BMSD layer doesn't cover it,
+  // so its own layer is required). Source: the city's own ArcGIS Server (gis.fortlauderdale.gov),
+  // "PropertyReporter/Interactive" MapServer sublayer 4 "Zoning Districts" — the same service the
+  // city's official Property Reporter parcel app reads. CORS-OK (live-tested Aug 2026). SR 3857
+  // (Web Mercator; arcQuery sends the point as 4326, server reprojects). Fields PINNED from a live
+  // record: ZONECLASS = district code (e.g. "RML-25"), ZONEDESC = readable description ("RML-25 -
+  // Residential Multifamily Low Rise/Medium High Density"); AGENCY="Municipal" confirms city zoning.
+  // Current (records last_edited 2025).
+  FORTLAUDERDALE: { label:"City of Fort Lauderdale Zoning", codeField:"ZONECLASS", descField:"ZONEDESC", urls:[
+    "https://gis.fortlauderdale.gov/arcgis/rest/services/PropertyReporter/Interactive/MapServer/4/query"
+  ]},
+  // ✅ City of Hollywood zoning (Broward). Source: the city's own ArcGIS Server (maps.hollywoodfl.org),
+  // "ZONING" FeatureServer layer 0 (gishw.DBO.Zoning_Hollywood) — the layer behind the city's zoning
+  // map. CORS-OK (live-tested Aug 2026). SR 4326 (native). codeField=Zoning (district code, e.g.
+  // "NBDD-DZ"); the layer is code-only (no readable description field — just Color/HEX_CODE for map
+  // styling), so no descField. FeatureServer, so the overlay's f=geojson works directly.
+  HOLLYWOOD: { label:"City of Hollywood Zoning", codeField:"Zoning", urls:[
+    "https://maps.hollywoodfl.org/arcgis/rest/services/ZONING/FeatureServer/0/query"
+  ]},
+  // ✅ City of Pembroke Pines zoning (Broward). Source: the city's ArcGIS Online org
+  // (services6.arcgis.com/OlJkQnf39yF1a7pM — CORS-open AGOL), "Planning_and__Zoning_WFL1" FeatureServer
+  // layer 0. SR 2881 (FL State Plane East ftUS; arcQuery sends inSR=4326, server reprojects). Fields
+  // PINNED from a live record: new_zoning = CURRENT district code (e.g. "(A)"), new_zon_de = readable
+  // description ("(A) Agricultural"). (zoning_id is an older petition code — not used.) FeatureServer,
+  // so the overlay's f=geojson works directly.
+  PEMBROKEPINES: { label:"City of Pembroke Pines Zoning", codeField:"new_zoning", descField:"new_zon_de", urls:[
+    "https://services6.arcgis.com/OlJkQnf39yF1a7pM/ArcGIS/rest/services/Planning_and__Zoning_WFL1/FeatureServer/0/query"
+  ]},
+  // ✅ City of Miramar zoning (Broward). NOTE: Miramar's public-facing zoning map is a Gridics embed
+  // (not queryable), but the city ALSO publishes a real ArcGIS zoning layer on its AGOL org
+  // (services6.arcgis.com/dAtAhTJ12QXYHJYN — CORS-open), "MiramarZoning" FeatureServer layer 7 — that's
+  // what's wired here (the "MiramarParcelsInfo" service on the same org is parcels, not zoning). SR 2236
+  // (FL State Plane East ftUS; arcQuery sends inSR=4326, server reprojects). Fields PINNED: ZONECODE =
+  // district code, ZONEDESC = readable description (also carries ORD_No/ORD_DATE = adopting ordinance).
+  // FeatureServer, so the overlay's f=geojson works directly.
+  MIRAMAR: { label:"City of Miramar Zoning", codeField:"ZONECODE", descField:"ZONEDESC", urls:[
+    "https://services6.arcgis.com/dAtAhTJ12QXYHJYN/arcgis/rest/services/MiramarZoning/FeatureServer/7/query"
+  ]},
+  // ✅ City of Pompano Beach zoning (Broward). Source: the city's ArcGIS Online org
+  // (services.arcgis.com/HnPbdNoPBNAJ6Oel — CORS-open AGOL), "Zoning_Districts" FeatureServer layer 0.
+  // SR 2236 (FL State Plane East ftUS; arcQuery sends inSR=4326, server reprojects). Fields PINNED:
+  // ZONECLASS = district code (e.g. "W", "RS-1"...), ZONEDESC = readable description; OVERLAY_DISTRICT
+  // surfaced as an extra (Pompano has Downtown/East overlay districts). FeatureServer, so the overlay's
+  // f=geojson works directly. (Same ZONECLASS/ZONEDESC schema as Fort Lauderdale — Broward cities share
+  // a GIS template.)
+  POMPANOBEACH: { label:"City of Pompano Beach Zoning", codeField:"ZONECLASS", descField:"ZONEDESC",
+    extra:[ {field:"OVERLAY_DISTRICT", label:"Overlay district"} ],
+    urls:[
+    "https://services.arcgis.com/HnPbdNoPBNAJ6Oel/ArcGIS/rest/services/Zoning_Districts/FeatureServer/0/query"
+  ]},
   // ✅ City of Sarasota zoning — the city runs its OWN code (it's incorporated and listed in
   // SARASOTA_INCORP, so it must NOT inherit unincorporated Sarasota County's UDC districts). The
   // "CitySarasotaZoning" polygon layer lives on the county's OWN ArcGIS Server (ags3.scgov.net),
@@ -2691,22 +2761,15 @@ const ZONING_LIVE_CITY = {
   VENICE: { label:"City of Venice Zoning", codeField:"zoning_district", urls:[
     "https://geoport.venicefl.gov/server/rest/services/bldg/TRAKiT/MapServer/10/query"
   ]},
-  // City of Marco Island runs its OWN GIS (gis.cityofmarcoisland.com). Marco Island is incorporated
-  // and has its own LDC (Ch. 30), so its zoning must come from the city's layer — NOT the Collier
-  // County layer (which would otherwise be the fallback and return county-style codes). Zoning is
-  // layer 3 of the DataHub MapServer. Field names aren't pinned, so detectZoningFields() resolves
-  // the code/description columns automatically (same as the Lee layers).
-  // City of Marco Island runs its OWN GIS (gis.cityofmarcoisland.com). Marco Island is incorporated
-  // and has its own LDC (Ch. 30), so its zoning must come from the city's layer — NOT the Collier
-  // County layer (which would otherwise be the fallback and return county-style codes). Fields are
-  // PINNED (verified from the layer def): ZONING = district code (RSF-2/3/4, RMF-6/12/16, C-1..C-5, RT,
-  // PUD, A, CON, CF, GC, P), DESCRIP = readable description. Marco Island is heavily PUD-zoned, so
-  // PUD_NAME (the layer's display field) is surfaced as an extra so PUD parcels show their specific PUD
-  // name. Pinning is REQUIRED — left to auto-detect it drifted to the bare "Zoning" layer name. PRIMARY
-  // url is the city's canonical "General/Zoning" service (layer 3); the "General/DataHub" copy (same
-  // layer 3, same fields) is kept as a fallback since it intermittently returns 503. NOTE: a Y in the
-  // ST_OVER field means the parcel also carries the Special Treatment (ST) overlay (the city labels it
-  // "<code>-ST") — not surfaced here, but relevant to development standards.
+  // City of Marco Island (incorporated, own LDC Ch. 30) runs its own GIS at gis.cityofmarcoisland.com,
+  // zoning at General/Zoning layer 3. Fields PINNED (verified from the layer def): ZONING = district
+  // code (RSF-2/3/4, RMF-6/12/16, C-1..C-5, RT, PUD, A, CON, CF, GC, P), DESCRIP = readable
+  // description; PUD_NAME surfaced as an extra since Marco is heavily PUD-zoned. PRIMARY is the
+  // canonical General/Zoning service (layer 3); the General/DataHub copy (same layer/fields) is the
+  // fallback. NOTE: brief "Failed to fetch" errors from this host are a TRANSIENT OUTAGE of the city
+  // GIS server (verified Aug 2026 — the host is CORS-capable, it was just down at the time), NOT a CORS
+  // policy block. When the server is up it reads fine cross-origin; if it's momentarily down, Marco
+  // Island falls back to the Collier County zoning layer automatically until it recovers.
   MARCOISLAND: { label:"City of Marco Island Zoning",
     codeField:"ZONING", descField:"DESCRIP",
     extra:[ {field:"PUD_NAME", label:"PUD"} ],
@@ -4403,6 +4466,56 @@ async function jurisdictionsInView(){
   _zjCache={key,cities,counties,t:Date.now()};
   return {cities,counties};
 }
+// Some ArcGIS hosts (older MapServers like Fort Lauderdale's PropertyReporter) advertise geoJSON but
+// return it empty/malformed for envelope queries, even though f=json works fine — so the zoning OVERLAY
+// (which requests f=geojson) draws nothing while the point lookup (f=json) still shows the district on
+// the card. This converts Esri JSON polygon features to GeoJSON so the overlay can fall back to f=json.
+function esriRingsToGeoJSON(geom){
+  if(!geom || !geom.rings || !geom.rings.length) return null;
+  // ArcGIS: clockwise ring = outer, counter-clockwise = hole. Classify by signed area, group holes
+  // with the outer ring they fall under (simple approach: each CW ring starts a new polygon, following
+  // CCW rings are its holes). Good enough for zoning district polygons.
+  const ringArea=(r)=>{ let a=0; for(let i=0,j=r.length-1;i<r.length;j=i++){ a+=(r[j][0]*r[i][1])-(r[i][0]*r[j][1]); } return a/2; };
+  const polys=[]; let cur=null;
+  for(const ring of geom.rings){
+    if(!ring || ring.length<4) continue;
+    if(ringArea(ring)<0){ // CW (outer) in screen coords → area sign per this formula: start new polygon
+      if(cur) polys.push(cur); cur=[ring];
+    } else { // hole
+      if(cur) cur.push(ring); else cur=[ring];
+    }
+  }
+  if(cur) polys.push(cur);
+  if(!polys.length) return null;
+  return polys.length===1 ? {type:'Polygon', coordinates:polys[0]} : {type:'MultiPolygon', coordinates:polys};
+}
+function esriJsonToGeoJSON(ej){
+  if(!ej || !ej.features) return null;
+  const out=[];
+  for(const f of ej.features){
+    const g=esriRingsToGeoJSON(f.geometry);
+    if(g) out.push({type:'Feature', geometry:g, properties:f.attributes||{}});
+  }
+  return {type:'FeatureCollection', features:out};
+}
+// Fetch one overlay URL as GeoJSON; if that yields no features, retry the SAME url as Esri JSON and
+// convert. Returns a GeoJSON FeatureCollection or null. `qs` is the geojson querystring; we swap the
+// f= param for the json retry.
+async function fetchZoningGeo(baseUrl, qs){
+  try{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
+    const r=await fetch(baseUrl+qs,{signal:ctrl.signal}); clearTimeout(t);
+    if(r.ok){ const gj=await r.json(); if(gj && gj.features && gj.features.length) return gj; }
+  }catch(e){ /* fall through to json retry */ }
+  try{
+    const jsonQs = qs.replace(/f=geojson/i,'f=json');
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
+    const r=await fetch(baseUrl+jsonQs,{signal:ctrl.signal}); clearTimeout(t);
+    if(r.ok){ const ej=await r.json(); const gj=esriJsonToGeoJSON(ej); if(gj && gj.features.length) return gj; }
+  }catch(e){ /* give up on this url */ }
+  return null;
+}
+
 async function refreshZoning(){
   if(!zoningOn){ zoningLayer.clearLayers(); return; }
   if(map.getZoom() < ZONING_MINZOOM){ zoningLayer.clearLayers(); zoningKey=''; return; }   // too far out
@@ -4438,25 +4551,15 @@ async function refreshZoning(){
     // across merged layers are collapsed later by the geometry-signature de-dup, so a stray overlap is safe.
     if(a.reg.additive){
       const parts = await Promise.all(urls.map(async baseUrl=>{
-        try{
-          const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
-          const r=await fetch(baseUrl+qs,{signal:ctrl.signal}); clearTimeout(t);
-          if(!r.ok) return null;
-          const gj=await r.json();
-          return (gj && gj.features && gj.features.length) ? gj.features : null;
-        }catch(e){ return null; }
+        const gj = await fetchZoningGeo(baseUrl, qs);
+        return (gj && gj.features && gj.features.length) ? gj.features : null;
       }));
       const feats = parts.filter(Boolean).flat();
       return feats.length ? {a, gj:{type:'FeatureCollection', features:feats}} : {a, gj:null};
     }
     for(const baseUrl of urls){
-      try{
-        const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
-        const r=await fetch(baseUrl+qs,{signal:ctrl.signal}); clearTimeout(t);
-        if(!r.ok) continue;
-        const gj=await r.json();
-        if(gj && gj.features && gj.features.length) return {a, gj};
-      }catch(e){ /* try next url */ }
+      const gj = await fetchZoningGeo(baseUrl, qs);
+      if(gj && gj.features && gj.features.length) return {a, gj};
     }
     return {a, gj:null};
   };
