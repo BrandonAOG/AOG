@@ -1070,7 +1070,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
     <div class="kick">Florida Parcel &amp; Flood Instrument</div>
     <h1>Property Lookup</h1>
-    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Osceola, Lake, DeSoto, Hardee, Highlands) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
+    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Osceola, Brevard, Lake, DeSoto, Hardee, Highlands) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
   </header>
 
   <div class="search">
@@ -1725,6 +1725,24 @@ const COUNTY_LIVE = {
     //   dedicated live zoning POLYGON layer (ZONING_LIVE.OSCEOLA, "● LIVE zoning polygon"); the roll
     //   Zone1 is spliced via __zoning only as a fallback when the polygon lookup returns nothing.
     "https://gis.osceola.org/hosting/rest/services/Parcels/FeatureServer/3/query"
+  ]},
+  BREVARD : { label:"Brevard County (Property Appraiser · BCPAO)", urls:[
+    // ✅ CORS-OPEN geometry layer — the Brevard County Property Appraiser's own ArcGIS server
+    // (bcpao.us), "Brevard_Detailed_Dynamic" MapServer, Parcels sublayer 24. Confirmed reachable +
+    // CORS-open cross-origin (live-tested via the app's own diagnostic Aug 2026). Polygon, SR 2881
+    // (FL State Plane East ft; the tool sends inSR=4326 and the server reprojects). This layer is
+    // GEOMETRY + JOIN KEY ONLY — its fields are TaxAcct (integer account #), Name (=PID, e.g.
+    // "21 3529-02-*-11"), Acres, township/range/section, subdivision/block/lot, legal record. It
+    // carries NO owner, value, square footage or year built. Those live in BCPAO's separate property
+    // API (bcpao.us/api/v1/account/{TaxAcct}), which is richer + fresher (rollYear 2026) but is
+    // CORS-BLOCKED. So Brevard is wired as a TWO-STEP feed: this layer resolves the parcel polygon +
+    // TaxAcct by point-in-polygon, then the BREVARD enrichment guard (in the live-feed block below)
+    // calls the API THROUGH A PROXY (bcpao.us/api is in CORS_PROXY_HOSTS) to splice in owner, market
+    // value, living area (totalBaseArea), year built, use, sale & legal. If the proxy/API is
+    // down/slow, the guard degrades silently and the statewide FDOR roll fills those fields instead
+    // (so the card still renders — just without the live BCPAO detail). Parcel id is pinned to the
+    // hyphenated PID via the guard; TaxAcct is the API key, not shown as the parcel number.
+    "https://www.bcpao.us/arcgis/rest/services/Brevard_Detailed_Dynamic/MapServer/24/query"
   ]}
 };
 
@@ -5767,6 +5785,38 @@ function useLabel(v){
   if(!digits) return s?('Use code '+esc(s)):null;
   const code=String(parseInt(digits,10)).padStart(2,'0');
   return DOR_USE[code] || (s?('Use code '+esc(s)):null);
+}
+
+/* ---------- Opt-in CORS proxy for public-but-CORS-blocked endpoints ----------------------------
+   A few authoritative sources are public and reachable but block cross-origin browser fetches (no
+   Access-Control-Allow-Origin), so a direct client-side fetch can never read them. For those SPECIFIC
+   hosts/paths we route through a public CORS proxy. The data is already public, so this is fine; we
+   proxy ONLY the listed prefixes (a proxy is slower + rate-limited, so direct is always preferred).
+     • www.bcpao.us/api  — Brevard County Property Appraiser property API (owner/value/sqft/year).
+                           Its sibling ArcGIS host (bcpao.us/arcgis) is CORS-OPEN and is NOT proxied;
+                           only the /api app blocks CORS, confirmed live Aug 2026.
+   allorigins' /raw endpoint passes the upstream JSON body through unchanged, which is what the BCPAO
+   API returns. If the proxy is down/slow the call just fails and the caller falls back to the
+   statewide roll — so a flaky proxy degrades gracefully, never hard-breaks a lookup. */
+const CORS_PROXY_PREFIXES = ['https://www.bcpao.us/api'];
+function needsCorsProxy(u){ try{ return CORS_PROXY_PREFIXES.some(p=>String(u).indexOf(p)===0); }catch(e){ return false; } }
+function corsProxied(fullUrl){ return 'https://api.allorigins.win/raw?url='+encodeURIComponent(fullUrl); }
+function proxyWrap(fullUrl){ return needsCorsProxy(fullUrl) ? corsProxied(fullUrl) : fullUrl; }
+
+/* Fetch a BCPAO property record by tax-account number, through the CORS proxy. Returns the parsed
+   JSON account object, or null on any failure (network/proxy/parse/timeout). Never throws. */
+async function fetchBcpaoAccount(taxAcct, timeoutMs){
+  const acct = String(taxAcct==null?'':taxAcct).replace(/[^0-9]/g,'');
+  if(!acct) return null;
+  const url = 'https://www.bcpao.us/api/v1/account/'+acct;
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeoutMs||ENRICH_TIMEOUT);
+  try{
+    const r=await fetch(proxyWrap(url),{signal:ctrl.signal}); clearTimeout(t);
+    if(!r.ok) return null;
+    const j=await r.json();
+    // allorigins /raw returns the upstream body verbatim; BCPAO returns the account object directly.
+    return (j && (j.account||j.parcelID||j.buildings||j.valueSummary)) ? j : null;
+  }catch(e){ clearTimeout(t); return null; }
 }
 
 async function arcQuery(url, lat, lng, outFields, withGeom, timeoutMs){
@@ -12296,6 +12346,98 @@ async function runLookup(lat,lng,searchCtx){
     if(norm(countyName)==='ORANGE'){
       const _la=liveRes.features[0].attributes;
       if(_la.__zoning==null && _la.ZONING_CODE!=null && String(_la.ZONING_CODE).trim()!=='') _la.__zoning=String(_la.ZONING_CODE).trim();
+    }
+    // Brevard is a TWO-STEP feed. The BCPAO parcel layer (24) that resolved above is geometry + join
+    // key only — it carries TaxAcct + Name(PID) + Acres and nothing else. The owner/value/living-area/
+    // year-built data lives in BCPAO's property API (bcpao.us/api/v1/account/{TaxAcct}), which is
+    // CORS-blocked, so we call it THROUGH THE PROXY here (see fetchBcpaoAccount / CORS_PROXY_PREFIXES)
+    // keyed on the TaxAcct we just matched, and splice the results into the live attributes under the
+    // field names the generic renderer + Excel export already understand. Everything is gap-only and
+    // wrapped so ANY failure (proxy down, API slow, missing record) leaves the parcel card intact —
+    // the statewide-roll splice further below then fills value/living-area/year exactly as it does for
+    // any lean-feed county. Guarded to Brevard. Verified field shape Aug 2026 (acct 2105702).
+    if(norm(countyName)==='BREVARD'){
+      const _la=liveRes.features[0].attributes;
+      const _acct = _la.TaxAcct!=null ? _la.TaxAcct : (_la.TAXACCT!=null ? _la.TAXACCT : null);
+      // Parcel id formatting: the geometry layer's "Name" packs it as "26 3605-VA-C-19" (township,
+      // then range+section jammed together as "3605"). The desired display is "26-36-05-VA-C-19" —
+      // township-range-section split out. Reformat "TT RRSS<rest>" -> "TT-RR-SS<rest>"; if it doesn't
+      // match that shape, just hyphenate spaces. (When the API answers below, its parcelID field is
+      // already in the clean format and overrides this.)
+      if(_la.Name!=null && String(_la.Name).trim()!==''){
+        const _nm=String(_la.Name).trim();
+        const _m=_nm.match(/^(\d{2})\s+(\d{2})(\d{2})(.*)$/);
+        _la.__brevardPID = _m ? (_m[1]+'-'+_m[2]+'-'+_m[3]+_m[4]) : _nm.replace(/\s+/g,'-');
+        det.pid='__brevardPID';
+      }
+      // FALSE-MATCH GUARD: BCPAO's geometry layer 24 has a field literally named "Name" (alias PID)
+      // that holds the PARCEL ID. detectFields' last-ditch owner pattern /^NAME$/ grabs it, so owner
+      // wrongly shows the parcel id. This layer carries NO owner field at all, so clear that mis-match
+      // now; the real owner comes from the BCPAO API below, or (if the API doesn't answer) from the
+      // statewide roll fallback right after. Never leave owner pointing at the PID.
+      if(det.owner==='Name' || det.owner==='NAME') det.owner=null;
+      if(_acct!=null){
+        const _acc = await fetchBcpaoAccount(_acct, ENRICH_TIMEOUT).catch(()=>null);
+        if(_acc){
+          // BCPAO's API is the AUTHORITATIVE appraiser source and fresher (rollYear 2026) than the
+          // annual statewide roll that ran the gap-fill splice above. So when the API answers we
+          // OVERRIDE those roll-spliced fields (re-point det.* to the API-backed values), rather than
+          // gap-filling — otherwise the older roll figure, set moments earlier, would win. Any field
+          // the API doesn't carry is simply left as the roll splice set it.
+          const _num=v=>v!=null&&String(v).replace(/[^0-9.]/g,'')!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+          const _s=v=>v!=null&&String(v).trim()!=='';
+          // parcel id: the API's parcelID is already in the clean "26-36-05-VA-C-19" format — prefer it.
+          if(_s(_acc.parcelID)){ _la.__brevardPID=String(_acc.parcelID).trim(); det.pid='__brevardPID'; }
+          // owner
+          if(_s(_acc.owner)){ _la.OWNER_NAME=String(_acc.owner).trim(); det.owner='OWNER_NAME'; }
+          // site address (the API returns one flat "2680 DONNA DR TITUSVILLE FL 32796" string)
+          if(_s(_acc.siteAddress)){ _la.__brevardSite=String(_acc.siteAddress).trim(); det.site='__brevardSite'; det.city=null; }
+          // primary building: living area (heated base) + year built + use
+          const _b = (_acc.buildings && _acc.buildings[0]) ? _acc.buildings[0] : null;
+          if(_b && _num(_b.totalBaseArea)){ _la.__brevardLiv=_b.totalBaseArea; det.liv='__brevardLiv'; window.__livOverride=null; }
+          if(_b && _num(_b.yearBuilt)){ _la.__brevardYr=_b.yearBuilt; det.yr='__brevardYr'; }
+          // use (readable text from the API)
+          const _use = _acc.propertyUse && _acc.propertyUse.description;
+          if(_s(_use)){ _la.__brevardUse=String(_use).trim(); det.use='__brevardUse'; }
+          // market (just) value — API gives a "$133,680" string AND a numeric valueSummary[0].marketVal
+          const _vs = (_acc.valueSummary && _acc.valueSummary[0]) ? _acc.valueSummary[0] : null;
+          {
+            const _mk = (_vs && _num(_vs.marketVal)) ? _vs.marketVal
+                      : (_num(_acc.marketValue) ? String(_acc.marketValue).replace(/[^0-9.]/g,'') : null);
+            if(_num(_mk)){ _la.__brevardJV=Number(_mk); det.jv='__brevardJV'; }
+          }
+          // assessed / taxable / roll year (override the roll splice's values with the API's)
+          if(_vs && _num(_vs.assessedVal)) _la.__assessedVal=_vs.assessedVal;
+          if(_vs && _num(_vs.taxableVal)) _la.__taxableVal=_vs.taxableVal;
+          if(_vs && _num(_vs.rollYear)) _la.__asmtYr=_vs.rollYear;
+          else if(_num(_acc.rollYear)) _la.__asmtYr=_acc.rollYear;
+          // most recent sale (salesHistory[0] is newest). BCPAO lists placeholder $100/$0 deeds; only
+          // surface a sale price that looks real (> $100) so we don't show a $100 quitclaim as "the sale".
+          const _sale=(_acc.salesHistory && _acc.salesHistory[0]) ? _acc.salesHistory[0] : null;
+          if(_sale && _num(_sale.salePrice) && Number(_sale.salePrice)>100){
+            _la.__saleP=Number(_sale.salePrice);
+            if(_s(_sale.saleDate)){ try{ const _y=new Date(_sale.saleDate).getUTCFullYear(); if(_y>1900&&_y<2100) _la.__saleY=String(_y); }catch(e){} }
+          }
+          // legal description (override) + owner mailing
+          if(_s(_acc.legalDescription)) _la.__legal=String(_acc.legalDescription).trim();
+          const _mail=_acc.mailingAddress;
+          if(_mail){
+            const _m1=[_mail.addr1,_mail.addr2].filter(_s).map(v=>String(v).trim()).join(' ').trim();
+            if(_m1){ _la.__brevardMail=_m1; det.mail='__brevardMail'; }
+            if(_s(_mail.city)){ _la.__brevardMailCity=[_mail.city,_mail.state,_mail.zip].filter(_s).join(' '); det.mailCity='__brevardMailCity'; }
+          }
+          _la.__brevardLive=true;   // live BCPAO API answered
+        }
+      }
+      // ROLL-OWNER FALLBACK: if the API didn't answer (proxy down/slow) owner is still unset (we
+      // cleared the false Name match above). Pull owner from the statewide FDOR roll that ran in
+      // parallel, so the card shows a real owner name instead of the parcel id. Same source the other
+      // lean-feed counties lean on; only used when the live API gave us nothing.
+      if(!det.owner && parcel && !parcel.__err && parcel.features && parcel.features[0]){
+        const _ra=parcel.features[0].attributes||{};
+        const _ro=pick(_ra,'OWN_NAME','OWNER','OWNER_NAME','OWNERNAME','OWN_NAME1','NAME');
+        if(_ro!=null && String(_ro).trim()!==''){ _la.__brevardOwner=String(_ro).trim(); det.owner='__brevardOwner'; }
+      }
     }
     // Osceola County's own hosted parcel roll (gis.osceola.org) has a DISTINCTIVE schema that the
     // generic detectFields aliases only partly cover: owner (Owner1/Owner2), parcel (PARCELNO), use
