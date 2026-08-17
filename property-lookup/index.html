@@ -269,7 +269,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   #footToggle .fchev{font-size:11px;line-height:1;transition:transform .25s}
   #footToggle .footver{color:var(--faint);font-size:10px;font-weight:700;letter-spacing:.06em;opacity:.9}
   #footBody{max-height:0;overflow:hidden;transition:max-height .3s ease;padding:0 16px}
-  footer:not(.collapsed) #footBody{max-height:360px;padding:2px 16px 12px}
+  footer:not(.collapsed) #footBody{max-height:min(70vh,640px);overflow-y:auto;padding:2px 16px 12px}
   footer:not(.collapsed) #footToggle .fchev{transform:rotate(180deg)}
 
   .layerswitch{position:absolute;z-index:1000;bottom:18px;right:18px;display:flex;background:var(--search-bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;box-shadow:0 6px 20px var(--shadow-soft)}
@@ -2184,7 +2184,7 @@ const ZONING_LIVE = {
     // schema + coded district list confirmed live on sublayer 53).
     "https://maps.citrusbocc.com/server/rest/services/PublicData/GeneralParcel/MapServer/53/query"
   ]},
-  SUMTER: { label:"Sumter County Zoning", codeField:"Zone_Type", urls:[
+  SUMTER: { label:"Sumter County Zoning", codeField:"Zone_Type", additive:true, urls:[
     // ✅ VERIFIED queryable public layer — Sumter County's "Interactive/FLU_Zoning" FeatureServer, Zoning
     // sublayer 11 (gis.sumtercountyfl.gov/sumtergis). Token-free, polygon, SR 2237 (FL State Plane ft; tool
     // sends inSR=4326 and the server reprojects). codeField=Zone_Type — CONFIRMED via the layer's unique-
@@ -2245,7 +2245,7 @@ const ZONING_LIVE = {
     // trusting a "no live zoning" gap here.
     "https://gis.highlandsfl.gov/server/rest/services/Layers/Zoning/FeatureServer/0/query"
   ]},
-  HARDEE: { label:"Hardee County Zoning", codeField:"ZONING", descField:"CLASS", urls:[
+  HARDEE: { label:"Hardee County Zoning", codeField:"ZONING", descField:"CLASS", additive:true, urls:[
     // ✅ VERIFIED public queryable layers — Hardee County's own ArcGIS Server (gis.hardeecounty.net),
     // "LandUseZoning" MapServer. Token-free, polygon, SR 102659/2237 (FL State Plane West ftUS; tool sends
     // inSR=4326 and the server reprojects, same as Levy/Sumter). FOUR sublayers chained, first polygon at the
@@ -4268,7 +4268,27 @@ async function refreshZoning(){
   // Fetch every active jurisdiction's zoning IN PARALLEL — each reg tries its own urls in order until
   // one returns features, same fallback pattern as the single-jurisdiction path used before.
   const fetchOne = async (a) => {
-    for(const baseUrl of (a.reg.urls||[])){
+    const urls = a.reg.urls||[];
+    // ADDITIVE regs (e.g. Hardee = county + Bowling Green + Wauchula + Zolfo Springs; Sumter = countywide +
+    // 4 city sublayers) list URLs that each cover a DIFFERENT area — so for the overlay we must fetch ALL of
+    // them and MERGE, not stop at the first that returns features (that's why in-city polygons only appeared
+    // once you were fully inside the county layer's coverage). NON-additive regs keep first-with-features-wins,
+    // since their extra URLs are fallback MIRRORS of the same data, not additional areas. Coincident polygons
+    // across merged layers are collapsed later by the geometry-signature de-dup, so a stray overlap is safe.
+    if(a.reg.additive){
+      const parts = await Promise.all(urls.map(async baseUrl=>{
+        try{
+          const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
+          const r=await fetch(baseUrl+qs,{signal:ctrl.signal}); clearTimeout(t);
+          if(!r.ok) return null;
+          const gj=await r.json();
+          return (gj && gj.features && gj.features.length) ? gj.features : null;
+        }catch(e){ return null; }
+      }));
+      const feats = parts.filter(Boolean).flat();
+      return feats.length ? {a, gj:{type:'FeatureCollection', features:feats}} : {a, gj:null};
+    }
+    for(const baseUrl of urls){
       try{
         const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
         const r=await fetch(baseUrl+qs,{signal:ctrl.signal}); clearTimeout(t);
