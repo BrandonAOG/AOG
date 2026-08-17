@@ -53,6 +53,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="dns-prefetch" href="https://vgispublic.ocpafl.org">               <!-- Orange County (OCPA) parcels -->
 <link rel="dns-prefetch" href="https://ocgis4.ocfl.net">                     <!-- Orange County zoning (unincorporated) -->
 <link rel="dns-prefetch" href="https://gis.lakecountyfl.gov">                <!-- Lake County zoning -->
+<link rel="dns-prefetch" href="https://gis.highlandsfl.gov">                 <!-- Highlands County zoning (unincorporated + Avon Park/Lake Placid/Sebring) -->
+<link rel="dns-prefetch" href="https://gis.hardeecounty.net">                <!-- Hardee County zoning (unincorporated) -->
 <link rel="dns-prefetch" href="https://unpkg.com">
 <link rel="dns-prefetch" href="https://tile.openstreetmap.org">
 <link rel="dns-prefetch" href="https://geocode.arcgis.com">
@@ -2226,6 +2228,49 @@ const ZONING_LIVE = {
     // Protection Area — not the district; OrdNum/OrdDate are the adopting ordinance.) Verified Aug 2026.
     "https://gis.lakecountyfl.gov/lakegis/rest/services/InteractiveMap/MapServer/50/query"
   ]},
+  HIGHLANDS: { label:"Highlands County Zoning", codeField:"ZON", descField:"FLUM", urls:[
+    // ✅ VERIFIED public queryable layer — Highlands County's own ArcGIS Server (gis.highlandsfl.gov),
+    // "Layers/Zoning" FeatureServer, sublayer 0. Token-free, polygon, SR 102100/3857 (Web Mercator — matches
+    // the map, no reprojection needed). codeField=ZON — CONFIRMED via the layer's unique-value renderer
+    // (Field 1 = ZON), its Type ID Field = ZON, its label expression [ZON], AND its per-type templates, which
+    // set ZON to the real district on every type. Covers unincorporated Highlands PLUS the three incorporated
+    // cities via prefixes: no prefix = unincorporated (A1, AU, EU, R1/R1A/R2/R3, B1–B4, CG1–CG3, I1/I2, M1/M2,
+    // O, P, PU, PW, plus *CU conditional-use / *PD planned-dev / *FUD future-urban-development variants);
+    // "AP " = Avon Park, "LP " = Lake Placid, "S " = Sebring. descField pinned to FLUM (Future Land Use Map)
+    // as the secondary readable row — there is NO district-name column on this layer, so the code in ZON is
+    // the primary value. STRAP_NUM ties each polygon to the appraiser STRAP. NOTE: a "NO ZON" value exists for
+    // a few unassigned parcels — treat as unknown, not an error. Verified Aug 2026 (full field schema + coded
+    // district list confirmed live on sublayer 0). Not yet live-point-tested through the app's parameterized
+    // point-in-polygon query — verify against a real Sebring/Avon Park/unincorporated address before fully
+    // trusting a "no live zoning" gap here.
+    "https://gis.highlandsfl.gov/server/rest/services/Layers/Zoning/FeatureServer/0/query"
+  ]},
+  HARDEE: { label:"Hardee County Zoning", codeField:"ZONING", descField:"CLASS", urls:[
+    // ✅ VERIFIED public queryable layers — Hardee County's own ArcGIS Server (gis.hardeecounty.net),
+    // "LandUseZoning" MapServer. Token-free, polygon, SR 102659/2237 (FL State Plane West ftUS; tool sends
+    // inSR=4326 and the server reprojects, same as Levy/Sumter). FOUR sublayers chained, first polygon at the
+    // point wins — same pattern as the Sumter city chain:
+    //   • 20 "Zoning (County)"        — UNINCORPORATED Hardee. codeField=ZONING (Display+renderer+label field).
+    //         Districts: A-1, C-1/C-2/C-IBC, F-R, I-1/I-2, P-I/P-R, PUD, R-1/R-2/R-3. descField=CLASS.
+    //   • 17 "Zoning (Bowling Green)" — City of Bowling Green. field ZON (NOT ZONING).
+    //   • 18 "Zoning (Wauchula)"      — City of Wauchula (county seat). field ZON.
+    //   • 19 "Zoning (Zolfo Springs)" — Town of Zolfo Springs. field ZON.
+    // ⚠️ FIELD SPLIT: the county layer keys zoning on ZONING; all three CITY layers key on ZON (city-specific
+    // codes like AG, FR, R-1A, R-4, PUD-R/PUD-C, HC-1, C-P, P-1, P-SP, CON — richer than the county set, each
+    // with a readable label baked into the renderer). codeField is pinned to ZONING for the county primary; on
+    // a city parcel a["ZONING"] is undefined so queryZoning() falls through to detectZoningFields(), which now
+    // matches the anchored ^ZON$ pattern (added for exactly this) — so city parcels resolve their ZON code
+    // automatically. City layers also carry FLU (future land use) + ZON_ORD/ZON_DATE (adopting ordinance).
+    // NOTE: county layer has a "NO ZON"/unassigned style and the city layers an "NA" (Unassigned/City
+    // Unassigned) value — treat as unknown, not an error. City data is a CFRPC DOR-join build (last noted
+    // update 2/5/2015 on Wauchula — older than the county layer, but it is the county's published municipal
+    // zoning). Not yet live-point-tested through the app's parameterized query — verify a real Wauchula/Bowling
+    // Green/Zolfo Springs parcel AND an unincorporated parcel before fully trusting a "no live zoning" gap.
+    "https://gis.hardeecounty.net/arcgis/rest/services/LandUseZoning/MapServer/20/query",
+    "https://gis.hardeecounty.net/arcgis/rest/services/LandUseZoning/MapServer/17/query",
+    "https://gis.hardeecounty.net/arcgis/rest/services/LandUseZoning/MapServer/18/query",
+    "https://gis.hardeecounty.net/arcgis/rest/services/LandUseZoning/MapServer/19/query"
+  ]},
   ORANGE: { label:"Orange County Zoning (unincorporated)", codeField:"ZONING", overlayOnly:true, urls:[
     // ✅ queryable public layer — Orange County GIS "InfoMap_Public_Layers" MapServer, Zoning sublayer 138
     // (ocgis4.ocfl.net). Token-free, polygon, SR 2236 (FL State Plane East ftUS; tool sends inSR=4326 and the
@@ -2616,7 +2661,7 @@ const ZONING_LIVE_CITY = {
 function detectZoningFields(fields){
   const up = fields.map(f=>({raw:f, u:String(f).toUpperCase()}));
   const find = pats => { for(const p of pats){ const h=up.find(f=>p.test(f.u)); if(h) return h.raw; } return null; };
-  const code = find([/^ZONING$/,/^ZONE_?CODE$/,/^ZONECODE$/,/^ZONING_?AREA_?CODE$/,/^ZONE_?AREA_?CODE$/,/^ZONE_?ABBR/,/^ZON_?CODE/,/^ZONE_?CLASS/,/^ZONE_?SYMB/,/^DISTRICT$/,/^ZONE$/,/ZONING/,/ZONE/,/DISTRICT/]);
+  const code = find([/^ZONING$/,/^ZONE_?CODE$/,/^ZONECODE$/,/^ZONING_?AREA_?CODE$/,/^ZONE_?AREA_?CODE$/,/^ZONE_?ABBR/,/^ZON_?CODE/,/^ZONE_?CLASS/,/^ZONE_?SYMB/,/^DISTRICT$/,/^ZONE$/,/^ZON$/,/ZONING/,/ZONE/,/DISTRICT/]);
   let desc  = find([/^ZONE_?DESC/,/^ZONEDESC/,/^ZONE_?NAME/,/^ZONINGNM/,/^ZONINGDESC/,/^DESCRIPT/,/^ZONE_?TYPE/,/^GENERAL/,/^ZONE$/,/DESC/,/NAME/]);
   if(desc===code) desc=null;
   return { code, desc };
@@ -12092,13 +12137,24 @@ async function runLookup(lat,lng,searchCtx){
       if(_la.__legal==null && _la.LEGDECFULL!=null && String(_la.LEGDECFULL).trim()!=='') _la.__legal=String(_la.LEGDECFULL).trim();
       if((_la.SITUSADD1==null || String(_la.SITUSADD1).trim()==='') && _la.SITEADD!=null && String(_la.SITEADD).trim()!=='') _la.SITUSADD1=String(_la.SITEADD).trim();
     }
-    // DeSoto, Hardee & Highlands ride the same SWFWMD parcel_search schema but have NO dedicated zoning layer
-    // wired yet, so — like Levy/Sumter were initially — their roll ZONING is surfaced via __zoning as "Zoning
-    // (per parcel roll)" (informational) until a county zoning polygon layer is added. Same legal/site harden.
-    if(norm(countyName)==='DESOTO' || norm(countyName)==='HARDEE' || norm(countyName)==='HIGHLANDS'){
+    // DeSoto rides the SWFWMD parcel_search schema but has NO dedicated public zoning layer wired (the only
+    // "DeSoto Zoning" service that exists is DeSoto County MISSISSIPPI; the FL county serves zoning only through
+    // a login-gated Geocortex portal). So — like Levy/Sumter were initially — DeSoto's roll ZONING is surfaced
+    // via __zoning as "Zoning (per parcel roll)" (informational) until a county zoning polygon layer is added.
+    if(norm(countyName)==='DESOTO'){
       const _la=liveRes.features[0].attributes;
       if(_la.__legal==null && _la.LEGDECFULL!=null && String(_la.LEGDECFULL).trim()!=='') _la.__legal=String(_la.LEGDECFULL).trim();
       if(_la.__zoning==null && _la.ZONING!=null && String(_la.ZONING).trim()!=='') _la.__zoning=String(_la.ZONING).trim();
+      if((_la.SITUSADD1==null || String(_la.SITUSADD1).trim()==='') && _la.SITEADD!=null && String(_la.SITEADD).trim()!=='') _la.SITUSADD1=String(_la.SITEADD).trim();
+    }
+    // Highlands & Hardee ride the SWFWMD parcel_search schema for legal/site fields, but each now has a
+    // dedicated live zoning POLYGON layer wired in ZONING_LIVE (Highlands: gis.highlandsfl.gov Layers/Zoning/0,
+    // field ZON; Hardee: gis.hardeecounty.net LandUseZoning/20, field ZONING), so their zoning resolves through
+    // the "● LIVE zoning polygon" point-in-polygon path like Citrus/Sumter/Levy/Lake — NOT via the roll
+    // __zoning. Only the legal/site fields are hardened here; roll ZONING is NOT spliced.
+    if(norm(countyName)==='HIGHLANDS' || norm(countyName)==='HARDEE'){
+      const _la=liveRes.features[0].attributes;
+      if(_la.__legal==null && _la.LEGDECFULL!=null && String(_la.LEGDECFULL).trim()!=='') _la.__legal=String(_la.LEGDECFULL).trim();
       if((_la.SITUSADD1==null || String(_la.SITUSADD1).trim()==='') && _la.SITEADD!=null && String(_la.SITEADD).trim()!=='') _la.SITUSADD1=String(_la.SITEADD).trim();
     }
     // Orange County's OCPA roll carries the appraiser-recorded ZONING_CODE directly on the parcel record.
