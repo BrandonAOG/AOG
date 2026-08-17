@@ -55,6 +55,12 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="dns-prefetch" href="https://gis.lakecountyfl.gov">                <!-- Lake County zoning -->
 <link rel="dns-prefetch" href="https://gis.highlandsfl.gov">                 <!-- Highlands County zoning (unincorporated + Avon Park/Lake Placid/Sebring) -->
 <link rel="dns-prefetch" href="https://gis.hardeecounty.net">                <!-- Hardee County zoning (unincorporated) -->
+<link rel="dns-prefetch" href="https://maps5.vcgov.org">                     <!-- Volusia County zoning (countywide, all jurisdictions) -->
+<link rel="dns-prefetch" href="https://gis.brevardfl.gov">                   <!-- Brevard County zoning (unincorporated) -->
+<link rel="dns-prefetch" href="https://gisweb.miamidade.gov">                <!-- Miami-Dade County zoning (unincorporated + municipal) -->
+<link rel="dns-prefetch" href="https://mcgis4.monroecounty-fl.gov">          <!-- Monroe County zoning (LUD, unincorporated Keys) -->
+<link rel="dns-prefetch" href="https://maps.co.palm-beach.fl.us">            <!-- Palm Beach County zoning (unincorporated) -->
+<link rel="dns-prefetch" href="https://gis.osceola.org">                     <!-- Osceola County zoning -->
 <link rel="dns-prefetch" href="https://unpkg.com">
 <link rel="dns-prefetch" href="https://tile.openstreetmap.org">
 <link rel="dns-prefetch" href="https://geocode.arcgis.com">
@@ -1064,7 +1070,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
     <div class="kick">Florida Parcel &amp; Flood Instrument</div>
     <h1>Property Lookup</h1>
-    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Lake, DeSoto, Hardee, Highlands) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
+    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Osceola, Lake, DeSoto, Hardee, Highlands) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
   </header>
 
   <div class="search">
@@ -1700,6 +1706,25 @@ const COUNTY_LIVE = {
     // to the other SWFWMD counties above. Same 6 A.M.–10 P.M. window with automatic statewide-roll fallback
     // off-hours/if down. SR 2882; tool sends inSR=4326. Verified Aug 2026.
     "https://www25.swfwmd.state.fl.us/arcgis12/rest/services/BaseVector/parcel_search/MapServer/6/query"
+  ]},
+  OSCEOLA : { label:"Osceola County (Property Appraiser · county GIS)", urls:[
+    // ✅ Osceola County's OWN hosted parcel layer — "Parcels" FeatureServer, sublayer 3, on the
+    // county GIS server (gis.osceola.org/hosting). Token-free, polygon, capabilities:"Query" (also
+    // Create/Update/Delete but reads are public). Source SR 102100/3857 (Web Mercator — matches the
+    // map); tool sends inSR=4326 and the server reprojects. NOT a SWFWMD county — this is the
+    // appraiser's own rich CAMA roll on the county's host, the same server the Osceola zoning layer
+    // (ZONING_LIVE.OSCEOLA) already reads from. Field schema is DISTINCTIVE (confirmed from layer
+    // metadata) and does NOT match the generic detectFields aliases for several fields, so an
+    // OSCEOLA guard (in the live-feed enrichment block below) maps them:
+    //   owner=Owner1(+Owner2) and parcel=PARCELNO auto-detect; use=DORDesc (readable) auto-detects;
+    //   year built=YearBuilt (+EffYr) and sale price=SalePrice auto-detect. The guard supplies the
+    //   rest: SITE ADDRESS is split across StreetNumb/StreetPfx/StreetName/StreetSfx/StreetSfxD +
+    //   LocCity/LocZip (no single field), so it's composed; just value=CurrJust, land=CurrLand,
+    //   living area=FinArea, assessed=AssessedVa, taxable = CurrJust−CurrExempt, legal=LegalDescS,
+    //   acreage=TotalAcres, and SaleDate (epoch ms) → sale year. ZONING resolves through Osceola's
+    //   dedicated live zoning POLYGON layer (ZONING_LIVE.OSCEOLA, "● LIVE zoning polygon"); the roll
+    //   Zone1 is spliced via __zoning only as a fallback when the polygon lookup returns nothing.
+    "https://gis.osceola.org/hosting/rest/services/Parcels/FeatureServer/3/query"
   ]}
 };
 
@@ -2270,6 +2295,92 @@ const ZONING_LIVE = {
     "https://gis.hardeecounty.net/arcgis/rest/services/LandUseZoning/MapServer/17/query",
     "https://gis.hardeecounty.net/arcgis/rest/services/LandUseZoning/MapServer/18/query",
     "https://gis.hardeecounty.net/arcgis/rest/services/LandUseZoning/MapServer/19/query"
+  ]},
+  VOLUSIA: { label:"Volusia County Zoning (countywide, all jurisdictions)", codeField:"JUR_ZONING", descField:"Z_DESCRIP", urls:[
+    // ✅ VERIFIED public queryable layer — Volusia County's "CountywideZoning" MapServer, sublayer 2
+    // ("Countywide Zoning") on the county's own ArcGIS Server (maps5.vcgov.org). Token-free, polygon, SR
+    // 2881 (FL State Plane East ftUS; tool sends inSR=4326 and the server reprojects). This is a COMPILATION
+    // of every jurisdiction's zoning within Volusia — unincorporated county PLUS all incorporated cities —
+    // maintained by "Volusia County GIS and all the Zoning Authorities", so one layer covers the whole county.
+    // codeField=JUR_ZONING = the actual adopted jurisdiction zoning code (the real district) — CONFIRMED as
+    // the per-jurisdiction district field (JURISD/CityName name the authority). descField=Z_DESCRIP = readable
+    // "Zoning Description". Also carries a generalized crosswalk (GENL_ZCODE / GenericTranslate / GenericDescription,
+    // e.g. AGR/COM/IND/RES/PUD/MIXED) used for the map's coarse color categories — NOT surfaced as the district
+    // since JUR_ZONING is the precise code. A "NO DATA" generic value exists for unmapped polygons — treat as
+    // unknown. URL field carries the jurisdiction's zoning-code reference link (not surfaced as the district).
+    // Not yet live-point-tested through the app's parameterized query — verify a real unincorporated + a real
+    // in-city (e.g. Deltona/Daytona/DeLand) parcel before fully trusting a "no live zoning" gap here.
+    "https://maps5.vcgov.org/arcgis/rest/services/CountywideZoning/MapServer/2/query"
+  ]},
+  BREVARD: { label:"Brevard County Zoning (unincorporated)", codeField:"ZONING", urls:[
+    // ✅ VERIFIED public queryable layer — Brevard County's "Planning_Development/Zoning_WKID2881" MapServer,
+    // sublayer 0 ("Zoning"), on the county's own ArcGIS Server (gis.brevardfl.gov/gissrv). Token-free, polygon,
+    // SR 2881 (FL State Plane East ftUS; tool sends inSR=4326 and the server reprojects). Data source: Brevard
+    // County Planning & Development Dept — UNINCORPORATED county zoning. codeField=ZONING — CONFIRMED as the
+    // Display Field, the label field, and it carries CODED VALUES whose labels embed the readable name
+    // (e.g. "AGR Agricultural", "ARR Agricultural Rural Residential", "AU Agricultural Residential", 59 total
+    // districts), so the code alone renders readably — no separate descField needed. DENSCAP (density cap) is a
+    // bonus field, not surfaced. NOTE: this is UNINCORPORATED Brevard — the 16 municipalities (Palm Bay,
+    // Melbourne, Titusville, Cocoa, Rockledge, etc.) set their own zoning and are NOT in this county layer; an
+    // in-city parcel may return blank here (city zoning would need its own layer added). Not yet live-point-
+    // tested through the app's parameterized query — verify a real unincorporated Brevard parcel first.
+    "https://gis.brevardfl.gov/gissrv/rest/services/Planning_Development/Zoning_WKID2881/MapServer/0/query"
+  ]},
+  MIAMIDADE: { label:"Miami-Dade County Zoning (countywide)", codeField:"ZONE", descField:"ZONE_DESC", additive:true, urls:[
+    // ✅ VERIFIED public queryable layers — Miami-Dade County's "LandManagement/MD_Zoning" MapServer on the
+    // county's own ArcGIS Server (gisweb.miamidade.gov/arcgis). Token-free, polygon, SR 102658/2236 (FL State
+    // Plane East ftUS; tool sends inSR=4326 and the server reprojects). Updated WEEKLY (Sat). TWO sublayers
+    // chained additive (first polygon at the point wins per layer; both drawn in the overlay) for full county
+    // coverage:
+    //   • 1 "Unincorporated Zoning" — UNINCORPORATED Miami-Dade. codeField=ZONE (Display+renderer+label field).
+    //   • 2 "Municipal Zoning"      — the 34 incorporated municipalities, same schema (same parcel model).
+    // codeField=ZONE — CONFIRMED as Display Field, unique-value renderer field (Field 1 = ZONE), and label
+    // expression [ZONE]; coded values are the real districts (AU, BU-1/1A/2/3, EU-1..EU-S, IU-1..IU-C, RU-1..
+    // RU-5A, TND, plus many *UC/*UAD urban-center/area-development + PAD/OPD planned districts). descField=
+    // ZONE_DESC (full 200-char readable name). Bonus fields: MUNC (municipality code), OVLY (overlay), SHORT_DESC,
+    // ZONEMUNC. A "NONE" value exists for unzoned polygons — treat as unknown. Not yet live-point-tested through
+    // the app's parameterized query — verify a real unincorporated + a real in-city (e.g. Hialeah/Miami/Homestead)
+    // parcel before fully trusting a "no live zoning" gap here.
+    "https://gisweb.miamidade.gov/arcgis/rest/services/LandManagement/MD_Zoning/MapServer/1/query",
+    "https://gisweb.miamidade.gov/arcgis/rest/services/LandManagement/MD_Zoning/MapServer/2/query"
+  ]},
+  MONROE: { label:"Monroe County Zoning (Land Use District, unincorporated Keys)", codeField:"ZONE_", descField:"Zone_Desc", urls:[
+    // ✅ VERIFIED public queryable layer — Monroe County's public "Planning_Environmental_Public" MapServer,
+    // sublayer 7 ("LUD - Zoning") on the county's own ArcGIS Server (mcgis4.monroecounty-fl.gov/public).
+    // Token-free, polygon, SR 2881 (FL State Plane East ftUS; tool sends inSR=4326 and the server reprojects).
+    // In the Keys the regulatory zoning system is the "Land Use District" (LUD) map, per the county Land
+    // Development Code — this IS the zoning layer (the county's own map viewer labels it "MONROE COUNTY LUD
+    // (Zoning)"). codeField=ZONE_ (note trailing underscore) — CONFIRMED as the Display Field, unique-value
+    // renderer field (Field 1 = ZONE_), and label field. descField=Zone_Desc (50-char readable district name).
+    // Bonus: Zone_Label (short label), Muinicode_URL (link to the district's LDC section). Covers UNINCORPORATED
+    // Monroe (the vast majority of the Keys); the five incorporated municipalities (Key West, Marathon,
+    // Islamorada, Key Colony Beach, Layton) set their own zoning and are NOT in this county layer — an in-city
+    // parcel may return blank. Not yet live-point-tested through the app's parameterized query — verify a real
+    // unincorporated Keys parcel (e.g. Big Pine, Key Largo, Cudjoe) before fully trusting a "no live zoning" gap.
+    "https://mcgis4.monroecounty-fl.gov/public/rest/services/Planning_Environmental_Public/MapServer/7/query"
+  ]},
+  PALMBEACH: { label:"Palm Beach County Zoning (unincorporated)", codeField:"FCODE", descField:"FNAME", urls:[
+    // ✅ VERIFIED public layer, fields CONFIRMED from a live query — Palm Beach County's "OpenData/
+    // Planning_Open_Data" MapServer, sublayer 9 ("Zoning"), on the county's own ArcGIS Server
+    // (maps.co.palm-beach.fl.us). Resolved from the AGOL item (38bec210586e4b828f2601b20d1f0dd3, owner
+    // PBCGOV_GIS) whose "url" points here; access:"public", polygon, SR 2881 (FL State Plane East ftUS; tool
+    // sends inSR=4326 and the server reprojects). UNINCORPORATED Palm Beach County zoning (per the Comprehensive
+    // Plan / ULDC). codeField=FCODE = "Zoning District Code" (e.g. "PO"); descField=FNAME = "Zoning District
+    // Name" (e.g. "PUBLIC OWNERSHIP DISTRICT"). (ZONING_DESC is a shorter description variant, not the code —
+    // NOT used, so detection can't drift to it.) DT_CHG carries the last district-change date. Confirmed via a
+    // live attributes read. Covers UNINCORPORATED PBC only — the 39 municipalities (West Palm Beach, Boca
+    // Raton, etc.) set their own zoning and are NOT in this county layer; an in-city parcel may return blank.
+    "https://maps.co.palm-beach.fl.us/arcgis/rest/services/OpenData/Planning_Open_Data/MapServer/9/query"
+  ]},
+  OSCEOLA: { label:"Osceola County Zoning", codeField:"PRIM_ZON", descField:"Zoning_Dis", urls:[
+    // ✅ VERIFIED public + CORS-reachable, fields CONFIRMED from a live query — Osceola County's hosted
+    // "Zoning" FeatureServer, sublayer 13, on the county's own server (gis.osceola.org). Token-free, polygon,
+    // SR 102100/3857 (Web Mercator — matches the map, no reprojection). (The parallel Zoning/MapServer/13 path
+    // is robots-blocked to servers but the FeatureServer /query works cross-origin.) codeField=PRIM_ZON =
+    // primary zoning district code (e.g. "PD"); SEC_ZON is a secondary/overlay designation (e.g. "PCD", not
+    // surfaced); descField=Zoning_Dis = readable district name (e.g. "Plan Commercial Development"). Confirmed
+    // via a live attributes read (PRIM_ZON/SEC_ZON/Zoning_Dis on a sample feature). Verified Aug 2026.
+    "https://gis.osceola.org/hosting/rest/services/Zoning/FeatureServer/13/query"
   ]},
   ORANGE: { label:"Orange County Zoning (unincorporated)", codeField:"ZONING", overlayOnly:true, urls:[
     // ✅ queryable public layer — Orange County GIS "InfoMap_Public_Layers" MapServer, Zoning sublayer 138
@@ -12185,6 +12296,47 @@ async function runLookup(lat,lng,searchCtx){
     if(norm(countyName)==='ORANGE'){
       const _la=liveRes.features[0].attributes;
       if(_la.__zoning==null && _la.ZONING_CODE!=null && String(_la.ZONING_CODE).trim()!=='') _la.__zoning=String(_la.ZONING_CODE).trim();
+    }
+    // Osceola County's own hosted parcel roll (gis.osceola.org) has a DISTINCTIVE schema that the
+    // generic detectFields aliases only partly cover: owner (Owner1/Owner2), parcel (PARCELNO), use
+    // (DORDesc), year built (YearBuilt) and sale price (SalePrice) auto-detect, but the rest need
+    // explicit mapping. SITE ADDRESS is split across StreetNumb/StreetPfx/StreetName/StreetSfx/
+    // StreetSfxD (no single field) so it's composed here; value=CurrJust, land=CurrLand, living
+    // area=FinArea, assessed=AssessedVa, taxable = CurrJust−CurrExempt, legal=LegalDescS, and the
+    // epoch-ms SaleDate becomes a sale YEAR. Zoning resolves via Osceola's dedicated live polygon
+    // layer (ZONING_LIVE.OSCEOLA); the roll Zone1 is spliced through __zoning only as a fallback.
+    // Gap-only (never overwrites an already-detected/spliced value); guarded to Osceola.
+    if(norm(countyName)==='OSCEOLA'){
+      const _la=liveRes.features[0].attributes;
+      const _n=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+      const _s=v=>v!=null&&String(v).trim()!=='';
+      // Compose the site address from its parts (skip blanks; collapse extra spaces).
+      if(!det.site){
+        const _addr=[_la.StreetNumb,_la.StreetPfx,_la.StreetName,_la.StreetSfx,_la.StreetSfxD]
+          .filter(_s).map(v=>String(v).trim()).join(' ').replace(/\s+/g,' ').trim();
+        if(_addr){ _la.__situs=_addr; det.site='__situs'; }
+      }
+      if(!det.city && _s(_la.LocCity)){ _la.__situsCity=String(_la.LocCity).trim(); det.city='__situsCity'; }
+      // Just (market) value, land value, living area.
+      if(!det.jv && _n(_la.CurrJust)){ _la.JV=_la.CurrJust; det.jv='JV'; }
+      if(!det.land && _n(_la.CurrLand)){ _la.LND_VAL=_la.CurrLand; det.land='LND_VAL'; }
+      if(!det.liv && _n(_la.FinArea)){ _la.TOT_LVG_AR=_la.FinArea; det.liv='TOT_LVG_AR'; }
+      // Assessed value directly; taxable = just − exemptions (only when both present and sane).
+      if(_la.__assessedVal==null && _n(_la.AssessedVa)) _la.__assessedVal=_la.AssessedVa;
+      if(_la.__taxableVal==null && _n(_la.CurrJust)){
+        const _j=Number(_la.CurrJust)||0, _ex=Number(_la.CurrExempt)||0, _tx=_j-_ex;
+        if(_tx>=0 && _tx<=_j) _la.__taxableVal=_tx;
+      }
+      if(_la.__legal==null && _s(_la.LegalDescS)) _la.__legal=String(_la.LegalDescS).trim();
+      // SaleDate is an epoch-ms date (no year field detected); surface the year alongside the price.
+      if(!det.saleY && _la.__saleY==null && _n(_la.SaleDate)){
+        try{ const _yr=new Date(Number(_la.SaleDate)).getUTCFullYear();
+          if(_yr>1900 && _yr<2100){ _la.__oscSaleYr=String(_yr); _la.__saleY=String(_yr); det.saleY='__oscSaleYr'; } }catch(e){}
+      }
+      // Zoning: Osceola has a verified dedicated live zoning POLYGON layer (ZONING_LIVE.OSCEOLA,
+      // "● LIVE zoning polygon" via point-in-polygon), so — like Lake/Highlands/Hardee — the roll
+      // Zone1 is deliberately NOT spliced through __zoning here (that would add a duplicate
+      // "Zoning (per parcel roll)" row); the polygon path is the single authoritative source.
     }
     // Hernando's CAMA export splits the legal description across LEGAL1-4 (each ~30 chars); join the
     // populated ones into a single readable line. Gap-only; guarded to Hernando.
