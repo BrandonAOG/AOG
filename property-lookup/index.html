@@ -1070,7 +1070,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
     <div class="kick">Florida Parcel &amp; Flood Instrument</div>
     <h1>Property Lookup</h1>
-    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Osceola, Brevard, Miami-Dade, Lake, DeSoto, Hardee, Highlands) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
+    <p class="intro-note noprint">Flood &amp; jurisdiction query official servers in real time. Owner/parcel auto-uses the <b>live county feed</b> for all supported counties (Lee, Collier, Charlotte, Manatee, Sarasota, Glades, Hendry, Hillsborough, Pinellas, Pasco, Polk, Marion, Hernando, Citrus, Sumter, Levy, Orange, Osceola, Brevard, Miami-Dade, Broward, Lake, DeSoto, Hardee, Highlands) and the dated state roll elsewhere. Add any county's live URL below. Florida only.</p>
   </header>
 
   <div class="search">
@@ -1759,6 +1759,22 @@ const COUNTY_LIVE = {
     // .gov allows cross-origin /query with the diagnostic — if blocked it falls back to the statewide
     // FDOR roll automatically (this layer is otherwise a clean direct wire-up, no proxy).
     "https://gisweb.miamidade.gov/arcgis/rest/services/MD_LandInformation/MapServer/26/query"
+  ]},
+  BROWARD : { label:"Broward County (Property Appraiser · BCPA)", urls:[
+    // TWO-STEP feed. Broward's June 2026 REST migration stripped owner/value/site/sqft OFF the public
+    // parcel layer — layer 16 of BCPA_EXTERNAL_JAN26 is now FOLIO + geometry only. But the appraiser
+    // data still lives in a sibling standalone TABLE on the same service: table 36 "BCPA_INFO", keyed
+    // by FOLIO_NUMBER (766k rows). There is NO ArcGIS relationship between them (layer 16
+    // relationships:[]), and the table rejects where=1=1 / outFields=* — it only answers queries that
+    // include orderByFields. So we resolve the parcel polygon + FOLIO here by point-in-polygon, then
+    // the BROWARD guard queries BCPA_INFO by that folio (with orderByFields=FOLIO_NUMBER, the required
+    // param) to splice owner, under-air sqft, building value, year built, use & situs address. Host
+    // gisweb-adapters.bcpa.net is CORS-OPEN (live-tested Aug 2026) so NO proxy is needed. Folio format
+    // matches directly: layer 16 FOLIO "473725000000" == table FOLIO_NUMBER (field typed 14-char but
+    // holds 12 digits). BCPA_INFO carries building value + sqft but NOT total-just or land value, so
+    // those still come from the statewide FDOR roll (the guard leaves them alone); if the table lookup
+    // fails, the roll fills everything and the card degrades gracefully. SR 2236.
+    "https://gisweb-adapters.bcpa.net/arcgis/rest/services/BCPA_EXTERNAL_JAN26/MapServer/16/query"
   ]}
 };
 
@@ -5818,6 +5834,28 @@ const CORS_PROXY_PREFIXES = ['https://www.bcpao.us/api'];
 function needsCorsProxy(u){ try{ return CORS_PROXY_PREFIXES.some(p=>String(u).indexOf(p)===0); }catch(e){ return false; } }
 function corsProxied(fullUrl){ return 'https://api.allorigins.win/raw?url='+encodeURIComponent(fullUrl); }
 function proxyWrap(fullUrl){ return needsCorsProxy(fullUrl) ? corsProxied(fullUrl) : fullUrl; }
+
+/* Fetch a Broward BCPA_INFO record by folio. Direct (CORS-open host, no proxy). The table REQUIRES
+   orderByFields on the query (a bare where=1=1/outFields=* 400s), and folios match layer 16 directly.
+   Returns the attributes object or null on any failure. Never throws. */
+async function fetchBrowardInfo(folio, timeoutMs){
+  const f = String(folio==null?'':folio).replace(/[^0-9]/g,'');
+  if(!f) return null;
+  const base='https://gisweb-adapters.bcpa.net/arcgis/rest/services/BCPA_EXTERNAL_JAN26/MapServer/36/query';
+  const of='FOLIO_NUMBER,NAME_LINE_1,JUST_BUILDING_VALUE,UNDER_AIR_SQFT,BLDG_ADJ_SQ_FOOTAGE,'+
+           'BLDG_YEAR_BUILT,ACTUAL_YEAR_BUILT,USE_CODE,BLDG_UNITS,'+
+           'SITUS_STREET_NUMBER,SITUS_STREET_DIRECTION,SITUS_STREET_NAME,SITUS_STREET_TYPE,'+
+           'SITUS_STREET_POST_DIR,SITUS_UNIT_NUMBER,SITUS_ZIP_CODE';
+  const url=base+'?where='+encodeURIComponent("FOLIO_NUMBER='"+f+"'")+
+            '&outFields='+encodeURIComponent(of)+'&orderByFields=FOLIO_NUMBER&returnGeometry=false&f=json';
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeoutMs||ENRICH_TIMEOUT);
+  try{
+    const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(t);
+    if(!r.ok) return null;
+    const j=await r.json();
+    return (j && j.features && j.features[0] && j.features[0].attributes) ? j.features[0].attributes : null;
+  }catch(e){ clearTimeout(t); return null; }
+}
 
 /* Fetch a BCPAO property record by tax-account number, through the CORS proxy. Returns the parsed
    JSON account object, or null on any failure (network/proxy/parse/timeout). Never throws. */
@@ -12383,6 +12421,69 @@ async function runLookup(lat,lng,searchCtx){
       if(_la.__asmtYr==null && _n(_la.ASSESSMENT_YEAR_CUR)) _la.__asmtYr=_la.ASSESSMENT_YEAR_CUR;
       // building count (renders "· N bldgs" next to year built when >1)
       if(_la.__bldgCount==null && _n(_la.BUILDING_COUNT)) _la.__bldgCount=_la.BUILDING_COUNT;
+    }
+    // Broward is a TWO-STEP feed. Its public parcel layer 16 (resolved above) is FOLIO + geometry only
+    // — the June 2026 migration moved owner/value/sqft into a sibling standalone table, BCPA_INFO
+    // (table 36 on the same service), with NO ArcGIS relationship linking them. So we take the parcel's
+    // FOLIO and query BCPA_INFO by folio (fetchBrowardInfo, which supplies the orderByFields the table
+    // requires) and splice the result. Host is CORS-open, so NO proxy. BCPA_INFO carries owner + under-
+    // air sqft + JUST_BUILDING_VALUE + year + situs, but NOT total-just or land value — those stay with
+    // the statewide-roll splice (this guard leaves det.jv/land alone). Any failure → the roll fills in,
+    // card intact. Zero/blank building fields (vacant/government land) are treated as "not present".
+    // Guarded to Broward. Verified live Aug 2026 (folio 473725000000).
+    if(norm(countyName)==='BROWARD'){
+      const _la=liveRes.features[0].attributes;
+      const _folio = _la.FOLIO!=null ? String(_la.FOLIO).replace(/[^0-9]/g,'') : null;
+      if(_folio){
+        // parcel id: show the folio (layer 16's own id) — formatted with the standard BCPA dashes
+        // NN-NNNN-NN-NNNN when it's the full 12-digit folio, else raw.
+        if(!det.pid){
+          const _fm=_folio.match(/^(\d{2})(\d{4})(\d{2})(\d{4})$/);
+          _la.__browardPID = _fm ? (_fm[1]+'-'+_fm[2]+'-'+_fm[3]+'-'+_fm[4]) : _folio;
+          det.pid='__browardPID';
+        }
+        const _info = await fetchBrowardInfo(_folio, ENRICH_TIMEOUT).catch(()=>null);
+        if(_info){
+          const _n=v=>v!=null&&String(v).replace(/[^0-9.]/g,'')!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+          const _s=v=>v!=null&&String(v).trim()!=='';
+          // owner (BCPA_INFO is authoritative + fresher than the annual roll → override)
+          if(_s(_info.NAME_LINE_1)){ _la.__browardOwner=String(_info.NAME_LINE_1).trim(); det.owner='__browardOwner'; }
+          // living area: UNDER_AIR_SQFT (heated) preferred; else BLDG_ADJ_SQ_FOOTAGE (adjusted/under-roof)
+          const _liv = _n(_info.UNDER_AIR_SQFT) ? _info.UNDER_AIR_SQFT
+                     : (_n(_info.BLDG_ADJ_SQ_FOOTAGE) ? _info.BLDG_ADJ_SQ_FOOTAGE : null);
+          if(_n(_liv)){ _la.__browardLiv=Number(String(_liv).replace(/[^0-9.]/g,'')); det.liv='__browardLiv'; window.__livOverride=null; }
+          // year built (actual preferred, else BLDG_YEAR_BUILT); 0 = no building → skip
+          const _yr = _n(_info.ACTUAL_YEAR_BUILT) ? _info.ACTUAL_YEAR_BUILT
+                    : (_n(_info.BLDG_YEAR_BUILT) ? _info.BLDG_YEAR_BUILT : null);
+          if(_n(_yr) && Number(String(_yr).replace(/[^0-9.]/g,''))>1500){ _la.__browardYr=Number(String(_yr).replace(/[^0-9.]/g,'')); det.yr='__browardYr'; }
+          // building units → building count badge
+          if(_la.__bldgCount==null && _n(_info.BLDG_UNITS)) _la.__bldgCount=_info.BLDG_UNITS;
+          // use code (2-digit DOR code; useLabel() maps it to text at render time via the roll path,
+          // but here it's a bare code — surface it through the same DOR_UC channel the roll uses)
+          if(!det.use && _s(_info.USE_CODE)){ _la.DOR_UC=String(_info.USE_CODE).trim(); det.use='DOR_UC'; }
+          // JUST_BUILDING_VALUE is BUILDING value only (no land / no total-just in this table). The
+          // renderer has no dedicated building-value row, and det.jv (total just value) rightly stays
+          // the statewide roll's figure. Surface building value in the Assessed-value slot ONLY if the
+          // roll didn't already provide an assessed value, so it's shown rather than dropped (labeled
+          // generically; it's the best value figure BCPA_INFO carries).
+          if(_la.__assessedVal==null && _n(_info.JUST_BUILDING_VALUE)) _la.__assessedVal=Number(_info.JUST_BUILDING_VALUE);
+          // situs address: compose from parts. SITUS_CITY is a cryptic 2-char code ("BC"), so we do NOT
+          // use it as the city; the statewide roll's PHY city (or the address-point fill) is cleaner.
+          const _sa=[_info.SITUS_STREET_NUMBER,_info.SITUS_STREET_DIRECTION,_info.SITUS_STREET_NAME,
+                     _info.SITUS_STREET_TYPE,_info.SITUS_STREET_POST_DIR,_info.SITUS_UNIT_NUMBER]
+                    .filter(_s).map(v=>String(v).trim()).join(' ').replace(/\s+/g,' ').trim();
+          if(!det.site && _sa){ _la.__browardSite=_sa; det.site='__browardSite'; }
+          _la.__browardLive=true;
+        }
+      }
+      // ROLL-OWNER FALLBACK: layer 16 carries no owner, so if the BCPA_INFO lookup didn't answer,
+      // owner is still unset. Pull it from the statewide FDOR roll that ran in parallel, so the card
+      // shows an owner instead of blank. Only used when the live table gave us nothing.
+      if(!det.owner && parcel && !parcel.__err && parcel.features && parcel.features[0]){
+        const _ra=parcel.features[0].attributes||{};
+        const _ro=pick(_ra,'OWN_NAME','OWNER','OWNER_NAME','OWNERNAME','OWN_NAME1');
+        if(_ro!=null && String(_ro).trim()!==''){ _la.__browardOwner2=String(_ro).trim(); det.owner='__browardOwner2'; }
+      }
     }
     // Brevard is a TWO-STEP feed. The BCPAO parcel layer (24) that resolved above is geometry + join
     // key only — it carries TaxAcct + Name(PID) + Acres and nothing else. The owner/value/living-area/
