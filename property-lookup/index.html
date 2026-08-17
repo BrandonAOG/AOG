@@ -2738,6 +2738,16 @@ const ZONING_LIVE_CITY = {
     urls:[
     "https://services.arcgis.com/HnPbdNoPBNAJ6Oel/ArcGIS/rest/services/Zoning_Districts/FeatureServer/0/query"
   ]},
+  // ✅ City of Plantation zoning (Broward). Source: the city's own ArcGIS Server (pgis.plantation.org),
+  // "PortalMaps/pgisgw" MapServer sublayer 14 "Zoning" — the layer behind the city's Public Works GIS
+  // portal map. CORS-OK (live-tested Aug 2026). SR 2881 (FL State Plane East ftUS; arcQuery sends
+  // inSR=4326, server reprojects). codeField=Text_ (aliased "Zoning"; district code e.g. "B-3P").
+  // Code-only layer (no readable description field). NOTE: pgisgw is a tile-CACHED MapServer, but the
+  // /query endpoint still does normal feature queries, so both the point lookup and the f=geojson
+  // overlay work. Fields PINNED from a live record.
+  PLANTATION: { label:"City of Plantation Zoning", codeField:"Text_", urls:[
+    "https://pgis.plantation.org/arcgis/rest/services/PortalMaps/pgisgw/MapServer/14/query"
+  ]},
   // ✅ City of Sarasota zoning — the city runs its OWN code (it's incorporated and listed in
   // SARASOTA_INCORP, so it must NOT inherit unincorporated Sarasota County's UDC districts). The
   // "CitySarasotaZoning" polygon layer lives on the county's OWN ArcGIS Server (ags3.scgov.net),
