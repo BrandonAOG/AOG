@@ -11909,7 +11909,10 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
     }
     // Over-fetch a margin around the view so short pans/zoom-outs land inside the cached box and
     // repaint instantly instead of triggering another round-trip.
-    try{ b = b.pad(0.35); }catch(e){}
+    // NOTE: the record caps in both fetch paths below were raised to match this larger box — a
+    // padded box with the old caps truncated the result set before it covered the visible view,
+    // which is what made scattered labels go missing in dense neighborhoods.
+    try{ b = b.pad(0.25); }catch(e){}
     const env=`${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
     const want = subjectHN!=null ? String(subjectHN).trim() : null;
     const _pidDigits = s => (s==null?'':String(s).replace(/\D/g,''));
@@ -11933,7 +11936,7 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
         const inView = await queryHostedFile(_fileCfg, b);   // null=load failed, []=loaded-but-empty
         if(Array.isArray(inView) && inView.length){
           for(const f of inView){
-            if(labels.length>=500) break;                    // cap: enough when zoomed in, smooth on zoom-out
+            if(labels.length>=900) break;                    // cap raised with the padded fetch box (below)
             const a=f.attributes||{};
             const txt=formatAddrPoint(a);
             const hn=houseNum(txt);
@@ -11964,14 +11967,14 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
       // label/match, plus owner name (OWN_NAME) and living area (TOT_LVG_AR) for the hover tooltip.
       const url=PARCEL_FS+`?geometry=${encodeURIComponent(env)}&geometryType=esriGeometryEnvelope&inSR=4326`+
         `&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=${encodeURIComponent('PHY_ADDR1,PARCEL_ID,OWN_NAME,TOT_LVG_AR')}`+
-        `&returnGeometry=false&returnCentroid=true&outSR=4326&resultRecordCount=400&f=json`;
+        `&returnGeometry=false&returnCentroid=true&outSR=4326&resultRecordCount=800&f=json`;
       const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
       let j=null;
       try{ const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(t); if(r.ok) j=await r.json(); }
       catch(e){ clearTimeout(t); }
       if(j && !j.error && j.features && j.features.length){
         for(const f of j.features){
-          if(labels.length>=200) break;                       // safety cap
+          if(labels.length>=450) break;                       // safety cap (scaled to the padded box)
           const a=f.attributes||{};
           const txt=parcelAddrText(a);                        // auto-detects SITEADDR/PHY_ADDR1/SITUS/etc.
           const hn=houseNum(txt);
@@ -12097,7 +12100,7 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
                            'PREDIR','PRE_DIR','ST_PREDIR','ST_NAME','STREETNAME','STNAME','FULLNAME','STREET',
                            'ST_TYPE','STREETTYPE','STTYPE','SUFFIX','POSTDIR','POST_DIR','ST_POSDIR'].join(',');
           const apUrlFull=apUrl+`?geometry=${encodeURIComponent(apEnv)}&geometryType=esriGeometryEnvelope&inSR=4326`+
-            `&spatialRel=esriSpatialRelIntersects&outFields=${encodeURIComponent(AP_FIELDS)}&returnGeometry=true&outSR=4326&resultRecordCount=500&f=json`;
+            `&spatialRel=esriSpatialRelIntersects&outFields=${encodeURIComponent(AP_FIELDS)}&returnGeometry=true&outSR=4326&resultRecordCount=900&f=json`;
           const ac=new AbortController(); const at=setTimeout(()=>ac.abort(),12000);
           try{ const ar=await fetch(apUrlFull,{signal:ac.signal}); clearTimeout(at); if(ar.ok) aj=await ar.json(); }
           catch(e){ clearTimeout(at); }
@@ -12113,7 +12116,7 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
           // the whole park in orange. Gather first, then highlight only the ONE nearest the anchor.
           const ptLabels=[];   // {hn, lat, lng, a}
           for(const f of aj.features){
-            if(ptLabels.length>=500) break;
+            if(ptLabels.length>=900) break;
             const a=f.attributes||{};
             const st=(a.STATUS||a.Status||'').toString().toUpperCase();
             if(st && /(RETIRE|INACTIVE|INVALID|DELETE)/.test(st)) continue;
