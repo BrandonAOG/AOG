@@ -42,6 +42,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="preconnect" href="https://mapservices.weather.noaa.gov" crossorigin> <!-- NWS warnings / NOAA overlays -->
 <link rel="preconnect" href="https://tiledimageservices2.arcgis.com" crossorigin> <!-- Collier 2026 LERC tiles -->
 <link rel="preconnect" href="https://services2.arcgis.com" crossorigin>       <!-- Collier hosted org: parcels, address points, EC, projects — the busiest data host -->
+<link rel="preconnect" href="https://geocoding.geo.census.gov" crossorigin>    <!-- geocoder #1 — on the critical path of EVERY search, so pay the TLS handshake up front -->
+<link rel="preconnect" href="https://geocode.arcgis.com" crossorigin>         <!-- geocoder #2 (Esri World) — same, and the strongest on rural addresses -->
 <link rel="dns-prefetch" href="https://gismapserver.leegov.com">              <!-- Lee parcels + building footprints -->
 <link rel="dns-prefetch" href="https://agis3.charlottecountyfl.gov">           <!-- Charlotte parcels + footprints -->
 <link rel="dns-prefetch" href="https://ags.colliergov.net">                  <!-- county flood cross-check queries -->
@@ -3241,10 +3243,73 @@ async function queryZoning(lat,lng, cityName, countyName){
   return null;
 }
 
-/* layer-metadata cache: name, last edit date, fields, detected mapping */
+/* layer-metadata cache: name, last edit date, fields, detected mapping.
+   ---------------------------------------------------------------------------------------------
+   COLD-START: on a fresh page load this map is empty, so the FIRST search pays an extra `?f=json`
+   round trip for every layer it touches — purely to learn that layer's column names. Those schemas
+   change maybe once a year, so we also persist them to localStorage with a 7-day TTL. Second visit
+   (not just second search) skips the probes entirely.
+   SAFETY: only the FIELD LIST is persisted. `lastEdit` is freshness data and must never come from
+   cache, and `detect` is recomputed from the fields on read — so if detectFields() logic changes,
+   or a county renamed a column and the cached list no longer yields a usable mapping, we discard
+   the entry and refetch rather than run on a stale schema. */
 const layerInfoCache={};
+const LAYERINFO_LS='aog.layerinfo.v1';
+const LAYERINFO_TTL=7*24*3600*1000;                 // 7 days
+let _liDisk=null, _liDirty=false;
+function _liLoad(){
+  if(_liDisk) return _liDisk;
+  try{
+    const raw=localStorage.getItem(LAYERINFO_LS);
+    const j=raw?JSON.parse(raw):null;
+    _liDisk=(j && typeof j==='object') ? j : {};
+    // drop expired entries on load so the blob can't grow forever
+    const now=Date.now(); let changed=false;
+    for(const k in _liDisk){ if(!_liDisk[k] || (now-(_liDisk[k].t||0))>LAYERINFO_TTL){ delete _liDisk[k]; changed=true; } }
+    if(changed) _liDirty=true;
+  }catch(e){ _liDisk={}; }
+  return _liDisk;
+}
+function _liSaveSoon(){
+  if(_liDirty) return; _liDirty=true;
+  setTimeout(()=>{ try{ localStorage.setItem(LAYERINFO_LS, JSON.stringify(_liDisk||{})); }catch(e){/* quota/private mode — fine */} _liDirty=false; }, 400);
+}
+/* Background refresh of a disk-served entry: fetches the real metadata (incl. lastEdit) without
+   anyone awaiting it, and replaces the in-memory entry when it lands. Fire-and-forget. */
+function _liRevalidate(queryUrl){
+  const root=queryUrl.replace(/\/query$/i,'');
+  setTimeout(()=>{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),ENRICH_TIMEOUT);
+    fetch(root+'?f=json',{signal:ctrl.signal}).then(r=>r.json()).then(m=>{
+      clearTimeout(t);
+      const fields=(m.fields||[]).map(f=>f.name);
+      if(!fields.length) return;
+      layerInfoCache[queryUrl]={ name:m.name||null,
+        lastEdit:(m.editingInfo&&m.editingInfo.lastEditDate)?new Date(m.editingInfo.lastEditDate):null,
+        fields, detect:detectFields(fields) };
+      try{ _liLoad()[queryUrl]={t:Date.now(), name:m.name||null, fields}; _liSaveSoon(); }catch(e){}
+    }).catch(()=>{ clearTimeout(t); });
+  }, 1200);   // let the search's own requests go first
+}
 async function getLayerInfo(queryUrl){
   if(layerInfoCache[queryUrl]) return layerInfoCache[queryUrl];
+  // --- disk hit: rebuild the in-memory entry from the stored field list ---
+  try{
+    const d=_liLoad()[queryUrl];
+    if(d && Array.isArray(d.fields) && d.fields.length && (Date.now()-(d.t||0))<=LAYERINFO_TTL){
+      const detect=detectFields(d.fields);
+      if(detect){                                   // stale/renamed schema → fall through and refetch
+        // lastEdit is deliberately NOT persisted — a cached "updated <date>" would be a stale claim
+        // about data freshness, which is worse than showing nothing. So we return the schema now
+        // (unblocking the search) and revalidate in the background; the real lastEdit lands in the
+        // cache a moment later for any card rendered after it.
+        const info={ name:d.name||null, lastEdit:null, fields:d.fields, detect, fromDisk:true };
+        layerInfoCache[queryUrl]=info;
+        _liRevalidate(queryUrl);
+        return info;
+      }
+    }
+  }catch(e){}
   const root=queryUrl.replace(/\/query$/i,'');
   try{
     const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),ENRICH_TIMEOUT);
@@ -3254,7 +3319,9 @@ async function getLayerInfo(queryUrl){
     const info={ name:m.name||null,
       lastEdit:(m.editingInfo&&m.editingInfo.lastEditDate)?new Date(m.editingInfo.lastEditDate):null,
       fields, detect: fields.length?detectFields(fields):null };
-    layerInfoCache[queryUrl]=info; return info;
+    layerInfoCache[queryUrl]=info;
+    if(fields.length){ try{ _liLoad()[queryUrl]={t:Date.now(), name:info.name, fields}; _liSaveSoon(); }catch(e){} }
+    return info;
   }catch(e){ const info={name:null,lastEdit:null,fields:[],detect:null,err:e.message}; layerInfoCache[queryUrl]=info; return info; }
 }
 let STATEWIDE_INFO=null; // filled on load
@@ -6480,6 +6547,35 @@ async function geocode(q){
 /* Return MULTIPLE geocode candidates (Census + OSM), each {lat,lng,label,src}.
    Both services are queried in PARALLEL (they used to run one after the other, doubling the
    wait); Census results are still listed first since they're best for US street addresses. */
+/* Holds the in-flight geocoder promises for the CURRENT geocodeAll() call, so geocodeFirst() can
+   race them without issuing a second set of requests. */
+let _geoInflight=null;
+
+/* ROUGH-POINT RACE: resolve as soon as ANY geocoder returns a usable coordinate, ignoring rank.
+   Used only to (a) identify which county we're in and (b) give the parcel resolvers something to
+   measure distance against. The authoritative point and label always come from the ranked
+   geocodeAll()/geocodeBest() result, which the caller awaits separately — so a fast-but-worse
+   geocoder can never decide the final answer, only shave latency off the next request.
+   Returns {lat,lng} or null. Never throws. */
+function geocodeFirst(msCap){
+  const inf=_geoInflight;
+  if(!inf) return Promise.resolve(null);
+  const pick=(p,fn)=>p.then(v=>{ const r=fn(v); if(r&&isFinite(r.lat)&&isFinite(r.lng)) return r; throw 0; });
+  const cands=[
+    pick(inf.census, v=>{ const m=v&&v.result&&v.result.addressMatches&&v.result.addressMatches[0];
+      return m?{lat:m.coordinates.y,lng:m.coordinates.x}:null; }),
+    pick(inf.esri, v=>{ const c=v&&v.candidates&&v.candidates[0];
+      return (c&&c.location)?{lat:+c.location.y,lng:+c.location.x}:null; }),
+    pick(inf.osm, v=>{ const m=v&&v[0]; return m?{lat:+m.lat,lng:+m.lon}:null; })
+  ];
+  // Promise.any resolves on the first SUCCESS (not the first settle), so a fast failure doesn't win.
+  const race = (typeof Promise.any==='function')
+    ? Promise.any(cands).catch(()=>null)
+    : new Promise(res=>{ let left=cands.length; cands.forEach(p=>p.then(res).catch(()=>{ if(--left===0) res(null); })); });
+  // Hard cap so a total stall here can't out-wait the ranked result we're running in parallel.
+  return Promise.race([ race, new Promise(res=>setTimeout(()=>res(null), msCap||2500)) ]).catch(()=>null);
+}
+
 async function geocodeAll(q){
   let qq = /\b(fl|florida)\b/i.test(q) ? q : q+', Florida';
   const censusU=`https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(qq)}&benchmark=Public_AR_Current&format=json`;
@@ -6501,11 +6597,16 @@ async function geocodeAll(q){
   // on whatever returned. Census/Esri are the reliable pair; OSM gets the shortest leash.
   const _gfetch=(u,ms)=>{ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),ms);
     return fetch(u,{signal:ctrl.signal}).then(r=>{clearTimeout(t);return r.json();}).catch(e=>{clearTimeout(t);throw e;}); };
-  const [cRes,oRes,eRes]=await Promise.allSettled([
-    _gfetch(censusU,7000),
-    _gfetch(osmU,4500),
-    _gfetch(esriU,7000)
-  ]);
+  // SPLIT ANSWERS: geocodeAll still returns the FULLY RANKED list (Census → OSM → Esri, with Esri's
+  // tier/score filtering) — ranking is what keeps the wrong "123 Main St" out of the result, so it
+  // must never be decided by whichever server happened to answer first. But the caller often needs
+  // only a ROUGH point to start the next request with (identify the county / seed the parcel
+  // resolvers), and for that the first usable answer is just as good. So we publish the three
+  // in-flight promises on the returned array via geocodeAll.__inflight, and geocodeFirst() below
+  // races them for that rough point. Same requests, no extra traffic, no change to ranking.
+  const pCensus=_gfetch(censusU,7000), pOsm=_gfetch(osmU,4500), pEsri=_gfetch(esriU,7000);
+  _geoInflight={ census:pCensus, osm:pOsm, esri:pEsri, q:qq };
+  const [cRes,oRes,eRes]=await Promise.allSettled([pCensus,pOsm,pEsri]);
   const out=[];
   if(cRes.status==='fulfilled'){
     const ms=(cRes.value&&cRes.value.result&&cRes.value.result.addressMatches)||[];
@@ -14812,6 +14913,9 @@ async function doSearch(){
   const mySeq=newSearch();                       // cancel any search still loading
   const stale=()=> mySeq!==searchSeq;            // true if a NEWER search has started
   const searchCtx = { raw:q, hn:houseNum(q), toks:new Set(streetTokens(q)), unit:searchUnit(q) };
+  // Held across both paths: the ranked geocode is started early (below) and REUSED by the fallback
+  // instead of issuing a second identical set of geocoder requests.
+  let rankedP=null;
 
   // AUTHORITATIVE COUNTY-PARCEL FIRST (e.g. Collier): if the search is in a county whose parcel layer
   // carries correct site addresses, resolve the EXACT lot there — by street + house number, server-
@@ -14820,21 +14924,45 @@ async function doSearch(){
   // the typed text gives us a rough point to identify it, then the parcel layer gives the truth.
   if(searchCtx.hn){
     results.innerHTML=setStatus('busy','Locating address (county parcel records)…');
-    // Rough county identification: try a fast geocode just to find WHICH county, not to place the pin.
-    let county=null;
-    const rough=await geocodeBest(q).catch(()=>null);
+    // ---- PARALLEL RESOLVE ----------------------------------------------------------------
+    // Previously this was strictly serial: ranked geocode → countyNameAt → then the ONE resolver
+    // for that county, awaited one at a time. Three round trips before the parcel query even
+    // started. Now everything that doesn't depend on another result runs together:
+    //   * rankedP  — the full ranked geocode (authoritative point/label; NOT awaited yet)
+    //   * roughP   — first usable coordinate from whichever geocoder answers first (rough only)
+    //   * every configured county resolver, fired concurrently
+    // The rough point is used ONLY to break ties and to identify the county, never to place a pin.
+    rankedP = geocodeBest(q).catch(()=>null);
+    const roughP  = geocodeFirst(2500).catch(()=>null);
+    const allCounties = Object.keys(COUNTY_PARCEL_RESOLVERS);
+    const resolverP = allCounties.map(cty =>
+      resolveCountyParcel(cty, searchCtx).then(r=>({cty,r})).catch(()=>({cty,r:null})));
+    const rough = await roughP;
     if(stale()) return;
-    if(rough && isFinite(rough.lat) && isFinite(rough.lng)) county=await countyNameAt(rough.lat,rough.lng).catch(()=>null);
+    const settled = await Promise.all(resolverP);
     if(stale()) return;
-    // If the rough geocode failed or landed somewhere without a resolver (common for short
-    // addresses like "481 8th Ave S" that exist in many cities), don't give up — try each
-    // configured county parcel layer directly. The strict house-number + street/direction/suffix
-    // match inside resolveCountyParcel keeps false hits out.
-    let tryCounties = (county && COUNTY_PARCEL_RESOLVERS[norm(county)]) ? [county] : Object.keys(COUNTY_PARCEL_RESOLVERS);
-    for(const cty of tryCounties){
-      const pr=await resolveCountyParcel(cty, searchCtx).catch(()=>null);
-      if(stale()) return;
-      if(!pr){ continue; }
+    // TIEBREAK: more than one county can hold a strict house-number + street match for the same
+    // query ("481 8th Ave S" exists in plenty of towns). The old loop silently took whichever came
+    // first in object order. Now we pick the hit NEAREST the rough geocode; if the rough point is
+    // missing or every hit is far from it (>~25 km), we don't guess — we show the candidate picker.
+    const hits = settled.filter(x=>x.r && (x.r.multi || (isFinite(x.r.lat)&&isFinite(x.r.lng))));
+    const FAR2 = 0.25*0.25;                       // ~25 km in degrees, squared
+    let ordered = hits;
+    if(rough && isFinite(rough.lat) && isFinite(rough.lng)){
+      const d2 = h => { const r=h.r; if(!isFinite(r.lat)||!isFinite(r.lng)) return Infinity;
+        const dx=r.lng-rough.lng, dy=r.lat-rough.lat; return dx*dx+dy*dy; };
+      ordered = hits.slice().sort((a,b)=>d2(a)-d2(b));
+      const near = ordered.filter(h=>d2(h)<=FAR2);
+      // Two or more counties matched and NONE is near the geocode → genuinely ambiguous, so ask.
+      if(!near.length && ordered.length>1){
+        const merged=[];
+        for(const h of ordered){ if(h.r.multi && h.r.candidates) merged.push(...h.r.candidates);
+          else merged.push({label:h.r.label, lat:h.r.lat, lng:h.r.lng, folio:h.r.folio, county:h.cty, src:h.r.src}); }
+        if(merged.length){ renderParcelCandidates(merged, q); return; }
+      }
+      if(near.length) ordered = near;
+    }
+    for(const {cty, r:pr} of ordered){
       if(pr && pr.multi && pr.candidates && pr.candidates.length){
         // Several lots share this number+street — show them rather than guess one.
         renderParcelCandidates(pr.candidates, q);   // clickable rows — click runs the lookup on that lot
@@ -14862,7 +14990,9 @@ async function doSearch(){
 
   // FALLBACK: external geocoder (universal — all counties, partial addresses, place names, ZIPs).
   results.innerHTML=setStatus('busy','Geocoding address…');
-  let g=await geocodeBest(q);
+  // Reuse the ranked geocode already in flight from the parcel path (identical query) rather than
+  // firing all three geocoders a second time. Only a query with no house number skips that path.
+  let g = rankedP ? await rankedP : await geocodeBest(q);
   if(stale()) return;
   // LAST-RESORT: geocoders (Census/OSM) often miss rural addresses (e.g. Glades/Moore Haven) that
   // DO exist in the statewide parcel roll. Query the roll directly by house number + street.
