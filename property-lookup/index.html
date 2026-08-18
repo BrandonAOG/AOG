@@ -444,7 +444,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .wx-legend .wx-allrow a{color:var(--signal2);cursor:pointer;text-decoration:none;border-bottom:1px dotted var(--signal2)}
   .nbr-num{background:rgba(10,16,22,.74);color:#bfe9ff;border:1px solid rgba(57,211,255,.45);border-radius:5px;
     font-family:var(--mono);font-size:10px;font-weight:600;line-height:1;letter-spacing:.02em;padding:2px 4px;
-    white-space:nowrap;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.45);pointer-events:none;transform:translate(-50%,-50%);
+    white-space:nowrap;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.45);pointer-events:none;
+    transform:translate(-50%,-50%) scale(var(--nbr-scale,1));transform-origin:50% 50%;will-change:transform;
     display:flex;flex-direction:column;align-items:center;gap:1px}
   .nbr-num .nbr-hn{font-weight:700}
   .nbr-num .nbr-st{font-size:8px;font-weight:500;opacity:.82;letter-spacing:.04em}
@@ -11590,6 +11591,38 @@ async function drawHomeWithinTract(lat, lng, tractAcres, info){
    any failure, and skipped when zoomed out too far to be readable. */
 const nbrNumLayer = L.layerGroup();
 
+/* ---------- Address-label sizing (--nbr-scale) ----------
+   The labels are DOM markers, so at a fixed px size they stay the same on screen while the parcels
+   under them shrink — at z16/17 a single badge covered several lots. Rule: the badge may never be
+   wider on the ground than a lot is, but it also must not shrink into unreadability when zoomed in.
+   So we size it against real ground distance and clamp both ends:
+     metres/px = 156543.034 * cos(lat) / 2^zoom
+     the badge is allowed to span NBR_TARGET_M metres of ground → that many px
+     scale = thatPx / natural badge width, clamped to [MIN, MAX]
+   Result: it shrinks steadily on zoom-out (floored so it stays legible) and grows on zoom-in up to
+   a cap, instead of being pinned to one screen size at every zoom. */
+const NBR_NATURAL_PX = 66;    // ≈ rendered width of a "1234 / FOREST AVE" badge at scale 1
+const NBR_TARGET_M   = 20;    // ground width the badge may occupy (~66 ft — still under a typical lot front)
+const NBR_SCALE_MIN  = 0.72;  // ZOOM-OUT CAP: the badge never renders smaller than this, and because
+                              // the ground-width rule wants it smaller at z16-18, this floor is what
+                              // actually pins the size out there — raise it and the far-out badges
+                              // grow, lower it and they shrink.
+const NBR_SCALE_MAX  = 1.55;  // growth cap (zoomed in) — keeps it from ballooning at z20+
+function nbrScaleForView(){
+  try{
+    const z=map.getZoom(), lat=map.getCenter().lat;
+    const mpp = 156543.03392 * Math.cos(lat*Math.PI/180) / Math.pow(2, z);
+    const allowedPx = NBR_TARGET_M / mpp;
+    const s = allowedPx / NBR_NATURAL_PX;
+    return Math.max(NBR_SCALE_MIN, Math.min(NBR_SCALE_MAX, s));
+  }catch(e){ return 1; }
+}
+function updateNbrScale(){
+  try{ document.documentElement.style.setProperty('--nbr-scale', nbrScaleForView().toFixed(3)); }catch(e){}
+}
+map.on('zoomend', updateNbrScale);
+updateNbrScale();
+
 /* ---------- Elevation Certificate 📝 note marker ----------
    When a live EC record is found (e.g. Collier's Elevation_Certificates_view layer), drop a small
    note symbol on the map at the certificate point. Clicking it opens the EC PDF directly (first
@@ -11703,9 +11736,161 @@ function searchForAddress(addrStr){
     doSearch();
   }catch(e){}
 }
+
+/* ---------- Label rendering, split out so it can be REPLAYED from cache ----------
+   Drawing the badges is cheap (a few hundred divIcons); FETCHING them is what took ~1s per pan.
+   By keeping the last result set in _nbrCache we can repaint instantly on zoom/pan and only hit
+   the network when the view leaves what we already have. */
+let _nbrCache = { b:null, labels:null, subjIdx:-1, ptLabels:null, ptSubjIdx:-1 };
+function _nbrClearCache(){ _nbrCache={ b:null, labels:null, subjIdx:-1, ptLabels:null, ptSubjIdx:-1 }; }
+
+function _nbrRenderParcelLabels(labels, subjIdx){
+  if(!labels || !labels.length) return;
+    // GROUP labels by coordinate. Condo/tower units all share ONE coordinate, so a group with
+    // 2+ members is a stack. Singletons render as normal labels. Stacks render as a single
+    // collapsed badge ("⊞ N units") that FANS OUT its individual unit labels on hover and
+    // collapses again on mouse-leave — keeping the map clean while staying clickable.
+    const groups=new Map();
+    for(let i=0;i<labels.length;i++){
+      const L0=labels[i];
+      const k=L0.lat.toFixed(6)+','+L0.lng.toFixed(6);
+      let g=groups.get(k); if(!g){ g=[]; groups.set(k,g); } g.push(i);
+    }
+
+    // helper: build a single unit's marker at a given draw position
+    function makeUnitMarker(L0, isSubj, dlat, dlng){
+      const labelHTML = numStreetLabelHTML(L0.txt, L0.hn);
+      const icon=L.divIcon({ className:'nbr-hit', html:`<div class="nbr-num${isSubj?' subject':''}">${labelHTML}</div>`, iconSize:null });
+      const mk=L.marker([dlat,dlng],{icon, interactive:true, keyboard:false, zIndexOffset:isSubj?1000:5}).addTo(nbrNumLayer);
+      mk.on('click', (ev)=>{ try{ L.DomEvent.stop(ev); }catch(e){}
+        // Use the parcel's REAL coordinates (exact) rather than re-geocoding the bare street, which
+        // can resolve "123 Main St" to the wrong town. Fall back to address only if coords missing.
+        if(isFinite(L0.lat) && isFinite(L0.lng)) runLookup(L0.lat, L0.lng);
+        else searchForAddress(L0.txt);
+      });
+      try{ const _a=L0.feat.attributes||{};
+        const _liv=fmtNum(pick(_a,'TOT_LVG_AR','TOTLVGAR','HEATED_AREA','HEATEDAREA','LIVING_AREA','LIVINGAREA','BLDG_SQFT'));
+        const _tip=parcelTooltipHTML({ site:L0.txt||parcelAddrText(_a),
+          pid:pick(_a,'PARCEL_ID','PARCELID','PARCEL','FOLIO','STRAP','PIN','PID'), owner:pick(_a,'OWN_NAME','OWNER','NAME1'),
+          sqft:_liv?_liv+' sq ft':null });
+        if(_tip) mk.bindTooltip(_tip,{sticky:true,direction:'top',className:'parcel-tip',opacity:1});
+      }catch(e){}
+      return mk;
+    }
+
+    const z=map.getZoom();
+    const degPerPx = 360/(256*Math.pow(2,z));
+    // Fan-out spacing tracks the current label scale, so scaled-up badges don't overlap each other
+    // (and scaled-down ones don't leave a sparse column of gaps).
+    const _ns = nbrScaleForView();
+    const STEP_Y = 22*_ns*degPerPx, STEP_X = 96*_ns*degPerPx, PER_COL = 12;
+
+    for(const idxs of groups.values()){
+      // ---- singleton: just render it ----
+      if(idxs.length<2){
+        const i=idxs[0]; makeUnitMarker(labels[i], i===subjIdx, labels[i].lat, labels[i].lng);
+        continue;
+      }
+      // ---- stack: collapsed badge that fans out on hover ----
+      idxs.sort((a,b)=> (a===subjIdx?-1:b===subjIdx?1:0));   // subject first
+      const baseLat=labels[idxs[0]].lat, baseLng=labels[idxs[0]].lng;
+      const subjInStack = idxs.indexOf(subjIdx)>=0;
+
+      const badgeHTML=`<div class="nbr-num stack"><span class="nbr-hn">⊞ ${idxs.length}</span><span class="nbr-st">units</span></div>`;
+      const badgeIcon=L.divIcon({ className:'nbr-hit', html:badgeHTML, iconSize:null });
+      const badge=L.marker([baseLat,baseLng],{icon:badgeIcon, interactive:true, keyboard:false,
+        zIndexOffset:subjInStack?1000:10}).addTo(nbrNumLayer);
+      badge.bindTooltip(`${idxs.length} units here — hover to expand, click one to look it up`,
+        {direction:'top',className:'parcel-tip',opacity:1});
+
+      let fanned=[];                                  // markers currently spread out
+      let leaveT=null;
+      function scheduleCollapse(){ clearTimeout(leaveT); leaveT=setTimeout(()=>{
+        const over = fanned.some(m=>{ const el=m.getElement(); return el && el.matches(':hover'); });
+        const overBadge = badge.getElement() && badge.getElement().matches(':hover');
+        if(!over && !overBadge) collapse();
+      }, 180); }
+      function fanOut(){
+        if(fanned.length) return;                     // already open
+        for(let n=0;n<idxs.length;n++){
+          const col=Math.floor(n/PER_COL), row=n%PER_COL;
+          const L0=labels[idxs[n]];
+          const dlat=baseLat - row*STEP_Y, dlng=baseLng + col*STEP_X;
+          const m=makeUnitMarker(L0, idxs[n]===subjIdx, dlat, dlng);
+          m.on('mouseover', ()=>clearTimeout(leaveT));  // staying in the cluster keeps it open
+          m.on('mouseout', scheduleCollapse);
+          fanned.push(m);
+        }
+        badge.getElement() && (badge.getElement().style.opacity='0.25');  // dim badge while open
+      }
+      function collapse(){
+        for(const m of fanned) nbrNumLayer.removeLayer(m);
+        fanned=[];
+        badge.getElement() && (badge.getElement().style.opacity='');
+      }
+      badge.on('mouseover', ()=>{ clearTimeout(leaveT); fanOut(); });
+      badge.on('mouseout', scheduleCollapse);
+
+      // if the subject is in this stack, fan it open immediately so the highlighted unit is visible
+      if(subjInStack) fanOut();
+    }
+    if(labels.length){ nbrNumLayer.addTo(map); }
+}
+
+function _nbrRenderPoints(ptLabels, ptSubjIdx){
+  if(!ptLabels || !ptLabels.length) return 0;
+          // PASS B: render the gap-fill points; only ptSubjIdx (if any) gets the subject highlight.
+          let added=0;
+          for(let i=0;i<ptLabels.length;i++){
+            const P=ptLabels[i]; const isSubj=(i===ptSubjIdx);
+            const _addr=formatAddrPoint(P.a);
+            const labelHTML = numStreetLabelHTML(_addr, P.hn);
+            const icon=L.divIcon({ className:'nbr-hit', html:`<div class="nbr-num${isSubj?' subject':''}">${labelHTML}</div>`, iconSize:null });
+            const mk=L.marker([P.lat,P.lng],{icon, interactive:true, keyboard:false, zIndexOffset:isSubj?1000:0}).addTo(nbrNumLayer);
+            mk.on('click', (ev)=>{ try{ L.DomEvent.stop(ev); }catch(e){}
+              if(isFinite(P.lat) && isFinite(P.lng)) runLookup(P.lat, P.lng);
+              else searchForAddress(_addr);
+            });
+            try{
+              const _aa=P.a||{};
+              const _liv=fmtNum(_aa.TOT_LVG_AR);
+              const _tip=parcelTooltipHTML({ site:_addr, owner:(_aa.OWN_NAME||null),
+                sqft:(_liv?_liv+' sq ft':null) });
+              if(_tip) mk.bindTooltip(_tip,{sticky:true,direction:'top',className:'parcel-tip',opacity:1});
+            }catch(e){}
+            added++;
+          }
+          if(added && !map.hasLayer(nbrNumLayer)) nbrNumLayer.addTo(map);
+  return added;
+}
+
+/* Instant repaint from the last fetched result set — no network, no awaits. Returns true if it
+   drew something, false if the cache can't serve this view (caller then does the full fetch). */
+function _nbrRepaintFromCache(){
+  try{
+    if(!_nbrCache.b || !_nbrCache.labels) return false;
+    if(map.getZoom() < 16) return false;
+    // Only reuse while the visible map is still INSIDE the box we fetched. Once the user pans past
+    // its edge the cache would leave a blank margin, so we refetch instead.
+    if(!_nbrCache.b.contains(map.getBounds())) return false;
+    updateNbrScale();
+    clearNeighborNumbers();
+    _nbrRenderParcelLabels(_nbrCache.labels, _nbrCache.subjIdx);
+    if(_nbrCache.ptLabels && _nbrCache.ptLabels.length) _nbrRenderPoints(_nbrCache.ptLabels, _nbrCache.ptSubjIdx);
+    if(!map.hasLayer(nbrNumLayer)) nbrNumLayer.addTo(map);
+    return true;
+  }catch(e){ return false; }
+}
+
 async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAnchorBox){
   if(!nbrNumOn) return;
   try{
+    // FAST PATH: a pan/zoom that stays inside the box we already fetched repaints from memory in
+    // one frame — no fetch, no await, no blank gap. Only a brand-new lookup (forceAnchorBox) or a
+    // move outside the cached box falls through to the network.
+    if(!forceAnchorBox && _nbrRepaintFromCache()) return;
+    if(forceAnchorBox) _nbrClearCache();
+    updateNbrScale();          // size the badges to the zoom they're about to be drawn at
     clearNeighborNumbers();
     const _haveAnchor = isFinite(subjLat) && isFinite(subjLng);
     // Zoom gate: skip only when zoomed out AND we're not forcing an anchor box. On the INITIAL draw
@@ -11722,6 +11907,9 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
       const aB=L.latLngBounds([subjLat-pad,subjLng-pad],[subjLat+pad,subjLng+pad]);
       b = b.isValid() ? b.extend(aB) : aB;
     }
+    // Over-fetch a margin around the view so short pans/zoom-outs land inside the cached box and
+    // repaint instantly instead of triggering another round-trip.
+    try{ b = b.pad(0.35); }catch(e){}
     const env=`${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
     const want = subjectHN!=null ? String(subjectHN).trim() : null;
     const _pidDigits = s => (s==null?'':String(s).replace(/\D/g,''));
@@ -11864,92 +12052,11 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
         }
       }
     }catch(e){}
-    // GROUP labels by coordinate. Condo/tower units all share ONE coordinate, so a group with
-    // 2+ members is a stack. Singletons render as normal labels. Stacks render as a single
-    // collapsed badge ("⊞ N units") that FANS OUT its individual unit labels on hover and
-    // collapses again on mouse-leave — keeping the map clean while staying clickable.
-    const groups=new Map();
-    for(let i=0;i<labels.length;i++){
-      const L0=labels[i];
-      const k=L0.lat.toFixed(6)+','+L0.lng.toFixed(6);
-      let g=groups.get(k); if(!g){ g=[]; groups.set(k,g); } g.push(i);
-    }
-
-    // helper: build a single unit's marker at a given draw position
-    function makeUnitMarker(L0, isSubj, dlat, dlng){
-      const labelHTML = numStreetLabelHTML(L0.txt, L0.hn);
-      const icon=L.divIcon({ className:'nbr-hit', html:`<div class="nbr-num${isSubj?' subject':''}">${labelHTML}</div>`, iconSize:null });
-      const mk=L.marker([dlat,dlng],{icon, interactive:true, keyboard:false, zIndexOffset:isSubj?1000:5}).addTo(nbrNumLayer);
-      mk.on('click', (ev)=>{ try{ L.DomEvent.stop(ev); }catch(e){}
-        // Use the parcel's REAL coordinates (exact) rather than re-geocoding the bare street, which
-        // can resolve "123 Main St" to the wrong town. Fall back to address only if coords missing.
-        if(isFinite(L0.lat) && isFinite(L0.lng)) runLookup(L0.lat, L0.lng);
-        else searchForAddress(L0.txt);
-      });
-      try{ const _a=L0.feat.attributes||{};
-        const _liv=fmtNum(pick(_a,'TOT_LVG_AR','TOTLVGAR','HEATED_AREA','HEATEDAREA','LIVING_AREA','LIVINGAREA','BLDG_SQFT'));
-        const _tip=parcelTooltipHTML({ site:L0.txt||parcelAddrText(_a),
-          pid:pick(_a,'PARCEL_ID','PARCELID','PARCEL','FOLIO','STRAP','PIN','PID'), owner:pick(_a,'OWN_NAME','OWNER','NAME1'),
-          sqft:_liv?_liv+' sq ft':null });
-        if(_tip) mk.bindTooltip(_tip,{sticky:true,direction:'top',className:'parcel-tip',opacity:1});
-      }catch(e){}
-      return mk;
-    }
-
-    const z=map.getZoom();
-    const degPerPx = 360/(256*Math.pow(2,z));
-    const STEP_Y = 22*degPerPx, STEP_X = 96*degPerPx, PER_COL = 12;
-
-    for(const idxs of groups.values()){
-      // ---- singleton: just render it ----
-      if(idxs.length<2){
-        const i=idxs[0]; makeUnitMarker(labels[i], i===subjIdx, labels[i].lat, labels[i].lng);
-        continue;
-      }
-      // ---- stack: collapsed badge that fans out on hover ----
-      idxs.sort((a,b)=> (a===subjIdx?-1:b===subjIdx?1:0));   // subject first
-      const baseLat=labels[idxs[0]].lat, baseLng=labels[idxs[0]].lng;
-      const subjInStack = idxs.indexOf(subjIdx)>=0;
-
-      const badgeHTML=`<div class="nbr-num stack"><span class="nbr-hn">⊞ ${idxs.length}</span><span class="nbr-st">units</span></div>`;
-      const badgeIcon=L.divIcon({ className:'nbr-hit', html:badgeHTML, iconSize:null });
-      const badge=L.marker([baseLat,baseLng],{icon:badgeIcon, interactive:true, keyboard:false,
-        zIndexOffset:subjInStack?1000:10}).addTo(nbrNumLayer);
-      badge.bindTooltip(`${idxs.length} units here — hover to expand, click one to look it up`,
-        {direction:'top',className:'parcel-tip',opacity:1});
-
-      let fanned=[];                                  // markers currently spread out
-      let leaveT=null;
-      function scheduleCollapse(){ clearTimeout(leaveT); leaveT=setTimeout(()=>{
-        const over = fanned.some(m=>{ const el=m.getElement(); return el && el.matches(':hover'); });
-        const overBadge = badge.getElement() && badge.getElement().matches(':hover');
-        if(!over && !overBadge) collapse();
-      }, 180); }
-      function fanOut(){
-        if(fanned.length) return;                     // already open
-        for(let n=0;n<idxs.length;n++){
-          const col=Math.floor(n/PER_COL), row=n%PER_COL;
-          const L0=labels[idxs[n]];
-          const dlat=baseLat - row*STEP_Y, dlng=baseLng + col*STEP_X;
-          const m=makeUnitMarker(L0, idxs[n]===subjIdx, dlat, dlng);
-          m.on('mouseover', ()=>clearTimeout(leaveT));  // staying in the cluster keeps it open
-          m.on('mouseout', scheduleCollapse);
-          fanned.push(m);
-        }
-        badge.getElement() && (badge.getElement().style.opacity='0.25');  // dim badge while open
-      }
-      function collapse(){
-        for(const m of fanned) nbrNumLayer.removeLayer(m);
-        fanned=[];
-        badge.getElement() && (badge.getElement().style.opacity='');
-      }
-      badge.on('mouseover', ()=>{ clearTimeout(leaveT); fanOut(); });
-      badge.on('mouseout', scheduleCollapse);
-
-      // if the subject is in this stack, fan it open immediately so the highlighted unit is visible
-      if(subjInStack) fanOut();
-    }
-    if(labels.length){ nbrNumLayer.addTo(map); }
+    // Cache the resolved set so subsequent pans/zooms inside this box repaint with zero latency.
+    _nbrCache.b=b; _nbrCache.labels=labels; _nbrCache.subjIdx=subjIdx;
+    _nbrCache.ptLabels=null; _nbrCache.ptSubjIdx=-1;
+    _nbrRenderParcelLabels(labels, subjIdx);
+    if(labels.length && !map.hasLayer(nbrNumLayer)) nbrNumLayer.addTo(map);
     // GAP-FILL for inside-tract / lean-feed homes: villa & condo units inside a shared tract often
     // carry NO address on the parcel layer, so PASS 2 skips them (you see numbers OUTSIDE the orange
     // tract but not inside). Counties that publish an address-POINT layer (e.g. Collier) have those
@@ -12046,28 +12153,9 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
               } else if(ptSubjIdx<0){ ptSubjIdx=i; }   // no anchor: first same-number point
             }
           }
-          // PASS B: render the gap-fill points; only ptSubjIdx (if any) gets the subject highlight.
-          let added=0;
-          for(let i=0;i<ptLabels.length;i++){
-            const P=ptLabels[i]; const isSubj=(i===ptSubjIdx);
-            const _addr=formatAddrPoint(P.a);
-            const labelHTML = numStreetLabelHTML(_addr, P.hn);
-            const icon=L.divIcon({ className:'nbr-hit', html:`<div class="nbr-num${isSubj?' subject':''}">${labelHTML}</div>`, iconSize:null });
-            const mk=L.marker([P.lat,P.lng],{icon, interactive:true, keyboard:false, zIndexOffset:isSubj?1000:0}).addTo(nbrNumLayer);
-            mk.on('click', (ev)=>{ try{ L.DomEvent.stop(ev); }catch(e){}
-              if(isFinite(P.lat) && isFinite(P.lng)) runLookup(P.lat, P.lng);
-              else searchForAddress(_addr);
-            });
-            try{
-              const _aa=P.a||{};
-              const _liv=fmtNum(_aa.TOT_LVG_AR);
-              const _tip=parcelTooltipHTML({ site:_addr, owner:(_aa.OWN_NAME||null),
-                sqft:(_liv?_liv+' sq ft':null) });
-              if(_tip) mk.bindTooltip(_tip,{sticky:true,direction:'top',className:'parcel-tip',opacity:1});
-            }catch(e){}
-            added++;
-          }
-          if(added && !map.hasLayer(nbrNumLayer)) nbrNumLayer.addTo(map);
+          // PASS B: render the gap-fill points (extracted so a cached repaint can redraw them).
+          _nbrRenderPoints(ptLabels, ptSubjIdx);
+          _nbrCache.ptLabels=ptLabels; _nbrCache.ptSubjIdx=ptSubjIdx;
         }
       }
     }catch(e){ /* gap-fill is best-effort; never block the result */ }
@@ -12079,10 +12167,17 @@ let _nbrTimer=null, _nbrCtx=null;
 // interactive markers frame-by-frame through the zoom animation is what caused the
 // stutter on zoom-out; clearing first and rebuilding on zoomend is smooth.
 map.on('zoomstart', ()=>{ if(nbrNumOn && _nbrCtx) clearNeighborNumbers(); });
+/* Two-speed refresh:
+   1. IMMEDIATE — the moment the gesture ends, repaint from the cached result set. Nothing is
+      awaited, so the badges are back on screen in the same frame instead of after a fetch.
+   2. DEFERRED — only when the cache can't cover the new view do we re-query, and even then on a
+      short debounce (the old 350/700 ms wait was tuned for heavy polygon layers, not these). */
+const NBR_DEBOUNCE = L.Browser.mobile ? 260 : 120;
 map.on('moveend zoomend', ()=>{
   if(!nbrNumOn || !_nbrCtx) return;
   clearTimeout(_nbrTimer);
-  _nbrTimer=setTimeout(()=>{ showNeighborNumbers(_nbrCtx.hn, _nbrCtx.lat, _nbrCtx.lng, _nbrCtx.pid); }, BOUNDS_DEBOUNCE);
+  if(_nbrRepaintFromCache()) return;          // covered by what we already have — done, no network
+  _nbrTimer=setTimeout(()=>{ showNeighborNumbers(_nbrCtx.hn, _nbrCtx.lat, _nbrCtx.lng, _nbrCtx.pid); }, NBR_DEBOUNCE);
 });
 
 /* Build the hover-tooltip markup for a parcel from {site, pid, owner} (any may be missing). */
