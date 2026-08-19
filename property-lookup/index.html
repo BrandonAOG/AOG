@@ -517,6 +517,34 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .pcand:hover,.pcand:focus{background:var(--search-bg);border-color:var(--signal);color:var(--signal);outline:none}
   .pcand .pcarrow{color:var(--signal);flex:none;font-size:13px}
   .pcand .pcfolio{color:var(--faint);font-size:11px;flex:none}
+  /* ---- Unit picker modal: shown when one address resolves to several condo/suite units ---- */
+  .umodal{position:fixed;inset:0;z-index:4000;display:none;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.55);backdrop-filter:blur(2px);padding:18px}
+  .umodal.show{display:flex}
+  .ubox{width:min(520px,96vw);max-height:min(78vh,720px);display:flex;flex-direction:column;
+    background:var(--card,#12161c);border:1px solid var(--signal);border-radius:12px;
+    box-shadow:0 18px 50px rgba(0,0,0,.55);overflow:hidden}
+  .uhead{padding:14px 16px 10px;border-bottom:1px solid var(--drop-line)}
+  .uttl{font-family:var(--mono);font-size:13px;font-weight:800;color:var(--signal);letter-spacing:.03em}
+  .usub{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:4px;line-height:1.45}
+  .ufilter{margin:10px 16px 0;padding:9px 11px;font-family:var(--mono);font-size:13px;
+    background:var(--search-bg);color:var(--ink);border:1px solid var(--drop-line);border-radius:8px;width:calc(100% - 32px)}
+  .ufilter:focus{outline:none;border-color:var(--signal)}
+  .ugrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;
+    padding:12px 16px;overflow:auto}
+  .ucell{padding:12px 6px;font-family:var(--mono);font-size:14px;font-weight:700;color:var(--ink);
+    background:var(--search-bg);border:1px solid var(--drop-line);border-radius:8px;cursor:pointer;
+    text-align:center;transition:background .12s,border-color .12s,color .12s}
+  .ucell:hover,.ucell:focus{border-color:var(--signal);color:var(--signal);outline:none}
+  .ucell .ucown{display:block;font-size:9.5px;font-weight:400;color:var(--faint);margin-top:3px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ufoot{padding:10px 16px 14px;border-top:1px solid var(--drop-line);display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .ubtn{padding:8px 14px;font-family:var(--mono);font-size:12px;color:var(--faint);cursor:pointer;
+    background:transparent;border:1px solid var(--drop-line);border-radius:8px}
+  .ubtn:hover{color:var(--ink);border-color:var(--ink)}
+  .unone{font-family:var(--mono);font-size:12px;color:var(--faint);padding:14px 16px}
+  @media (max-width:520px){ .ugrid{grid-template-columns:repeat(auto-fill,minmax(72px,1fr))} }
+  @media print{ .umodal{display:none!important} }
   .suggest .sg .sgsrc{margin-left:auto;color:var(--faint);font-size:9.5px;flex:none;padding-top:1px}
   /* Interpolated (guessed) geocode: warn loudly so it's obvious before a click. */
   .suggest .sg .sgsrc.approx{color:var(--warn);font-size:12px;font-weight:800;letter-spacing:.04em;padding-top:0}
@@ -1086,6 +1114,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
         <button id="go">Find</button>
       </div>
       <div class="suggest" id="suggest"></div>
+      <div class="umodal" id="unitModal" role="dialog" aria-modal="true" aria-labelledby="unitModalTtl"></div>
       <div class="history" id="historyDrop"></div>
     </div>
     <div class="hint"><b>OR</b> tap anywhere on the map to query that exact point — most reliable for getting the right parcel.</div>
@@ -4022,7 +4051,23 @@ document.addEventListener('click', closeBasemapMenu);
 map.on('moveend', ()=>{ if(_curBasemap==='sarco') updateLocalAerial(false); });
 
 let marker=null, parcelLayer=null, homeParcelLayer=null;
-map.on('click', e => { newSearch(); runLookup(e.latlng.lat, e.latlng.lng); });
+/* GHOST-CLICK GUARD. The unit picker / candidate rows are overlays sitting ON TOP of the map. On
+   touch devices the tap that dismisses an overlay is replayed ~300ms later as a synthetic mouse
+   click at the same screen point — which by then lands on the map underneath. Leaflet fires
+   map 'click', runLookup() runs with NO searchCtx, and the map-click branch rewrites the search box
+   with whatever parcel happened to be under your finger — silently throwing away the unit you just
+   picked. Any UI pick stamps suppressUiClick(); map clicks inside that window are ignored.
+   Note the guard must also cover programmatic setView: recentering can land the cursor over a
+   different parcel before the ghost fires. */
+let _uiClickUntil=0;
+function suppressUiClick(ms){ _uiClickUntil = Date.now() + (ms||900); }
+function uiClickSuppressed(){ return Date.now() < _uiClickUntil; }
+map.on('click', e => {
+  if(uiClickSuppressed()) return;          // replayed tap from an overlay pick — not a real map click
+  const um=document.getElementById('unitModal');
+  if(um && um.classList.contains('show')) return;   // modal is open; the map is not the target
+  newSearch(); runLookup(e.latlng.lat, e.latlng.lng);
+});
 
 /* ---------- City/county separation: color-coded INCORPORATED city outlines ----------
    The FDOT "Florida Cities Bndy" layer is built from US Census place data, which mixes
@@ -11838,6 +11883,33 @@ function searchForAddress(addrStr){
   }catch(e){}
 }
 
+/* Build a searchCtx for a click on a map label. Without one, runLookup() takes the MAP-CLICK branch:
+   it resolves purely by coordinate and rewrites the search box from whatever parcel sits under the
+   point. On a condo stack every unit shares ONE coordinate, so that resolves to the master/common-
+   element parcel and reports the association as owner — exactly the wrong answer for the unit you
+   clicked. Passing the label's own address (and folio, when the attributes carry one) pins it. */
+/* Put the label you actually clicked into the search box, so the box, the map pin and the results
+   card all agree. Without this a map-label click left the previous search text sitting there while
+   the panel showed a different parcel — the confusing part. Keeps the unit suffix intact. */
+function _nbrSetAddrBox(txt){
+  const v=String(txt||'').replace(/\s+/g,' ').trim();
+  if(!v) return;
+  try{
+    addrEl.value=v; STORE.set('fl_addr',v); addToHistory(v);
+    if(typeof updateClearBtn==='function') updateClearBtn();
+  }catch(e){}
+}
+
+function _nbrClickCtx(txt, attrs){
+  const raw=String(txt||'').trim();
+  const ctx={ raw, hn:houseNum(raw), toks:new Set(streetTokens(raw)), unit:searchUnit(raw) };
+  try{
+    const folio = attrs ? pick(attrs,'FOLIO','Folio','folio','PARCEL_ID','PARCELID','STRAP','PARCELNO') : null;
+    if(folio) ctx.folio=folio;
+  }catch(e){}
+  return ctx;
+}
+
 /* ---------- Label rendering, split out so it can be REPLAYED from cache ----------
    Drawing the badges is cheap (a few hundred divIcons); FETCHING them is what took ~1s per pan.
    By keeping the last result set in _nbrCache we can repaint instantly on zoom/pan and only hit
@@ -11864,9 +11936,11 @@ function _nbrRenderParcelLabels(labels, subjIdx){
       const icon=L.divIcon({ className:'nbr-hit', html:`<div class="nbr-num${isSubj?' subject':''}">${labelHTML}</div>`, iconSize:null });
       const mk=L.marker([dlat,dlng],{icon, interactive:true, keyboard:false, zIndexOffset:isSubj?1000:5}).addTo(nbrNumLayer);
       mk.on('click', (ev)=>{ try{ L.DomEvent.stop(ev); }catch(e){}
+        suppressUiClick(900);   // block the replayed tap landing on the map underneath
         // Use the parcel's REAL coordinates (exact) rather than re-geocoding the bare street, which
         // can resolve "123 Main St" to the wrong town. Fall back to address only if coords missing.
-        if(isFinite(L0.lat) && isFinite(L0.lng)) runLookup(L0.lat, L0.lng);
+        _nbrSetAddrBox(L0.txt);
+        if(isFinite(L0.lat) && isFinite(L0.lng)) runLookup(L0.lat, L0.lng, _nbrClickCtx(L0.txt, L0.feat&&L0.feat.attributes));
         else searchForAddress(L0.txt);
       });
       try{ const _a=L0.feat.attributes||{};
@@ -11949,7 +12023,9 @@ function _nbrRenderPoints(ptLabels, ptSubjIdx){
             const icon=L.divIcon({ className:'nbr-hit', html:`<div class="nbr-num${isSubj?' subject':''}">${labelHTML}</div>`, iconSize:null });
             const mk=L.marker([P.lat,P.lng],{icon, interactive:true, keyboard:false, zIndexOffset:isSubj?1000:0}).addTo(nbrNumLayer);
             mk.on('click', (ev)=>{ try{ L.DomEvent.stop(ev); }catch(e){}
-              if(isFinite(P.lat) && isFinite(P.lng)) runLookup(P.lat, P.lng);
+              suppressUiClick(900);
+              _nbrSetAddrBox(_addr);
+              if(isFinite(P.lat) && isFinite(P.lng)) runLookup(P.lat, P.lng, _nbrClickCtx(_addr, P.a));
               else searchForAddress(_addr);
             });
             try{
@@ -12638,10 +12714,43 @@ async function runLookup(lat,lng,searchCtx){
                    : (ngHit && ngHit.pointOnly && isFinite(ngHit.lng)) ? ngHit.lng : lng;
         for(const cu of cands){
           let al=null, matchedAddr=null, exactUnit=true, multi=0;
+          // 0a) FOLIO PIN (highest authority): the user picked an exact unit from the unit picker, so
+          //     we already hold its folio. Fetch that parcel straight from the county's correct parcel
+          //     layer — no point-in-polygon, no address guessing. Without this, a condo unit resolves
+          //     by coordinate onto the master/common-element polygon and shows the association as the
+          //     owner. Same deterministic path a unit-typed search already takes.
+          if(searchCtx && searchCtx.folio && COUNTY_PARCEL_RESOLVERS[norm(countyName)]){
+            const pin = await fetchCountyParcelFeatureByFolio(countyName, searchCtx.folio).catch(()=>null);
+            if(pin && pin.features && pin.features[0]){
+              al={features:[pin.features[0]]};
+              al.__authByFolio=true; al.__byFolioPin=true;
+              matchedAddr = searchCtx.raw || null; multi=1;
+              try{ const _c=featCentroid(pin.features[0]); if(_c){ al.__ngLat=_c[1]; al.__ngLng=_c[0]; } }catch(e){}
+            }
+          }
+          // 0b) UNIT FALLBACK: no usable folio (or the pin missed), but the clicked/typed address
+          //     carries a unit. Route through the SAME address-point resolver that a typed unit
+          //     search uses — it maps address+unit to the unit's own folio. Without this, a condo
+          //     unit falls through to point-in-polygon and reports the association as owner.
+          if(!al && searchCtx && searchCtx.unit && searchCtx.hn && COUNTY_PARCEL_RESOLVERS[norm(countyName)]){
+            const rc = await resolveCountyParcel(countyName, searchCtx).catch(()=>null);
+            if(rc && !rc.multi && rc.folio){
+              const pin2 = await fetchCountyParcelFeatureByFolio(countyName, rc.folio).catch(()=>null);
+              if(pin2 && pin2.features && pin2.features[0]){
+                al={features:[pin2.features[0]]};
+                al.__authByFolio=true; al.__byFolioPin=true;
+                matchedAddr = rc.label || searchCtx.raw || null; multi=1;
+                if(isFinite(rc.lat) && isFinite(rc.lng)){ al.__ngLat=rc.lat; al.__ngLng=rc.lng; }
+                // The resolver came back with the authoritative unit address — upgrade the search
+                // box to it so the box, the pin and the card all read the same thing.
+                if(rc.label) _nbrSetAddrBox(rc.label);
+              }
+            }
+          }
           // 0) AUTHORITATIVE (STRAP path): NG911 maps the address to a parcel STRAP; fetch by STRAP.
           //    Deterministic — this is what LeePA's own search does. (Counties whose NG911 layer
           //    carries a STRAP field, e.g. Lee.)
-          if(ngHit && ngHit.strap){
+          if(!al && ngHit && ngHit.strap){
             const pf = await queryFeedByStrap(cu, ngHit.strap).catch(()=>null);
             if(pf){
               al={features:[pf]}; matchedAddr=ngHit.addr||null; multi=1;
@@ -14686,7 +14795,13 @@ const COUNTY_PARCEL_RESOLVERS = {
     addrPointUrl:   "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Site_Address_Points_b/FeatureServer/3/query",
     apAddrField:    "STUBADDRESS",
     apFolioField:   "FLN",
-    apCityField:    "MUNICIPALITY"
+    apCityField:    "MUNICIPALITY",
+    // Unit / condo suffix carried on the address point. STUBADDRESS holds only "2040 Tarpon Bay Dr N"
+    // (no unit), so on a condo EVERY unit in the building shares one STUBADDRESS and differs only by
+    // UNITID + FLN. Without these two fields a unit search resolved to "several folios → ambiguous"
+    // and fell through to the interpolated geocoder, landing on the master condo address.
+    apUnitField:     "UNITID",
+    apUnitTypeField: "UNITTYPE"
   },
   // Charlotte County's own live parcel layer (the same layer that draws the correct per-parcel
   // address labels on the map). Site address = FullPropertyAddress, parcel id = ACCOUNT,
@@ -14723,10 +14838,11 @@ async function resolveCountyParcel(countyName, searchCtx){
   if(cfg.addrPointUrl && cfg.apFolioField){
     try{
       const apWhere = `${cfg.apAddrField} LIKE '${hn} %' OR ${cfg.apAddrField} = '${hn}'`;
-      const apOut = [cfg.apAddrField,cfg.apFolioField,cfg.apCityField,'STATUS','POINTTYPE'].filter(Boolean);
+      const apOut = [cfg.apAddrField,cfg.apFolioField,cfg.apCityField,cfg.apUnitField,cfg.apUnitTypeField,
+                     'STATUS','POINTTYPE'].filter(Boolean);
       const apParams = `where=${encodeURIComponent(apWhere)}`+
         `&outFields=${encodeURIComponent(apOut.join(','))}`+
-        `&returnGeometry=false&resultRecordCount=50&f=json`;
+        `&returnGeometry=false&resultRecordCount=400&f=json`;
       const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),9000);
       const r=await fetch(cfg.addrPointUrl+'?'+apParams,{signal:ctrl.signal}); clearTimeout(t);
       if(r.ok){
@@ -14739,6 +14855,10 @@ async function resolveCountyParcel(countyName, searchCtx){
           // Also remember each folio's STATUS + POINTTYPE (from the point) for a panel badge later.
           const folioHits=new Map();
           const folioMeta=new Map();
+          // Unit the user actually asked for ("2040 Tarpon Bay Dr N Unit 101" → "101"), normalized
+          // the same way the point's UNITID is below so "#101", "Unit 101" and "101" all compare equal.
+          const wantUnitAP = searchCtx.unit || null;
+          const _nu = v => String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
           for(const f of j.features){
             const a=f.attributes||{}; const addr=a[cfg.apAddrField]; const fln=a[cfg.apFolioField];
             if(!addr || !fln) continue;
@@ -14746,12 +14866,34 @@ async function resolveCountyParcel(countyName, searchCtx){
             const toks=new Set(streetTokens(addr));
             if(wantCoreAP.size){ let ov=false; wantCoreAP.forEach(x=>{ if(toks.has(x)) ov=true; }); if(!ov) continue; }
             if(wantDSAP.length && !wantDSAP.every(x=>toks.has(x))) continue;
+            // UNIT MATCH: on a condo/tower every unit shares one STUBADDRESS and differs only by
+            // UNITID. When the user typed a unit, keep ONLY the point carrying that unit — this is
+            // what turns "many folios → ambiguous → geocoder drift" into one exact folio.
+            const pUnit = cfg.apUnitField ? _nu(a[cfg.apUnitField]) : '';
+            if(wantUnitAP){ if(!pUnit || pUnit!==wantUnitAP) continue; }
             const digits=String(fln).replace(/\D/g,''); if(!digits) continue;
             if(!folioHits.has(digits)){ folioHits.set(digits, String(fln).trim());
-              folioMeta.set(digits, { status:(a.STATUS||'').trim(), pointType:(a.POINTTYPE||'').trim() }); }
+              folioMeta.set(digits, { status:(a.STATUS||'').trim(), pointType:(a.POINTTYPE||'').trim(),
+                                      ptAddr:String(addr).trim(),
+                                      unit:(cfg.apUnitField?String(a[cfg.apUnitField]||'').trim():''),
+                                      unitType:(cfg.apUnitTypeField?String(a[cfg.apUnitTypeField]||'').trim():''),
+                                      city:(cfg.apCityField?String(a[cfg.apCityField]||'').trim():'') }); }
           }
           // Only act when the address points agree on a SINGLE folio — otherwise it's ambiguous
           // (multi-unit / mis-file) and we defer to the parcel-layer logic below.
+          if(folioHits.size>1 && !wantUnitAP){
+            // BARE-ADDRESS UNIT STACK: the typed address resolved to several folios that differ only
+            // by unit — i.e. a condo/tower. Previously this fell through to the parcel layer, where a
+            // building address like "2040" often doesn't exist as a parcel at all (Collier files every
+            // unit under the association's master address), so the search died and drifted to the
+            // geocoder with no picker. Build the candidate list from the POINTS instead, so searching
+            // the plain street address offers the same unit picker as searching a unit does.
+            const stack = await candidatesFromFolios(cfg, countyName, folioHits, folioMeta).catch(()=>null);
+            if(stack && stack.length>1){
+              return { multi:true, candidates:stack, src:titleCase(countyName)+' County parcel' };
+            }
+            // couldn't resolve geometry for them — fall through to the parcel-layer logic below.
+          }
           if(folioHits.size===1){
             const folio=[...folioHits.values()][0];
             const _meta=[...folioMeta.values()][0]||null;
@@ -14760,8 +14902,21 @@ async function resolveCountyParcel(countyName, searchCtx){
               const pf=pinFeat.features[0]; const pa=pf.attributes||{};
               const c=featCentroid(pf);
               if(c){
-                const label=[pa[cfg.addrField], pa[cfg.cityField], pa[cfg.zipField]].filter(Boolean).join(', ')
-                           || (searchCtx.raw||'');
+                // LABEL: prefer the ADDRESS POINT we actually matched, not the parcel record's own
+                // address field. On Collier condos every unit folio carries the association's master
+                // address ("2008 Tarpon Bay Dr N"), so using the parcel field silently rewrote a
+                // search for 2040 #101 into 2008 #101. The parcel field is still the fallback.
+                let label='';
+                if(_meta && _meta.ptAddr){
+                  const _u = _meta.unit ? ((_meta.unitType||'Unit')+' '+_meta.unit) : '';
+                  label=[ (_meta.ptAddr + (_u?(' '+_u):'')),
+                          _meta.city || pa[cfg.cityField],
+                          pa[cfg.zipField] ].filter(Boolean).join(', ');
+                }
+                if(!label){
+                  label=[pa[cfg.addrField], pa[cfg.cityField], pa[cfg.zipField]].filter(Boolean).join(', ')
+                        || (searchCtx.raw||'');
+                }
                 // Stash the point's status/type by folio digits so the renderer can show a badge for
                 // THIS parcel only (cleared each lookup). Purely informational, high-confidence fields.
                 try{ window.__addrPtMeta = { folioDigits:String(folio).replace(/\D/g,''), status:(_meta&&_meta.status)||'', pointType:(_meta&&_meta.pointType)||'' }; }catch(e){}
@@ -14821,7 +14976,91 @@ async function resolveCountyParcel(countyName, searchCtx){
              src:titleCase(countyName)+' County parcel', multi:false };
   }
   // Several lots share this number+street (e.g. a multi-unit address). Don't guess.
-  return { multi:true, candidates:matches, src:titleCase(countyName)+' County parcel' };
+  // CONDO ENRICHMENT: on a condo every unit folio carries the SAME SiteStreetAddress, so the raw
+  // candidate rows come out as N identical lines distinguishable only by folio — useless to pick
+  // from. Attach each folio's UNITID from the address-point layer so the rows read 101, 102, 103…
+  const enriched = await attachUnitsToCandidates(cfg, searchCtx, matches).catch(()=>matches);
+  return { multi:true, candidates:enriched, src:titleCase(countyName)+' County parcel' };
+}
+/* Look up the unit number for each candidate folio in the county's address-point layer and fold it
+   into the candidate's label. Best-effort: any failure returns the candidates untouched. */
+/* Pull the real parcels for a set of folios in ONE query and return them as picker candidates,
+   each carrying its unit number from the address point. Used when a bare street address resolves to
+   a whole condo/tower stack. Returns [] on any failure so callers can fall through. */
+async function candidatesFromFolios(cfg, countyName, folioHits, folioMeta){
+  if(!cfg || !cfg.folioField || !folioHits || !folioHits.size) return [];
+  const folios=[...folioHits.values()].slice(0,200);
+  const inList=folios.map(f=>`'${String(f).replace(/'/g,"''")}'`).join(',');
+  const where=`${cfg.folioField} IN (${inList})`;
+  const params=`where=${encodeURIComponent(where)}`+
+    `&outFields=${encodeURIComponent([cfg.addrField,cfg.cityField,cfg.zipField,cfg.folioField,cfg.ownerField].filter(Boolean).join(','))}`+
+    `&returnGeometry=true&outSR=4326&resultRecordCount=250&f=json`;
+  let feats=[];
+  try{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
+    const r=await fetch(cfg.url+'?'+params,{signal:ctrl.signal}); clearTimeout(t);
+    if(!r.ok) return []; const j=await r.json(); if(j.error) return [];
+    feats=j.features||[];
+  }catch(e){ return []; }
+  const out=[];
+  for(const f of feats){
+    const a=f.attributes||{}; const c=featCentroid(f); if(!c) continue;
+    const folio=a[cfg.folioField]; const digits=String(folio||'').replace(/\D/g,'');
+    const meta=folioMeta ? folioMeta.get(digits) : null;
+    // Prefer the address POINT's own street text — the parcel's address field is the master condo
+    // address and would render every row identically.
+    const street=(meta&&meta.ptAddr) ? meta.ptAddr : a[cfg.addrField];
+    out.push({
+      lat:c[1], lng:c[0],
+      label:[street, (meta&&meta.city)||a[cfg.cityField], a[cfg.zipField]].filter(Boolean).join(', '),
+      folio:folio||null, owner:a[cfg.ownerField]||null,
+      unit:(meta&&meta.unit)||'', unitType:(meta&&meta.unitType)||'Unit'
+    });
+  }
+  out.sort((a,b)=>{
+    const na=parseInt(String(a.unit).replace(/\D/g,''),10), nb=parseInt(String(b.unit).replace(/\D/g,''),10);
+    if(isFinite(na)&&isFinite(nb)&&na!==nb) return na-nb;
+    return String(a.unit).localeCompare(String(b.unit));
+  });
+  return out;
+}
+async function attachUnitsToCandidates(cfg, searchCtx, matches){
+  if(!cfg || !cfg.addrPointUrl || !cfg.apFolioField || !cfg.apUnitField) return matches;
+  const hn = String(searchCtx.hn).replace(/'/g,"''");
+  const where = `${cfg.apAddrField} LIKE '${hn} %' OR ${cfg.apAddrField} = '${hn}'`;
+  const out = [cfg.apAddrField,cfg.apFolioField,cfg.apUnitField,cfg.apUnitTypeField,cfg.apCityField]
+                .filter(Boolean);
+  const params = `where=${encodeURIComponent(where)}`+
+    `&outFields=${encodeURIComponent(out.join(','))}`+
+    `&returnGeometry=false&resultRecordCount=400&f=json`;
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),9000);
+  const r=await fetch(cfg.addrPointUrl+'?'+params,{signal:ctrl.signal}); clearTimeout(t);
+  if(!r.ok) return matches;
+  const j=await r.json(); if(j.error || !j.features) return matches;
+  const byFolio=new Map();
+  for(const f of j.features){
+    const a=f.attributes||{}; const fln=a[cfg.apFolioField]; if(!fln) continue;
+    const u=String(a[cfg.apUnitField]||'').trim(); if(!u) continue;
+    const digits=String(fln).replace(/\D/g,''); if(!digits) continue;
+    if(!byFolio.has(digits)) byFolio.set(digits,{ unit:u,
+      unitType:String((cfg.apUnitTypeField?a[cfg.apUnitTypeField]:'')||'').trim() });
+  }
+  if(!byFolio.size) return matches;
+  const withUnits = matches.map(m=>{
+    const hit = m.folio ? byFolio.get(String(m.folio).replace(/\D/g,'')) : null;
+    if(!hit) return m;
+    return Object.assign({}, m, { unit:hit.unit, unitType:hit.unitType||'Unit' });
+  });
+  // Sort numerically by unit where we have one (101, 102, 110 — not 101, 110, 102), unlabeled last.
+  withUnits.sort((a,b)=>{
+    if(a.unit && !b.unit) return -1;
+    if(!a.unit && b.unit) return 1;
+    if(!a.unit && !b.unit) return 0;
+    const na=parseInt(String(a.unit).replace(/\D/g,''),10), nb=parseInt(String(b.unit).replace(/\D/g,''),10);
+    if(isFinite(na) && isFinite(nb) && na!==nb) return na-nb;
+    return String(a.unit).localeCompare(String(b.unit));
+  });
+  return withUnits;
 }
 /* Fetch authoritative attributes for a parcel by its FOLIO/parcel id from a county's correct parcel
    layer (COUNTY_PARCEL_RESOLVERS). Used to fix the live-feed card when the lean county feed has the
@@ -14834,16 +15073,39 @@ async function resolveCountyParcel(countyName, searchCtx){
 async function fetchCountyParcelFeatureByFolio(countyName, folio){
   const cfg = countyName ? COUNTY_PARCEL_RESOLVERS[norm(countyName)] : null;
   if(!cfg || !folio) return null;
-  const fol=String(folio).replace(/'/g,"''");
-  const where = `${cfg.folioField}='${fol}'`;
-  const params = `where=${encodeURIComponent(where)}&outFields=*&returnGeometry=true&outSR=4326&f=json`;
-  try{
-    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),10000);
-    const r=await fetch(cfg.url+'?'+params,{signal:ctrl.signal}); clearTimeout(t);
-    if(!r.ok) return null; const j=await r.json(); if(j.error) return null;
-    const f=(j.features||[])[0]; if(!f) return null;
-    return { features:[f], __authByFolio:true, __byFolioPin:true };
-  }catch(e){ return null; }
+  // FORMAT TOLERANCE. The folio can arrive from several sources that punctuate it differently: the
+  // address point's FLN, the statewide roll's PARCEL_ID (often dashed/spaced), or a map label's
+  // attributes. An exact string match silently returns nothing when the punctuation differs, and the
+  // caller then falls back to a coordinate lookup — which on a condo lands on the master parcel and
+  // reports the ASSOCIATION as owner. So: try exact, then digits-only, then a digits LIKE, and
+  // verify the returned parcel's own folio digits match what we asked for.
+  const want=String(folio).trim();
+  const digits=want.replace(/\D/g,'');
+  const tries=[];
+  const q=v=>String(v).replace(/'/g,"''");
+  tries.push(`${cfg.folioField}='${q(want)}'`);
+  if(digits && digits!==want) tries.push(`${cfg.folioField}='${q(digits)}'`);
+  if(digits) tries.push(`${cfg.folioField} LIKE '%${q(digits)}%'`);
+  for(const where of tries){
+    const params = `where=${encodeURIComponent(where)}&outFields=*&returnGeometry=true&outSR=4326&resultRecordCount=10&f=json`;
+    try{
+      const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),10000);
+      const r=await fetch(cfg.url+'?'+params,{signal:ctrl.signal}); clearTimeout(t);
+      if(!r.ok) continue; const j=await r.json(); if(j.error) continue;
+      const feats=j.features||[]; if(!feats.length) continue;
+      // Prefer the feature whose folio digits match exactly; never accept a loose LIKE hit that
+      // resolved to a different parcel.
+      let f=null;
+      for(const cand of feats){
+        const a=cand.attributes||{};
+        if(String(a[cfg.folioField]||'').replace(/\D/g,'')===digits){ f=cand; break; }
+      }
+      if(!f && feats.length===1 && where.indexOf('LIKE')<0) f=feats[0];
+      if(!f) continue;
+      return { features:[f], __authByFolio:true, __byFolioPin:true };
+    }catch(e){ /* try the next form */ }
+  }
+  return null;
 }
 async function lookupCountyParcelByFolio(countyName, folio){
   const cfg = countyName ? COUNTY_PARCEL_RESOLVERS[norm(countyName)] : null;
@@ -14869,28 +15131,139 @@ async function lookupCountyParcelByFolio(countyName, folio){
    Rows are also keyboard-reachable (Enter/Space) for accessibility. */
 window.__pcCands=null;
 function renderParcelCandidates(cands, basisText){
-  window.__pcCands = cands.slice(0,8);
+  // A condo stack can run well past 8 units — truncating to 8 hides the one you want. Show more
+  // when the rows are unit-labeled (they're compact and scannable); keep the old cap otherwise.
+  const anyUnits = cands.some(c=>c.unit);
+  window.__pcCands = cands.slice(0, anyUnits?40:8);
   const list = window.__pcCands.map((c,i)=>
     `<div class="pcand" role="button" tabindex="0" data-pc="${i}">`+
-      `<span>${esc(c.label)}</span>`+
+      `<span>`+
+        (c.unit?`<b style="color:var(--signal)">${esc((c.unitType||'Unit')+' '+c.unit)}</b> · `:'')+
+        `${esc(c.label)}`+
+        (c.owner?`<span style="color:var(--faint)"> · ${esc(c.owner)}</span>`:'')+
+      `</span>`+
       `<span style="display:flex;gap:8px;align-items:center">`+
         (c.folio?`<span class="pcfolio">${esc(c.folio)}</span>`:'')+
         `<span class="pcarrow">→</span>`+
       `</span>`+
     `</div>`).join('');
-  results.innerHTML = setStatus('err',`Found ${cands.length} lots matching “${esc(basisText)}”. Click the right one below, or add a unit / more detail.`)
+  const shown = window.__pcCands.length;
+  const more = cands.length>shown ? ` (showing ${shown})` : '';
+  const head = anyUnits
+    ? `Found ${cands.length} units at “${esc(basisText)}”${more}. Pick the unit below.`
+    : `Found ${cands.length} lots matching “${esc(basisText)}”${more}. Click the right one below, or add a unit / more detail.`;
+  results.innerHTML = setStatus('err',head)
     + `<div style="margin-top:6px">${list}</div>`;
+  // When the match is a genuine multi-unit stack, put the choice front and centre in a modal rather
+  // than leaving it buried in the results panel. The inline rows above stay as the fallback: closing
+  // the modal returns you to them, and they still work if the modal never opens.
+  if(anyUnits && window.__pcCands.filter(c=>c.unit).length>1) openUnitPicker(basisText);
   // Center on the first candidate so the area is visible while choosing.
   if(isFinite(cands[0].lat) && isFinite(cands[0].lng)) map.setView([cands[0].lat,cands[0].lng],18);
 }
+/* ---------- Unit picker modal ----------
+   One address, many units (condo/tower/suite building). Rather than making the user hunt down a list
+   of near-identical rows, ask outright: a grid of unit numbers, click one, run the lookup on that
+   exact folio. Indices are positions in window.__pcCands, so picking routes through _pcPick() and
+   inherits everything it already does (search box, history, searchCtx, map view). */
+let _umPrevFocus=null;
+function openUnitPicker(basisText){
+  const el=document.getElementById('unitModal');
+  const cands=window.__pcCands||[];
+  if(!el || !cands.length) return;
+  const addrLine = (cands[0].label||basisText||'').split(',')[0].trim();
+  const cells = cands.map((c,i)=> c.unit ? {i, c} : null).filter(Boolean);
+  if(cells.length<2) return;
+  el.innerHTML =
+    `<div class="ubox">`+
+      `<div class="uhead">`+
+        `<div class="uttl" id="unitModalTtl">WHICH UNIT?</div>`+
+        `<div class="usub">${esc(addrLine)} has ${cells.length} units on the county roll. Pick one to pull its parcel, owner and zoning.</div>`+
+      `</div>`+
+      `<input class="ufilter" id="unitFilter" type="text" inputmode="text" autocomplete="off" placeholder="Type a unit number to filter…">`+
+      `<div class="ugrid" id="unitGrid">`+
+        cells.map(({i,c})=>
+          `<div class="ucell" role="button" tabindex="0" data-um="${i}" data-u="${esc(String(c.unit).toUpperCase())}">`+
+            `${esc(c.unit)}`+
+            (c.owner?`<span class="ucown">${esc(c.owner)}</span>`:'')+
+          `</div>`).join('')+
+      `</div>`+
+      `<div class="unone" id="unitNone" style="display:none">No unit matches that.</div>`+
+      `<div class="ufoot">`+
+        `<span class="usub" style="margin:0">Not listed? Close and pick from the rows behind.</span>`+
+        `<button class="ubtn" id="unitCancel" type="button">CLOSE</button>`+
+      `</div>`+
+    `</div>`;
+  el.classList.add('show');
+  // Belt-and-braces alongside the ghost-click guard: tell Leaflet outright to ignore pointer events
+  // over this overlay, so a drag started on the modal can't pan the map either.
+  try{ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el); }catch(_){}
+  try{ _umPrevFocus=document.activeElement; }catch(e){ _umPrevFocus=null; }
+  const filt=document.getElementById('unitFilter');
+  if(filt){
+    setTimeout(()=>{ try{ filt.focus(); }catch(e){} },30);
+    filt.addEventListener('input',()=>{
+      const q=filt.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+      let shown=0;
+      el.querySelectorAll('.ucell').forEach(d=>{
+        const hit = !q || (d.dataset.u||'').replace(/[^A-Z0-9]/g,'').indexOf(q)===0;
+        d.style.display = hit?'':'none'; if(hit) shown++;
+      });
+      const none=document.getElementById('unitNone'); if(none) none.style.display = shown?'none':'';
+    });
+    // Enter picks the only remaining unit — fastest path when you know the number.
+    filt.addEventListener('keydown',e=>{
+      if(e.key!=='Enter') return;
+      const vis=[...el.querySelectorAll('.ucell')].filter(d=>d.style.display!=='none');
+      if(vis.length===1){ e.preventDefault(); _umPick(+vis[0].dataset.um); }
+    });
+  }
+}
+function closeUnitPicker(){
+  const el=document.getElementById('unitModal'); if(!el) return;
+  el.classList.remove('show'); el.innerHTML='';
+  try{ if(_umPrevFocus && _umPrevFocus.focus) _umPrevFocus.focus(); }catch(e){}
+  _umPrevFocus=null;
+}
+function _umPick(i){ suppressUiClick(1200); closeUnitPicker(); _pcPick(i); }
+document.addEventListener('click', e=>{
+  const el=document.getElementById('unitModal');
+  if(!el || !el.classList.contains('show')) return;
+  // Everything inside the modal is ours: swallow it so nothing reaches the map underneath.
+  try{ e.stopPropagation(); }catch(_){}
+  if(e.target && e.target.id==='unitCancel'){ suppressUiClick(700); closeUnitPicker(); return; }
+  if(e.target===el){ suppressUiClick(700); closeUnitPicker(); return; }   // backdrop click
+  const cell = e.target.closest && e.target.closest('.ucell');
+  if(cell && cell.dataset.um!=null){ _umPick(+cell.dataset.um); }
+}, true);
+document.addEventListener('keydown', e=>{
+  const el=document.getElementById('unitModal');
+  if(!el || !el.classList.contains('show')) return;
+  if(e.key==='Escape'){ e.preventDefault(); closeUnitPicker(); return; }
+  const cell = document.activeElement && document.activeElement.closest && document.activeElement.closest('.ucell');
+  if(cell && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); _umPick(+cell.dataset.um); }
+});
 function _pcPick(i){
   const c = window.__pcCands && window.__pcCands[i];
   if(!c || !isFinite(c.lat) || !isFinite(c.lng)) return;
   if(Date.now()-(window.__pcPickedAt||0) < 700) return;   // ignore a double-fired tap
   window.__pcPickedAt=Date.now();
-  const lbl = c.label || '';
+  suppressUiClick(1200);   // this row sits over the map — block the replayed tap (see map 'click')
+  // Fold the unit back into the label so the search box, history and the lookup context all carry
+  // it — otherwise picking "Unit 102" searched the bare condo address and re-hit the same ambiguity.
+  let lbl = c.label || '';
+  if(c.unit && !searchUnit(lbl)){
+    const parts = lbl.split(',');
+    parts[0] = (parts[0]||'').trim() + ' ' + (c.unitType||'Unit') + ' ' + c.unit;
+    lbl = parts.map(s=>s.trim()).filter(Boolean).join(', ');
+  }
   try{ if(lbl){ addrEl.value=lbl; STORE.set('fl_addr',lbl); addToHistory(lbl); } }catch(e){}
   const ctx = { raw:lbl, hn:houseNum(lbl), toks:new Set(streetTokens(lbl)), unit:searchUnit(lbl) };
+  // PIN BY FOLIO. Condo units all sit inside (or share) one polygon, so a coordinate lookup on the
+  // picked unit lands point-in-polygon on the master/common-element parcel and reports the
+  // ASSOCIATION as owner instead of the unit owner. We already know the exact folio from the picker
+  // — hand it to runLookup so it fetches that unit's parcel directly instead of guessing from a point.
+  if(c.folio) ctx.folio = c.folio;
   newSearch();   // cancel any address search still loading — this pick wins
   results.innerHTML = setStatus('busy','Pinpointing the parcel…');
   map.setView([c.lat,c.lng],18);
