@@ -11943,7 +11943,39 @@ async function refreshEcAreaNotes(){
   }catch(e){/* best-effort; try again on next move */}
   finally{ _ecAreaBusy=false; }
 }
-map.on('moveend zoomend', ()=>{ clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 800); });
+/* ---------- Auto-arm the EC sweep from the COUNTY CURRENTLY IN VIEW ----------
+   The sweep used to require a completed address lookup to set window.__ecAreaUrl. That meant you
+   could be staring at a street full of certificated houses and see nothing until you searched one.
+   This resolves whichever county/counties the viewport touches and wires the first one that has an
+   ecLayer, so 📝 notes simply appear as you scan the map. A real lookup still overrides this (it
+   sets __ecAreaUrl directly, and pins it so this can't stomp on the searched county).
+   Cheap: jurisdictionsInView() is itself cached ~30s per rounded viewport. */
+let _ecAutoBusy=false;
+async function autoArmEcLayer(){
+  if(window.__ecAreaPinned) return;              // an explicit lookup owns the layer; don't override
+  if(map.getZoom() < EC_AREA_MINZOOM) return;    // same gate as the sweep itself — no wasted calls
+  if(_ecAutoBusy) return;
+  _ecAutoBusy=true;
+  try{
+    const { counties } = await jurisdictionsInView();
+    let url=null;
+    for(const c of (counties||[])){
+      const cfg = DOCS_COUNTY[norm(c)];
+      if(cfg && cfg.ecLayer){ url=cfg.ecLayer; break; }
+    }
+    if(url && url!==window.__ecAreaUrl){
+      window.__ecAreaUrl=url; _ecAreaKey='';      // new layer → force the next sweep to actually run
+      refreshEcAreaNotes();
+    } else if(!url && window.__ecAreaUrl && !window.__ecAreaPinned){
+      // Panned into a county with no wired EC layer — drop the stale notes rather than leaving
+      // another county's certificates floating over unrelated ground.
+      window.__ecAreaUrl=null; _ecAreaKey='';
+      try{ ecNoteLayer.clearLayers(); }catch(e){}
+    }
+  }catch(e){/* best-effort */}
+  finally{ _ecAutoBusy=false; }
+}
+map.on('moveend zoomend', ()=>{ clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(()=>{ autoArmEcLayer(); refreshEcAreaNotes(); }, 800); });
 let nbrNumOn = true;   // labels follow the parcel view by default; tied to the parcel result
 // Rings ([[ [lng,lat], ... ]]) of the SUBJECT parcel currently highlighted, in WGS84. Set when a
 // parcel is drawn and used to suppress gap-fill address points that fall on the SAME lot — a deep
@@ -13166,7 +13198,7 @@ async function runLookup(lat,lng,searchCtx){
     : Promise.resolve(null);
   // Neighborhood 📝 notes are wired AFTER the main cards render (see the EC card below) so their
   // extra query never competes with the search's own requests to the same GIS host.
-  window.__ecAreaUrl = null; _ecAreaKey=''; clearTimeout(_ecAreaTimer);
+  window.__ecAreaUrl = null; window.__ecAreaPinned=false; _ecAreaKey=''; clearTimeout(_ecAreaTimer);
 
   /* ---- Aerial & Street View: scout the property first (keyless deep-links + Esri aerial) ---- */
   html += renderAerialScout(lat, lng);
@@ -14664,7 +14696,7 @@ async function runLookup(lat,lng,searchCtx){
        returned immediately. Result: neighbours WITH certificates on file never got their 📝 note,
        even though the layer had them. That's exactly backwards — the neighbour sweep matters MOST
        when the subject has none, since a nearby EC is the best available read on grade in the block. */
-    window.__ecAreaUrl=_ecLayerUrl; _ecAreaKey='';
+    window.__ecAreaUrl=_ecLayerUrl; window.__ecAreaPinned=true; _ecAreaKey='';
     clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 2500);
     if(ec && !ec.err && ec.features && ec.features.length){
       addEcNoteMarker(ec);   // 📝 note on the map at the EC point — click opens the PDF
