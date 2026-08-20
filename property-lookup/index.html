@@ -14657,12 +14657,17 @@ async function runLookup(lat,lng,searchCtx){
   if(_ecLayerUrl){
     const ec = await pEC;
     if(myId!==runId) return;
+    /* Arm the neighbourhood EC sweep for ANY lookup on a county with a wired EC layer — not only
+       when the SUBJECT parcel has a certificate. Previously this lived inside the "subject has an
+       EC" branch, so searching a house with no EC on file (very common — nothing pre-1979, and
+       plenty of newer builds) meant window.__ecAreaUrl was never set and refreshEcAreaNotes()
+       returned immediately. Result: neighbours WITH certificates on file never got their 📝 note,
+       even though the layer had them. That's exactly backwards — the neighbour sweep matters MOST
+       when the subject has none, since a nearby EC is the best available read on grade in the block. */
+    window.__ecAreaUrl=_ecLayerUrl; _ecAreaKey='';
+    clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 2500);
     if(ec && !ec.err && ec.features && ec.features.length){
       addEcNoteMarker(ec);   // 📝 note on the map at the EC point — click opens the PDF
-      // Only now (main data already resolved) arm the neighborhood sweep, and let it idle a moment
-      // so the remaining enrichment calls finish first.
-      window.__ecAreaUrl=_ecLayerUrl; _ecAreaKey='';
-      clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 2500);
       html += `<div class="freshline"><span class="badge live">● LIVE</span> elevation certificate on file at this point <span class="muted" style="font-size:11px">(📝 marked on the map — click it to open the PDF)</span></div>`;
       if(ec.ecDistM!=null && ec.ecDistM>25){
         html += `<div class="note">⚠ Nearest certificate is ~${ec.ecDistM} m away — it may belong to an adjacent property. Check the certificate address below before relying on it.</div>`;
@@ -14681,7 +14686,7 @@ async function runLookup(lat,lng,searchCtx){
     } else if(ec && ec.err){
       html += `<div class="note">Elevation-certificate layer didn't respond (${esc(ec.err)}). It may block cross-origin (CORS) requests, or the URL needs updating. Use the county EC map below.</div>`;
     } else {
-      html += `<div class="note">No elevation certificate found on file at this exact point. Newer or pre-1979 structures often have none — confirm on the county EC map below.</div>`;
+      html += `<div class="note">No elevation certificate found on file at this exact point. Newer or pre-1979 structures often have none — but any <b>neighbouring</b> properties with certificates are marked 📝 on the map (zoom to street level to see them); a nearby EC is often the best available read on grade for the block. Confirm on the county EC map below.</div>`;
     }
   }
 
