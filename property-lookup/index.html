@@ -4366,6 +4366,100 @@ const FEMA_BFE_QUERY = FEMA_NFHL_MS + "/16/query";
    number. Without this, a lot that's entirely AH shows one bare "AH" row with no elevation at all,
    even though two different BFEs cross it.
    Returns a sorted list of distinct elevations, or null. Fails soft — the card omits the row. */
+const FEMA_LOMA_QUERY  = FEMA_NFHL_MS + "/34/query";
+const FEMA_PANEL_QUERY = FEMA_NFHL_MS + "/3/query";
+
+/* Shared helper for the parcel-polygon NFHL queries below (LOMAs, FIRM panels). Same POST shape
+   the zone/BFE queries use: parcel rings in WGS84, intersects, fail-soft to null. */
+async function _nfhlParcelQuery(url, parcelFeature, outFields){
+  const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
+  if(!rings0 || !rings0.length) return null;
+  const rings = rings0.map(r=>r.map(p=>[+p[0].toFixed(6), +p[1].toFixed(6)]));
+  const params = { geometry:JSON.stringify({ rings, spatialReference:{ wkid:4326 } }),
+    geometryType:'esriGeometryPolygon', inSR:'4326', spatialRel:'esriSpatialRelIntersects',
+    outFields, returnGeometry:'false', f:'json' };
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), FLOOD_TIMEOUT);
+  try{
+    const r=await fetch(url,{ method:'POST', body:new URLSearchParams(params), signal:ctrl.signal });
+    clearTimeout(t);
+    if(!r.ok) return null;
+    const j=await r.json();
+    if(j.error || !j.features) return null;
+    return j.features.map(f=>f.attributes||{});
+  }catch(e){ clearTimeout(t); return null; }
+}
+
+/* ---------- LOMAs / LOMCs touching the parcel (NFHL layer 34) ----------
+   A Letter of Map Amendment removes a specific lot (or structure) from the SFHA — the FIRM still
+   SHOWS the zone, but the determination no longer applies to that property. That's the difference
+   between "flood requirements apply" and "they don't," so it's worth surfacing even though it's
+   comparatively rare. Fails soft. */
+async function queryLomasOnParcel(parcelFeature){
+  const rows = await _nfhlParcelQuery(FEMA_LOMA_QUERY, parcelFeature,
+    'CASE_NO,STATUS,DETERMINATION_DATE,LOMC_TYPE,PROJECT_NAME,OUTCOME,SUBDIVISION,LOT');
+  if(!rows || !rows.length){ window.__lomaDebug={count:0}; return null; }
+  const out = rows.map(a=>({
+    caseNo: a.CASE_NO || null,
+    type:   a.LOMC_TYPE || null,
+    status: a.STATUS || null,
+    outcome:a.OUTCOME || null,
+    lot:    a.LOT || null,
+    subdiv: a.SUBDIVISION || null,
+    date:   (a.DETERMINATION_DATE!=null && Number(a.DETERMINATION_DATE)>0)
+              ? new Date(Number(a.DETERMINATION_DATE)) : null
+  }));
+  out.sort((x,y)=>(y.date?y.date.getTime():0)-(x.date?x.date.getTime():0));   // newest first
+  window.__lomaDebug={count:out.length, rows:out};
+  return out;
+}
+
+/* Florida county FIPS (the 3 digits after the "12" state code in a FIRM panel number, e.g.
+   12071C0651G -> 071 -> Lee). Used to drop panels belonging to a NEIGHBOURING county: near a
+   county line the parcel ring — or the counties' separately-produced DFIRM panel polygons, which
+   can overlap slightly at the boundary — will pull in a panel from the wrong side. */
+const FL_COUNTY_FIPS = {
+  ALACHUA:'001', BAKER:'003', BAY:'005', BRADFORD:'007', BREVARD:'009', BROWARD:'011',
+  CALHOUN:'013', CHARLOTTE:'015', CITRUS:'017', CLAY:'019', COLLIER:'021', COLUMBIA:'023',
+  DESOTO:'027', DIXIE:'029', DUVAL:'031', ESCAMBIA:'033', FLAGLER:'035', FRANKLIN:'037',
+  GADSDEN:'039', GILCHRIST:'041', GLADES:'043', GULF:'045', HAMILTON:'047', HARDEE:'049',
+  HENDRY:'051', HERNANDO:'053', HIGHLANDS:'055', HILLSBOROUGH:'057', HOLMES:'059',
+  INDIANRIVER:'061', JACKSON:'063', JEFFERSON:'065', LAFAYETTE:'067', LAKE:'069', LEE:'071',
+  LEON:'073', LEVY:'075', LIBERTY:'077', MADISON:'079', MANATEE:'081', MARION:'083',
+  MARTIN:'085', MIAMIDADE:'086', MONROE:'087', NASSAU:'089', OKALOOSA:'091', OKEECHOBEE:'093',
+  ORANGE:'095', OSCEOLA:'097', PALMBEACH:'099', PASCO:'101', PINELLAS:'103', POLK:'105',
+  PUTNAM:'107', STJOHNS:'109', STLUCIE:'111', SANTAROSA:'113', SARASOTA:'115', SEMINOLE:'117',
+  SUMTER:'119', SUWANNEE:'121', TAYLOR:'123', UNION:'125', VOLUSIA:'127', WAKULLA:'129',
+  WALTON:'131', WASHINGTON:'133'
+};
+/* ---------- FIRM panel covering the parcel (NFHL layer 3) ----------
+   The panel number + effective date is the citation a plans reviewer expects alongside a zone
+   determination ("Zone AH per FIRM panel 12021C0195H, eff. 5/16/2012"). Fails soft.
+   countyName (optional) filters out cross-county spillover — see FL_COUNTY_FIPS above. */
+async function queryFirmPanelOnParcel(parcelFeature, countyName){
+  const rows = await _nfhlParcelQuery(FEMA_PANEL_QUERY, parcelFeature,
+    'FIRM_PAN,PANEL,EFF_DATE,PRE_DATE,SUFFIX,PANEL_TYP,DFIRM_ID');
+  if(!rows || !rows.length){ window.__panelDebug={count:0}; return null; }
+  const seen=new Set(), all=[];
+  for(const a of rows){
+    const id = a.FIRM_PAN || a.PANEL || null;
+    if(!id || seen.has(id)) continue; seen.add(id);
+    const s=String(id).trim();
+    all.push({ panel:s,
+      fips: /^12(\d{3})/.test(s) ? s.slice(2,5) : null,     // "12071C0651G" -> "071"
+      eff: (a.EFF_DATE!=null && Number(a.EFF_DATE)>0) ? new Date(Number(a.EFF_DATE)) : null,
+      type: a.PANEL_TYP || null });
+  }
+  // Keep only panels belonging to the parcel's own county, when we know it and at least one matches.
+  const want = countyName ? FL_COUNTY_FIPS[norm(countyName)] : null;
+  let out = all, dropped = [];
+  if(want && all.some(p=>p.fips===want)){
+    out     = all.filter(p=>p.fips===want);
+    dropped = all.filter(p=>p.fips!==want).map(p=>p.panel);
+  }
+  window.__panelDebug={count:out.length, rows:out, dropped, wantFips:want, allRaw:all.map(p=>p.panel)};
+  return out.length ? out : null;
+}
+
 async function queryBfeLinesOnParcel(parcelFeature){
   const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
   if(!rings0 || !rings0.length) return null;
@@ -14400,7 +14494,15 @@ async function runLookup(lat,lng,searchCtx){
            : (typeof liveRes!=='undefined' && liveRes && liveRes.features && _ringed(liveRes.features[0])) ? 'county live feed' : 'pasted feed')
         : 'NONE — no parcel polygon available';
       if(pFeat){
-        const pz = await queryFloodZonesOnParcel(pFeat);
+        /* All four whole-parcel NFHL queries fire TOGETHER. They were previously awaited one after
+           another, so the block cost the SUM of the round-trips against FEMA's slow host; in
+           parallel it costs the slowest single one, and adding LOMAs + FIRM panels is close to free. */
+        const [pz, bl, lomas, panels] = await Promise.all([
+          queryFloodZonesOnParcel(pFeat),
+          queryBfeLinesOnParcel(pFeat),
+          queryLomasOnParcel(pFeat),
+          queryFirmPanelOnParcel(pFeat, countyName)
+        ]);
         if(myId!==runId) return;
         if(pz && pz.length>1){
           const lbls = pz.map(m=>{
@@ -14416,8 +14518,6 @@ async function runLookup(lat,lng,searchCtx){
            AH polygon and still have two different BFE lines (e.g. 8 and 9) crossing it, because
            the zone polygon carries no STATIC_BFE at all in that case. This is often the ONLY place
            the usable elevation appears, so it must not be gated behind pz.length>1. */
-        const bl = await queryBfeLinesOnParcel(pFeat);
-        if(myId!==runId) return;
         if(bl && bl.elevs.length){
           const dat = bl.datum ? ' ('+esc(bl.datum)+')' : ' (NAVD88)';
           html += `<div class="field"><div class="k">BFE lines on parcel</div><div class="v">${bl.elevs.map(e=>'<b>'+esc(e)+' ft</b>').join(' &nbsp;·&nbsp; ')}${dat}</div></div>`;
@@ -14430,6 +14530,29 @@ async function runLookup(lat,lng,searchCtx){
             window.__exportData.bfeLines = bl.elevs.join(', ');
             if(window.__exportData.bfe==null) window.__exportData.bfe = bl.elevs[bl.elevs.length-1];
           }
+        }
+        /* --- FIRM panel (layer 3): the citation a reviewer wants next to the zone --- */
+        if(panels && panels.length){
+          const fmt = p => esc(p.panel) + (p.eff ? ' · eff. '+esc(p.eff.toLocaleDateString()) : '');
+          html += `<div class="field"><div class="k">FIRM panel</div><div class="v">${panels.map(fmt).join('<br>')}</div></div>`;
+          if(panels.length>1) html += `<div class="note">This lot touches more than one FIRM panel. Cite the panel covering the <b>structure</b> (or the equipment location, if that's what's being permitted) — these are separate map tiles, not competing revisions, so the newer date does not override the other.</div>`;
+          if(window.__exportData){
+            window.__exportData.firmPanel = panels[0].panel;
+            if(panels[0].eff) window.__exportData.firmPanelEff = panels[0].eff.toLocaleDateString();
+          }
+        }
+        /* --- LOMA / LOMC (layer 34): may remove this lot from the SFHA entirely --- */
+        if(lomas && lomas.length){
+          const rows = lomas.map(m=>{
+            let s='<b>'+esc(m.caseNo||'(no case #)')+'</b>';
+            if(m.type)    s+=' · '+esc(m.type);
+            if(m.outcome) s+=' · '+esc(m.outcome);
+            if(m.date)    s+=' · '+esc(m.date.toLocaleDateString());
+            if(m.lot)     s+=' <span class="muted">(lot '+esc(m.lot)+')</span>';
+            return s; });
+          html += `<div class="field"><div class="k">Map changes (LOMA/LOMC)</div><div class="v">${rows.join('<br>')}</div></div>`;
+          html += `<div class="note">FEMA has issued a Letter of Map Amendment/Change touching this parcel. A LOMA can remove a specific <b>lot or structure</b> from the Special Flood Hazard Area even though the FIRM still shades it — but it applies only to the land or building described in the letter, which may not be the part of the lot you're working on. Pull the actual letter from FEMA's Map Service Center and confirm what it covers before assuming flood requirements don't apply.</div>`;
+          if(window.__exportData) window.__exportData.lomc = lomas.map(m=>m.caseNo).filter(Boolean).join(', ');
         }
       }
       else {
