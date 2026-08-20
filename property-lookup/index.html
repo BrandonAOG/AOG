@@ -714,11 +714,18 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     #panel.dragging{transition:none}          /* follow the finger 1:1 while dragging */
     /* fully hidden: slide the whole sheet off the bottom so the map is unobstructed */
     #panel.hidden{transform:translateY(105%)}
-    /* grab handle (tap target + drag origin) — clearly a slide bar */
-    .sheet-grip{display:block;position:relative;height:34px;flex:none;cursor:grab;touch-action:none}
-    .sheet-grip::before{content:"";position:absolute;top:13px;left:50%;transform:translateX(-50%);
-      width:56px;height:6px;border-radius:4px;background:var(--grip);transition:background .15s,width .15s}
-    .sheet-grip:active::before{background:var(--signal);width:66px}
+    /* grab handle (tap target + drag origin) — clearly a slide bar.
+       The bar used to be var(--grip) (#4a5868 in dark), which is only a shade off the panel
+       background and effectively invisible — people couldn't find the thing they were meant to
+       drag. Now near-white at 55% so it reads instantly against either theme, and the zone is
+       44px (Apple's minimum touch target) rather than 34. */
+    .sheet-grip{display:block;position:relative;height:44px;flex:none;cursor:grab;touch-action:none}
+    .sheet-grip::before{content:"";position:absolute;top:16px;left:50%;transform:translateX(-50%);
+      width:52px;height:5px;border-radius:3px;background:rgba(255,255,255,.55);
+      transition:background .15s,width .15s,height .15s}
+    .sheet-grip:active::before{background:var(--signal);width:64px;height:6px}
+    /* light theme: a white bar would vanish, so go dark instead */
+    html[data-theme="light"] .sheet-grip::before{background:rgba(20,26,34,.42)}
 
     /* floating pull-up tab — only visible when the sheet is hidden */
     .sheet-tab{display:none;position:absolute;z-index:1100;bottom:14px;left:50%;transform:translateX(-50%);
@@ -16854,17 +16861,62 @@ const Sheet=(function(){
     searchEl.addEventListener('touchend',()=>{ pending=false; },{passive:true});
     searchEl.addEventListener('touchcancel',()=>{ pending=false; },{passive:true});
   }
+  /* ---- Drag-down from the RESULTS area when it's already scrolled to the top ----
+     This is the behaviour every native bottom sheet has and the one this was missing. After a
+     search the results fill the sheet, so the obvious thing to grab is the content — but that
+     just scrolled the list, and the only way to shrink the sheet was to hit the thin grip at the
+     very top. Now: if the results are at scrollTop 0 and the finger moves DOWN, the sheet takes
+     over the gesture. Scrolled even one pixel down, or moving up, and it stays a normal scroll —
+     so reading a long card is unaffected. */
+  const bodyEl=document.getElementById('results');
+  if(bodyEl){
+    let bStartY=0, bPending=false;
+    bodyEl.addEventListener('touchstart',e=>{
+      if(!isMobile() || dragging) return;
+      if(e.touches.length>1) { bPending=false; return; }
+      bPending = (bodyEl.scrollTop <= 0);     // only arm when already at the top
+      bStartY = e.touches[0].clientY;
+    },{passive:true});
+    bodyEl.addEventListener('touchmove',e=>{
+      if(!bPending || dragging) return;
+      const dy = e.touches[0].clientY - bStartY;
+      if(dy > 12 && bodyEl.scrollTop <= 0){   // deliberate pull down, still pinned at the top
+        bPending=false;
+        down(e);                              // hand off to the real sheet drag
+      } else if(dy < -6){
+        bPending=false;                       // scrolling up into the content — leave it alone
+      }
+    },{passive:false});
+    bodyEl.addEventListener('touchend',()=>{ bPending=false; },{passive:true});
+    bodyEl.addEventListener('touchcancel',()=>{ bPending=false; },{passive:true});
+  }
+
+  /* Let the HEADER act as a drag surface too — the title block is a big, obvious grab area, and
+     on a phone it sits right under the grip. Taps on links/buttons still pass through. */
+  const headEl=panel.querySelector('header');
+  if(headEl){
+    const headDown=e=>{
+      if(!isMobile()) return;
+      if(e.target.closest('a,button,input,select,textarea,.suggest,.history,.search')) return;
+      down(e);
+    };
+    headEl.addEventListener('touchstart',headDown,{passive:false});
+    headEl.addEventListener('mousedown',headDown);
+  }
+
   // move listeners are bound in down() and removed in up() — see bindDragMove() above.
   window.addEventListener('touchend',up);
   window.addEventListener('mouseup',up);
   // pull-up tab brings the sheet all the way back to FULL height (top of the screen),
   // so one tap restores the panel to its largest size; the grip can then drag it down.
   tab.addEventListener('click',()=>{ snapTo(2); });
-  // tapping the grip (no drag) cycles peek -> half -> full -> peek...
+  /* Tapping the grip TOGGLES between half and full. It used to cycle peek→half→full→peek, which
+     meant a tap at full height collapsed the sheet to a 16% sliver — jarring, and easy to trigger
+     by accident when aiming for the panel. Dragging is still the way to reach peek or dismiss. */
   let tapStartY=0,moved=false;
   grip.addEventListener('touchstart',e=>{tapStartY=e.touches[0].clientY;moved=false;},{passive:true});
   grip.addEventListener('touchmove',e=>{ if(Math.abs(e.touches[0].clientY-tapStartY)>6) moved=true; },{passive:true});
-  grip.addEventListener('click',()=>{ if(moved) return; snapTo(idx>=2?0:idx+1); });
+  grip.addEventListener('click',()=>{ if(moved) return; snapTo(idx>=2 ? 1 : 2); });
   // re-apply on resize/orientation change
   window.addEventListener('resize',()=>{ if(isMobile()){ if(!hidden) snapTo(idx); } else { panel.style.removeProperty('--sheet-h'); panel.classList.remove('hidden'); tab.classList.remove('show'); } });
   // init
