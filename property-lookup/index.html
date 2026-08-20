@@ -584,8 +584,30 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .history .hi:last-child{border-bottom:none}
   .history .hi:hover,.history .hi.active{background:var(--search-bg);color:var(--ink)}
   .history .hi .hpin{color:var(--faint);font-size:10px;flex:none}
-  .history .hi .hdel{margin-left:auto;flex:none;color:var(--faint);font-size:11px;padding:2px 4px}
-  .history .hi .hdel:hover{color:var(--warn)}
+  /* The address span MUST be able to shrink. Without flex:1+min-width:0 it collapses to its
+     narrowest word and the address wraps one word per line — which is what it was doing on a
+     phone. Ellipsis instead: a recent address only needs to be recognisable, not complete. */
+  .history .hi .htext{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* appearance:none is load-bearing — iOS otherwise draws its own pill-shaped control here, which
+     rendered as a giant rounded bar swallowing the row. */
+  .history .hi .hdel{-webkit-appearance:none;appearance:none;background:none;border:none;
+    flex:none;width:26px;height:26px;line-height:1;display:flex;align-items:center;
+    justify-content:center;border-radius:6px;color:var(--faint);font-size:15px;padding:0;cursor:pointer}
+  .history .hi .hdel:hover{color:var(--warn);background:var(--drop-line)}
+  .history .hi .hdel:active{background:var(--drop-line)}
+
+  /* ---- phone sizing: the dropdown was unusable at 380px ---- */
+  @media (max-width:520px){
+    /* Cap the list so it can't run off the screen behind the keyboard, and let it scroll. */
+    .history{max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:10px}
+    .history-header{position:sticky;top:0;z-index:1;background:var(--input-bg);
+      padding:9px 13px 8px}
+    .history-header span,.history-header button{font-size:10.5px}
+    .history-header button{padding:4px 6px;margin:-4px -6px}   /* bigger tap target, same look */
+    /* 44px min row height = Apple's minimum touch target. Was ~31px. */
+    .history .hi{padding:0 13px;min-height:44px;font-size:12.5px;gap:10px}
+    .history .hi .hdel{width:34px;height:34px;font-size:17px;margin-right:-6px}
+  }
 
   @media (max-width:520px){ header h1{font-size:19px} #panel{top:8px;left:8px} }
 
@@ -4107,8 +4129,57 @@ let marker=null, parcelLayer=null, homeParcelLayer=null;
 let _uiClickUntil=0;
 function suppressUiClick(ms){ _uiClickUntil = Date.now() + (ms||900); }
 function uiClickSuppressed(){ return Date.now() < _uiClickUntil; }
+
+/* ---------- TOUCH-QUALITY GATE (mobile) ----------
+   On a phone, a "click" on the map is fired for far more than a deliberate tap: a finger resting
+   mid-pan, a thumb brushing the bezel while holding the device, the last frame of a pinch. Each
+   one used to kick off a full lookup — a chain of network calls that also blows away the card the
+   user was reading.
+   So we watch the raw touch and only let a click through when it looks INTENTIONAL:
+     • moved less than ~10px between touchstart and touchend (a pan/brush always drifts more)
+     • lasted under ~300ms (a resting finger lasts much longer)
+     • was a single finger (a pinch has 2+)
+     • wasn't within 24px of the left/right edge — that's palm & grip territory one-handed
+   Desktop is untouched: a mouse click there is always deliberate, and no touch events fire, so
+   _touchOk stays true and the gate is a no-op. */
+const TAP_MAX_MOVE = 10;     // px of drift allowed
+const TAP_MAX_MS   = 300;    // ms the finger may stay down
+const EDGE_GUARD   = 24;     // px along each vertical edge that never counts as a tap
+let _touchOk = true, _tStart = null, _tMulti = false;
+(function installTapGate(){
+  const el = map.getContainer();
+  el.addEventListener('touchstart', ev => {
+    if(ev.touches.length > 1){ _tMulti = true; _touchOk = false; return; }
+    _tMulti = false;
+    const t = ev.touches[0];
+    _tStart = { x:t.clientX, y:t.clientY, t:Date.now() };
+    _touchOk = false;                       // assume no until touchend proves otherwise
+  }, { passive:true });
+  el.addEventListener('touchend', ev => {
+    if(_tMulti || !_tStart){ _touchOk = false; _tStart = null; return; }
+    const t = ev.changedTouches[0];
+    const dx = t.clientX - _tStart.x, dy = t.clientY - _tStart.y;
+    const moved = Math.sqrt(dx*dx + dy*dy);
+    const held  = Date.now() - _tStart.t;
+    const nearEdge = t.clientX < EDGE_GUARD || t.clientX > (window.innerWidth - EDGE_GUARD);
+    _touchOk = (moved <= TAP_MAX_MOVE) && (held <= TAP_MAX_MS) && !nearEdge;
+    window.__lastTap = { moved:Math.round(moved), held, nearEdge, accepted:_touchOk };
+    _tStart = null;
+  }, { passive:true });
+  // A cancelled touch (system gesture, notification) is never a tap.
+  el.addEventListener('touchcancel', () => { _touchOk = false; _tStart = null; }, { passive:true });
+})();
+/* Any pan/zoom that actually moved the map also poisons the next ~350ms: the gesture's final
+   frame frequently arrives as a click. */
+let _gestureUntil = 0;
+map.on('movestart zoomstart', () => { _gestureUntil = Date.now() + 100000; });
+map.on('moveend zoomend',     () => { _gestureUntil = Date.now() + 350; });
+
 map.on('click', e => {
   if(uiClickSuppressed()) return;          // replayed tap from an overlay pick — not a real map click
+  if(Date.now() < _gestureUntil) return;   // tail end of a pan/pinch, not a tap
+  if(!_touchOk) return;                    // touch didn't look like a deliberate tap (mobile only)
+  _touchOk = false;                        // one lookup per touch; don't let a replay through
   const um=document.getElementById('unitModal');
   if(um && um.classList.contains('show')) return;   // modal is open; the map is not the target
   newSearch(); runLookup(e.latlng.lat, e.latlng.lng);
@@ -4312,12 +4383,47 @@ const FEMA_NFHL_QUERY = FEMA_NFHL_MS + "/28/query";
    POLYGON geometry (the statewide-roll / live-feed parcel rings we already fetched, WGS84) and
    returns every distinct zone touching the lot. POST, because parcel rings can exceed URL limits.
    Fails soft: any error/timeout → null → the card simply omits the extra row. */
-async function queryFloodZonesOnParcel(parcelFeature){
+/* County-hosted flood-zone polygon layers carrying FEMA's own field names. Hitting these instead
+   of hazards.fema.gov is the single biggest speed win on the flood card: FEMA's NFHL host is slow
+   and strict (the app's own comments call it the slowest handshake here), while these are AGOL-
+   hosted and typically answer in a few hundred ms. Same data, county-adopted. */
+const COUNTY_ZONE_LAYERS = {
+  COLLIER: { url:"https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FEMA24_FloodZones/FeatureServer/0/query",
+             label:"Collier County 2024 DFIRM" }
+};
+async function queryFloodZonesOnParcel(parcelFeature, countyName){
+  // --- fast path: the county's own layer, when we have one ---
+  const reg = countyName ? COUNTY_ZONE_LAYERS[norm(countyName)] : null;
+  if(reg){
+    const rows = await _nfhlParcelQuery(reg.url, parcelFeature, 'FLD_ZONE,ZONE_SUBTY,STATIC_BFE');
+    if(rows && rows.length){
+      const seen=new Set(), out=[];
+      for(const a of rows){
+        const zone=(a.FLD_ZONE||'').trim(); if(!zone) continue;
+        const bfe=(a.STATIC_BFE!=null && Number(a.STATIC_BFE)>-9999)?Number(a.STATIC_BFE):null;
+        const key=zone+'|'+(bfe==null?'':bfe);
+        if(seen.has(key)) continue; seen.add(key);
+        out.push({ zone, bfe,
+          sfha:/^(A|V)/i.test(zone) && !/^AREA/i.test(zone),   // county layer has no SFHA_TF
+          sub:(a.ZONE_SUBTY&&a.ZONE_SUBTY.trim())?a.ZONE_SUBTY.trim():null });
+      }
+      out.sort((x,y)=>(y.sfha-x.sfha)||((y.bfe||0)-(x.bfe||0))||x.zone.localeCompare(y.zone));
+      if(out.length){
+        window.__floodParcelDebug={ src:reg.label, rawHits:rows.length, distinct:out.length };
+        return out;
+      }
+    }
+    // county layer empty or failed → fall through to FEMA below
+  }
+  return _queryFemaFloodZonesOnParcel(parcelFeature);
+}
+async function _queryFemaFloodZonesOnParcel(parcelFeature){
   const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
   if(!rings0 || !rings0.length){ window.__floodParcelDebug={fail:'no parcel rings'}; return null; }
-  // Round to 6 decimals (~10 cm): shrinks the payload a lot, and FEMA's strict server is happier
-  // with sane coordinates than with 15-decimal doubles.
-  const rings = rings0.map(r=>r.map(p=>[+p[0].toFixed(6), +p[1].toFixed(6)]));
+  /* Outer ring only, thinned to 60 vertices, 5-decimal precision. The full multi-ring geometry at
+     15 decimals made for a large POST body and slow server-side work against FEMA's host; flood
+     polygons are far coarser than a lot line, so the intersect result is unchanged. */
+  const rings = [ _thinRing(rings0[0], 60).map(p=>[+p[0].toFixed(5), +p[1].toFixed(5)]) ];
   const geomStr = JSON.stringify({ rings, spatialReference:{ wkid:4326 } });
   const common = { geometryType:'esriGeometryPolygon', inSR:'4326',
     spatialRel:'esriSpatialRelIntersects',
@@ -4339,7 +4445,8 @@ async function queryFloodZonesOnParcel(parcelFeature){
     return out;
   };
   const attempt = async (opts) => {
-    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), FLOOD_TIMEOUT);
+    const ctrl=new AbortController();
+    const t=setTimeout(()=>ctrl.abort(), opts.timeout||PARCEL_EXTRA_TIMEOUT);
     try{
       const r=await fetch(opts.url, { method:opts.method, body:opts.body, signal:ctrl.signal });
       clearTimeout(t);
@@ -4374,7 +4481,6 @@ async function queryFloodZonesOnParcel(parcelFeature){
      reason, but this query never had a retry, so a single slow response made the whole
      "Zones on this parcel" row silently disappear. One cheap retry fixes the common case. */
   if(!res.ok){
-    await new Promise(r=>setTimeout(r,600));
     const body2=new URLSearchParams(Object.assign({ geometry:geomStr }, common));
     res = await run('post-retry', { url:FEMA_NFHL_QUERY, method:'POST', body:body2 });
   }
@@ -4416,21 +4522,51 @@ const FEMA_PANEL_QUERY = FEMA_NFHL_MS + "/3/query";
 
 /* Shared helper for the parcel-polygon NFHL queries below (LOMAs, FIRM panels). Same POST shape
    the zone/BFE queries use: parcel rings in WGS84, intersects, fail-soft to null. */
-async function _nfhlParcelQuery(url, parcelFeature, outFields){
+/* Secondary whole-parcel lookups get a MUCH shorter leash than the main flood point query.
+   They run in a Promise.all, so the slowest one sets the card's render time — a single 9 s
+   straggler against hazards.fema.gov used to hold the entire flood card hostage. These are all
+   fail-soft extras: better to drop one row than to make the user wait. */
+const PARCEL_EXTRA_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 5000 : 3000;
+
+/* Evenly thin a ring to at most `max` vertices, keeping first+last so it still closes. Flood
+   layers are far coarser than a parcel boundary, so this doesn't change which features intersect
+   — but a 400-vertex Estates ring is a big POST body AND expensive server-side geometry work.
+   Cuts both. */
+function _thinRing(ring, max){
+  if(!ring || ring.length<=max) return ring;
+  const step=(ring.length-1)/(max-1), out=[];
+  for(let i=0;i<max-1;i++) out.push(ring[Math.round(i*step)]);
+  out.push(ring[ring.length-1]);
+  return out;
+}
+/* Cache keyed by url+geometry+fields, cleared on each new lookup. Several of these layers get hit
+   more than once per parcel (e.g. a county BFE layer that also backstops FEMA's). */
+let _nfhlCache = Object.create(null);
+function clearNfhlCache(){ _nfhlCache = Object.create(null); }
+
+async function _nfhlParcelQuery(url, parcelFeature, outFields, timeoutMs){
   const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
   if(!rings0 || !rings0.length) return null;
-  const rings = rings0.map(r=>r.map(p=>[+p[0].toFixed(6), +p[1].toFixed(6)]));
-  const params = { geometry:JSON.stringify({ rings, spatialReference:{ wkid:4326 } }),
+  // Outer ring only, thinned to 40 points, 5-decimal (~1 m) precision. Holes don't matter for an
+  // intersects test against flood geometry, and dropping them shrinks the payload further.
+  const rings = [ _thinRing(rings0[0], 40).map(p=>[+p[0].toFixed(5), +p[1].toFixed(5)]) ];
+  const geom = JSON.stringify({ rings, spatialReference:{ wkid:4326 } });
+  const key = url+'|'+outFields+'|'+geom;
+  if(key in _nfhlCache) return _nfhlCache[key];
+  const params = { geometry:geom,
     geometryType:'esriGeometryPolygon', inSR:'4326', spatialRel:'esriSpatialRelIntersects',
     outFields, returnGeometry:'false', f:'json' };
-  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), FLOOD_TIMEOUT);
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(), timeoutMs||PARCEL_EXTRA_TIMEOUT);
   try{
     const r=await fetch(url,{ method:'POST', body:new URLSearchParams(params), signal:ctrl.signal });
     clearTimeout(t);
     if(!r.ok) return null;
     const j=await r.json();
     if(j.error || !j.features) return null;
-    return j.features.map(f=>f.attributes||{});
+    const rows = j.features.map(f=>f.attributes||{});
+    _nfhlCache[key]=rows;
+    return rows;
   }catch(e){ clearTimeout(t); return null; }
 }
 
@@ -13476,6 +13612,7 @@ async function runLookup(lat,lng,searchCtx){
   // Neighborhood 📝 notes are wired AFTER the main cards render (see the EC card below) so their
   // extra query never competes with the search's own requests to the same GIS host.
   window.__ecAreaUrl = null; window.__ecAreaPinned=false; _ecAreaKey=''; clearTimeout(_ecAreaTimer);
+  try{ clearNfhlCache(); }catch(e){}   // per-parcel flood query cache — must not survive a new lookup
 
   /* ---- Aerial & Street View: scout the property first (keyless deep-links + Esri aerial) ---- */
   html += renderAerialScout(lat, lng);
@@ -14682,11 +14819,15 @@ async function runLookup(lat,lng,searchCtx){
            parallel it costs the slowest single one, and adding LOMAs + FIRM panels is close to free. */
         const isLee = norm(countyName)==='LEE';
         const isCollier = norm(countyName)==='COLLIER';
+        /* Skip FEMA's national panel layer where the county publishes its own — one fewer call to
+           the slow hazards.fema.gov host, and the county's adopted panel is the better citation
+           anyway. Same reasoning drives the county-first routing inside the zone and BFE queries. */
+        const skipFemaPanels = isLee || isCollier;
         const [pz, bl, lomas, panels, leePanels, gElev, leeLimwa, colLimwa, colPanels] = await Promise.all([
-          queryFloodZonesOnParcel(pFeat),
+          queryFloodZonesOnParcel(pFeat, countyName),
           queryBfeLinesOnParcel(pFeat, countyName),
           queryLomasOnParcel(pFeat),
-          queryFirmPanelOnParcel(pFeat, countyName),
+          skipFemaPanels ? Promise.resolve(null) : queryFirmPanelOnParcel(pFeat, countyName),
           isLee ? queryLeePanelJurisdiction(pFeat) : Promise.resolve(null),
           /* Ground elevation: Lee's own 2018 LiDAR is a 50-ft point grid — finer than 3DEP's ~10 m
              raster — so prefer it there and fall back to 3DEP everywhere else. */
@@ -16498,6 +16639,26 @@ function addToHistory(label){
   saveHistory(h);
 }
 
+/* Geocoder results come back verbose — "201, Southwest 32nd Terrace, Cape Coral, Lee County,
+   Florida, 33914, United States". In a narrow recents list that's all noise: drop the country,
+   the state, the "X County" part and the ZIP, and abbreviate the directionals, so what's left is
+   the part that identifies the property. Full string stays in the title attribute. */
+function shortAddr(s){
+  let a = String(s||'').trim();
+  a = a.replace(/,\s*United States\s*$/i,'')
+       .replace(/,\s*\d{5}(-\d{4})?\s*$/,'')
+       .replace(/,\s*Florida\s*$/i,'')
+       .replace(/,\s*[A-Za-z .'-]+\s+County\b/i,'');
+  // "201, Southwest 32nd Terrace" -> "201 Southwest 32nd Terrace" (geocoders comma off the number)
+  a = a.replace(/^(\d+[A-Za-z]?),\s+/,'$1 ');
+  const abbr = { Southwest:'SW', Southeast:'SE', Northwest:'NW', Northeast:'NE',
+    South:'S', North:'N', East:'E', West:'W', Terrace:'Ter', Avenue:'Ave', Street:'St',
+    Boulevard:'Blvd', Drive:'Dr', Court:'Ct', Lane:'Ln', Circle:'Cir', Parkway:'Pkwy',
+    Place:'Pl', Road:'Rd', Highway:'Hwy' };
+  a = a.replace(/\b([A-Z][a-z]+)\b/g, (m,w) => abbr[w] || m);
+  return a.replace(/\s{2,}/g,' ').trim();
+}
+
 function hideHistory(){ histEl.classList.remove('show'); histEl.innerHTML=''; }
 
 function showHistory(){
@@ -16506,18 +16667,32 @@ function showHistory(){
   histEl.innerHTML =
     `<div class="history-header"><span>↺ Recent</span><button id="clearHist">Clear all</button></div>` +
     h.map((addr, i) =>
-      `<div class="hi" data-i="${i}"><span class="hpin">▸</span><span>${esc(addr)}</span><button class="hdel" data-i="${i}" title="Remove">×</button></div>`
+      `<div class="hi" data-i="${i}"><span class="hpin">▸</span><span class="htext" title="${esc(addr)}">${esc(shortAddr(addr))}</span><button class="hdel" data-i="${i}" title="Remove" aria-label="Remove">×</button></div>`
     ).join('');
   histEl.classList.add('show');
 
-  document.getElementById('clearHist').addEventListener('mousedown', e => {
-    e.preventDefault(); saveHistory([]); hideHistory();
-  });
-  histEl.querySelectorAll('.hdel').forEach(btn => {
-    btn.addEventListener('mousedown', e => {
+  /* mousedown alone is unreliable on touch: iOS synthesises it late (after blur has already
+     closed the dropdown), so a tap on × frequently did nothing or selected the row instead.
+     Bind touchstart as well and mark the event handled so the later synthetic mousedown is a
+     no-op rather than a second, duplicate delete. */
+  const bindPress = (el, fn) => {
+    let done = false;
+    const run = e => {
+      if(done) return; done = true;
+      setTimeout(()=>{ done = false; }, 500);   // window covering the synthetic mouse replay
       e.preventDefault(); e.stopPropagation();
+      fn(e);
+    };
+    el.addEventListener('touchstart', run, { passive:false });
+    el.addEventListener('mousedown',  run);
+  };
+
+  bindPress(document.getElementById('clearHist'), () => { saveHistory([]); hideHistory(); });
+  histEl.querySelectorAll('.hdel').forEach(btn => {
+    bindPress(btn, () => {
       let h2 = getHistory(); h2.splice(+btn.dataset.i, 1); saveHistory(h2);
-      showHistory(); addrEl.focus();
+      if(h2.length) showHistory(); else hideHistory();
+      addrEl.focus();
     });
   });
 }
