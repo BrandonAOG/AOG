@@ -4304,22 +4304,96 @@ async function queryFloodZonesOnParcel(parcelFeature){
       return { ok:parse(j), raw:(j.features||[]).length };
     }catch(e){ clearTimeout(t); return { fail:String(e&&e.message||e) }; }
   };
+  /* Evenly thin a ring down to at most `max` vertices, ALWAYS keeping the first and last point so
+     the ring still closes. Flood zones are far coarser than a parcel boundary, so dropping
+     intermediate vertices doesn't change which zones the lot intersects — but it does bring a
+     detailed ring back under the URL length limit for the GET fallback. */
+  const decimate = (ring, max) => {
+    if(ring.length<=max) return ring;
+    const step=(ring.length-1)/(max-1), out=[];
+    for(let i=0;i<max-1;i++) out.push(ring[Math.round(i*step)]);
+    out.push(ring[ring.length-1]);                       // keep the closing vertex
+    return out;
+  };
+  const trail=[];                                        // every attempt's outcome, for debugging
+  const run = async (label, opts) => {
+    const r = await attempt(opts);
+    trail.push(label+': '+(r.ok ? 'ok ('+(r.ok.length)+' distinct)' : (r.fail||'no features')));
+    return r;
+  };
   // Attempt 1: POST (handles any parcel size).
   const body=new URLSearchParams(Object.assign({ geometry:geomStr }, common));
-  let res = await attempt({ url:FEMA_NFHL_QUERY, method:'POST', body });
-  // Attempt 2: GET with the OUTER ring only (some strict proxies mishandle POST). Skip if URL too long.
+  let res = await run('post', { url:FEMA_NFHL_QUERY, method:'POST', body });
+  /* Attempt 2: POST again after a short pause. FEMA's NFHL host is slow and frequently just
+     times out under FLOOD_TIMEOUT — the main flood lookup wraps arcQueryRetry() for exactly this
+     reason, but this query never had a retry, so a single slow response made the whole
+     "Zones on this parcel" row silently disappear. One cheap retry fixes the common case. */
   if(!res.ok){
-    const post_fail = res.fail;
+    await new Promise(r=>setTimeout(r,600));
+    const body2=new URLSearchParams(Object.assign({ geometry:geomStr }, common));
+    res = await run('post-retry', { url:FEMA_NFHL_QUERY, method:'POST', body:body2 });
+  }
+  // Attempt 3: GET with the OUTER ring only (some strict proxies mishandle POST).
+  if(!res.ok){
     const outer = JSON.stringify({ rings:[rings[0]], spatialReference:{ wkid:4326 } });
     const qs = new URLSearchParams(Object.assign({ geometry:outer }, common)).toString();
     if((FEMA_NFHL_QUERY+'?'+qs).length < 7500){
-      res = await attempt({ url:FEMA_NFHL_QUERY+'?'+qs, method:'GET' });
-    }
-    res.post_fail = post_fail;
+      res = await run('get-outer', { url:FEMA_NFHL_QUERY+'?'+qs, method:'GET' });
+    } else trail.push('get-outer: skipped (url too long)');
+  }
+  /* Attempt 4: GET with a DECIMATED outer ring. Previously, a parcel whose ring blew past the
+     7500-char URL cap simply got no fallback at all — POST failed, the GET was skipped, and the
+     row vanished with no explanation. Thinning to 60 vertices keeps the lot's shape well enough
+     to pick up every flood zone it touches while fitting comfortably in a URL. */
+  if(!res.ok){
+    const thin = JSON.stringify({ rings:[decimate(rings[0],60)], spatialReference:{ wkid:4326 } });
+    const qs2 = new URLSearchParams(Object.assign({ geometry:thin }, common)).toString();
+    if((FEMA_NFHL_QUERY+'?'+qs2).length < 7500){
+      res = await run('get-thin', { url:FEMA_NFHL_QUERY+'?'+qs2, method:'GET' });
+    } else trail.push('get-thin: skipped (url still too long)');
   }
   window.__floodParcelDebug = { rings:rings.length, verts:rings[0].length,
-    rawHits:res.raw, distinct:(res.ok?res.ok.length:null), fail:res.fail||null, post_fail:res.post_fail||null };
+    rawHits:res.raw, distinct:(res.ok?res.ok.length:null), fail:res.fail||null, attempts:trail };
   return res.ok || null;
+}
+const FEMA_BFE_QUERY = FEMA_NFHL_MS + "/16/query";
+
+/* ---------- BFE LINES crossing the parcel (NFHL layer 16) ----------
+   Layer 28's STATIC_BFE is a single number stamped on the whole zone polygon. Across a broad flat
+   AH area (Golden Gate Estates is the classic case) the elevation VARIES, so FEMA leaves
+   STATIC_BFE empty and publishes the elevations as labelled contour LINES instead — the black
+   "8 / 9 / 13.5" lines on a county DFIRM. Layer 16 is that line layer; its ELEV field is the
+   number. Without this, a lot that's entirely AH shows one bare "AH" row with no elevation at all,
+   even though two different BFEs cross it.
+   Returns a sorted list of distinct elevations, or null. Fails soft — the card omits the row. */
+async function queryBfeLinesOnParcel(parcelFeature){
+  const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
+  if(!rings0 || !rings0.length) return null;
+  const rings = rings0.map(r=>r.map(p=>[+p[0].toFixed(6), +p[1].toFixed(6)]));
+  const geomStr = JSON.stringify({ rings, spatialReference:{ wkid:4326 } });
+  const params = { geometry:geomStr, geometryType:'esriGeometryPolygon', inSR:'4326',
+    spatialRel:'esriSpatialRelIntersects', outFields:'ELEV,LEN_UNIT,V_DATUM',
+    returnGeometry:'false', f:'json' };
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), FLOOD_TIMEOUT);
+  try{
+    const r=await fetch(FEMA_BFE_QUERY, { method:'POST',
+      body:new URLSearchParams(params), signal:ctrl.signal });
+    clearTimeout(t);
+    if(!r.ok){ window.__bfeLineDebug={fail:'HTTP '+r.status}; return null; }
+    const j=await r.json();
+    if(j.error || !j.features){ window.__bfeLineDebug={fail:'service error'}; return null; }
+    const seen=new Set(); let datum=null;
+    for(const f of j.features){
+      const a=f.attributes||{};
+      const e=Number(a.ELEV);
+      if(!isFinite(e) || e<=-9999) continue;            // -9999 is FEMA's "no value" sentinel
+      if(a.V_DATUM && !datum) datum=String(a.V_DATUM).trim();
+      seen.add(e);
+    }
+    const elevs=[...seen].sort((a,b)=>a-b);
+    window.__bfeLineDebug={ raw:j.features.length, distinct:elevs.length, elevs, datum };
+    return elevs.length ? { elevs, datum } : null;
+  }catch(e){ clearTimeout(t); window.__bfeLineDebug={fail:String(e&&e.message||e)}; return null; }
 }
 const floodEdgeLayer = L.geoJSON(null, {
   style:{ color:'#39d3ff', weight:2, opacity:.95, dashArray:'6,5',
@@ -14290,6 +14364,26 @@ async function runLookup(lat,lng,searchCtx){
           html += `<div class="field"><div class="k">Zones on this parcel</div><div class="v">${lbls.join(' &nbsp;·&nbsp; ')}</div></div>`;
           html += `<div class="note">This lot crosses a flood-zone boundary — the zone above is only where the pin sits. Insurance rating uses the <b>building's</b> zone (typically the highest-risk zone the structure touches); equipment placed elsewhere on the lot (generator pad, pool equipment) may fall in a different zone with a different required elevation. Confirm the zone line on the FIRM panel.</div>`;
           if(window.__exportData) window.__exportData.floodZonesParcel = pz.map(m=>m.zone+(m.bfe!=null?' '+m.bfe:'')).join(', ');
+        }
+        /* --- BFE contour lines crossing the lot (layer 16) ---
+           Runs regardless of how many ZONES the parcel touches: a lot can sit entirely inside one
+           AH polygon and still have two different BFE lines (e.g. 8 and 9) crossing it, because
+           the zone polygon carries no STATIC_BFE at all in that case. This is often the ONLY place
+           the usable elevation appears, so it must not be gated behind pz.length>1. */
+        const bl = await queryBfeLinesOnParcel(pFeat);
+        if(myId!==runId) return;
+        if(bl && bl.elevs.length){
+          const dat = bl.datum ? ' ('+esc(bl.datum)+')' : ' (NAVD88)';
+          html += `<div class="field"><div class="k">BFE lines on parcel</div><div class="v">${bl.elevs.map(e=>'<b>'+esc(e)+' ft</b>').join(' &nbsp;·&nbsp; ')}${dat}</div></div>`;
+          if(bl.elevs.length>1){
+            html += `<div class="note">Two or more base-flood elevations cross this lot, so there is no single BFE for the parcel — the required elevation depends on <b>where</b> on the lot you build. Between contours the value interpolates; a surveyor or the floodplain administrator sets the number that goes on the permit. For siting, the conservative choice is the <b>higher</b> line (${esc(bl.elevs[bl.elevs.length-1])} ft) plus any local freeboard.</div>`;
+          } else {
+            html += `<div class="note">One base-flood elevation line crosses this lot. The zone polygon carries no static BFE, so this contour is the mapped elevation — confirm against the FIRM panel before relying on it.</div>`;
+          }
+          if(window.__exportData){
+            window.__exportData.bfeLines = bl.elevs.join(', ');
+            if(window.__exportData.bfe==null) window.__exportData.bfe = bl.elevs[bl.elevs.length-1];
+          }
         }
       }
     }
