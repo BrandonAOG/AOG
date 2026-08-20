@@ -1072,7 +1072,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       <button data-bm="topo" title="USGS topographic / terrain basemap — elevation &amp; contour context for low-ground / pad siting">⛰ Topo</button>
     </div>
   </div>
-  <button id="btnFlood" title="Shade FEMA flood-hazard zones (AE / VE / X) across the view — live NFHL. Zoom in to see it.">≋ Flood</button>
+  <button id="btnFlood" title="Shade FEMA flood-hazard zones (AE / AH / VE / X) plus BFE elevation contour lines — live NFHL. Zoom in to see it.">≋ Flood</button>
   <div class="layers-pick">
     <button id="btnLayers" title="Property boundary overlays (city limits, parcels, zoning)">▦ Layers <span class="bm-caret">▾</span></button>
     <div id="layersMenu" class="basemap-menu" hidden>
@@ -4183,7 +4183,7 @@ const ArcGISExportTiles = L.TileLayer.extend({
 });
 const floodLayer = new ArcGISExportTiles(
   FEMA_NFHL_MS + "/export?dpi=96&transparent=true&format=png32&bboxSR=3857&imageSR=3857"
-              + "&size=512,512&layers=show:28&f=image&bbox={bbox}",
+              + "&size=512,512&layers=show:16,28&f=image&bbox={bbox}",
   // maxZoom must match the map's (23) or Leaflet drops the layer entirely above 19; maxNativeZoom
   // caps the actual export requests at 19 and upscales beyond. The fill is flat colour so the
   // stretch is invisible, and floodEdgeLayer draws crisp vector zone outlines over it from z13.
@@ -4205,7 +4205,16 @@ let ownFloodLabels=false;
 (async function blueFloodLabels(){
   const dbg = window.__floodLabelDebug = { stage:'start', mode:'suppress+own' };
   try{
-    const dyn=[{ id:28, source:{ type:'mapLayer', mapLayerId:28 }, drawingInfo:{ showLabels:false } }];
+    // Layer 16 = Base Flood Elevations (BFE contour lines, labelled with the ELEV field — the
+    // black "13 / 13.5 / 14" lines you see on a county DFIRM). Keep FEMA's own labels on these:
+    // in AH/AE areas the polygon's STATIC_BFE is often empty because the elevation VARIES across
+    // the zone, and these contours are the only place that number exists. No drawingInfo = FEMA's
+    // default symbol + labels. First array element draws on TOP, so 16 sits above the 28 fill.
+    // Layer 16 has minScale 50000, so FEMA only renders it zoomed in (~z13+) — matches our edge gate.
+    const dyn=[
+      { id:16, source:{ type:'mapLayer', mapLayerId:16 } },
+      { id:28, source:{ type:'mapLayer', mapLayerId:28 }, drawingInfo:{ showLabels:false, transparency:55 } }
+    ];
     const url = FEMA_NFHL_MS + "/export?dpi=96&transparent=true&format=png32&bboxSR=3857&imageSR=3857"
               + "&size=512,512&f=image&dynamicLayers=" + encodeURIComponent(JSON.stringify(dyn))
               + "&bbox={bbox}";
@@ -4220,6 +4229,11 @@ let ownFloodLabels=false;
     dbg.probe = okImg ? 'image loaded ok' : 'image failed to load';
     if(!okImg){ dbg.stage='abort: label-suppression tile failed — FEMA labels kept'; return; }
     floodLayer.setUrl(url);
+    // The zone fill is now softened SERVER-side (transparency:55 on layer 28), so we no longer
+    // need the blanket 0.45 tile opacity — which was also fading the BFE lines and their labels
+    // to unreadable gray over aerial. Full opacity = crisp black contours, still-translucent fill.
+    // Only do this on the dynamicLayers path; the plain fallback URL still needs the 0.45.
+    floodLayer.setOpacity(1);
     ownFloodLabels=true;                       // refreshFloodEdges now draws the blue labels
     dbg.stage='ACTIVE — FEMA labels off, blue labels on';
     try{ drawFloodLabels(); refreshFloodEdges(); }catch(e){}
