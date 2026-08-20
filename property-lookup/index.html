@@ -1994,6 +1994,14 @@ const FORERUNNER = {
   NAPLES:    { url:"https://naplesfl.withforerunner.com/explore", label:"City of Naples flood portal (Forerunner)" },
   CAPECORAL: { url:"https://capecoralfl.withforerunner.com/",     label:"City of Cape Coral flood portal (Forerunner)" }
 };
+/* Lee County (the COUNTY, not a city) also runs Forerunner — confirmed Aug 2026 from Lee GIS's own
+   AGOL item "Forerunner Floodplain Information". This matters because Lee publishes NO elevation-
+   certificate GIS layer at all: their "Find My Elevation" app is a LiDAR/DEM viewer (ground
+   elevation), not certificates. Forerunner is where Lee's ECs actually live, searchable by address.
+   Keyed separately from FORERUNNER (which is city-keyed) so the county lookup can find it. */
+const FORERUNNER_COUNTY = {
+  LEE: { url:"https://leecountyfl.withforerunner.com/", label:"Lee County flood portal (Forerunner)" }
+};
 
 /* ---------- LIVE county flood cross-check (vs the effective FEMA NFHL) ----------
    Some counties host their own adopted DFIRM as a queryable polygon layer. We point-query
@@ -2007,9 +2015,46 @@ const COUNTY_FLOOD_LIVE = {
   COLLIER: { label:"Collier County 2024 DFIRM",
     viewer:"https://experience.arcgis.com/experience/70ae02cb985c4d288556ba5d00629fc7",
     urls:[
-      "https://ags.colliergov.net/arcgis/rest/services/Operational/FemaFloodZones/MapServer/2/query" // Flood Zones — verify query/CORS
+      /* Collier's own AGOL-hosted DFIRM polygons — 57,385 features carrying FLD_ZONE /
+         ZONE_SUBTY / STATIC_BFE, the same field names FEMA uses, so detectFloodZoneField()
+         handles it unchanged. Preferred over the ags.colliergov.net MapServer below, which is a
+         CACHED map service and less reliable to query. Verified Aug 2026. */
+      "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FEMA24_FloodZones/FeatureServer/0/query",
+      "https://ags.colliergov.net/arcgis/rest/services/Operational/FemaFloodZones/MapServer/2/query" // legacy fallback — cached service
+    ]},
+  /* Lee County GIS "Open Data Flood Hazard" — the county's own adopted FIRM polygons (layer 0),
+     alongside FIRM Panels (1), Floodway (2) and Undeveloped Coastal Barrier (3). ✅ CORS-open
+     (live-tested Aug 2026 from the browser). Service SR is 2237 (State Plane FL West, feet), but
+     the server reprojects from the inSR=4326 point we send, so no client-side projection needed.
+     Field auto-detection handles FLD_ZONE/ZONE_SUBTY as usual. */
+  LEE: { label:"Lee County FIRM (county GIS)",
+    viewer:"https://gisexplorer.leegov.com/",
+    urls:[
+      "https://gismapserver.leegov.com/gisserver910/rest/services/OpenData/OpenData_FloodHazard/MapServer/0/query"
     ]}
 };
+/* ---------- Lee County FIRM PANELS (same service, layer 1) ----------
+   Carries FIRM_PAN / PANEL_TYP / EFF_DATE like FEMA's layer 3, PLUS a coded CITY field
+   ("Unincorporated Lee County", "City of Bonita Springs", "City of Cape Coral", ...). That CITY
+   value is the permitting jurisdiction — the thing that decides WHO reviews the job, which the
+   FEMA panel number alone never tells you. Lee only. */
+const LEE_FIRM_PANEL_QUERY =
+  "https://gismapserver.leegov.com/gisserver910/rest/services/OpenData/OpenData_FloodHazard/MapServer/1/query";
+async function queryLeePanelJurisdiction(parcelFeature){
+  const rows = await _nfhlParcelQuery(LEE_FIRM_PANEL_QUERY, parcelFeature,
+    'FIRM_PAN,PANEL_TYP,EFF_DATE,CITY,COMMUNITY,SUFFIX');
+  if(!rows || !rows.length){ window.__leePanelDebug={count:0}; return null; }
+  const seen=new Set(), out=[];
+  for(const a of rows){
+    const key=(a.FIRM_PAN||'')+'|'+(a.CITY||'');
+    if(seen.has(key)) continue; seen.add(key);
+    out.push({ panel:a.FIRM_PAN||null, city:a.CITY||null, community:a.COMMUNITY||null,
+      type:a.PANEL_TYP||null,
+      eff:(a.EFF_DATE!=null && Number(a.EFF_DATE)>0)?new Date(Number(a.EFF_DATE)):null });
+  }
+  window.__leePanelDebug={count:out.length, rows:out};
+  return out.length ? out : null;
+}
 function detectFloodZoneField(fields){
   const up=fields.map(f=>({raw:f,u:String(f).toUpperCase()}));
   const find=pats=>{ for(const p of pats){ const h=up.find(f=>p.test(f.u)); if(h) return h.raw; } return null; };
@@ -2131,7 +2176,7 @@ const DOCS_COUNTY = {
     // Lee's EC search is by permit record # (RES/COM/MRV), not address — so no point layer; link out.
     ecLayer: null,
     ecMap:   "https://www.leegov.com/dcd/BldPermitServ/elevcertsearch",
-    ecNote:  "Lee searches ECs by permit record # (RES/COM/MRV). Find the permit # for an address/STRAP in eConnect first. Email FIRMinfo@leegov.com if not found.",
+    ecNote:  "Lee County's Elevation Certificates are in its Forerunner resident portal (linked above) — search by address; that's the fastest route. Lee publishes no public EC map layer. If it isn't there, Lee can search by permit record # (RES/COM/MRV) — find the # for the address/STRAP in eConnect first, or email FIRMinfo@leegov.com.",
     permit:  "https://accelaaca.leegov.com/aca/",   // eConnect / ACA portal
     permitBy:"address"
   }
@@ -4460,7 +4505,145 @@ async function queryFirmPanelOnParcel(parcelFeature, countyName){
   return out.length ? out : null;
 }
 
-async function queryBfeLinesOnParcel(parcelFeature){
+/* ---------- Lee County SPOT ELEVATIONS (2018 LiDAR, 50-ft grid) ----------
+   12.3M points countywide, field Z_feet = ground elevation (NAVD88). This is the GROUND, not a
+   flood elevation — but for siting a generator pad it's the number you actually stand on: compare
+   existing grade against the BFE to see how much fill or how tall a stand you need. Lee only.
+   Returns min/median/max across the parcel, since a lot is rarely flat. */
+const LEE_SPOT_ELEV_QUERY =
+  "https://services2.arcgis.com/LvWGAAhHwbCJ2GMP/arcgis/rest/services/Spot_Elevations_2018/FeatureServer/0/query";
+async function queryLeeGroundElevation(parcelFeature){
+  const rows = await _nfhlParcelQuery(LEE_SPOT_ELEV_QUERY, parcelFeature, 'Z_feet');
+  if(!rows || !rows.length){ window.__leeElevDebug={count:0}; return null; }
+  const z = rows.map(a=>Number(a.Z_feet)).filter(v=>isFinite(v) && v>-100 && v<200).sort((a,b)=>a-b);
+  if(!z.length){ window.__leeElevDebug={count:0}; return null; }
+  const r1 = v => Math.round(v*10)/10;
+  const res = { n:z.length, min:r1(z[0]), max:r1(z[z.length-1]),
+                med:r1(z[Math.floor(z.length/2)]), src:'Lee County 2018 LiDAR' };
+  window.__leeElevDebug=res;
+  return res;
+}
+
+/* ---------- Lee County LiMWA (Limit of Moderate Wave Action) ----------
+   Inside the LiMWA, coastal AE behaves much more like VE: 1.5-ft+ breaking waves, and Lee applies
+   stricter construction standards. Purely a yes/no for whether the parcel is inside it. */
+const LEE_LIMWA_QUERY =
+  "https://services2.arcgis.com/LvWGAAhHwbCJ2GMP/arcgis/rest/services/FIRM_LiMWA/FeatureServer/0/query";
+async function queryLeeLimwa(parcelFeature){
+  const rows = await _nfhlParcelQuery(LEE_LIMWA_QUERY, parcelFeature, 'OBJECTID');
+  return (rows && rows.length) ? true : false;
+}
+
+/* ---------- GROUND ELEVATION, nationwide (USGS 3DEP bare-earth DEM) ----------
+   Works in every county, unlike the per-county LiDAR layers (Lee publishes points; Collier's is
+   TilesOnly and can't be queried at all). ~1/3 arc-second (~10 m) bare-earth.
+
+   ⚠️ UNITS: 3DEP returns METERS. Verified empirically Aug 2026, not assumed — a 3DEP reading was
+   compared against Lee County's Spot_Elevations_2018 Z_feet at the SAME coordinate in Cape Coral:
+   Lee 3.63 ft vs 3DEP 1.11512 → ratio 0.307, i.e. the metre-to-foot factor. Getting this backwards
+   would overstate grade by 3.3x and produce a badly wrong pad height, so don't "simplify" it away.
+
+   computeStatisticsHistograms accepts the parcel POLYGON, so one call returns min/max/mean across
+   the actual lot rather than a bounding box. Falls back to a centroid identify if stats fail. */
+const DEP3_BASE = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer";
+const M_TO_FT = 3.28084;
+async function queryGroundElevation(parcelFeature){
+  const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
+  if(!rings0 || !rings0.length) return null;
+  const rings = rings0.map(r=>r.map(p=>[+p[0].toFixed(6), +p[1].toFixed(6)]));
+  const poly = JSON.stringify({ rings, spatialReference:{ wkid:4326 } });
+  const r1 = v => Math.round(v*10)/10;
+  const grab = async (url, ms=FLOOD_TIMEOUT) => {
+    const c=new AbortController(); const t=setTimeout(()=>c.abort(), ms);
+    try{ const r=await fetch(url,{signal:c.signal}); clearTimeout(t);
+         const j=await r.json(); return j.error?null:j; }
+    catch(e){ clearTimeout(t); return null; }
+  };
+  // --- preferred: statistics over the whole parcel polygon ---
+  const sUrl = `${DEP3_BASE}/computeStatisticsHistograms?geometry=${encodeURIComponent(poly)}`
+             + `&geometryType=esriGeometryPolygon&f=json`;
+  const st = await grab(sUrl);
+  const s = st && st.statistics && st.statistics[0];
+  if(s && isFinite(s.min) && isFinite(s.max)){
+    const res = { min:r1(s.min*M_TO_FT), max:r1(s.max*M_TO_FT), med:r1(s.mean*M_TO_FT),
+                  src:'USGS 3DEP', method:'parcel statistics' };
+    window.__groundElevDebug={ ...res, rawMeters:{min:s.min,max:s.max,mean:s.mean} };
+    return res;
+  }
+  // --- fallback: single identify at the parcel centroid ---
+  let cx=0, cy=0, n=0;
+  for(const p of rings[0]){ cx+=p[0]; cy+=p[1]; n++; }
+  if(!n) return null;
+  const pt = JSON.stringify({ x:cx/n, y:cy/n, spatialReference:{ wkid:4326 } });
+  const id = await grab(`${DEP3_BASE}/identify?geometry=${encodeURIComponent(pt)}`
+                      + `&geometryType=esriGeometryPoint&returnGeometry=false&f=json`);
+  const v = id && Number(id.value);
+  if(!isFinite(v)) { window.__groundElevDebug={fail:'both stats and identify failed'}; return null; }
+  const ft = r1(v*M_TO_FT);
+  const res = { min:ft, max:ft, med:ft, src:'USGS 3DEP', method:'centroid point only' };
+  window.__groundElevDebug={ ...res, rawMeters:v };
+  return res;
+}
+
+/* ---------- Collier County LiMWA + FIRM panels (county-hosted 2024 DFIRM) ----------
+   LiMWA: 56 polylines, no attributes — presence alone is the answer (is the lot inside it).
+   Panels: 156 polygons with FIRM_PAN / PANEL_TYP / EFF_DATE. Unlike Lee's, there's no CITY field,
+   so this gives the panel citation but NOT the permitting jurisdiction. */
+const COLLIER_LIMWA_QUERY =
+  "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FEMA24_LiMWA/FeatureServer/0/query";
+const COLLIER_PANEL_QUERY =
+  "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FEMA24_Panels/FeatureServer/0/query";
+async function queryCollierLimwa(parcelFeature){
+  /* A LiMWA line rarely crosses a lot exactly — it's a boundary, so "inside the LiMWA" usually
+     means the line passes NEAR the parcel rather than through it. Buffer the test by intersecting
+     against the parcel itself first; if that misses, this simply reports false, which is the
+     conservative reading (we don't claim LiMWA status we can't demonstrate). */
+  const rows = await _nfhlParcelQuery(COLLIER_LIMWA_QUERY, parcelFeature, 'OBJECTID');
+  return (rows && rows.length) ? true : false;
+}
+async function queryCollierPanels(parcelFeature){
+  const rows = await _nfhlParcelQuery(COLLIER_PANEL_QUERY, parcelFeature,
+    'FIRM_PAN,PANEL_TYP,EFF_DATE');
+  if(!rows || !rows.length) return null;
+  const seen=new Set(), out=[];
+  for(const a of rows){
+    const id=a.FIRM_PAN; if(!id || seen.has(id)) continue; seen.add(id);
+    out.push({ panel:String(id).trim(), type:a.PANEL_TYP||null,
+      eff:(a.EFF_DATE!=null && Number(a.EFF_DATE)>0)?new Date(Number(a.EFF_DATE)):null });
+  }
+  window.__collierPanelDebug={count:out.length, rows:out};
+  return out.length ? out : null;
+}
+
+/* County-hosted BFE line layers. When a county publishes its own adopted DFIRM contours, prefer
+   them over FEMA's national layer 16: they're the map the local floodplain office actually
+   administers, and they're usually faster and more current than the NFHL rollup.
+   Collier: FEMA24_BFE, 6,775 polylines, field ELEV. Verified Aug 2026. */
+const COUNTY_BFE_LINES = {
+  COLLIER: { url:"https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FEMA24_BFE/FeatureServer/0/query",
+             field:"ELEV", label:"Collier County 2024 DFIRM" }
+};
+async function queryBfeLinesOnParcel(parcelFeature, countyName){
+  const reg = countyName ? COUNTY_BFE_LINES[norm(countyName)] : null;
+  if(reg){
+    const rows = await _nfhlParcelQuery(reg.url, parcelFeature, reg.field);
+    if(rows && rows.length){
+      const seen=new Set();
+      for(const a of rows){
+        const e=Number(a[reg.field]);
+        if(isFinite(e) && e>-9999) seen.add(e);
+      }
+      const elevs=[...seen].sort((a,b)=>a-b);
+      if(elevs.length){
+        window.__bfeLineDebug={ src:reg.label, raw:rows.length, distinct:elevs.length, elevs };
+        return { elevs, datum:null, src:reg.label };
+      }
+    }
+    // county layer empty/failed → fall through to FEMA's national layer 16 below
+  }
+  return _queryFemaBfeLines(parcelFeature);
+}
+async function _queryFemaBfeLines(parcelFeature){
   const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
   if(!rings0 || !rings0.length) return null;
   const rings = rings0.map(r=>r.map(p=>[+p[0].toFixed(6), +p[1].toFixed(6)]));
@@ -14497,11 +14680,21 @@ async function runLookup(lat,lng,searchCtx){
         /* All four whole-parcel NFHL queries fire TOGETHER. They were previously awaited one after
            another, so the block cost the SUM of the round-trips against FEMA's slow host; in
            parallel it costs the slowest single one, and adding LOMAs + FIRM panels is close to free. */
-        const [pz, bl, lomas, panels] = await Promise.all([
+        const isLee = norm(countyName)==='LEE';
+        const isCollier = norm(countyName)==='COLLIER';
+        const [pz, bl, lomas, panels, leePanels, gElev, leeLimwa, colLimwa, colPanels] = await Promise.all([
           queryFloodZonesOnParcel(pFeat),
-          queryBfeLinesOnParcel(pFeat),
+          queryBfeLinesOnParcel(pFeat, countyName),
           queryLomasOnParcel(pFeat),
-          queryFirmPanelOnParcel(pFeat, countyName)
+          queryFirmPanelOnParcel(pFeat, countyName),
+          isLee ? queryLeePanelJurisdiction(pFeat) : Promise.resolve(null),
+          /* Ground elevation: Lee's own 2018 LiDAR is a 50-ft point grid — finer than 3DEP's ~10 m
+             raster — so prefer it there and fall back to 3DEP everywhere else. */
+          isLee ? queryLeeGroundElevation(pFeat).then(r => r || queryGroundElevation(pFeat))
+                : queryGroundElevation(pFeat),
+          isLee ? queryLeeLimwa(pFeat)             : Promise.resolve(false),
+          isCollier ? queryCollierLimwa(pFeat)     : Promise.resolve(false),
+          isCollier ? queryCollierPanels(pFeat)    : Promise.resolve(null)
         ]);
         if(myId!==runId) return;
         if(pz && pz.length>1){
@@ -14520,7 +14713,8 @@ async function runLookup(lat,lng,searchCtx){
            the usable elevation appears, so it must not be gated behind pz.length>1. */
         if(bl && bl.elevs.length){
           const dat = bl.datum ? ' ('+esc(bl.datum)+')' : ' (NAVD88)';
-          html += `<div class="field"><div class="k">BFE lines on parcel</div><div class="v">${bl.elevs.map(e=>'<b>'+esc(e)+' ft</b>').join(' &nbsp;·&nbsp; ')}${dat}</div></div>`;
+          const src = bl.src ? ' <span class="muted" style="font-size:11px">· '+esc(bl.src)+'</span>' : '';
+          html += `<div class="field"><div class="k">BFE lines on parcel</div><div class="v">${bl.elevs.map(e=>'<b>'+esc(e)+' ft</b>').join(' &nbsp;·&nbsp; ')}${dat}${src}</div></div>`;
           if(bl.elevs.length>1){
             html += `<div class="note">Two or more base-flood elevations cross this lot, so there is no single BFE for the parcel — the required elevation depends on <b>where</b> on the lot you build. Between contours the value interpolates; a surveyor or the floodplain administrator sets the number that goes on the permit. For siting, the conservative choice is the <b>higher</b> line (${esc(bl.elevs[bl.elevs.length-1])} ft) plus any local freeboard.</div>`;
           } else {
@@ -14540,6 +14734,63 @@ async function runLookup(lat,lng,searchCtx){
             window.__exportData.firmPanel = panels[0].panel;
             if(panels[0].eff) window.__exportData.firmPanelEff = panels[0].eff.toLocaleDateString();
           }
+        }
+        /* --- Lee County: permitting jurisdiction from the county's own FIRM panel layer ---
+           The CITY field is a coded value naming the jurisdiction that administers the floodplain
+           and issues the permit. In Lee that's frequently a city (Bonita Springs, Cape Coral,
+           Sanibel, Fort Myers Beach...) rather than the county, and getting it wrong means filing
+           with the wrong building department. */
+        if(leePanels && leePanels.length){
+          const cities=[...new Set(leePanels.map(p=>p.city).filter(Boolean))];
+          if(cities.length){
+            html += `<div class="field"><div class="k">Floodplain jurisdiction</div><div class="v">${cities.map(c=>'<b>'+esc(c)+'</b>').join(' &nbsp;·&nbsp; ')}</div></div>`;
+            if(cities.length>1){
+              html += `<div class="note">This parcel touches panels attributed to more than one jurisdiction — confirm which building department covers the structure before filing.</div>`;
+            } else if(!/Unincorporated/i.test(cities[0])){
+              html += `<div class="note">Per Lee County GIS, this address is inside <b>${esc(cities[0])}</b>, not unincorporated Lee — that city administers its own floodplain ordinance, issues the permit, and holds its own Elevation Certificate records. Lee County's flood office is not the reviewing authority here.</div>`;
+            }
+            if(window.__exportData) window.__exportData.floodJurisdiction = cities.join(', ');
+          }
+        }
+        /* --- Existing ground elevation, and how far it sits below the BFE --- */
+        if(gElev){
+          const spread = (gElev.max - gElev.min).toFixed(1);
+          const flat = gElev.max === gElev.min;
+          const shown = flat ? `${esc(gElev.med)} ft`
+                             : `${esc(gElev.min)}–${esc(gElev.max)} ft <span class="muted">(avg ${esc(gElev.med)})</span>`;
+          html += `<div class="field"><div class="k">Ground elev.</div><div class="v">${shown} <span class="muted" style="font-size:11px">NAVD88 · ${esc(gElev.src||'LiDAR')}</span></div></div>`;
+          // If we have a BFE to compare against, show the gap — that's the practical number.
+          const refBfe = (bl && bl.elevs.length) ? bl.elevs[bl.elevs.length-1]
+                       : (pz && pz.length && pz[0].bfe!=null) ? pz[0].bfe : null;
+          if(refBfe!=null){
+            const gap = Math.round((refBfe - gElev.med)*10)/10;
+            html += fieldRow('Avg grade vs BFE', gap>0
+              ? `<b>${esc(gap)} ft below</b> the ${esc(refBfe)} ft BFE`
+              : `${esc(Math.abs(gap))} ft above the ${esc(refBfe)} ft BFE`);
+          }
+          const detail = gElev.n ? `${esc(gElev.n)} LiDAR points on this lot`
+                       : (gElev.method==='centroid point only'
+                            ? 'single reading at the parcel centre — the rest of the lot was not sampled'
+                            : 'sampled across the parcel');
+          html += `<div class="note">Bare-earth ground surface (${detail}) — this is <b>existing grade</b>, not a flood elevation, and not a survey.${flat?'':` Grade varies ${esc(spread)} ft across the parcel, so any specific pad location may differ from the average.`} A surveyed elevation is what the permit will require, and an Elevation Certificate is what the floodplain office will accept.</div>`;
+          if(window.__exportData){
+            window.__exportData.groundElevMin = gElev.min;
+            window.__exportData.groundElevMed = gElev.med;
+            window.__exportData.groundElevMax = gElev.max;
+            window.__exportData.groundElevSrc = gElev.src||'';
+          }
+        }
+        if(leeLimwa || colLimwa){
+          html += `<div class="field"><div class="k">LiMWA</div><div class="v"><span class="badge sfha">Inside Limit of Moderate Wave Action</span></div></div>`;
+          html += `<div class="note">This parcel is landward of the V zone but inside the LiMWA — the area where breaking waves can still reach 1.5 ft. Coastal A zones inside the LiMWA carry construction standards closer to VE than to ordinary AE. Confirm requirements with the floodplain administrator before setting equipment.</div>`;
+          if(window.__exportData) window.__exportData.limwa = 'Yes';
+        }
+        /* --- Collier's own adopted 2024 DFIRM panel (separate from the FEMA NFHL panel above) --- */
+        if(colPanels && colPanels.length){
+          const fmt = p => esc(p.panel) + (p.eff ? ' · eff. '+esc(p.eff.toLocaleDateString()) : '');
+          html += `<div class="field"><div class="k">Collier 2024 DFIRM panel</div><div class="v">${colPanels.map(fmt).join('<br>')}</div></div>`;
+          html += `<div class="note">From Collier County's adopted 2024 DFIRM. If this differs from the FEMA panel above, the county's adopted map is what the local floodplain office adminsters — verify with them before citing either on a permit.</div>`;
+          if(window.__exportData) window.__exportData.countyPanel = colPanels[0].panel;
         }
         /* --- LOMA / LOMC (layer 34): may remove this lot from the SFHA entirely --- */
         if(lomas && lomas.length){
@@ -14805,6 +15056,15 @@ async function runLookup(lat,lng,searchCtx){
   if(frDoc && !sameUrl(frDoc.url, floodPortalUrl)){
     html += `<a class="palink" href="${esc(frDoc.url)}" target="_blank" rel="noopener">↗ ${esc(frDoc.label)} — search this address for its Elevation Certificate</a>`;
     html += `<div class="note">${esc(titleCase(cityName))}'s resident portal lets you search an address and view the Elevation Certificate on file (plus local flood info). This is usually the quickest EC lookup for in-city properties.</div>`;
+  }
+  /* --- County-level Forerunner portal (e.g. Lee) ---
+     Lee County publishes NO elevation-certificate GIS layer — their "Find My Elevation" app is a
+     LiDAR/DEM viewer, not certificates. Lee's ECs live in Forerunner, searchable by address. Shown
+     whenever no city portal already covered this address. */
+  const frCounty = countyName ? FORERUNNER_COUNTY[norm(countyName)] : null;
+  if(frCounty && !frDoc && !sameUrl(frCounty.url, floodPortalUrl)){
+    html += `<a class="palink" href="${esc(frCounty.url)}" target="_blank" rel="noopener">↗ ${esc(frCounty.label)} — search this address for its Elevation Certificate</a>`;
+    html += `<div class="note">${esc(titleCase(countyName))} County keeps its Elevation Certificates in this resident portal rather than in a public GIS layer — search the address there to view the EC on file. If the address is inside an incorporated city, that city may hold its own separate records.</div>`;
   }
 
   // --- Elevation Certificate (live attempt where a layer is wired) ---
