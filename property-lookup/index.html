@@ -14351,8 +14351,22 @@ async function runLookup(lat,lng,searchCtx){
     if(depth!=null) html += fieldRow('Base flood depth', esc(depth)+' ft');
     if(zones.length>1) html += fieldRow('Note','Point sits on a zone boundary — '+zones.length+' zones overlap here.');
     // --- Whole-parcel check: does the LOT cross flood-zone lines? (pin query above is point-only) ---
-    { const pFeat = (parcel && !parcel.__err && parcel.features && parcel.features[0] && parcel.features[0].geometry && parcel.features[0].geometry.rings) ? parcel.features[0]
-                  : (live && !live.__err && live.features && live.features[0] && live.features[0].geometry && live.features[0].geometry.rings) ? live.features[0] : null;
+    /* Parcel polygon for the whole-lot flood queries below. Order: statewide roll → pre-wired
+       county live feed (liveRes) → manually pasted feed (live).
+       ⚠️ liveRes was MISSING here. `live` is only ever populated when the user pastes a feed URL
+       (liveSource.url); for a pre-wired county like Collier the parcel arrives via pCountyLive and
+       is stored in liveRes. So on those counties the chain was effectively "state roll or nothing"
+       — and whenever the roll timed out or had no polygon, pFeat came back null and BOTH the
+       "Zones on this parcel" and "BFE lines" rows silently vanished. Same address, next reload,
+       roll responds, rows reappear: exactly the intermittent behaviour. */
+    const _ringed = f => f && f.geometry && f.geometry.rings && f.geometry.rings.length ? f : null;
+    { const pFeat = (parcel && !parcel.__err && parcel.features && _ringed(parcel.features[0])) ? parcel.features[0]
+                  : (typeof liveRes!=='undefined' && liveRes && liveRes.features && _ringed(liveRes.features[0])) ? liveRes.features[0]
+                  : (live && !live.__err && live.features && _ringed(live.features[0])) ? live.features[0] : null;
+      window.__floodParcelSrc = pFeat
+        ? ((parcel && parcel.features && _ringed(parcel.features[0])) ? 'state roll'
+           : (typeof liveRes!=='undefined' && liveRes && liveRes.features && _ringed(liveRes.features[0])) ? 'county live feed' : 'pasted feed')
+        : 'NONE — no parcel polygon available';
       if(pFeat){
         const pz = await queryFloodZonesOnParcel(pFeat);
         if(myId!==runId) return;
@@ -14385,6 +14399,11 @@ async function runLookup(lat,lng,searchCtx){
             if(window.__exportData.bfe==null) window.__exportData.bfe = bl.elevs[bl.elevs.length-1];
           }
         }
+      }
+      else {
+        // No parcel polygon from ANY source — say so rather than silently omitting the rows,
+        // which previously looked identical to "this lot has only one zone / no BFE lines".
+        html += `<div class="note">Whole-parcel flood check unavailable — no parcel boundary came back for this lookup, so only the point under the pin was tested. Re-run the search, or confirm on the county viewer.</div>`;
       }
     }
     html += `<div class="note" style="padding-top:9px">Static BFE comes straight from the effective FIRM. Many zones (e.g. AE on a wide floodplain, AO, or Zone X) carry no single static BFE — confirm the precise elevation on the FIRM panel / FEMA Map Service Center.</div>`;
