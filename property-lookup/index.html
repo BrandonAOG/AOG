@@ -2750,14 +2750,25 @@ const ZONING_LIVE = {
     "https://mapping.pascopa.com/arcgis/rest/services/Land_Use/MapServer/1/query"
   ]},
   LEE: { label:"Lee County DCD Zoning",
+    codeField:"ZONING",                       // ZONE / GeneralZoning are null countywide; ZONING is the district
     // POINT LOOKUP is jurisdiction-aware: DCD_Zoning is split into per-municipality sublayers, and only
     // the sublayer containing this parcel can ever match — so queryZoning fires the SINGLE sublayer keyed
     // by the parcel's city (norm form) below, instead of all six (no more querying Estero/Bonita on a
     // Cape Coral lookup). "" = unincorporated Lee, the default when the parcel isn't in a mapped city.
     // The flat urls list is kept for the MAP OVERLAY and the connectivity diagnostic, which legitimately
     // need every sublayer (the overlay draws all districts in view).
+    //
+    // UNINCORPORATED gets TWO urls: the on-prem sublayer 0 first, then Lee's AGOL mirror of the same
+    // dataset. queryZoning fires candidates in PARALLEL and takes the first in priority order that
+    // answers, so the mirror simply covers the very common case where gismapserver — consistently the
+    // slowest host this app touches — burns the whole timeout and returns nothing.
+    // ✅ Verified same data, not a stale copy: a Lehigh Acres point returns byte-identical attributes
+    // from both (OBJECTID 325082, ZONING RS-1, same VERIFYDATE), and the AGOL copy's EDIT_DATE is
+    // recent. The mirror is UNINCORPORATED-ONLY — an in-city point (Cape Coral) returns NO HIT — so
+    // it is deliberately not added to any of the city keys below.
     byCity: {
-      "":               "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/0/query",
+      "":               ["https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/0/query",
+                         "https://services2.arcgis.com/LvWGAAhHwbCJ2GMP/arcgis/rest/services/Zoning/FeatureServer/0/query"],
       "CAPECORAL":      "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/1/query",
       "FORTMYERS":      "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/2/query",
       "ESTERO":         "https://gismapserver.leegov.com/gisserver910/rest/services/Layers/DCD_Zoning/MapServer/5/query",
@@ -3274,7 +3285,9 @@ async function queryZoning(lat,lng, cityName, countyName){
     // firing every city's sublayer (Estero/Bonita/Fort Myers…) on a lookup that can only match one.
     const lookupUrls = (r)=>{
       if(!r) return [];
-      if(r.byCity){ const u = r.byCity[norm(cityName||'')] || r.byCity['']; if(u) return [u]; }
+      // A byCity value may be a single url OR an array (e.g. unincorporated Lee: on-prem first, then
+      // its AGOL mirror as a fast fallback). Normalise both to an array.
+      if(r.byCity){ const u = r.byCity[norm(cityName||'')] || r.byCity['']; if(u) return Array.isArray(u)?u.slice():[u]; }
       return r.urls || (r.url?[r.url]:[]);
     };
     const reg = cityReg || cntyReg;
@@ -15146,9 +15159,23 @@ async function runLookup(lat,lng,searchCtx){
     <div class="src">local code /<br>permitting portal</div></div><div class="cb">`;
 
 
-  // --- LIVE zoning-district detection (point-in-polygon against a county/city zoning layer) ---
-  const zhit = await pZoning;
+  /* --- LIVE zoning-district detection (point-in-polygon against a county/city zoning layer) ---
+     CAPPED, not a bare await. This sits in the render path, so whatever it costs is added to every
+     lookup — and several counties (Lee's on-prem gismapserver especially) routinely burn the full
+     ENRICH_TIMEOUT here and then return nothing, i.e. the user waits 6 s for a timeout.
+     The card does NOT depend on it: resolveZoning() above already supplied the district rules and
+     setbacks from the local ordinance, and the live polygon only CONFIRMS which district the point
+     falls in. So give it a short window; if it misses, render everything else and say the live
+     confirmation was skipped. Same treatment the wind card and the county flood cross-check get. */
+  const ZONING_CEILING = 2000;
+  const zhit = await Promise.race([ pZoning,
+    new Promise(res=>setTimeout(()=>res({__slow:true}), ZONING_CEILING)) ]);
   if(myId!==runId) return;
+  if(zhit && zhit.__slow){
+    _timings.push({label:'zoning (skipped — over '+ZONING_CEILING+'ms)', ms:ZONING_CEILING, err:true});
+    html += `<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> live district lookup skipped — the ${esc(jurName)} zoning service didn't respond in time</div>`;
+    html += `<div class="note">The setbacks and district rules below come from the adopted code and still apply. Only the live point-in-polygon confirmation of <b>which</b> district this parcel sits in was skipped — confirm the district on the jurisdiction's zoning map before relying on the setbacks.</div>`;
+  } else
   // Polk County's countywide Future Land Use layer (used as the zoning-equivalent — see POLK notes)
   // codes land INSIDE incorporated cities (Lakeland, Winter Haven, Bartow, Mulberry, Auburndale, etc.)
   // with a placeholder value like "City" rather than a real land-use district, since the county doesn't
