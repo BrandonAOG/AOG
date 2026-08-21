@@ -12229,8 +12229,14 @@ function drawParcel(g, info){
       if(tip){
         parcelLayer.bindTooltip(tip,{sticky:true,direction:'top',className:'parcel-tip',opacity:1});
         if(!L.Browser.mobile){   // hover brighten is desktop-only; saves sticky-tracking work on touch
-          parcelLayer.on('mouseover',()=>parcelLayer.setStyle({fillOpacity:oversized?.14:.28,weight:oversized?4.5:3}));
-          parcelLayer.on('mouseout', ()=>parcelLayer.setStyle({fillOpacity:oversized?.05:.12,weight:oversized?3.5:2}));
+          /* Close over THIS layer (pl), not the outer `parcelLayer` variable. A new lookup nulls
+             parcelLayer, but Leaflet keeps firing this layer's own mouseout while the cursor is
+             still over where it was — the handler then read null and threw
+             "Cannot read properties of null (reading 'setStyle')" on every mouse move. Holding the
+             instance means the handler always styles the layer it was actually bound to. */
+          const pl = parcelLayer;
+          pl.on('mouseover',()=>{ try{ pl.setStyle({fillOpacity:oversized?.14:.28, weight:oversized?4.5:3}); }catch(e){} });
+          pl.on('mouseout', ()=>{ try{ pl.setStyle({fillOpacity:oversized?.05:.12, weight:oversized?3.5:2}); }catch(e){} });
         }
       }
       if(oversized){
@@ -12291,8 +12297,11 @@ async function drawHomeWithinTract(lat, lng, tractAcres, info){
     if(tip){
       homeParcelLayer.bindTooltip(tip,{sticky:true,direction:'top',className:'parcel-tip',opacity:1});
       if(!L.Browser.mobile){
-        homeParcelLayer.on('mouseover',()=>homeParcelLayer.setStyle({fillOpacity:.28,weight:3}));
-        homeParcelLayer.on('mouseout', ()=>homeParcelLayer.setStyle({fillOpacity:.14,weight:2.5}));
+        // Same stale-closure guard as the main parcel layer above: hold the instance, not the
+        // outer variable, so a new lookup nulling homeParcelLayer can't make this throw.
+        const hl = homeParcelLayer;
+        hl.on('mouseover',()=>{ try{ hl.setStyle({fillOpacity:.28, weight:3}); }catch(e){} });
+        hl.on('mouseout', ()=>{ try{ hl.setStyle({fillOpacity:.14, weight:2.5}); }catch(e){} });
       }
     }
   }catch(e){ /* best-effort; never block the result */ }
