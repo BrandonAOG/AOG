@@ -42,7 +42,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="preconnect" href="https://mapservices.weather.noaa.gov" crossorigin> <!-- NWS warnings / NOAA overlays -->
 <link rel="preconnect" href="https://tiledimageservices2.arcgis.com" crossorigin> <!-- Collier 2026 LERC tiles -->
 <link rel="preconnect" href="https://services2.arcgis.com" crossorigin>       <!-- Collier hosted org: parcels, address points, EC, projects — the busiest data host -->
-<link rel="preconnect" href="https://geocoding.geo.census.gov" crossorigin>    <!-- geocoder #1 — on the critical path of EVERY search, so pay the TLS handshake up front -->
+<!-- US Census geocoder REMOVED: the service is reachable but sends no Access-Control-Allow-Origin
+     header, so every browser request fails CORS (verified — a no-cors fetch returns an opaque
+     response, i.e. the server answers but the header is absent). It was costing a TLS handshake
+     and a failed request on every single search while contributing nothing. Esri + OSM remain. -->
 <link rel="preconnect" href="https://geocode.arcgis.com" crossorigin>         <!-- geocoder #2 (Esri World) — same, and the strongest on rural addresses -->
 <link rel="dns-prefetch" href="https://gismapserver.leegov.com">              <!-- Lee parcels + building footprints -->
 <link rel="dns-prefetch" href="https://agis3.charlottecountyfl.gov">           <!-- Charlotte parcels + footprints -->
@@ -66,7 +69,6 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="dns-prefetch" href="https://unpkg.com">
 <link rel="dns-prefetch" href="https://tile.openstreetmap.org">
 <link rel="dns-prefetch" href="https://geocode.arcgis.com">
-<link rel="dns-prefetch" href="https://geocoding.geo.census.gov">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <!-- SPEED: load the webfont CSS without blocking first paint. media="print" makes the browser fetch
      it at low priority off the render path; onload flips it live. display=swap in the URL means text
@@ -1189,7 +1191,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </button>
     <div id="footBody">
       <div style="color:var(--signal);font-family:var(--disp);font-weight:600;letter-spacing:.08em;margin-bottom:6px">ALWAYS ON GENERATORS · PROPERTY LOOKUP</div>
-      Sources: FL Dept. of Revenue statewide cadastral (county appraiser rolls) · FEMA National Flood Hazard Layer · FDOT administrative boundaries · HIFLD Electric Retail Service Territories · US Census / OSM geocoding. Data reflects the most recent official rolls and <i>effective</i> FEMA maps — always verify with the county property appraiser before any legal, financial, or permitting decision.
+      Sources: FL Dept. of Revenue statewide cadastral (county appraiser rolls) · FEMA National Flood Hazard Layer · FDOT administrative boundaries · HIFLD Electric Retail Service Territories · Esri / OSM geocoding. Data reflects the most recent official rolls and <i>effective</i> FEMA maps — always verify with the county property appraiser before any legal, financial, or permitting decision.
       <div id="swStatus" style="margin-top:7px;color:var(--faint)"></div>
       <div id="lookupTiming"></div>
     </div>
@@ -7152,7 +7154,7 @@ async function queryEC(ecLayerUrl, lat, lng){
   }catch(e){ clearTimeout(t); return { err:e.message }; }
 }
 
-/* ---------- Geocoding (Census primary, Nominatim fallback) ---------- */
+/* ---------- Geocoding (Esri primary, Nominatim fallback) ---------- */
 async function geocode(q){
   const all=await geocodeAll(q);
   return all.length?all[0]:null;
@@ -7175,8 +7177,6 @@ function geocodeFirst(msCap){
   if(!inf) return Promise.resolve(null);
   const pick=(p,fn)=>p.then(v=>{ const r=fn(v); if(r&&isFinite(r.lat)&&isFinite(r.lng)) return r; throw 0; });
   const cands=[
-    pick(inf.census, v=>{ const m=v&&v.result&&v.result.addressMatches&&v.result.addressMatches[0];
-      return m?{lat:m.coordinates.y,lng:m.coordinates.x}:null; }),
     pick(inf.esri, v=>{ const c=v&&v.candidates&&v.candidates[0];
       return (c&&c.location)?{lat:+c.location.y,lng:+c.location.x}:null; }),
     pick(inf.osm, v=>{ const m=v&&v[0]; return m?{lat:+m.lat,lng:+m.lon}:null; })
@@ -7191,7 +7191,10 @@ function geocodeFirst(msCap){
 
 async function geocodeAll(q){
   let qq = /\b(fl|florida)\b/i.test(q) ? q : q+', Florida';
-  const censusU=`https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(qq)}&benchmark=Public_AR_Current&format=json`;
+  /* NOTE: the US Census geocoder used to be first in this list. It is reachable but sends no
+     Access-Control-Allow-Origin header, so every browser request fails CORS — allSettled hid the
+     failure, so searches still worked while one of three geocoders silently never contributed.
+     Removed rather than left failing. Esri (strong on rural/rooftop) + OSM remain. */
   const osmU=`https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=us&q=${encodeURIComponent(qq)}`;
   // Esri World Geocoder — strong on rural addresses the others miss (e.g. Glades/Moore Haven).
   // Bias to Florida's center and request WGS84 directly. This is the same service many county
@@ -7217,14 +7220,10 @@ async function geocodeAll(q){
   // resolvers), and for that the first usable answer is just as good. So we publish the three
   // in-flight promises on the returned array via geocodeAll.__inflight, and geocodeFirst() below
   // races them for that rough point. Same requests, no extra traffic, no change to ranking.
-  const pCensus=_gfetch(censusU,7000), pOsm=_gfetch(osmU,4500), pEsri=_gfetch(esriU,7000);
-  _geoInflight={ census:pCensus, osm:pOsm, esri:pEsri, q:qq };
-  const [cRes,oRes,eRes]=await Promise.allSettled([pCensus,pOsm,pEsri]);
+  const pOsm=_gfetch(osmU,4500), pEsri=_gfetch(esriU,7000);
+  _geoInflight={ osm:pOsm, esri:pEsri, q:qq };
+  const [oRes,eRes]=await Promise.allSettled([pOsm,pEsri]);
   const out=[];
-  if(cRes.status==='fulfilled'){
-    const ms=(cRes.value&&cRes.value.result&&cRes.value.result.addressMatches)||[];
-    for(const m of ms.slice(0,5)) out.push({lat:m.coordinates.y,lng:m.coordinates.x,label:m.matchedAddress,src:'US Census'});
-  }
   if(oRes.status==='fulfilled'){
     for(const m of (oRes.value||[])){
       if(out.some(o=>o.label===m.display_name)) continue;
@@ -16511,8 +16510,9 @@ function rankSuggestions(items, typed){
     for(const tok of tTokens){ if(tok.length>1 && lbl.includes(tok)) s+=8; }
     // Prefix match — label starts with what they typed (minus trailing fragments).
     if(t && lbl.startsWith(t.split(',')[0].trim())) s+=15;
-    // Source quality nudge: Census/Esri tend to be cleaner for US street addresses than OSM.
-    if(it.src==='US Census') s+=4; else if(it.src==='Esri') s+=3;
+    // Source quality nudge: Esri tends to be cleaner for US street addresses than OSM.
+    // (A 'US Census' branch lived here too; that geocoder is gone — see geocodeAll().)
+    if(it.src==='Esri') s+=3;
     // Proximity to current map view (closer = small bonus), so a nearby match outranks a far twin.
     if(center && typeof it.lat==='number' && typeof it.lng==='number'){
       const d=Math.hypot(it.lat-center.lat, it.lng-center.lng);   // degrees; fine for ranking
@@ -16567,8 +16567,8 @@ async function fetchSuggestions(q, signal){
   if(cached) return cached;                 // instant: re-typed / backspaced query
   let qq = /\b(fl|florida)\b/i.test(q) ? q : q+', Florida';
   const out=[];
-  // run Census + Esri in parallel; Esri is what catches rural addresses the Census geocoder lacks
-  const censusU=`https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(qq)}&benchmark=Public_AR_Current&format=json`;
+  // Esri only. The Census geocoder was here too but sends no CORS header, so it failed on every
+  // keystroke of every search — see the note in geocodeAll().
   const esriU=`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates`+
     `?SingleLine=${encodeURIComponent(qq)}&f=json&outFields=*&maxLocations=6&outSR=4326`+
     `&searchExtent=${encodeURIComponent('-87.6,24.4,-80.0,31.0')}`;
@@ -16578,14 +16578,9 @@ async function fetchSuggestions(q, signal){
   const _gf=(u,ms)=>{ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),ms);
     if(signal){ try{ signal.addEventListener('abort',()=>ctrl.abort(),{once:true}); }catch(e){} }
     return fetch(u,{signal:ctrl.signal}).then(r=>{clearTimeout(t);return r.json();}).catch(e=>{clearTimeout(t);throw e;}); };
-  const [cR,eR]=await Promise.allSettled([
-    _gf(censusU,7000),
+  const [eR]=await Promise.allSettled([
     _gf(esriU,7000)
   ]);
-  if(cR.status==='fulfilled'){
-    const ms=(cR.value&&cR.value.result&&cR.value.result.addressMatches)||[];
-    for(const m of ms.slice(0,5)) out.push({lat:m.coordinates.y,lng:m.coordinates.x,label:m.matchedAddress,src:'US Census'});
-  }
   if(eR.status==='fulfilled'){
     const cands=(eR.value&&eR.value.candidates)||[];
     for(const c of cands){
