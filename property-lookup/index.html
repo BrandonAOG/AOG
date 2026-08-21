@@ -392,6 +392,14 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .bnd-tip{background:var(--bnd-bg);color:var(--bnd-ink);border:none;font-family:var(--disp);font-weight:700;font-size:11px;letter-spacing:.04em;padding:2px 7px;box-shadow:0 2px 8px var(--shadow-soft)}
   .bnd-tip .leaflet-tooltip-tip{background:var(--bnd-bg)}
   /* Hover card shown over a looked-up parcel polygon (address / parcel / owner) */
+  /* Elevation-height labels: dark text with a white halo so they stay legible over aerial
+     imagery, light grass and dark asphalt alike. No box — a background chip at this density
+     would hide more ground than it clarifies. */
+  .elev-lbl{ font:600 11px/1.1 var(--mono,monospace); color:#1a1a17; text-align:center;
+    white-space:nowrap; pointer-events:none; background:none; border:0;
+    text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 4px #fff, 1px 1px 0 #fff, -1px -1px 0 #fff; }
+  /* Neighbour points are context, not the subject — lighter so the parcel's own grid reads first. */
+  .elev-lbl-out{ color:#5f5e5a; font-weight:400; }
   .parcel-tip{background:var(--panel);color:var(--ink);border:1px solid var(--blueprint);border-radius:7px;
     font-family:var(--body);font-size:11.5px;line-height:1.5;padding:8px 10px;max-width:240px;white-space:normal;
     box-shadow:0 6px 22px var(--shadow-strong)}
@@ -1104,6 +1112,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
   </div>
   <button id="btnFlood" title="Shade FEMA flood-hazard zones (AE / AH / VE / X) plus BFE elevation contour lines — live NFHL. Zoom in to see it.">≋ Flood</button>
+  <button id="btnElev" title="Sample bare-earth ground elevation on a grid across the parcel and its immediate neighbours (USGS 3DEP, NAVD88). Search an address first.">⛭ Elevation heights</button>
   <div class="layers-pick">
     <button id="btnLayers" title="Property boundary overlays (city limits, parcels, zoning)">▦ Layers <span class="bm-caret">▾</span></button>
     <div id="layersMenu" class="basemap-menu" hidden>
@@ -4393,6 +4402,225 @@ let ownFloodLabels=false;
   }catch(e){ dbg.stage='exception'; dbg.err=String(e&&e.message||e); }
 })();
 let floodOn=false;
+/* ---------- ELEVATION HEIGHTS (USGS 3DEP point grid) ----------------------------------------
+   Samples BARE-EARTH ground elevation on a grid across the subject parcel plus a margin that
+   catches the immediate neighbours, and labels each point in feet — the same thing a surveyor's
+   spot-elevation sheet shows, but derived from LiDAR rather than measured.
+
+   Why getSamples and not a shaded tile: /getSamples takes a MULTIPOINT and returns a value for
+   every point in ONE request, so we get readable NUMBERS instead of colours, identically in all
+   67 counties. (Lee publishes its own 50-ft LiDAR point layer and Collier's is TilesOnly — a
+   county-by-county approach would have been inconsistent. 3DEP is the same everywhere.)
+
+   ⚠️ 3DEP returns METRES — the same conversion trap as the ground-elevation row. Verified against
+   Lee's Z_feet layer at an identical coordinate (ratio 0.307). Do not remove the ×3.28084.
+
+   TOGGLE, not automatic: the call measured ~3 s, which would roughly double a normal lookup. It
+   only matters when you're siting a pad, so it runs on demand and caches per parcel. */
+/* Full literal, not DEP3_BASE + "/getSamples": DEP3_BASE is declared several hundred lines BELOW
+   this point, and `const` is not hoisted — referencing it here throws a temporal-dead-zone error
+   at load and kills the entire script. Same host, spelled out. */
+const DEP3_SAMPLES = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/getSamples";
+const DEP3_ID      = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/identify";
+const ELEV_M_TO_FT = 3.28084;   // ditto — M_TO_FT is declared later
+/* Point counts. Measured against the service: 49 pts → 731 ms, 100 → 2148 ms, 196 → 2046 ms,
+   400 → 1550 ms. The time is ALL round-trip; the point count is essentially free. So sample
+   generously and spend the density where it's useful rather than spreading it evenly:
+     INNER — a tight grid over the subject parcel, where the pad actually goes
+     OUTER — a coarse grid over the surrounding margin, enough to see which way the ground falls
+   Both go in ONE multipoint request. */
+const ELEV_INNER_N = 11;       // 11x11 across the parcel itself
+const ELEV_OUTER_N = 9;        // 9x9 across the padded extent (points inside the parcel dropped)
+const ELEV_PAD     = 0.55;     // extra extent beyond the parcel, as a fraction of its size,
+                               // so the neighbouring lots are sampled too
+const ELEV_LABEL_ZOOM = 18;    // below this, draw dots only — 150+ labels would be unreadable
+let elevOn=false, _elevKey='', _elevBusy=false, _elevPts=[];
+const elevLayer = L.layerGroup();
+
+/* Which LiDAR collect actually answered, and when was it flown?
+   getSamples returns values and a pixel size but not the SOURCE, and the vintage matters: Collier
+   is covered by both a 2007 collect and a 2018 one, and a lot that was filled between the two
+   reads several feet lower on the older data. One identify at the parcel centre with
+   returnCatalogItems tells us which dataset the mosaic is serving there.
+   Pyramid overviews (Ov_*) are the service's own downsampled tiles, not real collects — skipped. */
+async function identifyElevationSource(lat,lng){
+  const g=encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}));
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 6000);
+  try{
+    const r=await fetch(DEP3_ID+`?geometry=${g}&geometryType=esriGeometryPoint`
+      +`&returnCatalogItems=true&returnGeometry=false&f=json`, {signal:ctrl.signal});
+    clearTimeout(t);
+    const j=await r.json();
+    const feats=(j.catalogItems&&j.catalogItems.features)||[];
+    const real=feats.map(f=>f.attributes||{})
+      .filter(a=>a.Name && !/^Ov_/i.test(a.Name))
+      .map(a=>({ name:a.Name,
+                 px:Number(a.PixelSize||a.LowPS)||null,
+                 ms:Number(a.AcquisitionDate||a.Date)||null }))
+      .filter(a=>isFinite(a.px));
+    if(!real.length) return null;
+    real.sort((a,b)=>a.px-b.px);               // finest first — that's what the mosaic serves
+    const best=real[0];
+    best.year = best.ms ? new Date(best.ms).getUTCFullYear() : null;
+    best.others = real.slice(1).map(o=>({ name:o.name, px:o.px,
+                    year:o.ms?new Date(o.ms).getUTCFullYear():null }));
+    return best;
+  }catch(e){ clearTimeout(t); return null; }
+}
+
+async function loadElevationGrid(){
+  // Anchor on the parcel outline when we have one, else a fixed box around the marker.
+  let b=null;
+  try{ if(parcelLayer && parcelLayer.getBounds && parcelLayer.getBounds().isValid()) b=parcelLayer.getBounds(); }catch(e){}
+  if(!b && marker){ b = marker.getLatLng().toBounds(70); }
+  if(!b){ mapToast('Search an address first — elevation samples follow the parcel.',2600); return; }
+
+  const pS=b.getSouth(), pN=b.getNorth(), pW=b.getWest(), pE=b.getEast();
+  const padLat=(pN-pS)*ELEV_PAD, padLng=(pE-pW)*ELEV_PAD;
+  const s=pS-padLat, n=pN+padLat, w=pW-padLng, e=pE+padLng;
+  const key=[s,n,w,e].map(v=>v.toFixed(5)).join(',');
+  if(key===_elevKey && _elevPts.length){ drawElevationPoints(); return; }  // cached — just redraw
+  if(_elevBusy) return;
+  _elevBusy=true;
+
+  const pts=[];
+  // INNER: dense, parcel bounds only
+  for(let i=0;i<ELEV_INNER_N;i++) for(let j=0;j<ELEV_INNER_N;j++)
+    pts.push([ +(pW+(pE-pW)*i/(ELEV_INNER_N-1)).toFixed(6),
+               +(pS+(pN-pS)*j/(ELEV_INNER_N-1)).toFixed(6) ]);
+  // OUTER: coarse, full padded extent, skipping anything already covered by the inner grid
+  for(let i=0;i<ELEV_OUTER_N;i++) for(let j=0;j<ELEV_OUTER_N;j++){
+    const x=w+(e-w)*i/(ELEV_OUTER_N-1), y=s+(n-s)*j/(ELEV_OUTER_N-1);
+    if(x>=pW && x<=pE && y>=pS && y<=pN) continue;
+    pts.push([ +x.toFixed(6), +y.toFixed(6) ]);
+  }
+
+  mapToast('Sampling ground elevation…',1800);
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 12000);
+  let js=null;
+  try{
+    const body=new URLSearchParams({
+      geometry:JSON.stringify({ points:pts, spatialReference:{wkid:4326} }),
+      geometryType:'esriGeometryMultipoint',
+      /* NO mosaicRule. 3DEP overlaps many rasters at any point (current 1 m LiDAR, older county
+         collects, coarse pyramid overviews), so pinning the finest source looked worthwhile — but
+         the service REJECTS esriMosaicAttribute outright ("Invalid or missing input parameters",
+         HTTP 400), which silently killed the whole layer. And it was unnecessary: an
+         esriMosaicLockRaster test pinned to FL_Southwest_B_2018 returned a value identical to no
+         rule at all, i.e. the default already resolves to the finest available source.
+         Instead of forcing it, we ASK what answered — see identifyElevationSource() below. */
+      returnFirstValueOnly:'true',
+      interpolation:'RSP_BilinearInterpolation',
+      f:'json'
+    });
+    const r=await fetch(DEP3_SAMPLES,{method:'POST',body,signal:ctrl.signal});
+    clearTimeout(t);
+    js=await r.json();
+  }catch(err){ clearTimeout(t); }
+  _elevBusy=false;
+
+  if(!js || js.error || !js.samples || !js.samples.length){
+    mapToast('Elevation samples unavailable here.',2600);
+    window.__elevDebug={fail:(js&&js.error)||'no samples'};
+    return;
+  }
+
+  /* Keep the VALUES, not the drawn layers — drawElevationPoints() re-renders from this on zoom
+     (labels appear only when zoomed in) without another request. */
+  _elevPts=[];
+  for(const smp of js.samples){
+    const m=Number(smp.value);
+    if(!isFinite(m)) continue;
+    const loc=smp.location||{};
+    if(!isFinite(loc.x)||!isFinite(loc.y)) continue;
+    const inner = loc.x>=pW && loc.x<=pE && loc.y>=pS && loc.y<=pN;
+    _elevPts.push({ lat:loc.y, lng:loc.x, ft:Math.round(m*ELEV_M_TO_FT*100)/100, inner });
+  }
+  _elevKey=key;
+  drawElevationPoints();
+
+  const vals=_elevPts.map(p=>p.ft);
+  const inner=_elevPts.filter(p=>p.inner).map(p=>p.ft);
+  const res=(js.samples[0]||{}).resolution;
+
+  // Ask which collect answered — one extra call, at the centre of the sampled area.
+  const src = await identifyElevationSource((pS+pN)/2, (pW+pE)/2);
+
+  window.__elevDebug={ n:vals.length, inner:inner.length,
+    min:Math.min(...vals), max:Math.max(...vals),
+    parcelMin:inner.length?Math.min(...inner):null, parcelMax:inner.length?Math.max(...inner):null,
+    resolutionMetres:res, source:src };
+
+  if(inner.length){
+    const lo=Math.min(...inner), hi=Math.max(...inner);
+    const yr  = src&&src.year ? String(src.year) : null;
+    const rtag = isFinite(res) ? `${(+res).toFixed(res<10?1:0)} m` : '';
+    const stag = yr ? ` · ${yr} LiDAR${rtag?' ('+rtag+')':''}` : (rtag?` · ${rtag} source`:'');
+    mapToast(`${vals.length} points · this lot ${lo.toFixed(1)}–${hi.toFixed(1)} ft NAVD88${stag} — bare earth, not a survey`,5200);
+    /* A toast fades; the vintage is worth keeping on screen. If an OLDER collect is being served
+       while a newer one also covers the point, say so plainly — that's the case where a filled
+       pad reads several feet low and the numbers shouldn't be trusted for siting. */
+    if(src){
+      const newer = (src.others||[]).filter(o=>o.year && src.year && o.year>src.year);
+      const stale = newer.length>0;
+      elevBadge(yr ? `${yr} LiDAR · ${rtag}` : `${rtag} source`, stale, src);
+    }
+  }
+}
+
+/* Small persistent chip on the map naming the elevation source. Cleared with the layer. */
+let _elevBadgeEl=null;
+function elevBadge(text, stale, src){
+  try{
+    if(!_elevBadgeEl){
+      _elevBadgeEl=document.createElement('div');
+      _elevBadgeEl.style.cssText='position:absolute;left:10px;bottom:10px;z-index:640;'
+        +'font:11px/1.35 var(--mono,monospace);padding:5px 9px;border-radius:6px;'
+        +'background:rgba(16,18,22,.86);color:#e8e6df;border:1px solid rgba(255,255,255,.18);'
+        +'pointer-events:none;max-width:260px';
+      map.getContainer().appendChild(_elevBadgeEl);
+    }
+    const alt=(src&&src.others||[]).map(o=>o.year||'?').join(', ');
+    _elevBadgeEl.style.borderColor = stale ? 'rgba(255,180,80,.75)' : 'rgba(255,255,255,.18)';
+    _elevBadgeEl.innerHTML = '⛭ ground elevation · '+text
+      + (stale ? '<br><span style="color:#ffb450">newer coverage exists ('+alt+') — a lot filled since may read low</span>' : '');
+    _elevBadgeEl.hidden=false;
+  }catch(e){}
+}
+function elevBadgeHide(){ if(_elevBadgeEl) _elevBadgeEl.hidden=true; }
+
+/* Render from the cached samples. Split out from the fetch so zooming can add or drop the
+   numeric labels without re-querying — at 150+ points the labels only make sense up close. */
+function drawElevationPoints(){
+  elevLayer.clearLayers();
+  if(!_elevPts.length) return;
+  const showLabels = map.getZoom() >= ELEV_LABEL_ZOOM;
+  for(const p of _elevPts){
+    L.circleMarker([p.lat,p.lng],{
+      radius: p.inner?4.5:3.5, color: p.inner?'#8a6a14':'#7c7c74', weight:1,
+      fillColor: p.inner?'#f5c451':'#cfcdc4', fillOpacity:1, interactive:false
+    }).addTo(elevLayer);
+    if(showLabels){
+      L.marker([p.lat,p.lng],{ interactive:false, keyboard:false,
+        icon:L.divIcon({ className:'elev-lbl'+(p.inner?'':' elev-lbl-out'),
+          html:p.ft.toFixed(2)+"&#39;", iconSize:[54,14], iconAnchor:[27,20] }) }).addTo(elevLayer);
+    }
+  }
+}
+map.on('zoomend', ()=>{ if(elevOn && _elevPts.length) drawElevationPoints(); });
+
+const btnElev=document.getElementById('btnElev');
+if(btnElev) btnElev.onclick=function(){
+  elevOn=!elevOn; this.classList.toggle('active',elevOn);
+  if(elevOn){ elevLayer.addTo(map); loadElevationGrid(); }
+  else { map.removeLayer(elevLayer); elevBadgeHide(); }
+};
+/* A new lookup invalidates the cached grid; re-sample if the layer is showing. */
+function resetElevationGrid(){
+  _elevKey=''; _elevPts=[]; try{ elevLayer.clearLayers(); elevBadgeHide(); }catch(e){}
+  if(elevOn) setTimeout(loadElevationGrid, 900);   // let the parcel outline land first
+}
+
 const btnFlood=document.getElementById('btnFlood');
 if(btnFlood) btnFlood.onclick=function(){
   floodOn=!floodOn; this.classList.toggle('active',floodOn);
@@ -13442,6 +13670,7 @@ async function runLookup(lat,lng,searchCtx){
   if(marker) map.removeLayer(marker);
   marker=L.circleMarker([lat,lng],{renderer:canvasRenderer,radius:6,color:'#ffb000',weight:2,fillColor:'#ffb000',fillOpacity:.9}).addTo(map);
   if(parcelLayer){ map.removeLayer(parcelLayer); parcelLayer=null; }
+  try{ resetElevationGrid(); }catch(e){}   // grid follows the parcel — stale points must not linger
   if(homeParcelLayer){ map.removeLayer(homeParcelLayer); homeParcelLayer=null; }
   clearNeighborNumbers(); _nbrCtx=null;
   clearEcNote();   // remove any 📝 EC note from a previous property
