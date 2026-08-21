@@ -4152,10 +4152,16 @@ function uiClickSuppressed(){ return Date.now() < _uiClickUntil; }
 const TAP_MAX_MOVE = 10;     // px of drift allowed
 const TAP_MAX_MS   = 300;    // ms the finger may stay down
 const EDGE_GUARD   = 24;     // px along each vertical edge that never counts as a tap
-let _touchOk = true, _tStart = null, _tMulti = false;
+/* _hasTouch stays false until a real touchstart is seen. The gate below is skipped entirely while
+   it's false, so a mouse-driven browser is never affected.
+   ⚠️ This flag is load-bearing: an earlier version consumed _touchOk after every accepted click
+   ("one lookup per touch"), which on desktop meant the FIRST click worked and every click after
+   was silently dead — nothing ever set it back to true, because no touch events fire there. */
+let _hasTouch = false, _touchOk = false, _tStart = null, _tMulti = false;
 (function installTapGate(){
   const el = map.getContainer();
   el.addEventListener('touchstart', ev => {
+    _hasTouch = true;
     if(ev.touches.length > 1){ _tMulti = true; _touchOk = false; return; }
     _tMulti = false;
     const t = ev.touches[0];
@@ -4177,16 +4183,21 @@ let _touchOk = true, _tStart = null, _tMulti = false;
   el.addEventListener('touchcancel', () => { _touchOk = false; _tStart = null; }, { passive:true });
 })();
 /* Any pan/zoom that actually moved the map also poisons the next ~350ms: the gesture's final
-   frame frequently arrives as a click. */
+   frame frequently arrives as a click.
+   The start value is deliberately a SHORT ceiling (4s) rather than an open-ended lock — if a
+   movestart ever fired without a matching moveend, an open-ended value would silently kill map
+   clicks until reload. 4s is longer than any real pan and self-heals if an event is dropped. */
 let _gestureUntil = 0;
-map.on('movestart zoomstart', () => { _gestureUntil = Date.now() + 100000; });
-map.on('moveend zoomend',     () => { _gestureUntil = Date.now() + 350; });
+map.on('movestart zoomstart', () => { _gestureUntil = Date.now() + 4000; });
+map.on('moveend zoomend',     () => { _gestureUntil = Date.now() + 350;  });
 
 map.on('click', e => {
   if(uiClickSuppressed()) return;          // replayed tap from an overlay pick — not a real map click
   if(Date.now() < _gestureUntil) return;   // tail end of a pan/pinch, not a tap
-  if(!_touchOk) return;                    // touch didn't look like a deliberate tap (mobile only)
-  _touchOk = false;                        // one lookup per touch; don't let a replay through
+  if(_hasTouch){                           // touch device: the tap must have looked deliberate
+    if(!_touchOk) return;
+    _touchOk = false;                      // one lookup per touch; don't let a replay through
+  }
   const um=document.getElementById('unitModal');
   if(um && um.classList.contains('show')) return;   // modal is open; the map is not the target
   newSearch(); runLookup(e.latlng.lat, e.latlng.lng);
@@ -4672,6 +4683,38 @@ async function queryLeeGroundElevation(parcelFeature){
    stricter construction standards. Purely a yes/no for whether the parcel is inside it. */
 const LEE_LIMWA_QUERY =
   "https://services2.arcgis.com/LvWGAAhHwbCJ2GMP/arcgis/rest/services/FIRM_LiMWA/FeatureServer/0/query";
+/* ---------- Lee County ESTIMATED Zone A BFE ----------
+   Zone A is FEMA's "approximate" designation: studied enough to be called a flood hazard area, but
+   no detailed hydraulics were run, so NO base flood elevation is published. That's a dead end for
+   permitting — you can't build to an elevation that doesn't exist — and it's why the card
+   otherwise says "none published for this zone" and stops.
+   Lee estimated them anyway: 121 curated polygons on their Accela/Forerunner service. The number
+   is embedded in the FLOODZONE string rather than a numeric field ("A-EL23 est" = Zone A,
+   estimated EL 23). PBSJComment records HOW each one was derived ("BFE from contours; spill-over
+   N/A because not ponding area"), which is exactly what a plans reviewer will ask about — so we
+   surface it rather than presenting a bare number.
+   ⚠️ This is a COUNTY ESTIMATE, not an adopted FEMA BFE. Labelled as such everywhere it appears. */
+const LEE_ZONEA_BFE_QUERY =
+  "https://gismapserver.leegov.com/gisserver910/rest/services/AccelaGIS/Forerunner_Parcels/MapServer/3/query";
+async function queryLeeEstZoneABfe(parcelFeature){
+  const rows = await _nfhlParcelQuery(LEE_ZONEA_BFE_QUERY, parcelFeature, 'FLOODZONE,PBSJComment');
+  if(!rows || !rows.length){ window.__leeZoneADebug={count:0}; return null; }
+  const seen=new Set(), out=[];
+  for(const a of rows){
+    const raw=(a.FLOODZONE||'').trim();
+    if(!raw) continue;
+    // "A-EL23 est" / "A-EL 8.5 est" → 23 / 8.5. No match = a polygon with no usable estimate.
+    const m=/EL\s*([\d]+(?:\.[\d]+)?)/i.exec(raw);
+    const el = m ? Number(m[1]) : null;
+    const key = raw;
+    if(seen.has(key)) continue; seen.add(key);
+    out.push({ el, raw, note:(a.PBSJComment||'').trim()||null });
+  }
+  const withEl = out.filter(o=>o.el!=null);
+  window.__leeZoneADebug={ raw:rows.length, parsed:out.length, withEl:withEl.length, rows:out };
+  return withEl.length ? withEl.sort((x,y)=>x.el-y.el) : null;
+}
+
 async function queryLeeLimwa(parcelFeature){
   const rows = await _nfhlParcelQuery(LEE_LIMWA_QUERY, parcelFeature, 'OBJECTID');
   return (rows && rows.length) ? true : false;
@@ -14830,7 +14873,7 @@ async function runLookup(lat,lng,searchCtx){
            the slow hazards.fema.gov host, and the county's adopted panel is the better citation
            anyway. Same reasoning drives the county-first routing inside the zone and BFE queries. */
         const skipFemaPanels = isLee || isCollier;
-        const [pz, bl, lomas, panels, leePanels, gElev, leeLimwa, colLimwa, colPanels] = await Promise.all([
+        const [pz, bl, lomas, panels, leePanels, gElev, leeLimwa, leeZoneA, colLimwa, colPanels] = await Promise.all([
           queryFloodZonesOnParcel(pFeat, countyName),
           queryBfeLinesOnParcel(pFeat, countyName),
           queryLomasOnParcel(pFeat),
@@ -14841,6 +14884,7 @@ async function runLookup(lat,lng,searchCtx){
           isLee ? queryLeeGroundElevation(pFeat).then(r => r || queryGroundElevation(pFeat))
                 : queryGroundElevation(pFeat),
           isLee ? queryLeeLimwa(pFeat)             : Promise.resolve(false),
+          isLee ? queryLeeEstZoneABfe(pFeat)       : Promise.resolve(null),
           isCollier ? queryCollierLimwa(pFeat)     : Promise.resolve(false),
           isCollier ? queryCollierPanels(pFeat)    : Promise.resolve(null)
         ]);
@@ -14900,6 +14944,15 @@ async function runLookup(lat,lng,searchCtx){
             if(window.__exportData) window.__exportData.floodJurisdiction = cities.join(', ');
           }
         }
+        /* --- Lee: ESTIMATED Zone A BFE. Only meaningful where FEMA published nothing, which is
+               the whole point of Zone A — so this is the row that turns a dead end into a number. */
+        if(leeZoneA && leeZoneA.length){
+          const vals = leeZoneA.map(z=>'<b>'+esc(z.el)+' ft</b>').join(' &nbsp;·&nbsp; ');
+          html += `<div class="field"><div class="k">Est. BFE (Zone A)</div><div class="v">${vals} <span class="muted" style="font-size:11px">county estimate</span></div></div>`;
+          const notes = [...new Set(leeZoneA.map(z=>z.note).filter(Boolean))];
+          html += `<div class="note">Zone A carries <b>no FEMA-published base flood elevation</b> — it's an approximate-study area, so the effective FIRM gives no number to build to. Lee County has estimated one${leeZoneA.length>1?' for each of the areas touching this lot':''}. Treat it as the county's working figure, <b>not</b> an adopted BFE: the floodplain administrator decides what governs, and a site-specific engineering determination may be required for permitting.${notes.length?' <span class="muted">Method: '+esc(notes.join(' · '))+'</span>':''}</div>`;
+          if(window.__exportData) window.__exportData.estZoneABfe = leeZoneA.map(z=>z.el).join(', ');
+        }
         /* --- Existing ground elevation, and how far it sits below the BFE --- */
         if(gElev){
           const spread = (gElev.max - gElev.min).toFixed(1);
@@ -14907,14 +14960,23 @@ async function runLookup(lat,lng,searchCtx){
           const shown = flat ? `${esc(gElev.med)} ft`
                              : `${esc(gElev.min)}–${esc(gElev.max)} ft <span class="muted">(avg ${esc(gElev.med)})</span>`;
           html += `<div class="field"><div class="k">Ground elev.</div><div class="v">${shown} <span class="muted" style="font-size:11px">NAVD88 · ${esc(gElev.src||'LiDAR')}</span></div></div>`;
-          // If we have a BFE to compare against, show the gap — that's the practical number.
-          const refBfe = (bl && bl.elevs.length) ? bl.elevs[bl.elevs.length-1]
-                       : (pz && pz.length && pz[0].bfe!=null) ? pz[0].bfe : null;
+          /* Reference BFE for the comparison below, best source first: a mapped BFE line, then a
+             polygon's static BFE, then Lee's Zone A ESTIMATE. The estimate is last on purpose —
+             it's the county's working figure, not an adopted number — but in Zone A it's the only
+             thing there is, and "4 ft below grade" is more use than a blank row. */
+          let refBfe = (bl && bl.elevs.length) ? bl.elevs[bl.elevs.length-1]
+                     : (pz && pz.length && pz[0].bfe!=null) ? pz[0].bfe : null;
+          let refEst = false;
+          if(refBfe==null && leeZoneA && leeZoneA.length){
+            refBfe = leeZoneA[leeZoneA.length-1].el;   // highest estimate = conservative
+            refEst = true;
+          }
           if(refBfe!=null){
             const gap = Math.round((refBfe - gElev.med)*10)/10;
-            html += fieldRow('Avg grade vs BFE', gap>0
-              ? `<b>${esc(gap)} ft below</b> the ${esc(refBfe)} ft BFE`
-              : `${esc(Math.abs(gap))} ft above the ${esc(refBfe)} ft BFE`);
+            const tag = refEst ? ' <span class="muted">(est.)</span>' : '';
+            html += fieldRow(refEst ? 'Avg grade vs est. BFE' : 'Avg grade vs BFE', gap>0
+              ? `<b>${esc(gap)} ft below</b> the ${esc(refBfe)} ft BFE${tag}`
+              : `${esc(Math.abs(gap))} ft above the ${esc(refBfe)} ft BFE${tag}`);
           }
           const detail = gElev.n ? `${esc(gElev.n)} LiDAR points on this lot`
                        : (gElev.method==='centroid point only'
