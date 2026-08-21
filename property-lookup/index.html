@@ -2070,8 +2070,12 @@ const COUNTY_FLOOD_LIVE = {
 const LEE_FIRM_PANEL_QUERY =
   "https://gismapserver.leegov.com/gisserver910/rest/services/OpenData/OpenData_FloodHazard/MapServer/1/query";
 async function queryLeePanelJurisdiction(parcelFeature){
+  /* 1.8 s ceiling rather than the shared 3 s: this is Lee's ON-PREM gismapserver, consistently the
+     slowest host the app touches, and it only supplies the jurisdiction badge. It sits in the
+     parcel Promise.all, so when it stalls it alone sets the batch's duration — measured pinning a
+     batch at 3005 ms (the old ceiling exactly) while every other query in it finished under 150 ms. */
   const rows = await _nfhlParcelQuery(LEE_FIRM_PANEL_QUERY, parcelFeature,
-    'FIRM_PAN,PANEL_TYP,EFF_DATE,CITY,COMMUNITY,SUFFIX');
+    'FIRM_PAN,PANEL_TYP,EFF_DATE,CITY,COMMUNITY,SUFFIX', 1800);
   if(!rows || !rows.length){ window.__leePanelDebug={count:0}; return null; }
   const seen=new Set(), out=[];
   for(const a of rows){
@@ -13141,7 +13145,14 @@ map.on('moveend zoomend', ()=>{
   if(!nbrNumOn || !_nbrCtx) return;
   clearTimeout(_nbrTimer);
   if(_nbrRepaintFromCache()) return;          // covered by what we already have — done, no network
-  _nbrTimer=setTimeout(()=>{ showNeighborNumbers(_nbrCtx.hn, _nbrCtx.lat, _nbrCtx.lng, _nbrCtx.pid); }, NBR_DEBOUNCE);
+  _nbrTimer=setTimeout(()=>{
+    /* Re-check INSIDE the timer. The guard above ran when the gesture ended, but a new lookup can
+       clear _nbrCtx during the 120–260 ms debounce — and then this fired against null and threw
+       "Cannot read properties of null (reading 'hn')". Re-reading it here is the whole fix. */
+    const c = _nbrCtx;
+    if(!nbrNumOn || !c) return;
+    showNeighborNumbers(c.hn, c.lat, c.lng, c.pid);
+  }, NBR_DEBOUNCE);
 });
 
 /* Build the hover-tooltip markup for a parcel from {site, pid, owner} (any may be missing). */
@@ -13377,7 +13388,7 @@ function renderLookupTiming(timings){
     +   src.map(row).join('')
     +   `<div style="border-top:1px dashed rgba(255,255,255,.14);margin:5px 0"></div>`
     +   mile.map(mrow).join('')
-    +   `<div style="color:var(--faint);font-size:9.5px;margin-top:6px;line-height:1.4">Sources run in parallel — total ≈ the slowest source, not the sum. <span style="color:var(--signal)">Highlighted</span> = slowest; <span style="color:var(--warn)">red ✕</span> = failed/timed out.</div>`
+    +   `<div style="color:var(--faint);font-size:9.5px;margin-top:6px;line-height:1.4">Sources run in parallel, so the total is neither their sum nor the slowest one — some run in sequence after others resolve. A total well above every source means time went somewhere untimed. <span style="color:var(--signal)">Highlighted</span> = slowest; <span style="color:var(--warn)">red ✕</span> = failed/timed out.</div>`
     + `</div>`
     + `</div>`;
   const btn=document.getElementById('timingToggle');
@@ -13398,6 +13409,10 @@ async function runLookup(lat,lng,searchCtx){
   const _timed = (label,p)=>{ const t0=performance.now();
     return p.then(v=>{ _timings.push({label, ms:Math.round(performance.now()-t0), err:!!(v&&v.__err)}); return v; },
                   e=>{ _timings.push({label, ms:Math.round(performance.now()-t0), err:true}); throw e; }); };
+  // Same thing with the arguments reversed, for promises that are more readable wrapped at the end
+  // (a long IIFE) than at the start.
+  const _timedTail = (p,label)=>_timed(label,p);
+
   window.__parcelMeta=null;   // cleared each lookup; set when a parcel renders
   window.__addrPtMeta=null;   // cleared each lookup; set by the Collier address-point resolver
   // Collected for the "Export to Excel" feature (imports into the Estimate sheet).
@@ -13490,8 +13505,11 @@ async function runLookup(lat,lng,searchCtx){
   const pWind        = _timed('wind (ASCE 7-22)', queryWindSpeed(lat, lng)).catch(()=>null);   // live ASCE 7-22 Risk Cat II; null → county fallback
   const pCountyFlood = (countyName && COUNTY_FLOOD_LIVE[norm(countyName)])
                          ? _timed('county flood', queryCountyFlood(lat, lng, countyName)).catch(()=>null) : Promise.resolve(null);
+  /* The authoritative parcel source in a wired county — and one of the slower calls in the
+     lookup — so it belongs in the timing panel like every other feed. _timedTail() wraps a
+     promise that's already been built (the IIFE above) rather than at call time. */
   const pCountyLive  = (!liveSource.url && countyName && COUNTY_LIVE[norm(countyName)])
-    ? (async()=>{
+    ? _timedTail((async()=>{
         const reg=COUNTY_LIVE[norm(countyName)]; const cands=reg.urls||(reg.url?[reg.url]:[]);
         let res=null, meta=null, err=null;
         // Resolve the authoritative NG911 point ONCE for this address (county-level, not per-candidate).
@@ -13659,7 +13677,7 @@ async function runLookup(lat,lng,searchCtx){
           }
         }
         return {res, meta, err};
-      })().catch(()=>({res:null,meta:null,err:'lookup failed'}))
+      })().catch(()=>({res:null,meta:null,err:'lookup failed'})), 'county live feed')
     : Promise.resolve(null);
 
   // Pre-fire the Permits/Elevation-Certificate query NOW, in parallel with everything else.
@@ -13673,7 +13691,7 @@ async function runLookup(lat,lng,searchCtx){
   const _ecLayerUrl = (_docCfgEC && _docCfgEC.ecLayer) ? _docCfgEC.ecLayer
                      : (countyName ? COUNTY_EC_LAYERS[norm(countyName)] : null);
   const pEC = _ecLayerUrl
-    ? queryEC(_ecLayerUrl, lat, lng).catch(e=>({err:e.message}))
+    ? _timed('elevation certificate', queryEC(_ecLayerUrl, lat, lng).catch(e=>({err:e.message})))
     : Promise.resolve(null);
   // Neighborhood 📝 notes are wired AFTER the main cards render (see the EC card below) so their
   // extra query never competes with the search's own requests to the same GIS host.
@@ -13758,8 +13776,15 @@ async function runLookup(lat,lng,searchCtx){
   if(_rollAnchor){
     const _dd=(_rollAnchor.lat-lat)*(_rollAnchor.lat-lat)+(_rollAnchor.lng-lng)*(_rollAnchor.lng-lng);
     if(_dd > 1e-9){   // ~> a few metres: only re-fetch when the point actually moved
-      const _reParcel = await arcQueryRetry(EP.parcel, _rollAnchor.lat, _rollAnchor.lng, '*', true, PARCEL_TIMEOUT, 3, true)
-        .catch(()=>null);
+      /* Re-anchored roll fetch. Like the primary roll this only supplies SUPPLEMENTARY fields
+         (living area / year built) on top of an already-authoritative live-feed parcel — so it
+         does not deserve the patient 3-pass budget the primary roll gets in an unwired county.
+         Measured stalling an entire lookup by 11 s on a cold statewide point-in-polygon while
+         everything downstream sat waiting for a couple of extra attributes. One pass, 4 s cap:
+         it fills the fields when the roll is warm and gets out of the way when it isn't. */
+      const _reParcel = await _timed('parcel roll re-anchor',
+        arcQueryRetry(EP.parcel, _rollAnchor.lat, _rollAnchor.lng, '*', true, 4000, 1, false))
+          .catch(()=>null);
       if(_reParcel && !_reParcel.__err && _reParcel.features && _reParcel.features[0]){
         // Trust the re-anchored record only if its house number matches the authoritative address
         // (guards against the roll itself being sparse at the centroid).
@@ -14889,21 +14914,32 @@ async function runLookup(lat,lng,searchCtx){
            the slow hazards.fema.gov host, and the county's adopted panel is the better citation
            anyway. Same reasoning drives the county-first routing inside the zone and BFE queries. */
         const skipFemaPanels = isLee || isCollier;
+        /* Timed as ONE panel row, not ten: they run in parallel, so ten near-identical entries
+           would bury the genuinely slow feeds. The label carries the slowest member's name, which
+           is the part you actually need when the batch is the bottleneck. */
+        const _fpT0 = performance.now();
+        const _fpMark = (name,p) => { const t=performance.now();
+          return Promise.resolve(p).then(v=>{ _fpParts.push({name, ms:Math.round(performance.now()-t)}); return v; },
+                                        e=>{ _fpParts.push({name:name+' ✗', ms:Math.round(performance.now()-t)}); throw e; }); };
+        const _fpParts = [];
         const [pz, bl, lomas, panels, leePanels, gElev, leeLimwa, leeZoneA, colLimwa, colPanels] = await Promise.all([
-          queryFloodZonesOnParcel(pFeat, countyName),
-          queryBfeLinesOnParcel(pFeat, countyName),
-          queryLomasOnParcel(pFeat),
-          skipFemaPanels ? Promise.resolve(null) : queryFirmPanelOnParcel(pFeat, countyName),
-          isLee ? queryLeePanelJurisdiction(pFeat) : Promise.resolve(null),
+          _fpMark('zones',        queryFloodZonesOnParcel(pFeat, countyName)),
+          _fpMark('BFE lines',    queryBfeLinesOnParcel(pFeat, countyName)),
+          _fpMark('LOMA',         queryLomasOnParcel(pFeat)),
+          _fpMark('FIRM panel',   skipFemaPanels ? Promise.resolve(null) : queryFirmPanelOnParcel(pFeat, countyName)),
+          _fpMark('jurisdiction', isLee ? queryLeePanelJurisdiction(pFeat) : Promise.resolve(null)),
           /* Ground elevation: Lee's own 2018 LiDAR is a 50-ft point grid — finer than 3DEP's ~10 m
              raster — so prefer it there and fall back to 3DEP everywhere else. */
-          isLee ? queryLeeGroundElevation(pFeat).then(r => r || queryGroundElevation(pFeat))
-                : queryGroundElevation(pFeat),
-          isLee ? queryLeeLimwa(pFeat)             : Promise.resolve(false),
-          isLee ? queryLeeEstZoneABfe(pFeat)       : Promise.resolve(null),
-          isCollier ? queryCollierLimwa(pFeat)     : Promise.resolve(false),
-          isCollier ? queryCollierPanels(pFeat)    : Promise.resolve(null)
+          _fpMark('ground elev',  isLee ? queryLeeGroundElevation(pFeat).then(r => r || queryGroundElevation(pFeat))
+                                        : queryGroundElevation(pFeat)),
+          _fpMark('LiMWA',        isLee ? queryLeeLimwa(pFeat) : Promise.resolve(false)),
+          _fpMark('est Zone A',   isLee ? queryLeeEstZoneABfe(pFeat) : Promise.resolve(null)),
+          _fpMark('LiMWA (Col)',  isCollier ? queryCollierLimwa(pFeat) : Promise.resolve(false)),
+          _fpMark('panels (Col)', isCollier ? queryCollierPanels(pFeat) : Promise.resolve(null))
         ]);
+        { const worst = _fpParts.slice().sort((a,b)=>b.ms-a.ms)[0];
+          _timings.push({ label:'flood · whole parcel (10 queries'+(worst?', slowest: '+worst.name:'')+')',
+                          ms:Math.round(performance.now()-_fpT0) }); }
         if(myId!==runId) return;
         if(pz && pz.length>1){
           const lbls = pz.map(m=>{
@@ -15046,9 +15082,19 @@ async function runLookup(lat,lng,searchCtx){
   // --- LIVE county DFIRM cross-check (e.g. Collier's adopted 2024 map) vs the effective NFHL above ---
   const cfReg = countyName ? COUNTY_FLOOD_LIVE[norm(countyName)] : null;
   if(cfReg){
-    const cf = await pCountyFlood;
+    /* This is a CROSS-CHECK, not a primary source — the effective NFHL zone is already rendered
+       above, and this only adds a "matches FEMA / differs" badge. But it was a bare await, so a
+       slow county host gated the whole rest of the card: measured at 3124 ms of a 4403 ms lookup
+       on Lee's on-prem gismapserver, i.e. ~70% of the total spent on a badge.
+       Now it gets a 1.5 s ceiling. If it wins, the badge renders exactly as before; if it doesn't,
+       the card carries on and says the cross-check was skipped rather than silently omitting it. */
+    const CF_CEILING = 1500;
+    const cf = await Promise.race([ pCountyFlood, new Promise(res=>setTimeout(()=>res({__slow:true}), CF_CEILING)) ]);
     if(myId!==runId) return;
-    if(cf && cf.zone!=null && String(cf.zone).trim()!==''){
+    if(cf && cf.__slow){
+      html += `<div class="note">County DFIRM cross-check skipped — ${esc(cfReg.label)} didn't respond in time. The FEMA zone above still stands; re-run the lookup if you need the county comparison.</div>`;
+    }
+    else if(cf && cf.zone!=null && String(cf.zone).trim()!==''){
       const cz=String(cf.zone).trim();
       let flag;
       if(nfhlZone==null || nfhlZone==='—')      flag=`<span class="badge unk">county only</span>`;
