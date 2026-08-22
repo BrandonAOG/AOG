@@ -4580,8 +4580,31 @@ async function identifyElevationSource(lat,lng){
 
 async function loadElevationGrid(){
   // Anchor on the parcel outline when we have one, else a fixed box around the marker.
+  /* STALE-PARCEL GUARD: `marker` is recreated at the current lookup point on every search
+     (see runLookup), but `parcelLayer` can linger from a PREVIOUS search when a new parcel
+     outline hasn't drawn yet — or fails to draw at all. Sampling that stale outline puts the whole
+     elevation grid miles away (observed: a Cape Coral search sampled an Estero parcel ~16 mi off,
+     because the outline was left over). So: accept the parcel bounds ONLY if they sit near the
+     current marker; otherwise fall back to a box around the marker, which is always current. */
   let b=null;
-  try{ if(parcelLayer && parcelLayer.getBounds && parcelLayer.getBounds().isValid()) b=parcelLayer.getBounds(); }catch(e){}
+  try{
+    if(parcelLayer && parcelLayer.getBounds && parcelLayer.getBounds().isValid()){
+      const pb=parcelLayer.getBounds();
+      if(marker){
+        const m=marker.getLatLng();
+        // A real parcel contains or sits right next to its lookup point. If the marker is more than
+        // ~500 m outside the parcel's bounds, the outline is stale/wrong — don't trust it.
+        const padDeg=0.005; // ~500 m
+        const inside = m.lat >= pb.getSouth()-padDeg && m.lat <= pb.getNorth()+padDeg &&
+                       m.lng >= pb.getWest()-padDeg && m.lng <= pb.getEast()+padDeg;
+        if(inside) b=pb;
+        else { window.__elevStale={ marker:[m.lat,m.lng],
+               parcel:[pb.getSouth(),pb.getNorth(),pb.getWest(),pb.getEast()] }; }
+      } else {
+        b=pb;
+      }
+    }
+  }catch(e){}
   if(!b && marker){ b = marker.getLatLng().toBounds(70); }
   if(!b){ mapToast('Search an address first — elevation samples follow the parcel.',2600); return; }
 
@@ -4606,27 +4629,36 @@ async function loadElevationGrid(){
   }
 
   mapToast('Sampling ground elevation…',1800);
-  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 12000);
-  let js=null;
-  try{
-    const body=new URLSearchParams({
-      geometry:JSON.stringify({ points:pts, spatialReference:{wkid:4326} }),
-      geometryType:'esriGeometryMultipoint',
-      /* NO mosaicRule. 3DEP overlaps many rasters at any point (current 1 m LiDAR, older county
-         collects, coarse pyramid overviews), so pinning the finest source looked worthwhile — but
-         the service REJECTS esriMosaicAttribute outright ("Invalid or missing input parameters",
-         HTTP 400), which silently killed the whole layer. And it was unnecessary: an
-         esriMosaicLockRaster test pinned to FL_Southwest_B_2018 returned a value identical to no
-         rule at all, i.e. the default already resolves to the finest available source.
-         Instead of forcing it, we ASK what answered — see identifyElevationSource() below. */
-      returnFirstValueOnly:'true',
-      interpolation:'RSP_BilinearInterpolation',
-      f:'json'
-    });
-    const r=await fetch(DEP3_SAMPLES,{method:'POST',body,signal:ctrl.signal});
-    clearTimeout(t);
-    js=await r.json();
-  }catch(err){ clearTimeout(t); }
+  const body=new URLSearchParams({
+    geometry:JSON.stringify({ points:pts, spatialReference:{wkid:4326} }),
+    geometryType:'esriGeometryMultipoint',
+    /* NO mosaicRule. 3DEP overlaps many rasters at any point (current 1 m LiDAR, older county
+       collects, coarse pyramid overviews), so pinning the finest source looked worthwhile — but
+       the service REJECTS esriMosaicAttribute outright ("Invalid or missing input parameters",
+       HTTP 400), which silently killed the whole layer. And it was unnecessary: an
+       esriMosaicLockRaster test pinned to FL_Southwest_B_2018 returned a value identical to no
+       rule at all, i.e. the default already resolves to the finest available source.
+       Instead of forcing it, we ASK what answered — see identifyElevationSource() below. */
+    returnFirstValueOnly:'true',
+    interpolation:'RSP_BilinearInterpolation',
+    f:'json'
+  });
+  /* One retry on a transient empty/failed response. 3DEP occasionally returns an empty set or times
+     out on a cold multipoint request even though the same points succeed a beat later (this was the
+     intermittent "Elevation samples unavailable here" — the service, not the grid). A single 600 ms-
+     delayed retry clears virtually all of them without turning a genuine no-coverage spot into a
+     long hang. */
+  const _fetchSamples = async ()=>{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 12000);
+    try{ const r=await fetch(DEP3_SAMPLES,{method:'POST',body,signal:ctrl.signal});
+         clearTimeout(t); return await r.json(); }
+    catch(err){ clearTimeout(t); return null; }
+  };
+  let js=await _fetchSamples();
+  if(!js || js.error || !js.samples || !js.samples.length){
+    await new Promise(r=>setTimeout(r,600));
+    js=await _fetchSamples();
+  }
   _elevBusy=false;
 
   if(!js || js.error || !js.samples || !js.samples.length){
