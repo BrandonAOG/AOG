@@ -4578,12 +4578,15 @@ const elevLayer = L.layerGroup();
    Pyramid overviews (Ov_*) are the service's own downsampled tiles, not real collects — skipped. */
 async function identifyElevationSource(lat,lng){
   const g=encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}));
-  /* Fetch the catalog items, with retries. This call is as flaky as getSamples (same federal
-     server), and when it fails it returns NULL — which empties _elevCollects and hides the source
-     caret even on parcels that genuinely have multiple collects (observed on a Collier lot with 4).
-     So give it the same treatment as the sample fetch: up to 4 quick attempts before giving up. */
+  /* Two-tier source discovery, both capped at 3 s so neither can hang the workflow (USGS is
+     intermittently blocking these — see today's testing). PRIMARY: identify GET, which gives
+     collect NAMES + DATES so rows can be labelled by YEAR ("2018 · 1m"). FALLBACK: getSamples POST,
+     which lists each collect's rasterId + resolution but no year, so rows fall back to resolution
+     only ("1m"). Either way the elevation GRID itself (single-value getSamples) is unaffected; this
+     is only the compare-source picker, a nice-to-have that appears when either endpoint cooperates
+     and quietly hides when neither does. */
   const _tryIdentify = async ()=>{
-    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 5000);
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 3000);   // fail fast
     try{
       const r=await fetch(DEP3_ID+`?geometry=${g}&geometryType=esriGeometryPoint`
         +`&returnCatalogItems=true&returnGeometry=false&f=json`, {signal:ctrl.signal});
@@ -4598,26 +4601,51 @@ async function identifyElevationSource(lat,lng){
         .filter(a=>isFinite(a.px));
     }catch(e){ clearTimeout(t); return null; }
   };
+  const _trySamples = async ()=>{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 3000);   // fail fast
+    try{
+      const body=new URLSearchParams({
+        geometry:JSON.stringify({points:[[lng,lat]],spatialReference:{wkid:4326}}),
+        geometryType:'esriGeometryMultipoint', returnFirstValueOnly:'false', f:'json' });
+      const r=await fetch(DEP3_SAMPLES,{method:'POST',body,signal:ctrl.signal});
+      clearTimeout(t);
+      const j=await r.json();
+      const seen=Object.create(null), out=[];
+      for(const s of (j.samples||[])){
+        if(s.rasterId==null || seen[s.rasterId]) continue;
+        seen[s.rasterId]=1;
+        let px=Number(s.resolution);
+        if(isFinite(px) && px>0 && px<1) px=px*111320;   // degrees → metres
+        out.push({ name:null, oid:s.rasterId, px:isFinite(px)?px:null, ms:null });
+      }
+      return out.filter(o=>isFinite(o.px));
+    }catch(e){ clearTimeout(t); return null; }
+  };
+  /* Up to 3 rounds. Each round fires BOTH endpoints in parallel (identify for years, getSamples for
+     resolution) and waits at most 3 s; we stop the instant either returns data, preferring
+     identify's year-labelled result. Worst case ~9-10 s only when everything fails all three rounds
+     (e.g. USGS hard-blocking, as it does some days); a healthy service answers on round one in
+     ~1-3 s. The elevation GRID is independent of this — the picker is a nice-to-have on top. */
   let real=null;
-  for(let a=0; a<4; a++){
-    if(a>0) await new Promise(r=>setTimeout(r,350));
-    real=await _tryIdentify();
-    if(real && real.length) break;               // got collects → done
+  for(let round=0; round<3; round++){
+    if(round>0) await new Promise(r=>setTimeout(r,300));
+    const [idRes, smRes] = await Promise.all([ _tryIdentify(), _trySamples() ]);
+    real = (idRes && idRes.length) ? idRes : smRes;
+    if(real && real.length) break;               // got collects → stop retrying
   }
   try{
     if(!real || !real.length){ _elevCollects=[];
       try{ const car=document.getElementById('elevSrcCaret'); if(car) car.style.display='none'; }catch(e){}
       return null; }
     real.sort((a,b)=>a.px-b.px);               // finest first — that's what the mosaic serves
-    /* Publish the full collect list (finest→coarsest) for the badge's dataset toggles. Each entry
-       carries the catalog OID used to pin it, its resolution, and its year. */
-    _elevCollects = real.map(o=>({ oid:o.oid, name:o.name, px:o.px,
-      year:o.ms?new Date(o.ms).getUTCFullYear():null,
-      label:(o.ms?new Date(o.ms).getUTCFullYear():'?')+' · '+(o.px<10?(+o.px).toFixed(o.px<2?0:1):Math.round(o.px))+'m' }));
-    /* Show/hide the control-bar ▾ source caret HERE, the instant the collect list is known —
-       independent of whether the badge render path runs. (Bug found on a Collier parcel with 4
-       collects: the caret was gated behind a successful badge render, so a flaky identify or a
-       different render branch left it hidden even though comparable collects existed.) */
+    /* Label by YEAR when identify gave us a date, else resolution only (getSamples fallback). */
+    const pxTag=px=>(px<10?(+px).toFixed(px<2?0:1):Math.round(px))+'m';
+    _elevCollects = real.map(o=>{
+      const yr=o.ms?new Date(o.ms).getUTCFullYear():null;
+      return { oid:o.oid, name:o.name, px:o.px, year:yr,
+               label:(yr? yr+' · ' : '')+pxTag(o.px) };
+    });
+    /* Show/hide the control-bar ▾ source caret the instant the collect list is known. */
     try{ const car=document.getElementById('elevSrcCaret');
       if(car) car.style.display = (_elevCollects.length>1) ? '' : 'none'; }catch(e){}
     const best=real[0];
@@ -4674,11 +4702,15 @@ async function loadElevationGrid(){
   const key=[s,n,w,e].map(v=>v.toFixed(5)).join(',');
   if(key===_elevKey && _elevPts.length){
     drawElevationPoints();                       // cached grid — redraw instantly
-    /* But if the source list never populated (identify failed on the original load, or was never
-       reached), fire it now so the ▾ compare-source caret can still appear. Cheap, and only runs
-       when collects are actually missing. Skip while a collect is pinned — that path owns the list. */
-    if(_elevLockOid==null && (!_elevCollects || !_elevCollects.length)){
-      identifyElevationSource((pS+pN)/2, (pW+pE)/2);   // fire-and-forget; it updates the caret itself
+    /* Restore the ▾ compare-source caret on a cached redraw. Toggling the layer off hides the
+       caret but keeps _elevCollects, so on toggle-back-on we already know the collects — just
+       re-show the caret directly. If the list somehow never populated, fire identify to fill it. */
+    if(_elevLockOid==null){
+      if(_elevCollects && _elevCollects.length>1){
+        try{ const car=document.getElementById('elevSrcCaret'); if(car) car.style.display=''; }catch(e){}
+      } else if(!_elevCollects || !_elevCollects.length){
+        identifyElevationSource((pS+pN)/2, (pW+pE)/2);   // fire-and-forget; it updates the caret itself
+      }
     }
     return;
   }
@@ -4757,6 +4789,13 @@ async function loadElevationGrid(){
   if(!_ok(js)){
     mapToast('Elevation service did not respond - try again in a moment.',3000);
     window.__elevDebug={fail:(js&&js.error)||'no samples after retries + backup'};
+    /* Nothing loaded — pop the toggle back OFF so the lit button doesn't imply data is showing.
+       Clears the layer state too, so the next click is a clean fresh attempt. */
+    elevOn=false;
+    try{ const bE=document.getElementById('btnElev'); if(bE) bE.classList.remove('active');
+         const car=document.getElementById('elevSrcCaret'); if(car) car.style.display='none'; }catch(e){}
+    try{ map.removeLayer(elevLayer); }catch(e){}
+    elevBadgeHide();
     return;
   }
 
