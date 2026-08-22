@@ -1112,7 +1112,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
   </div>
   <button id="btnFlood" title="Shade FEMA flood-hazard zones (AE / AH / VE / X) plus BFE elevation contour lines — live NFHL. Zoom in to see it.">≋ Flood</button>
-  <button id="btnElev" title="Sample bare-earth ground elevation on a grid across the parcel and its immediate neighbours (USGS 3DEP, NAVD88). Search an address first.">⛭ Elevation heights</button>
+  <button id="btnElev" title="Sample bare-earth ground elevation on a grid across the parcel and its immediate neighbours (USGS 3DEP, NAVD88). Search an address first.">⛭ Elevation heights <span id="elevSrcCaret" class="bm-caret" style="display:none" title="Compare elevation source (which LiDAR collect)">▾</span></button>
   <div class="layers-pick">
     <button id="btnLayers" title="Property boundary overlays (city limits, parcels, zoning)">▦ Layers <span class="bm-caret">▾</span></button>
     <div id="layersMenu" class="basemap-menu" hidden>
@@ -4532,6 +4532,27 @@ let floodOn=false;
    at load and kills the entire script. Same host, spelled out. */
 const DEP3_SAMPLES = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/getSamples";
 const DEP3_ID      = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/identify";
+/* Esri's public WorldElevation coverage/extent layer (NO auth needed — only the VALUES service is
+   gated). Returns provenance for the elevation data at a point: ProductName (e.g. "3DEP_1m"),
+   PixelSize, VerticalDatum. Confirmed Aug 2026 that Cape Coral resolves to USGS 3DEP_1m / NAVD88 —
+   i.e. the same source we sample from nationalmap.gov, so this is a cross-check stamp, not a second
+   source. Date/accuracy fields exist but are a wide mosaic range / null sentinel (999), so we use
+   only the trustworthy three. Best-effort: any failure just omits the confirmation. */
+const ESRI_COVERAGE = "https://elevation.arcgis.com/arcgis/rest/services/WorldElevation/DataExtents/MapServer/1/query";
+async function esriElevCoverage(lat,lng){
+  try{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),4000);
+    const u=ESRI_COVERAGE+'?'+new URLSearchParams({
+      geometry:`${lng},${lat}`, geometryType:'esriGeometryPoint', inSR:'4326',
+      spatialRel:'esriSpatialRelIntersects', returnGeometry:'false', outFields:'ProductName,PixelSize,VerticalDatum,Source', f:'json' });
+    const r=await fetch(u,{signal:ctrl.signal}); clearTimeout(t);
+    const j=await r.json();
+    const a=(j.features&&j.features[0]&&j.features[0].attributes)||null;
+    if(!a) return null;
+    return { product:a.ProductName||null, px:(a.PixelSize!=null?Number(a.PixelSize):null),
+             datum:a.VerticalDatum||null, source:a.Source||null };
+  }catch(e){ return null; }
+}
 const ELEV_M_TO_FT = 3.28084;   // ditto — M_TO_FT is declared later
 /* Point counts. Measured against the service: 49 pts → 731 ms, 100 → 2148 ms, 196 → 2046 ms,
    400 → 1550 ms. The time is ALL round-trip; the point count is essentially free. So sample
@@ -4545,6 +4566,8 @@ const ELEV_PAD     = 0.55;     // extra extent beyond the parcel, as a fraction 
                                // so the neighbouring lots are sampled too
 const ELEV_LABEL_ZOOM = 18;    // below this, draw dots only — 150+ labels would be unreadable
 let elevOn=false, _elevKey='', _elevBusy=false, _elevPts=[];
+let _elevLockOid=null;      // catalog ObjectID to pin, or null for the default (finest) mosaic
+let _elevCollects=[];       // all real collects at the current parcel: [{oid,name,px,year,label}]
 const elevLayer = L.layerGroup();
 
 /* Which LiDAR collect actually answered, and when was it flown?
@@ -4555,27 +4578,54 @@ const elevLayer = L.layerGroup();
    Pyramid overviews (Ov_*) are the service's own downsampled tiles, not real collects — skipped. */
 async function identifyElevationSource(lat,lng){
   const g=encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}));
-  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 6000);
+  /* Fetch the catalog items, with retries. This call is as flaky as getSamples (same federal
+     server), and when it fails it returns NULL — which empties _elevCollects and hides the source
+     caret even on parcels that genuinely have multiple collects (observed on a Collier lot with 4).
+     So give it the same treatment as the sample fetch: up to 4 quick attempts before giving up. */
+  const _tryIdentify = async ()=>{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 5000);
+    try{
+      const r=await fetch(DEP3_ID+`?geometry=${g}&geometryType=esriGeometryPoint`
+        +`&returnCatalogItems=true&returnGeometry=false&f=json`, {signal:ctrl.signal});
+      clearTimeout(t);
+      const j=await r.json();
+      const feats=(j.catalogItems&&j.catalogItems.features)||[];
+      return feats.map(f=>f.attributes||{})
+        .filter(a=>a.Name && !/^Ov_/i.test(a.Name))
+        .map(a=>({ name:a.Name, oid:a.OBJECTID,
+                   px:Number(a.PixelSize||a.LowPS)||null,
+                   ms:Number(a.AcquisitionDate||a.Date)||null }))
+        .filter(a=>isFinite(a.px));
+    }catch(e){ clearTimeout(t); return null; }
+  };
+  let real=null;
+  for(let a=0; a<4; a++){
+    if(a>0) await new Promise(r=>setTimeout(r,350));
+    real=await _tryIdentify();
+    if(real && real.length) break;               // got collects → done
+  }
   try{
-    const r=await fetch(DEP3_ID+`?geometry=${g}&geometryType=esriGeometryPoint`
-      +`&returnCatalogItems=true&returnGeometry=false&f=json`, {signal:ctrl.signal});
-    clearTimeout(t);
-    const j=await r.json();
-    const feats=(j.catalogItems&&j.catalogItems.features)||[];
-    const real=feats.map(f=>f.attributes||{})
-      .filter(a=>a.Name && !/^Ov_/i.test(a.Name))
-      .map(a=>({ name:a.Name,
-                 px:Number(a.PixelSize||a.LowPS)||null,
-                 ms:Number(a.AcquisitionDate||a.Date)||null }))
-      .filter(a=>isFinite(a.px));
-    if(!real.length) return null;
+    if(!real || !real.length){ _elevCollects=[];
+      try{ const car=document.getElementById('elevSrcCaret'); if(car) car.style.display='none'; }catch(e){}
+      return null; }
     real.sort((a,b)=>a.px-b.px);               // finest first — that's what the mosaic serves
+    /* Publish the full collect list (finest→coarsest) for the badge's dataset toggles. Each entry
+       carries the catalog OID used to pin it, its resolution, and its year. */
+    _elevCollects = real.map(o=>({ oid:o.oid, name:o.name, px:o.px,
+      year:o.ms?new Date(o.ms).getUTCFullYear():null,
+      label:(o.ms?new Date(o.ms).getUTCFullYear():'?')+' · '+(o.px<10?(+o.px).toFixed(o.px<2?0:1):Math.round(o.px))+'m' }));
+    /* Show/hide the control-bar ▾ source caret HERE, the instant the collect list is known —
+       independent of whether the badge render path runs. (Bug found on a Collier parcel with 4
+       collects: the caret was gated behind a successful badge render, so a flaky identify or a
+       different render branch left it hidden even though comparable collects existed.) */
+    try{ const car=document.getElementById('elevSrcCaret');
+      if(car) car.style.display = (_elevCollects.length>1) ? '' : 'none'; }catch(e){}
     const best=real[0];
     best.year = best.ms ? new Date(best.ms).getUTCFullYear() : null;
     best.others = real.slice(1).map(o=>({ name:o.name, px:o.px,
                     year:o.ms?new Date(o.ms).getUTCFullYear():null }));
     return best;
-  }catch(e){ clearTimeout(t); return null; }
+  }catch(e){ return null; }
 }
 
 async function loadElevationGrid(){
@@ -4622,7 +4672,16 @@ async function loadElevationGrid(){
   const padLat=(pN-pS)*ELEV_PAD, padLng=(pE-pW)*ELEV_PAD;
   const s=pS-padLat, n=pN+padLat, w=pW-padLng, e=pE+padLng;
   const key=[s,n,w,e].map(v=>v.toFixed(5)).join(',');
-  if(key===_elevKey && _elevPts.length){ drawElevationPoints(); return; }  // cached — just redraw
+  if(key===_elevKey && _elevPts.length){
+    drawElevationPoints();                       // cached grid — redraw instantly
+    /* But if the source list never populated (identify failed on the original load, or was never
+       reached), fire it now so the ▾ compare-source caret can still appear. Cheap, and only runs
+       when collects are actually missing. Skip while a collect is pinned — that path owns the list. */
+    if(_elevLockOid==null && (!_elevCollects || !_elevCollects.length)){
+      identifyElevationSource((pS+pN)/2, (pW+pE)/2);   // fire-and-forget; it updates the caret itself
+    }
+    return;
+  }
   if(_elevBusy) return;
   _elevBusy=true;
 
@@ -4639,20 +4698,21 @@ async function loadElevationGrid(){
   }
 
   mapToast('Sampling ground elevation…',1800);
-  const body=new URLSearchParams({
+  /* mosaicRule: normally omitted, so 3DEP serves its default (finest available source). When the
+     user picks a specific collect via the badge toggles, _elevLockOid holds that collect's
+     catalog ObjectID and we pin to it with esriMosaicLockRaster — verified Aug 2026 to return that
+     exact dataset's values (2018 1 m vs 2020 10 m differ ~0.5 ft at the same point). */
+  const _bodyObj={
     geometry:JSON.stringify({ points:pts, spatialReference:{wkid:4326} }),
     geometryType:'esriGeometryMultipoint',
-    /* NO mosaicRule. 3DEP overlaps many rasters at any point (current 1 m LiDAR, older county
-       collects, coarse pyramid overviews), so pinning the finest source looked worthwhile — but
-       the service REJECTS esriMosaicAttribute outright ("Invalid or missing input parameters",
-       HTTP 400), which silently killed the whole layer. And it was unnecessary: an
-       esriMosaicLockRaster test pinned to FL_Southwest_B_2018 returned a value identical to no
-       rule at all, i.e. the default already resolves to the finest available source.
-       Instead of forcing it, we ASK what answered — see identifyElevationSource() below. */
     returnFirstValueOnly:'true',
     interpolation:'RSP_BilinearInterpolation',
     f:'json'
-  });
+  };
+  if(_elevLockOid!=null){
+    _bodyObj.mosaicRule=JSON.stringify({mosaicMethod:'esriMosaicLockRaster',lockRasterIds:[_elevLockOid]});
+  }
+  const body=new URLSearchParams(_bodyObj);
   /* Retry + FALLBACK. The failure mode is transient: 3DEP (a federal server under variable load)
      intermittently returns an empty set or times out, while the same request succeeds moments
      later. Try the primary USGS getSamples up to 10 times with SHORT gaps (Option B: 10 chances
@@ -4718,10 +4778,20 @@ async function loadElevationGrid(){
   const inner=_elevPts.filter(p=>p.inner).map(p=>p.ft);
   const res=(js.samples[0]||{}).resolution;
 
-  // Ask which collect answered — one extra call, at the centre of the sampled area.
-  const src = await identifyElevationSource((pS+pN)/2, (pW+pE)/2);
+  // On the default (Auto) load, ask which collect answered — this also populates _elevCollects for
+  // the toggle chips. When a specific collect is PINNED, we already know it, so skip the extra call
+  // and label straight from the pinned entry.
+  let src, cov=null;
+  if(_elevLockOid==null){
+    src = await identifyElevationSource((pS+pN)/2, (pW+pE)/2);
+    cov = await esriElevCoverage((pS+pN)/2, (pW+pE)/2);
+    if(cov) window.__elevCoverage=cov;
+  } else {
+    const pinned=(_elevCollects||[]).find(c=>c.oid===_elevLockOid);
+    src = pinned ? { year:pinned.year, px:pinned.px, name:pinned.name, others:[] } : null;
+  }
 
-  window.__elevDebug={ n:vals.length, inner:inner.length,
+  window.__elevDebug={ n:vals.length, inner:inner.length, lockOid:_elevLockOid,
     min:Math.min(...vals), max:Math.max(...vals),
     parcelMin:inner.length?Math.min(...inner):null, parcelMax:inner.length?Math.max(...inner):null,
     resolutionMetres:res, source:src };
@@ -4729,40 +4799,109 @@ async function loadElevationGrid(){
   if(inner.length){
     const lo=Math.min(...inner), hi=Math.max(...inner);
     const yr  = src&&src.year ? String(src.year) : null;
-    const rtag = isFinite(res) ? `${(+res).toFixed(res<10?1:0)} m` : '';
-    const stag = yr ? ` · ${yr} LiDAR${rtag?' ('+rtag+')':''}` : (rtag?` · ${rtag} source`:'');
+    const rtag = isFinite(res) ? `${(+res).toFixed(res<10?1:0)} m` : (src&&src.px?`${src.px<10?(+src.px).toFixed(src.px<2?0:1):Math.round(src.px)} m`:'');
+    const pinTag = _elevLockOid!=null ? ' · pinned' : '';
+    const stag = yr ? ` · ${yr} LiDAR${rtag?' ('+rtag+')':''}${pinTag}` : (rtag?` · ${rtag} source${pinTag}`:'');
     mapToast(`${vals.length} points · this lot ${lo.toFixed(1)}–${hi.toFixed(1)} ft NAVD88${stag} — bare earth, not a survey`,5200);
     /* A toast fades; the vintage is worth keeping on screen. If an OLDER collect is being served
        while a newer one also covers the point, say so plainly — that's the case where a filled
        pad reads several feet low and the numbers shouldn't be trusted for siting. */
     if(src){
-      const newer = (src.others||[]).filter(o=>o.year && src.year && o.year>src.year);
+      /* Warn about a newer collect ONLY if it's also at least as fine as the one being served.
+         3DEP overlaps a 1 m LiDAR flight with coarse 10 m / 30 m REGIONAL passes that often carry
+         LATER dates — but those aren't better data, so flagging them as "newer coverage" cried wolf
+         on every 1 m lot (observed: a 2018 1 m source warned about 10 m/30 m 2020 passes). A newer
+         collect only matters for a possible post-survey fill if its resolution rivals the served
+         source (px <= served px, with a small tolerance). */
+      const servedPx = isFinite(res) ? +res : (src.px!=null?src.px:1);
+      const newer = (src.others||[]).filter(o=>
+        o.year && src.year && o.year>src.year &&
+        o.px!=null && isFinite(o.px) && o.px <= servedPx*1.5);
       const stale = newer.length>0;
-      elevBadge(yr ? `${yr} LiDAR · ${rtag}` : `${rtag} source`, stale, src);
+      const alt2 = newer.map(o=>o.year).join(', ');
+      elevBadge(yr ? `${yr} LiDAR · ${rtag}` : `${rtag} source`, stale, src, cov, alt2);
     }
   }
 }
 
 /* Small persistent chip on the map naming the elevation source. Cleared with the layer. */
 let _elevBadgeEl=null;
-function elevBadge(text, stale, src){
+function elevBadge(text, stale, src, cov, newerYears){
   try{
     if(!_elevBadgeEl){
       _elevBadgeEl=document.createElement('div');
-      _elevBadgeEl.style.cssText='position:absolute;left:10px;bottom:10px;z-index:640;'
+      _elevBadgeEl.style.cssText='position:absolute;left:10px;bottom:68px;z-index:640;'
         +'font:11px/1.35 var(--mono,monospace);padding:5px 9px;border-radius:6px;'
         +'background:rgba(16,18,22,.86);color:#e8e6df;border:1px solid rgba(255,255,255,.18);'
-        +'pointer-events:none;max-width:260px';
+        +'pointer-events:auto;max-width:280px';   // auto so the toggle chips are clickable
       map.getContainer().appendChild(_elevBadgeEl);
     }
-    const alt=(src&&src.others||[]).map(o=>o.year||'?').join(', ');
+    const alt = newerYears || '';
     _elevBadgeEl.style.borderColor = stale ? 'rgba(255,180,80,.75)' : 'rgba(255,255,255,.18)';
+    /* Authoritative confirmation from Esri's public coverage layer, when it agrees this is 3DEP.
+       Purely a "verified source" stamp — same USGS data, cross-confirmed provenance. */
+    let confirm='';
+    if(cov && (cov.product || cov.datum)){
+      const bits=[];
+      if(cov.product) bits.push(cov.product.replace(/_/g,' '));
+      if(cov.px!=null && isFinite(cov.px)) bits.push(cov.px+' m');
+      if(cov.datum) bits.push(cov.datum);
+      confirm = '<br><span style="color:#87c98a">✓ '+bits.join(' · ')+' (USGS, verified)</span>';
+    }
     _elevBadgeEl.innerHTML = '⛭ ground elevation · '+text
-      + (stale ? '<br><span style="color:#ffb450">newer coverage exists ('+alt+') — a lot filled since may read low</span>' : '');
+      + (stale ? '<br><span style="color:#ffb450">newer coverage exists ('+alt+') — a lot filled since may read low</span>' : '')
+      + confirm;
     _elevBadgeEl.hidden=false;
+    /* Show the ▾ source caret on the control-bar Elevation button whenever this parcel has more than
+       one collect to compare; hide it otherwise. The caret (not the badge) opens the picker. */
+    try{ const car=document.getElementById('elevSrcCaret');
+      if(car) car.style.display = (_elevCollects && _elevCollects.length>1) ? '' : 'none'; }catch(e){}
   }catch(e){}
 }
-function elevBadgeHide(){ if(_elevBadgeEl) _elevBadgeEl.hidden=true; }
+function elevBadgeHide(){ if(_elevBadgeEl) _elevBadgeEl.hidden=true; closeElevSourceMenu(); }
+
+/* Dropdown menu of elevation collects, styled to match the basemap picker. Built fresh each open
+   from _elevCollects so it always reflects the current parcel. Picking a row pins that collect and
+   re-samples; picking Auto returns to the default finest mosaic. */
+let _elevMenuEl=null;
+function closeElevSourceMenu(){ if(_elevMenuEl) _elevMenuEl.hidden=true; }
+function openElevSourceMenu(anchorEl){
+  if(!_elevMenuEl){
+    _elevMenuEl=document.createElement('div');
+    _elevMenuEl.className='basemap-menu';          // reuse the basemap menu's CSS for an exact match
+    _elevMenuEl.style.zIndex='1300';
+    document.body.appendChild(_elevMenuEl);
+    document.addEventListener('click', ()=>closeElevSourceMenu(), true);
+  }
+  // Build rows: Auto first, then each collect finest→coarsest.
+  const row=(label,sub,oid,active)=>{
+    const b=document.createElement('button');
+    b.className=active?'active':'';
+    b.innerHTML = label + (sub?' <span style="opacity:.6;font-size:10px">'+sub+'</span>':'');
+    b.onclick=(e)=>{ e.stopPropagation();
+      const want = oid;
+      closeElevSourceMenu();
+      if(want===_elevLockOid) return;              // already showing this one
+      _elevLockOid=want; _elevKey='';              // bypass cache, force fresh pinned sample
+      loadElevationGrid();
+    };
+    return b;
+  };
+  _elevMenuEl.innerHTML='';
+  _elevMenuEl.appendChild(row('Auto', '(finest available)', null, _elevLockOid==null));
+  _elevCollects.forEach(c=>{
+    const fine = c.px<=1.0001;
+    _elevMenuEl.appendChild(row(c.label, fine?'high-res LiDAR':'regional', c.oid, _elevLockOid===c.oid));
+  });
+  // Position the fixed popup just above the trigger (same approach as the basemap menu).
+  _elevMenuEl.hidden=false;
+  const r=anchorEl.getBoundingClientRect();
+  const mh=_elevMenuEl.offsetHeight||160, mw=_elevMenuEl.offsetWidth||170;
+  let top=r.top-mh-6; if(top<8) top=r.bottom+6;
+  let left=r.left; if(left+mw>window.innerWidth-8) left=window.innerWidth-8-mw;
+  _elevMenuEl.style.top=top+'px';
+  _elevMenuEl.style.left=left+'px';
+}
 
 /* Render from the cached samples. Split out from the fetch so zooming can add or drop the
    numeric labels without re-querying — at 150+ points the labels only make sense up close. */
@@ -4785,14 +4924,24 @@ function drawElevationPoints(){
 map.on('zoomend', ()=>{ if(elevOn && _elevPts.length) drawElevationPoints(); });
 
 const btnElev=document.getElementById('btnElev');
-if(btnElev) btnElev.onclick=function(){
+if(btnElev) btnElev.onclick=function(ev){
+  // Clicking the ▾ caret opens the source picker instead of toggling the layer.
+  if(ev && ev.target && ev.target.id==='elevSrcCaret'){
+    ev.stopPropagation();
+    if(_elevMenuEl && !_elevMenuEl.hidden) closeElevSourceMenu();
+    else openElevSourceMenu(btnElev);
+    return;
+  }
   elevOn=!elevOn; this.classList.toggle('active',elevOn);
   if(elevOn){ elevLayer.addTo(map); loadElevationGrid(); }
-  else { map.removeLayer(elevLayer); elevBadgeHide(); }
+  else { map.removeLayer(elevLayer); elevBadgeHide();
+    const car=document.getElementById('elevSrcCaret'); if(car) car.style.display='none'; }
 };
 /* A new lookup invalidates the cached grid; re-sample if the layer is showing. */
 function resetElevationGrid(){
-  _elevKey=''; _elevPts=[]; try{ elevLayer.clearLayers(); elevBadgeHide(); }catch(e){}
+  _elevKey=''; _elevPts=[]; _elevLockOid=null; _elevCollects=[];   // new parcel → back to Auto
+  try{ elevLayer.clearLayers(); elevBadgeHide();
+    const car=document.getElementById('elevSrcCaret'); if(car) car.style.display='none'; }catch(e){}
   if(!elevOn) return;
   /* Don't sample on a blind timer — the parcel outline may not have landed yet, and sampling early
      grabs the PREVIOUS search's stale parcel (observed: a new search sampled 5.3 km away). Instead
