@@ -4643,27 +4643,31 @@ async function loadElevationGrid(){
     interpolation:'RSP_BilinearInterpolation',
     f:'json'
   });
-  /* One retry on a transient empty/failed response. 3DEP occasionally returns an empty set or times
-     out on a cold multipoint request even though the same points succeed a beat later (this was the
-     intermittent "Elevation samples unavailable here" — the service, not the grid). A single 600 ms-
-     delayed retry clears virtually all of them without turning a genuine no-coverage spot into a
-     long hang. */
+  /* Retry with backoff. The ONLY failure mode here is transient: 3DEP (a federal server under
+     variable load) intermittently returns an empty set or times out, while the exact same request
+     succeeds moments later — verified live (single points, and the full 121-point grid, all return
+     cleanly on retry; staleness and coverage were both ruled out). So try up to 3 times with
+     growing pauses before surfacing the error. Each attempt gets a fresh 12 s window. */
   const _fetchSamples = async ()=>{
     const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 12000);
     try{ const r=await fetch(DEP3_SAMPLES,{method:'POST',body,signal:ctrl.signal});
          clearTimeout(t); return await r.json(); }
     catch(err){ clearTimeout(t); return null; }
   };
-  let js=await _fetchSamples();
-  if(!js || js.error || !js.samples || !js.samples.length){
-    await new Promise(r=>setTimeout(r,600));
+  const _ok = j => j && !j.error && j.samples && j.samples.length;
+  let js=null;
+  const _delays=[0, 500, 1200];               // 3 attempts: immediate, +0.5 s, +1.2 s
+  for(let a=0; a<_delays.length; a++){
+    if(_delays[a]) await new Promise(r=>setTimeout(r,_delays[a]));
+    if(a>0) mapToast('Retrying elevation service…',1200);
     js=await _fetchSamples();
+    if(_ok(js)) break;
   }
   _elevBusy=false;
 
-  if(!js || js.error || !js.samples || !js.samples.length){
-    mapToast('Elevation samples unavailable here.',2600);
-    window.__elevDebug={fail:(js&&js.error)||'no samples'};
+  if(!_ok(js)){
+    mapToast('Elevation service didn\u2019t respond — try again in a moment.',3000);
+    window.__elevDebug={fail:(js&&js.error)||'no samples after retries'};
     return;
   }
 
