@@ -1590,7 +1590,20 @@ const COUNTY_LIVE = {
     // strings; Number()/fmtMoney handle the padding fine.
     "https://agis.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGIS_Web_Layers2022/MapServer/17/query"
   ]},
-  MANATEE : { label:"Manatee (SWFWMD/PA)", urls:[
+  MANATEE : { label:"Manatee County Property Appraiser", urls:[
+    /* Manatee PA's public "Parcel Search" layer (CAMA roll joined to parcel geometry). This is the
+       authoritative source and the only one of the three with OWNER — the county's public-services
+       portal (second below) deliberately omits ownership, and the SWFWMD regional service (third)
+       is a water-district copy.
+       Fields worth knowing: PAR_OWNER_NAME1/NAME2, PAR_MAIL_* (mailing address), SITUS_ADDRESS,
+       PARID, CAD_JUST_VALUE / CAD_JUST_LNDVAL, BLDG_R1_YRBUILT, BLDGS_SQFT_LIVING, PAR_ZONING,
+       PAR_SUBDIVISION, PAR_LEGAL1-3, SALE_DATE_LAST / SALE_PRICE_LAST, PERMIT1-3_* (recent
+       permits!), PAR_SWIMPOOL_FLAG, PAR_WATERFRT_FLAG.
+       ✅ CORS-open, verified Aug 2026.
+       The portal layer stays as failover: it carries EVACUATION_ZONE and the county's own ZONING
+       string, which the PA roll spells differently. */
+    "https://gis.manateepao.gov/arcgis/rest/services/Website/WebLayers/MapServer/0/query",
+    "https://www.mymanatee.org/gisits/rest/services/publicportal/publicportal/MapServer/0/query",
     "https://www25.swfwmd.state.fl.us/arcgiswmis/rest/services/r27/LocationInfo/MapServer/74/query"
   ]},
   SARASOTA: { label:"Sarasota (SWFWMD/PA)", urls:[
@@ -2069,6 +2082,12 @@ const COUNTY_FLOOD_LIVE = {
      Field auto-detection handles FLD_ZONE/ZONE_SUBTY as usual. */
   /* Charlotte's adopted FEMA_2022 (effective 12/15/2022) carries the full NFHL schema plus COBRA,
      Floodway and Panel. ✅ CORS-open (agis3, verified Aug 2026). */
+  /* Manatee publishes a proper NFHL-schema flood layer (STATIC_BFE, ZONE_SUBTY, SFHA_TF, DEPTH)
+     on its own open-data service — NOT to be confused with the FLOOD_ZONE text field pre-joined
+     onto their parcel layer, which is a comma-joined list with no elevation. ✅ CORS-open. */
+  MANATEE: { label:"Manatee County 100-year Flood Zones",
+    viewer:"https://www.mymanatee.org/departments/public_safety/emergency_management",
+    urls:[ "https://www.mymanatee.org/gisits/rest/services/opendata/Flood/MapServer/0/query" ]},
   /* Sarasota hosts a full FEMA stack on ags3.scgov.net — zones, BFE lines, LiMWA, panels, LOMCs,
      plus a county-run CommunityFloodZone model. ✅ CORS-open (verified Aug 2026). */
   SARASOTA: { label:"Sarasota County FEMA Flood Zone",
@@ -2157,6 +2176,16 @@ async function queryCountyFlood(lat,lng,countyName){
      permitBy - 'address' | 'strap' | 'permit'  (how that portal is searched)
 */
 const DOCS_CITY = {
+  BRADENTONBEACH: {
+    /* Anna Maria Island's cities hold their OWN elevation certificates — a county-list lookup will
+       miss them. Bradenton Beach publishes a plain list of every address it has a certificate for,
+       and emails electronic copies free of charge. Worth wiring because barrier-island lots are
+       exactly where an EC matters most. */
+    ecLayer: null,
+    ecMap:   "https://www.cityofbradentonbeach.com/243/Elevation-Certificates",
+    ecNote:  "Bradenton Beach keeps its own Elevation Certificates — separate from Manatee County's list. The page linked above lists every address the city holds a certificate for; the permit technician emails electronic copies free of charge. Many are scanned copies rather than originals.",
+    permitBy:"address"
+  },
   NAPLES: {
     // City of Naples is its own jurisdiction inside Collier County — separate permitting & flood portal.
     ecLayer: null,   // Naples EC lookup is via the Forerunner resident portal (not an ArcGIS layer)
@@ -2217,6 +2246,44 @@ const DOCS_CITY = {
   }
 };
 const DOCS_COUNTY = {
+  PINELLAS: {
+    /* The most complete EC layer wired here: 19,382 certificates storing the WHOLE FEMA form,
+       one field per box (A1…G10) — and uniquely, each Section C elevation pre-converted to both
+       datums (C2a_88/C2a_29, C2e_88/C2e_29 …).
+       Coverage measured Aug 2026, and it is uneven — the card is written around this:
+         C2A finished floor 95% · C2F lowest grade 92% · B9 BFE 93% · C2E machinery 64%
+         but the _88 converted columns only 34%, VERTICAL_DATUM 8%, FILE_NAME 19%.
+       So: values almost always, a document rarely, and a STATED DATUM almost never. Where the
+       datum is unknown the elevations still render (useful for judging a lot) but the card refuses
+       to subtract them from a BFE — ~0.9 ft between datums here is enough to matter on a pad. */
+    /* PRIMARY: the county's NEW hosted layer (AGOL org f5HgUpxURgEzTccH — same org as the parcel
+       layer) with the scanned certificates as REAL ArcGIS ATTACHMENTS. Discovered Aug 2026 by
+       tracing the county's own EC app: clicking a certificate fetched
+       .../Elevation_Certificates_New_Public/FeatureServer/0/{oid}/attachments/{id} — a direct PDF.
+       queryEC() already handles attachments end-to-end (hasAttachments check → /{oid}/attachments
+       listing → per-attachment links), so this layer gives one-click PDFs with no extra code. */
+    ecLayer: "https://services.arcgis.com/f5HgUpxURgEzTccH/arcgis/rest/services/Elevation_Certificates_New_Public/FeatureServer/0/query",
+    /* FALLBACK: the old on-prem MapServer (hasAttachments:false, FILE_NAME only). Kept because it
+       carries the full form-as-data (C2*_88 converted columns etc.) and may hold records the new
+       layer doesn't; used automatically if the primary errors or finds nothing at the point. */
+    ecLayerAlt: "https://egis.pinellas.gov/gis/rest/services/ElevationCertsApp/ElevationCertsApp/MapServer/0/query",
+    ecMap:   "https://floodmaps.pinellas.gov/pages/elevation-certificates",
+    ecNote:  "Pinellas serves its Elevation Certificates two ways and this card uses both: the county's new GIS layer attaches the scanned certificate directly (the PDF link above opens it), and the older layer publishes the full form as data — so surveyed elevations can appear even when no scan exists. Not every structure has a certificate, and older records often omit the vertical datum — confirm it on the document before using these figures for a permit. Public Works (727) 464-8962.",
+    permit:  "https://pinellas.gov/services/find-an-elevation-certificate/",
+    permitBy:"address"
+  },
+  MANATEE: {
+    /* Manatee publishes NO elevation-certificate GIS layer — verified by scanning all 424 layers
+       across the county's 20 service folders AND the Property Appraiser's CAMA services: not one
+       carries EC-style fields. What they DO publish beats Lee's situation though: a searchable
+       LIST of the certificates Flood staff hold, plus an online request form that emails the PDF.
+       So this is a link-out with a real destination rather than a dead end. */
+    ecLayer: null,
+    ecMap:   "https://www.mymanatee.org/services-and-amenities/service-listing/service-details/request-a-flood-elevation-determination---certificates",
+    ecNote:  "Manatee County has no public EC map layer. Check the county's list of certificates on file (linked above) — if the address is on it, the request form emails you the PDF. Records Management can also pull copies at (941) 748-4501 ext. 6888; the Floodplain Division is (941) 742-5871. Note the barrier-island cities keep their OWN records: Bradenton Beach, Holmes Beach, Anna Maria and the City of Bradenton each hold certificates separately, so an island address may not appear on the county list at all.",
+    permit:  "https://www.mymanatee.org/departments/building___development_services",
+    permitBy:"address"
+  },
   COLLIER: {
     // ✅ VERIFIED: Collier's Elevation Certificates point layer (Elevation_Certificates_view, layer
     //    36). Each point carries Certificate = a direct link to the scanned EC PDF (apps4.collier.gov),
@@ -2272,7 +2339,9 @@ const COUNTY_EC_LAYERS = {
   COLLIER: "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Elevation_Certificates_view/FeatureServer/36/query",
   // Charlotte's covers Punta Gorda too (city addresses appear on the county GIS map).
   CHARLOTTE: "https://agis3.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGISLayers/MapServer/13/query",
-  SARASOTA:  "https://ags3.scgov.net/server/rest/services/Hosted/FemaElevationCert/FeatureServer/0/query"
+  SARASOTA:  "https://ags3.scgov.net/server/rest/services/Hosted/FemaElevationCert/FeatureServer/0/query",
+  // New AGOL layer with scanned certificates as ArcGIS attachments (see PINELLAS docs config).
+  PINELLAS:  "https://services.arcgis.com/f5HgUpxURgEzTccH/arcgis/rest/services/Elevation_Certificates_New_Public/FeatureServer/0/query"
 };
 
 /* Resolve documents config: city first (by municipality), else county. */
@@ -4699,7 +4768,9 @@ const COUNTY_ZONE_LAYERS = {
   CHARLOTTE: { url:"https://agis3.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGISLayers/MapServer/135/query",
                label:"Charlotte County FEMA 2022" },
   SARASOTA:  { url:"https://ags3.scgov.net/server/rest/services/Hosted/FEMAFloodZone/FeatureServer/0/query",
-               label:"Sarasota County FEMA Flood Zone" }
+               label:"Sarasota County FEMA Flood Zone" },
+  MANATEE:   { url:"https://www.mymanatee.org/gisits/rest/services/opendata/Flood/MapServer/0/query",
+               label:"Manatee County 100-year Flood Zones" }
 };
 async function queryFloodZonesOnParcel(parcelFeature, countyName){
   // --- fast path: the county's own layer, when we have one ---
@@ -5028,11 +5099,24 @@ const M_TO_FT = 3.28084;
 async function queryGroundElevation(parcelFeature){
   const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
   if(!rings0 || !rings0.length) return null;
-  const rings = rings0.map(r=>r.map(p=>[+p[0].toFixed(6), +p[1].toFixed(6)]));
+  /* Outer ring only, thinned and rounded. computeStatisticsHistograms has to rasterise whatever
+     polygon it's handed; a 400-vertex parcel at 6 decimals is both a big request and slow work,
+     and the extra vertices change the min/max by nothing at a 1 m cell size. */
+  const rings = [ _thinRing(rings0[0], 40).map(p=>[+p[0].toFixed(5), +p[1].toFixed(5)]) ];
   const poly = JSON.stringify({ rings, spatialReference:{ wkid:4326 } });
   const r1 = v => Math.round(v*10)/10;
-  const grab = async (url, ms=FLOOD_TIMEOUT) => {
-    const c=new AbortController(); const t=setTimeout(()=>c.abort(), ms);
+  /* ⚠️ These two calls used to run back-to-back at FLOOD_TIMEOUT (9 s desktop / 14 s mobile) each.
+     When 3DEP was slow BOTH timed out in sequence — 9 + 9 = 18 s — and because this sits inside the
+     whole-parcel Promise.all, that one straggler set the render time for the entire flood card.
+     Now: a short shared budget, and the fallback only runs if there's budget LEFT. Worst case is
+     the budget, not double the budget. */
+  const BUDGET = PARCEL_EXTRA_TIMEOUT;          // 3 s desktop / 5 s mobile
+  const t0 = performance.now();
+  const left = () => BUDGET - (performance.now() - t0);
+  const grab = async (url, ms) => {
+    const cap = Math.min(ms==null?BUDGET:ms, Math.max(0, left()));
+    if(cap < 250) return null;                  // not enough time to be worth the round-trip
+    const c=new AbortController(); const t=setTimeout(()=>c.abort(), cap);
     try{ const r=await fetch(url,{signal:c.signal}); clearTimeout(t);
          const j=await r.json(); return j.error?null:j; }
     catch(e){ clearTimeout(t); return null; }
@@ -5040,15 +5124,16 @@ async function queryGroundElevation(parcelFeature){
   // --- preferred: statistics over the whole parcel polygon ---
   const sUrl = `${DEP3_BASE}/computeStatisticsHistograms?geometry=${encodeURIComponent(poly)}`
              + `&geometryType=esriGeometryPolygon&f=json`;
-  const st = await grab(sUrl);
+  const st = await grab(sUrl, BUDGET*0.7);      // leave ~30% for the centroid fallback
   const s = st && st.statistics && st.statistics[0];
   if(s && isFinite(s.min) && isFinite(s.max)){
     const res = { min:r1(s.min*M_TO_FT), max:r1(s.max*M_TO_FT), med:r1(s.mean*M_TO_FT),
                   src:'USGS 3DEP', method:'parcel statistics' };
-    window.__groundElevDebug={ ...res, rawMeters:{min:s.min,max:s.max,mean:s.mean} };
+    window.__groundElevDebug={ ...res, rawMeters:{min:s.min,max:s.max,mean:s.mean},
+                               ms:Math.round(performance.now()-t0) };
     return res;
   }
-  // --- fallback: single identify at the parcel centroid ---
+  // --- fallback: single identify at the parcel centroid (only if budget remains) ---
   let cx=0, cy=0, n=0;
   for(const p of rings[0]){ cx+=p[0]; cy+=p[1]; n++; }
   if(!n) return null;
@@ -5056,10 +5141,14 @@ async function queryGroundElevation(parcelFeature){
   const id = await grab(`${DEP3_BASE}/identify?geometry=${encodeURIComponent(pt)}`
                       + `&geometryType=esriGeometryPoint&returnGeometry=false&f=json`);
   const v = id && Number(id.value);
-  if(!isFinite(v)) { window.__groundElevDebug={fail:'both stats and identify failed'}; return null; }
+  if(!isFinite(v)) {
+    window.__groundElevDebug={fail:'stats and identify both failed or out of budget',
+                             ms:Math.round(performance.now()-t0)};
+    return null;
+  }
   const ft = r1(v*M_TO_FT);
   const res = { min:ft, max:ft, med:ft, src:'USGS 3DEP', method:'centroid point only' };
-  window.__groundElevDebug={ ...res, rawMeters:v };
+  window.__groundElevDebug={ ...res, rawMeters:v, ms:Math.round(performance.now()-t0) };
   return res;
 }
 
@@ -5091,6 +5180,31 @@ async function queryCollierPanels(parcelFeature){
   }
   window.__collierPanelDebug={count:out.length, rows:out};
   return out.length ? out : null;
+}
+
+/* ---------- COUNTY CONTOUR LINES (ground elevation, where a county publishes them) ----------
+   A few counties publish topographic contours at a tight enough interval to be useful on a single
+   lot. Manatee's are 1-FOOT — far finer than the 2-metre state DEP contours (≈6.5 ft apart, useless
+   when a whole parcel spans 4 ft) and finer than anything else found statewide.
+   This complements rather than replaces the 3DEP grid: contours show you WHERE the ground steps up
+   or down across the lot; the sampled points give you numbers at specific spots. */
+const COUNTY_CONTOURS = {
+  MANATEE: { url:"https://www.mymanatee.org/gisits/rest/services/NaturalResources/onefootcontours/MapServer/0/query",
+             field:"CONTOUR", interval:1, label:"Manatee County 1-ft contours" }
+};
+async function queryCountyContours(parcelFeature, countyName){
+  const reg = countyName ? COUNTY_CONTOURS[norm(countyName)] : null;
+  if(!reg) return null;
+  const rows = await _nfhlParcelQuery(reg.url, parcelFeature, reg.field);
+  if(!rows || !rows.length){ window.__contourDebug={src:reg.label,count:0}; return null; }
+  const seen=new Set();
+  for(const a of rows){
+    const v=Number(a[reg.field]);
+    if(isFinite(v) && v>-100 && v<500) seen.add(v);
+  }
+  const elevs=[...seen].sort((a,b)=>a-b);
+  window.__contourDebug={ src:reg.label, raw:rows.length, distinct:elevs.length, elevs };
+  return elevs.length ? { elevs, interval:reg.interval, label:reg.label } : null;
 }
 
 /* County-hosted BFE line layers. When a county publishes its own adopted DFIRM contours, prefer
@@ -7120,15 +7234,15 @@ function detectFields(fields){
   const find=(res)=>{ for(const re of res){ const m=F.find(f=>re.test(f.U)); if(m) return m.raw; } return null; };
   return {
     // /^NAME$/ (last) is Marion County's Ocala-hosted parcel layer; fully anchored so it can't false-match.
-    owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^OWN1$/,/^NAME1$/,/^ONAME$/,/^O_NAME/,/^OWNERLINE1$/,/OWN.*NAME/,/OWNER_?LINE_?1/,/^GRANTEE/,/^NAME$/]),
-    owner2:find([/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^OWN2$/,/^NAME2$/,/^OWNERLINE2$/,/OWNER_?LINE_?2/,/OWN.*NAME2/,/^OWNER_NAME_2$/]),
+    owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^OWN1$/,/^NAME1$/,/^ONAME$/,/^O_NAME/,/^OWNERLINE1$/,/OWN.*NAME/,/OWNER_?LINE_?1/,/^GRANTEE/,/^NAME$/,/^PAR_OWNER_NAME1$/]),
+    owner2:find([/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^OWN2$/,/^NAME2$/,/^OWNERLINE2$/,/OWNER_?LINE_?2/,/OWN.*NAME2/,/^OWNER_NAME_2$/,/^PAR_OWNER_NAME2$/]),
     pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/,/^PARCEL$/,/^HPARCEL$/]),
-    site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/]),
-    city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/,/^STR_CITY$/,/^SITE_MAILING_CITY$/,/^SCITY$/]),
-    jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/,/^ASSD_TOT$/,/^JV_HMSTD$/,/^CER_JUST_VALUE$/,/^TOTAL_MKT$/]),
-    land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/,/^JUST_LAND$/,/^CER_LAND_VALUE$/,/^LAND_MKT$/]),
+    site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/,/^SITUS_ADDRESS$/]),
+    city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/,/^STR_CITY$/,/^SITE_MAILING_CITY$/,/^SCITY$/,/^SITUS_POSTAL_CITY$/]),
+    jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/,/^ASSD_TOT$/,/^JV_HMSTD$/,/^CER_JUST_VALUE$/,/^TOTAL_MKT$/,/^CAD_JUST_VALUE$/]),
+    land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/,/^JUST_LAND$/,/^CER_LAND_VALUE$/,/^LAND_MKT$/,/^CAD_JUST_LNDVAL$/]),
     // /^ACT$/ is Hillsborough (Tampa-hosted) "Actual Year Built"; /^EFF$/ is its remodel year (fallback).
-    yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/,/^ACTUAL_YEAR_BUILT$/,/^STRUCT1_ACT_YEAR$/,/^AYB$/,/^EYB$/]),
+    yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/,/^ACTUAL_YEAR_BUILT$/,/^STRUCT1_ACT_YEAR$/,/^AYB$/,/^EYB$/,/^BLDG_R1_YRBUILT$/,/^BLDG_C1_YRBUILT$/]),
     // Marion's Ocala-hosted layer: RESUSESF = heated/living (residential use) sq ft — the TRUE living
     // area; USE_SF matches it. BLD1_SF / RESTOTSF are the larger TOTAL under-roof figure (incl.
     // garage/porch), so they must rank BELOW resusesf/use_sf or living area over-reports. Verified
@@ -7136,15 +7250,15 @@ function detectFields(fields){
     // /^STRUCT1_BASE_SQFT$/ is Hernando's heated/living area — verified base+aux(STRUCT1_AUX_SQFT)=
     // CER_STRU_SQFT (e.g. 9382+250=9632), so CER_STRU_SQFT is the inflated total incl. non-heated aux
     // area and is deliberately NOT added here (same over-reporting trap fixed for Marion's bld1_sf).
-    liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^RESUSESF$/,/^USE_SF$/,/^BLD1_SF$/,/^HEAT_?AR$/,/^STRUCT1_BASE_SQFT$/]),
-    saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/,/^AMT$/,/^SALE_AMOUNT$/,/^LSALE_PRICE$/,/^SALE_ADJ_VALUE$/]),
-    saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/,/^SALE_DATE$/,/^LSALE_DATE$/]),
-    mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/,/^ADD_1$/,/^MAILADD$/]),
-    mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/^O_CITY$/,/OWNER_?CITY/,/^ADD_3$/,/^MAILING_CITY$/]),
+    liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^RESUSESF$/,/^USE_SF$/,/^BLD1_SF$/,/^HEAT_?AR$/,/^STRUCT1_BASE_SQFT$/,/^BLDGS_SQFT_LIVING$/]),
+    saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/,/^AMT$/,/^SALE_AMOUNT$/,/^LSALE_PRICE$/,/^SALE_ADJ_VALUE$/,/^SALE_PRICE_LAST$/]),
+    saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/,/^SALE_DATE$/,/^LSALE_DATE$/,/^SALE_DATE_LAST$/]),
+    mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/,/^ADD_1$/,/^MAILADD$/,/^PAR_MAIL_ADDR1$/]),
+    mailCity: find([/^OWN_?CITY$/,/^MAIL_?CITY$/,/^O_CITY$/,/OWNER_?CITY/,/^ADD_3$/,/^MAILING_CITY$/,/^PAR_MAIL_CITY$/]),
     // /^DOR_CODE$/ (last) is Orange County's OCPA roll — the primary FL DOR use code (reads through the
     // DOR_USE table). Anchored so it can't match LAND_DOR_CODE / BLDG_DOR_CODE / DOR_CODE_OVR on the same roll.
-    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/,/^DOR_C$/,/^PROPERTY_USE$/,/^LAND_USE_DESC$/,/^LAND_USE_CODE$/,/^PARUSEDESC$/,/^CER_DOR_CODE$/,/^DOR_CODE$/]),
-    lotSqft: find([/^LND_?SQFOOT$/,/^LOT_?SQ/,/^LOTSQFT$/,/^LAND_?SQFT$/,/^SQFT_?LND$/,/^LOTSF$/,/^LOT_?SIZE$/,/LOTSQUARE/,/^LAND_?SQ/])
+    use:   find([/^USE_?CODE$/,/^USE_?CD$/,/^DOR_?UC$/,/^PA_?UC$/,/^LAND_?USE$/,/^USETYPE$/,/^USE_?DESC/,/^PROP_?USE/,/^PUSE1$/,/^DOR_?DESC/,/^PC$/,/^DOR_C$/,/^PROPERTY_USE$/,/^LAND_USE_DESC$/,/^LAND_USE_CODE$/,/^PARUSEDESC$/,/^CER_DOR_CODE$/,/^DOR_CODE$/,/^CAD_DOR_LUC_CODE$/]),
+    lotSqft: find([/^LND_?SQFOOT$/,/^LOT_?SQ/,/^LOTSQFT$/,/^LAND_?SQFT$/,/^SQFT_?LND$/,/^LOTSF$/,/^LOT_?SIZE$/,/LOTSQUARE/,/^LAND_?SQ/,/^LAND_SQFT_CAMA$/])
   };
 }
 /* Map common FL DOR use codes to readable labels (for "existing use"). Codes are strings like "01". */
@@ -7378,7 +7492,7 @@ function ecDetect(fields){
     permit: find([/PERMIT/,/RECORD.?N/,/CASE.?N/]),
     addr: find([/SITE.?ADDR/,/SITUS/,/^ADDRESS$/,/LOCATION/,/PHY.?ADDR/,/^STREETADDRESS$/,/STREET.?ADDR/,/^FULL_ADDRESS$/]),
     link: find([/URL$/,/HYPERLINK/,/DOC.?LINK/,/PDF/,/^LINK$/,/WEBLINK/,/DOC.?PATH/,/^CERTIFICATE$/,/CERT.?URL/,/^ECFILENAME$/,/EC.?FILE/,/FILE.?NAME/]),
-    bfe:  find([/^BFE$/,/BASE.?FLOOD/,/^STATIC.?BFE$/,/^BASEFLOODE$/]),
+    bfe:  find([/^BFE_CONVERTED_TO_NAVD88$/,/^BFE$/,/BASE.?FLOOD/,/^STATIC.?BFE$/,/^BASEFLOODE$/]),
     /* SURVEYED elevations off the certificate itself. Most counties publish an EC layer that is
        little more than a marker plus a PDF link — Charlotte publishes the Section C values as
        attributes, which is far more useful: these are the numbers a surveyor sealed, so they beat
@@ -7389,11 +7503,23 @@ function ecDetect(fields){
          ffe  — top of bottom floor / finished floor (EC item a)
        Named loosely because field naming varies: Charlotte uses both LOWESTGRAD (points) and
        Lowest_Adjacent_Grade (polygons) for the same value. */
-    lag:  find([/LOWEST.?ADJ/,/^LOWESTGRAD/,/^LAG$/]),
-    mach: find([/LOWEST.?MACH/,/MACHINERY/,/EQUIP.*ELEV/]),
-    ffe:  find([/FLOOR.?ELEV/,/^FLOORELEVA/,/^FFE$/,/BOTTOM.?FLOOR/]),
-    datum:find([/^DATUM$/,/V_DATUM/,/VERT.?DATUM/]),
-    panel:find([/^PANEL$/,/^PANELNUMBE/,/PANEL.?NUM/,/FIRM.?PAN/])
+    /* Pinellas stores the FULL FEMA form, one field per box (A1…G10), plus — uniquely — a set of
+       columns holding each Section C elevation already CONVERTED to both datums: C2a_88/C2a_29,
+       C2e_88/C2e_29 and so on. Those `_88` columns are unambiguous, so they're matched FIRST and
+       used in preference to the raw C2* value whenever present (≈34% of records).
+       Coverage measured Aug 2026 on 19,382 records: C2A 95%, C2F 92%, B9 93%, C2E 64%,
+       but VERTICAL_DATUM only 8% and FILE_NAME only 19% — so this layer is values-first, and the
+       datum is usually UNSTATED. See the render for how that's handled. */
+    lag:  find([/^C2F_88$/,/^C2H_88$/,/LOWEST.?ADJ/,/^LOWESTGRAD/,/^C2F_LAG_ELEV$/,/^LAG$/]),
+    mach: find([/^C2E_88$/,/LOWEST.?MACH/,/MACHINERY/,/EQUIP.*ELEV/]),
+    ffe:  find([/^C2A_88$/,/FLOOR.?ELEV/,/^FLOORELEVA/,/^C2A_TOP_BOTTOM_FLOOR_EL$/,/^FFE$/,/BOTTOM.?FLOOR/]),
+    /* The matching raw (as-certified) value, so we can fall back when the _88 column is empty and
+       say plainly which datum it's on — or that the record doesn't state one. */
+    lagRaw:  find([/^C2F_LAG_ELEV$/,/^C2H_LOWEST_ADJACENT_GRADE$/]),
+    machRaw: find([/^C2E_LOWEST_MACHINERY_EQ_EL$/]),
+    ffeRaw:  find([/^C2A_TOP_BOTTOM_FLOOR_EL$/]),
+    datum:find([/^VERTICAL_DATUM$/,/^DATUM$/,/V_DATUM/,/VERT.?DATUM/,/^B11_ELEVATION_DATUM$/]),
+    panel:find([/^PANEL$/,/^PANELNUMBE/,/^B4_PANEL_NUMBER$/,/PANEL.?NUM/,/FIRM.?PAN/])
   };
 }
 async function queryEC(ecLayerUrl, lat, lng){
@@ -7440,6 +7566,14 @@ async function queryEC(ecLayerUrl, lat, lng){
        expression: 'https://ags3.scgov.net/adv/FemaElevationCerts/' + $feature.ecfilename.
        EC_DOC_BASE maps a layer host/name to that prefix so the filename becomes a working link
        instead of being discarded for not looking like a URL. */
+    /* docFileName: when the layer stores only a bare filename and no known folder prefix exists
+       (EC_DOC_BASE has no entry for this host), the filename used to be silently DISCARDED here —
+       which is why Pinellas never showed a PDF: its layer has hasAttachments:false and stores the
+       scan's name in FILE_NAME (e.g. "EC_1234.pdf") with no public folder the county has ever
+       published. The county's own map app doesn't link the scan either — the document lives behind
+       Public Works / the FDEM statewide portal. So instead of dropping it, carry the filename out
+       so the card can say "a scanned document EXISTS — here's its name and where to request it." */
+    let docFileName=null;
     if(det.link){
       const u=pick(f0.attributes,det.link);
       if(u){
@@ -7448,6 +7582,7 @@ async function queryEC(ecLayerUrl, lat, lng){
         else if(/\.(pdf|tif{1,2}|jpe?g|png)$/i.test(raw)){
           const base=ecDocBase(root);
           if(base) docs.push({name:'Elevation Certificate (PDF)',url:base+encodeURIComponent(raw)});
+          else docFileName=raw;   // real scan exists, no public folder known — surface, don't drop
         }
       }
     }
@@ -7468,17 +7603,35 @@ async function queryEC(ecLayerUrl, lat, lng){
     /* Surveyed elevations, when the layer carries them. Guarded hard: a 0 is a legitimate elevation
        in coastal Florida, so test for null/blank rather than falsiness, and drop anything
        non-numeric or obviously a sentinel. */
+    /* A blank-ish string must NOT become 0 — Number(' ') is 0, and Pinellas stores ' ' in unused
+       boxes across 19k records. A literal 0.00 is also treated as "not recorded" here: it's the
+       default an empty form field digitises to, and a genuine 0.00 ft NAVD 88 elevation on a
+       Florida certificate is vanishingly rare compared with how often 0 means "blank". */
     const num=k=>{ if(!k) return null; const v=pick(f0.attributes,k);
-      if(v==null||v==='') return null; const n=Number(v);
-      return (isFinite(n) && n>-100 && n<500) ? n : null; };
-    const surveyed = { lag:num(det.lag), mach:num(det.mach), ffe:num(det.ffe),
-                       datum:det.datum?pick(f0.attributes,det.datum):null,
+      if(v==null) return null;
+      const str=String(v).trim(); if(str==='') return null;
+      const n=Number(str);
+      if(!isFinite(n) || n===0) return null;
+      return (n>-100 && n<500) ? n : null; };
+    /* Prefer the datum-normalised (_88) column; fall back to the as-certified value.
+       `conv` records WHICH we used, so the card can be explicit rather than implying every number
+       shares a datum. A blank-ish datum string (Pinellas stores ' ' / 'UNK' / 'OTH' on ~92% of
+       records) is treated as UNSTATED, not as a datum. */
+    const rawDatum = det.datum ? String(pick(f0.attributes,det.datum)||'').trim() : '';
+    const datumKnown = /NGVD|NAVD|\b(19)?(29|88|1929|1988)\b/i.test(rawDatum);
+    const pickPair = (conv,raw)=>{ const c=num(conv); if(c!=null) return {v:c, navd88:true};
+                                   const r=num(raw);  return r!=null ? {v:r, navd88:false} : null; };
+    const _lag=pickPair(det.lag,det.lagRaw), _mach=pickPair(det.mach,det.machRaw), _ffe=pickPair(det.ffe,det.ffeRaw);
+    const surveyed = { lag:_lag&&_lag.v, mach:_mach&&_mach.v, ffe:_ffe&&_ffe.v,
+                       conv:{ lag:!!(_lag&&_lag.navd88), mach:!!(_mach&&_mach.navd88), ffe:!!(_ffe&&_ffe.navd88) },
+                       datum: datumKnown ? rawDatum : null,
+                       datumStated: datumKnown,
                        panel:det.panel?pick(f0.attributes,det.panel):null };
     // EC point's own coordinates (WGS84, outSR=4326) — used to drop the 📝 note marker on the map.
     let ecLat=null, ecLng=null;
     try{ const g0=f0.geometry; const gx=g0?(g0.x!=null?g0.x:g0.X):null, gy=g0?(g0.y!=null?g0.y:g0.Y):null;
          if(gx!=null && gy!=null){ ecLng=Number(gx); ecLat=Number(gy); } }catch(e){}
-    return { features:feats, docs, det, oid, date, bfe, ecAddr, ecDistM, hasAtt, ecLat, ecLng, surveyed };
+    return { features:feats, docs, docFileName, det, oid, date, bfe, ecAddr, ecDistM, hasAtt, ecLat, ecLng, surveyed };
   }catch(e){ clearTimeout(t); return { err:e.message }; }
 }
 
@@ -11487,7 +11640,8 @@ async function queryFeedByAddress(feedUrl, ctx, lat, lng){
   const root=feedUrl.replace(/\/query$/i,'');
   const info=await getLayerInfo(feedUrl).catch(()=>null);
   const fields=(info&&info.fields)||[];
-  const addrField = ['SITEADDR','PHY_ADDR1','SITE_ADDR','SITUS','FULLADDR','ADDRESS'].find(f=>fields.includes(f));
+  // PRIMARY_ADDRESS: Manatee's public-portal parcel layer.
+  const addrField = ['SITEADDR','PHY_ADDR1','SITE_ADDR','SITUS','FULLADDR','ADDRESS','PRIMARY_ADDRESS'].find(f=>fields.includes(f));
   const numField  = ['SITENUMBER','SITE_NUM','HOUSE_NUM','STR_NUM'].find(f=>fields.includes(f));
   const stField   = ['SITESTREET','STREET','STREETNAME','ST_NAME'].find(f=>fields.includes(f));
   if(!addrField && !numField) return null;          // no usable address field (e.g. Collier lean layer)
@@ -11551,7 +11705,7 @@ function parcelAddrText(a){
   if(!a) return '';
   // Marion County's Ocala-hosted layer uses lowercase situs_1 (street) / situs_2 (city-state-zip);
   // JS keys are case-sensitive so these must be listed explicitly alongside the uppercase names.
-  const direct = a.SITEADDR||a.PHY_ADDR1||a.SITE_ADDR||a.SITUS||a.FULLADDR||a.ADDRESS||a.situs_1;
+  const direct = a.SITEADDR||a.PHY_ADDR1||a.SITE_ADDR||a.SITUS||a.FULLADDR||a.ADDRESS||a.PRIMARY_ADDRESS||a.situs_1;
   if(direct) return String(direct);
   const parts=[a.SITENUMBER,a.SITESTREET,a.SITEUNIT].filter(Boolean);
   if(parts.length) return parts.join(' ');
@@ -14052,8 +14206,22 @@ async function runLookup(lat,lng,searchCtx){
   // addresses, while the city's own portal link still renders separately below.
   const _ecLayerUrl = (_docCfgEC && _docCfgEC.ecLayer) ? _docCfgEC.ecLayer
                      : (countyName ? COUNTY_EC_LAYERS[norm(countyName)] : null);
+  /* Primary → fallback: if a county config names an ecLayerAlt (Pinellas: new AGOL attachment
+     layer first, old on-prem values layer second), retry the alt when the primary errors OR
+     finds no certificate at the point — the two layers don't hold identical record sets. */
+  const _ecLayerAlt = (_docCfgEC && _docCfgEC.ecLayerAlt) ? _docCfgEC.ecLayerAlt : null;
+  const _queryEcWithFallback = async (u1,u2,la,ln)=>{
+    let r1=null;
+    try{ r1=await queryEC(u1,la,ln); }catch(e){ r1={err:e.message}; }
+    const empty1 = !r1 || r1.err || !(r1.features&&r1.features.length);
+    if(!empty1 || !u2) return r1;
+    let r2=null;
+    try{ r2=await queryEC(u2,la,ln); }catch(e){ r2={err:e.message}; }
+    const good2 = r2 && !r2.err && r2.features && r2.features.length;
+    return good2 ? r2 : r1;   // fallback only replaces the result when it actually found something
+  };
   const pEC = _ecLayerUrl
-    ? _timed('elevation certificate', queryEC(_ecLayerUrl, lat, lng).catch(e=>({err:e.message})))
+    ? _timed('elevation certificate', _queryEcWithFallback(_ecLayerUrl,_ecLayerAlt,lat,lng).catch(e=>({err:e.message})))
     : Promise.resolve(null);
   // Neighborhood 📝 notes are wired AFTER the main cards render (see the EC card below) so their
   // extra query never competes with the search's own requests to the same GIS host.
@@ -15284,7 +15452,17 @@ async function runLookup(lat,lng,searchCtx){
           return Promise.resolve(p).then(v=>{ _fpParts.push({name, ms:Math.round(performance.now()-t)}); return v; },
                                         e=>{ _fpParts.push({name:name+' ✗', ms:Math.round(performance.now()-t)}); throw e; }); };
         const _fpParts = [];
-        const [pz, bl, lomas, panels, leePanels, gElev, leeLimwa, leeZoneA, colLimwa, colPanels] = await Promise.all([
+        /* HARD CEILING on the whole batch. Every member is fail-soft — a missing row is fine, a
+           hung card is not — but Promise.all still waits for the slowest, so one bad host set the
+           render time for everything. Measured: 3DEP stalled and the batch took 18 s while every
+           other query in it finished under 300 ms.
+           Each promise now races a timer that resolves to null, so a straggler contributes nothing
+           instead of holding the card. The batch can no longer exceed BATCH_CEILING. */
+        const BATCH_CEILING = PARCEL_EXTRA_TIMEOUT + 1200;   // 4.2 s desktop / 6.2 s mobile
+        let _fpCapped = 0;
+        const _cap = p => Promise.race([ Promise.resolve(p).catch(()=>null),
+                            new Promise(r=>setTimeout(()=>{ _fpCapped++; r(null); }, BATCH_CEILING)) ]);
+        const [pz, bl, lomas, panels, leePanels, gElev, leeLimwa, leeZoneA, colLimwa, colPanels, contours] = (await Promise.all([
           _fpMark('zones',        queryFloodZonesOnParcel(pFeat, countyName)),
           _fpMark('BFE lines',    queryBfeLinesOnParcel(pFeat, countyName)),
           _fpMark('LOMA',         queryLomasOnParcel(pFeat)),
@@ -15297,11 +15475,13 @@ async function runLookup(lat,lng,searchCtx){
           _fpMark('LiMWA',        isLee ? queryLeeLimwa(pFeat) : Promise.resolve(false)),
           _fpMark('est Zone A',   isLee ? queryLeeEstZoneABfe(pFeat) : Promise.resolve(null)),
           _fpMark('LiMWA (Col)',  isCollier ? queryCollierLimwa(pFeat) : Promise.resolve(false)),
-          _fpMark('panels (Col)', isCollier ? queryCollierPanels(pFeat) : Promise.resolve(null))
-        ]);
+          _fpMark('panels (Col)', isCollier ? queryCollierPanels(pFeat) : Promise.resolve(null)),
+          _fpMark('contours',     queryCountyContours(pFeat, countyName))
+        ].map(_cap)));
         { const worst = _fpParts.slice().sort((a,b)=>b.ms-a.ms)[0];
-          _timings.push({ label:'flood · whole parcel (10 queries'+(worst?', slowest: '+worst.name:'')+')',
-                          ms:Math.round(performance.now()-_fpT0) }); }
+          const capNote = _fpCapped ? ', '+_fpCapped+' capped' : '';
+          _timings.push({ label:'flood · whole parcel (11 queries'+(worst?', slowest: '+worst.name:'')+capNote+')',
+                          ms:Math.round(performance.now()-_fpT0), err:_fpCapped>0 }); }
         if(myId!==runId) return;
         if(pz && pz.length>1){
           const lbls = pz.map(m=>{
@@ -15366,6 +15546,18 @@ async function runLookup(lat,lng,searchCtx){
           const notes = [...new Set(leeZoneA.map(z=>z.note).filter(Boolean))];
           html += `<div class="note">Zone A carries <b>no FEMA-published base flood elevation</b> — it's an approximate-study area, so the effective FIRM gives no number to build to. Lee County has estimated one${leeZoneA.length>1?' for each of the areas touching this lot':''}. Treat it as the county's working figure, <b>not</b> an adopted BFE: the floodplain administrator decides what governs, and a site-specific engineering determination may be required for permitting.${notes.length?' <span class="muted">Method: '+esc(notes.join(' · '))+'</span>':''}</div>`;
           if(window.__exportData) window.__exportData.estZoneABfe = leeZoneA.map(z=>z.el).join(', ');
+        }
+        /* --- County topographic contours, where published at a useful interval --- */
+        if(contours && contours.elevs.length){
+          const lo=contours.elevs[0], hi=contours.elevs[contours.elevs.length-1];
+          const shown = (contours.elevs.length<=6)
+            ? contours.elevs.map(v=>esc(v)+"'").join(' · ')
+            : esc(lo)+"' – "+esc(hi)+"'";
+          html += `<div class="field"><div class="k">Contours on parcel</div><div class="v">${shown} <span class="muted" style="font-size:11px">${esc(contours.interval)}-ft interval · ${esc(contours.label)}</span></div></div>`;
+          html += `<div class="note">${contours.elevs.length===1
+            ? 'A single contour line crosses this lot, so the ground is close to level at that elevation.'
+            : 'The ground crosses '+esc(contours.elevs.length)+' contour lines across this parcel — roughly '+esc(Math.round((hi-lo)*10)/10)+' ft of fall from one side to the other.'} Contours show <b>where</b> the ground steps; the sampled elevations above give values at specific points. Neither is a survey.</div>`;
+          if(window.__exportData) window.__exportData.contours = contours.elevs.join(', ');
         }
         /* --- Existing ground elevation, and how far it sits below the BFE --- */
         if(gElev){
@@ -15742,45 +15934,47 @@ async function runLookup(lat,lng,searchCtx){
          LiDAR-derived figure elsewhere on this card for the same structure, so they're shown
          together and labelled by their EC item letter. */
       { const sv = ec.surveyed || {};
-        /* DATUM FLAG. An Elevation Certificate written on NGVD 29 cannot be compared directly with a
-           BFE on NAVD 88 — in Southwest Florida NGVD 29 readings run roughly 1.2 ft HIGHER for the
-           same ground. Subtracting one from the other silently produces a number that looks fine and
-           is wrong by more than a foot, which on a pad height is the difference between passing and
-           failing. So when the certificate says NGVD 29 we (a) mark the datum RED next to every
-           surveyed value and (b) SUPPRESS the equipment-vs-BFE comparison below rather than doing
-           cross-datum arithmetic. Only NGVD 29 is flagged; NAVD 88 and anything else render plain. */
-        /* Match NGVD explicitly, or a 29/1929 that's clearly a datum year — not a bare "29"
-           anywhere in the string, which would flag a panel number or community ID if this field
-           ever holds something unexpected. A value naming BOTH datums (e.g. "NAVD 88 converted
-           from NGVD 29") is already on NAVD 88, so it isn't flagged. */
+        const cv = sv.conv || {};
+        /* DATUM HANDLING, three cases — the numbers are only comparable if we know their reference:
+             1. value came from a _88 column  → NAVD 88, certain. Render plain.
+             2. no _88, but the record STATES a datum → render it; red if NGVD 29 (see below).
+             3. no _88 and no stated datum → say so. Pinellas leaves VERTICAL_DATUM blank on ~92%
+                of records, and NGVD 29 vs NAVD 88 differs by ~0.9 ft there — enough to matter on a
+                pad height. We show the elevation (still useful for siting) but refuse to compare it
+                against a BFE, because that subtraction would be unjustifiable. */
         const _dRaw = String(sv.datum||'');
         const isNGVD29 = /NGVD/i.test(_dRaw) || /\b(19)?29\b/.test(_dRaw);
         const _isNAVD88 = /NAVD/i.test(_dRaw) || /\b(19)?88\b/.test(_dRaw);
         const _flagDatum = isNGVD29 && !_isNAVD88;
-        const dtm = sv.datum
-          ? (_flagDatum
-              ? ' <span style="color:var(--warn);font-weight:600">'+esc(_dRaw)+'</span>'
-              : ' <span class="muted">'+esc(_dRaw)+'</span>')
-          : '';
-        if(sv.ffe!=null)  html += fieldRow('Finished floor (EC item a)', '<b>'+esc(String(sv.ffe))+' ft</b>'+dtm);
-        if(sv.mach!=null) html += fieldRow('Lowest machinery (EC item e)', '<b>'+esc(String(sv.mach))+' ft</b>'+dtm);
-        if(sv.lag!=null)  html += fieldRow('Lowest adjacent grade (EC item f)', '<b>'+esc(String(sv.lag))+' ft</b>'+dtm);
+        const _unstated = !sv.datumStated;
+        const tag = (isConv) => isConv
+          ? ' <span class="muted">NAVD 88</span>'
+          : (sv.datum
+              ? (_flagDatum ? ' <span style="color:var(--warn);font-weight:600">'+esc(_dRaw)+'</span>'
+                            : ' <span class="muted">'+esc(_dRaw)+'</span>')
+              : ' <span style="color:var(--warn);font-weight:600">datum not stated</span>');
+        if(sv.ffe!=null)  html += fieldRow('Finished floor (EC item a)', '<b>'+esc(String(sv.ffe))+' ft</b>'+tag(cv.ffe));
+        if(sv.mach!=null) html += fieldRow('Lowest machinery (EC item e)', '<b>'+esc(String(sv.mach))+' ft</b>'+tag(cv.mach));
+        if(sv.lag!=null)  html += fieldRow('Lowest adjacent grade (EC item f)', '<b>'+esc(String(sv.lag))+' ft</b>'+tag(cv.lag));
         if(sv.panel)      html += fieldRow('FIRM panel (per EC)', esc(String(sv.panel)));
 
-        if(_flagDatum){
-          html += `<div class="note warnbox"><b>This certificate is on NGVD 29.</b> The effective FIRM and the base flood elevation above are <b>NAVD 88</b> — the two datums are not interchangeable, and in this area an NGVD 29 reading is roughly <b>1.2 ft higher</b> than the same ground on NAVD 88. Convert before comparing anything here with a BFE or a required elevation, and have a surveyor restate the figures if they're going on a permit. The comparison this card would normally show has been left out rather than subtracting values on two different references.</div>`;
+        const anyVal = (sv.ffe!=null||sv.mach!=null||sv.lag!=null);
+        /* A value is only safe to compare when we KNOW it's NAVD 88 — either it came from a
+           converted column, or the record states NAVD 88 outright. */
+        const comparable = (isConv) => isConv || (sv.datumStated && _isNAVD88);
+
+        if(anyVal && _flagDatum){
+          html += `<div class="note warnbox"><b>This certificate is on NGVD 29.</b> The effective FIRM and the base flood elevation above are <b>NAVD 88</b> — the two are not interchangeable, and an NGVD 29 reading runs roughly a foot higher than the same ground on NAVD 88. Convert before comparing, and have a surveyor restate the figures if they're going on a permit. The comparison this card would normally show has been left out rather than subtracting values on two different references.</div>`;
+        } else if(anyVal && _unstated){
+          html += `<div class="note warnbox"><b>This record doesn't state a vertical datum.</b> The elevations above are as-certified, and on this layer most records don't say whether they're NGVD 29 or NAVD 88 — a difference of roughly a foot. They're still useful for judging the lot, but the card won't compare them against the BFE, because that subtraction would only be valid if both were on the same reference. Open the certificate itself to confirm the datum before using these numbers for a pad height.</div>`;
         }
 
-        if(!_flagDatum && (sv.mach!=null || sv.lag!=null)){
-          /* The practical number for this trade: how high existing equipment sits above grade, and
-             where the BFE falls relative to both. Item (e) is the line an EC uses for machinery
-             servicing the building — i.e. the standard a generator is judged against.
-             Gated on the datum matching — see the NGVD 29 note above. */
+        if(anyVal && !_flagDatum && !_unstated && (sv.mach!=null || sv.lag!=null)){
           const bits=[];
-          if(sv.mach!=null && sv.lag!=null)
+          if(sv.mach!=null && sv.lag!=null && comparable(cv.mach) && comparable(cv.lag))
             bits.push(`existing equipment sits <b>${esc((Math.round((sv.mach-sv.lag)*10)/10))} ft</b> above lowest grade`);
           const refB = (ec.bfe!=null?ec.bfe:null);
-          if(refB!=null && sv.mach!=null){
+          if(refB!=null && sv.mach!=null && comparable(cv.mach)){
             const d=Math.round((sv.mach-refB)*10)/10;
             bits.push(d>=0 ? `and <b>${esc(d)} ft above</b> the ${esc(refB)} ft BFE`
                            : `and <b>${esc(Math.abs(d))} ft below</b> the ${esc(refB)} ft BFE`);
@@ -15793,8 +15987,22 @@ async function runLookup(lat,lng,searchCtx){
         for(const d of ec.docs){
           html += `<a class="palink" href="${esc(d.url)}" target="_blank" rel="noopener" style="margin-top:8px">↗ ${esc(d.name)}</a>`;
         }
+      } else if(ec.docFileName){
+        /* A scanned certificate EXISTS for this record (the layer names the file) but the county
+           publishes no direct download URL for it — Pinellas is the main case. The scan almost
+           always lives in the FDEM statewide portal (surveyors must file every EC there,
+           F.S. 472.0366), where it opens as a direct PDF — but its link uses Forerunner's own
+           internal file ID, which the county GIS layer doesn't carry, so the app can't build the
+           URL itself. Next best: open FDEM's property search and hand the user the certificate's
+           address ready to paste. */
+        const _fdemAddr = ec.ecAddr ? String(ec.ecAddr).trim() : '';
+        html += `<div class="note">A scanned certificate is on file for this record — <b>${esc(ec.docFileName)}</b>. The county doesn't serve the PDF directly, but the document itself is in the <b>FDEM statewide portal</b>: open the search below, paste the address, and the certificate opens as a PDF on the property page. (Or give Public Works the filename above and they can pull it by name.)</div>`;
+        html += `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">`
+          + `<a class="palink" href="https://florida.withforerunner.com/properties" target="_blank" rel="noopener" style="margin-top:0">↗ FDEM statewide EC search — find this address's certificate PDF</a>`
+          + (_fdemAddr ? `<button type="button" class="copyfolio" data-folio="${esc(_fdemAddr)}" style="font-family:var(--mono);font-size:10px;padding:3px 10px;border-radius:5px;border:1px solid var(--unk-line);background:var(--unk-bg);color:var(--dim);cursor:pointer">Copy address</button>` : '')
+          + `</div>`;
       } else {
-        html += `<div class="note">A certificate record exists here, but no downloadable file was attached to it — open the county EC map to view it.</div>`;
+        html += `<div class="note">A certificate record exists here, but no downloadable file was attached to it — open the county EC map to view it, or search the address in the <a href="https://florida.withforerunner.com/properties" target="_blank" rel="noopener" style="color:var(--blueprint)">FDEM statewide EC portal</a> (all ECs are filed there by statute since 2017; the certificate opens as a PDF on the property page).</div>`;
       }
       ecRendered=true;
     } else if(ec && ec.err){
