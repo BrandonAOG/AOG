@@ -7099,6 +7099,14 @@ if(results) results.addEventListener('click', async (e)=>{
   btn.textContent = ok ? 'Copied ✓' : 'Copy failed';
   setTimeout(()=>{ btn.textContent = prev; }, 1400);
 });
+// Delegated handler: the "Check neighbours at FDEM" button in the EC card. Manual-trigger-only
+// by design — see the FDEM neighbor check block for the full politeness rules.
+if(results) results.addEventListener('click', (e)=>{
+  const btn = e.target && e.target.closest ? e.target.closest('.fdemnb') : null;
+  if(!btn || btn.disabled) return;
+  e.preventDefault();
+  runFdemNeighborCheck(btn);
+});
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 function pointGeom(lat,lng){ return encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}})); }
@@ -7633,6 +7641,308 @@ async function queryEC(ecLayerUrl, lat, lng){
          if(gx!=null && gy!=null){ ecLng=Number(gx); ecLat=Number(gy); } }catch(e){}
     return { features:feats, docs, docFileName, det, oid, date, bfe, ecAddr, ecDistM, hasAtt, ecLat, ecLng, surveyed };
   }catch(e){ clearTimeout(t); return { err:e.message }; }
+}
+
+/* ---------- FDEM statewide Elevation Certificates (Forerunner, via relay) ----------
+   Every FL surveyor must file each completed EC with the Division (F.S. 472.0366), so FDEM's
+   portal (florida.withforerunner.com) is the statewide backstop for counties with no public EC
+   layer of their own. Their GraphQL API refuses cross-origin browser calls, so requests go
+   through our own Cloudflare Worker relay (fdem-worker.js — POST-only, forwards solely to the
+   FDEM host, adds CORS headers). Set FDEM_PROXY to '' to disable the whole tier.
+
+   Two-call chain, captured Aug 2026 from the portal's own traffic:
+     1) getOrCreateGuestProperty(latitude, longitude[, address]) → property { id }
+        (only lat/lng are required in the schema — so our geocoded point is enough; the address
+        is passed too when we have one, which helps their matcher pick the right structure)
+     2) getCarouselDocumentsForProperty(objectId) → documentUploads [{ id, accountDocumentType
+        { name }, mimeType }] — each upload id opens directly at /view-file/{id} (a PDF).
+   Query strings below are VERBATIM from the capture — don't "clean them up", the server
+   validates against its schema and unknown fields fail the whole operation. */
+const FDEM_PROXY = "https://fdem-proxy.brandon-5e7.workers.dev";
+const FDEM_VIEW  = "https://florida.withforerunner.com/view-file/";
+const FDEM_PROP  = "https://florida.withforerunner.com/properties/";
+
+async function fdemGql(operationName, variables, query, signal){
+  const r = await fetch(FDEM_PROXY, {
+    method:"POST", headers:{"Content-Type":"application/json"}, signal,
+    body: JSON.stringify({ operationName, variables, query })
+  });
+  const j = await r.json();
+  if(j.errors && j.errors.length) throw new Error(j.errors[0].message || 'GraphQL error');
+  return j.data;
+}
+
+/* Returns { propertyId, propertyUrl, fullAddress, docs:[{name,url,isEC}] } or {err}. Never throws. */
+async function queryForerunnerEC(lat, lng, address){
+  if(!FDEM_PROXY) return { err:'FDEM relay not configured' };
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
+  try{
+    const d1 = await fdemGql('getOrCreateGuestProperty',
+      { latitude:lat, longitude:lng, address:(address||null), improveParcelCoordinates:false },
+      `query getOrCreateGuestProperty($address: String, $latitude: Float!, $longitude: Float!, $id: ID, $parcelId: ID, $improveParcelCoordinates: Boolean = false, $parcelNumber: String) {
+  getProperty(
+    address: $address
+    latitude: $latitude
+    longitude: $longitude
+    id: $id
+    parcelId: $parcelId
+    improveParcelCoordinates: $improveParcelCoordinates
+    parcelNumber: $parcelNumber
+  ) {
+    id
+    fullAddress
+    latitude
+    longitude
+    __typename
+  }
+}`, ctrl.signal);
+    const prop = d1 && d1.getProperty;
+    if(!prop || !prop.id){ clearTimeout(t); return { err:'no property record' }; }
+
+    /* Document list. NOT the carousel query — carouselDocumentsOnly:true is the photo strip and
+       returns [] even when a certificate is on file (verified live: Cape Coral cert present on
+       the page, carousel empty). filterProcessing:false is what the portal's own property page
+       uses and is what returns the certificate uploads. */
+    const d2 = await fdemGql('fdemDocs',
+      { objectId: prop.id },
+      `query fdemDocs($objectId: ID!) {
+  property(propertyId: $objectId) {
+    id
+    documentUploads(filterProcessing: false) {
+      id
+      issuedAt
+      createdAt
+      mimeType
+      originalFilename
+      accountDocumentType {
+        id
+        name
+        __typename
+      }
+      elevationCertificate {
+        id
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}`, ctrl.signal);
+    const ups = (d2 && d2.property && d2.property.documentUploads) || [];
+    const docs = ups.map(u=>{
+      const typeName = (u.accountDocumentType && u.accountDocumentType.name) || 'Document';
+      return { name: typeName, url: FDEM_VIEW + u.id,
+               isEC: !!u.elevationCertificate || /elev/i.test(typeName),
+               issuedAt: u.issuedAt || null, fileName: u.originalFilename || null };
+    });
+
+    /* Surveyed Section C elevations — FDEM parses each filed certificate into structured data
+       (getBuildingAttributes), including the machinery/equipment line that governs generator pad
+       height, WITH the vertical datum stated. Only fetched when an EC upload exists. The document
+       type ID is FDEM's "Elevation Certificate" AccountDocumentType (constant for their account). */
+    let surveyed=null;
+    if(docs.some(d=>d.isEC)){
+      try{
+        const d3 = await fdemGql('getBuildingAttributes',
+          { propertyId: prop.id, accountDocumentTypeIds:["55fe9d9a-19d2-45b4-9c3b-1c4f58b854db"] },
+          `query getBuildingAttributes($propertyId: ID!, $accountDocumentTypeIds: [ID!]!) {
+  property(propertyId: $propertyId) {
+    id
+    documentUploads(
+      accountDocumentTypeIds: $accountDocumentTypeIds
+      filterProcessing: true
+    ) {
+      id
+      elevationCertificate {
+        id
+        issuedAt
+        buildingDiagramNumber
+        buildingElevations {
+          elevationDatum
+          topOfBottomFloorWithUnits { value units __typename }
+          attachedGarageWithUnits { value units __typename }
+          lowestElevationOfMachineryOrEquipmentWithUnits { value units __typename }
+          lowestAdjacentGradeWithUnits { value units __typename }
+          highestAdjacentGradeWithUnits { value units __typename }
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}`, ctrl.signal);
+        const eu=(d3&&d3.property&&d3.property.documentUploads)||[];
+        for(const u of eu){
+          const cert=u.elevationCertificate; if(!cert) continue;
+          const be=(cert.buildingElevations&&cert.buildingElevations[0])||null;
+          const num=v=>(v&&v.value!=null&&isFinite(Number(v.value)))?Number(v.value):null;
+          if(be){
+            surveyed={ datum: be.elevationDatum||null,
+                       ffe:  num(be.topOfBottomFloorWithUnits),
+                       garage: num(be.attachedGarageWithUnits),
+                       mach: num(be.lowestElevationOfMachineryOrEquipmentWithUnits),
+                       lag:  num(be.lowestAdjacentGradeWithUnits),
+                       hag:  num(be.highestAdjacentGradeWithUnits),
+                       issuedAt: cert.issuedAt||null,
+                       diagram: cert.buildingDiagramNumber||null };
+            break;
+          }
+        }
+      }catch(e){/* surveyed data is a bonus — never fail the docs for it */}
+    }
+
+    clearTimeout(t);
+    return { propertyId: prop.id, propertyUrl: FDEM_PROP + prop.id,
+             fullAddress: prop.fullAddress || null, docs, surveyed };
+  }catch(e){ clearTimeout(t); return { err: e.message }; }
+}
+
+/* ---------- FDEM neighbor check (manual, polite, capped) ----------
+   FDEM's API has no "all certificates in this box" query, so neighbourhood 📝 sweeps like the
+   county layers do are impossible there. This is the honest substitute: a BUTTON in the EC card
+   that, when pressed, asks FDEM's own coordinate search for the nearest parcels (one call — the
+   same thing their site's right-click "Search nearby" does), then checks them ONE AT A TIME with
+   a 700 ms pause, five per press, dropping a 📝 on each hit. Design rules, all safety-first:
+   manual trigger only (nothing fires on pan/zoom/search) · sequential, never parallel · 5 per
+   press, "5 more" walks outward down the same distance-sorted list · session cache so re-pressing
+   costs nothing for already-checked parcels · 30 s cooldown between runs · and the Worker itself
+   carries a server-side daily cap as the final seatbelt. Neighbors get the 2-call existence check
+   only (no surveyed-elevation query) — for a neighbour's numbers, search that address properly. */
+const FDEM_NB_BATCH=5, FDEM_NB_DELAY=700, FDEM_NB_COOLDOWN=30000, FDEM_NB_MAXLIST=15;
+let _fdemNb={ key:'', list:[], idx:0, busy:false, lastEnd:0, found:0,
+              cache:Object.create(null) };   // parcelResultId -> {isEC,url}|null
+const _fdemSleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function _fdemCoordSearch(lat,lng){
+  // Mimic the portal's own right-click coordinate search (Florida is always N / W).
+  const one=async(la,ln)=>{
+    const q=`${la.toFixed(7)}°N, ${Math.abs(ln).toFixed(7)}°W`;
+    const d=await fdemGql('executeSearch',
+      { query:q, options:{ calculateBounds:false, scopes:null, isCoordinateSearch:true } },
+      `query executeSearch($query: String!, $options: SearchOptions) {
+  search(query: $query, options: $options) {
+    results {
+      ... on ParcelSearchResult {
+        __typename
+        id
+        address
+        parcelId
+        interiorPoint
+        score
+      }
+      __typename
+    }
+    __typename
+  }
+}`);
+    return ((d&&d.search&&d.search.results)||[]).filter(r=>r.__typename==='ParcelSearchResult'&&r.interiorPoint&&r.interiorPoint.coordinates);
+  };
+  const mLat=111320, mLng=111320*Math.cos(lat*Math.PI/180);
+  const distM=r=>{ const [x,y]=r.interiorPoint.coordinates; return Math.hypot((x-lng)*mLng,(y-lat)*mLat); };
+  const seen=Object.create(null), out=[];
+  const take=list=>{ for(const r of list){ if(seen[r.id]) continue; seen[r.id]=1;
+    if(distM(r)>25) out.push(r); } };          // >25 m drops the subject parcel itself
+  take(await one(lat,lng));
+  /* FDEM's search only returns what IT considers nearby — a sparse block can come back with 3-4
+     parcels. When the first pass lands under 5 neighbours, widen the net with ring searches ~120 m
+     N/S/E/W of the subject (one polite call each, stopping as soon as 5 are gathered), then
+     re-sort everything by TRUE distance from the subject so "closest first" still holds. */
+  if(out.length<5){
+    const dLat=120/mLat, dLng=120/mLng;
+    const ring=[[lat+dLat,lng],[lat-dLat,lng],[lat,lng+dLng],[lat,lng-dLng]];
+    for(const [la,ln] of ring){
+      if(out.length>=5) break;
+      try{ take(await one(la,ln)); }catch(e){/* a ring miss must not kill the gather */}
+      await _fdemSleep(300);
+    }
+  }
+  out.sort((a,b)=>distM(a)-distM(b));
+  return out.slice(0, FDEM_NB_MAXLIST);
+}
+
+async function _fdemCheckOne(r){
+  if(r.id in _fdemNb.cache) return _fdemNb.cache[r.id];
+  const [x,y]=r.interiorPoint.coordinates;
+  let out=null;
+  try{
+    const d1=await fdemGql('getOrCreateGuestProperty',
+      { latitude:y, longitude:x, address:(r.address||null), parcelId:r.id, improveParcelCoordinates:false },
+      `query getOrCreateGuestProperty($address: String, $latitude: Float!, $longitude: Float!, $id: ID, $parcelId: ID, $improveParcelCoordinates: Boolean = false, $parcelNumber: String) {
+  getProperty(
+    address: $address
+    latitude: $latitude
+    longitude: $longitude
+    id: $id
+    parcelId: $parcelId
+    improveParcelCoordinates: $improveParcelCoordinates
+    parcelNumber: $parcelNumber
+  ) {
+    id
+    __typename
+  }
+}`);
+    const pid=d1&&d1.getProperty&&d1.getProperty.id;
+    if(pid){
+      const d2=await fdemGql('fdemDocs',{ objectId:pid },
+        `query fdemDocs($objectId: ID!) {
+  property(propertyId: $objectId) {
+    id
+    documentUploads(filterProcessing: false) {
+      id
+      accountDocumentType { id name __typename }
+      elevationCertificate { id __typename }
+      __typename
+    }
+    __typename
+  }
+}`);
+      const ups=(d2&&d2.property&&d2.property.documentUploads)||[];
+      const ec=ups.find(u=>u.elevationCertificate||/elev/i.test((u.accountDocumentType&&u.accountDocumentType.name)||''));
+      if(ec) out={ isEC:true, url:FDEM_VIEW+ec.id, lat:y, lng:x };
+    }
+  }catch(e){/* one neighbour failing must not stop the walk */}
+  _fdemNb.cache[r.id]=out;
+  return out;
+}
+
+async function runFdemNeighborCheck(btn, batchSize){
+  const BATCH = (batchSize && batchSize>0) ? batchSize : FDEM_NB_BATCH;
+  if(_fdemNb.busy) return;
+  const now=Date.now();
+  if(now-_fdemNb.lastEnd<FDEM_NB_COOLDOWN && _fdemNb.lastEnd) return;
+  const lat=Number(btn.getAttribute('data-lat')), lng=Number(btn.getAttribute('data-lng'));
+  if(!isFinite(lat)||!isFinite(lng)) return;
+  _fdemNb.busy=true; btn.disabled=true;
+  const setTxt=s=>{ try{ btn.textContent=s; }catch(_){} };
+  try{
+    const key=lat.toFixed(6)+','+lng.toFixed(6);
+    if(_fdemNb.key!==key){ // new subject → fresh distance-sorted list
+      setTxt('Finding nearest parcels…');
+      _fdemNb.key=key; _fdemNb.idx=0; _fdemNb.found=0;
+      _fdemNb.list=await _fdemCoordSearch(lat,lng);
+    }
+    const batch=_fdemNb.list.slice(_fdemNb.idx, _fdemNb.idx+BATCH);
+    for(let i=0;i<batch.length;i++){
+      setTxt(`Checking neighbour ${_fdemNb.idx+i+1} of ${_fdemNb.list.length}…`);
+      const hit=await _fdemCheckOne(batch[i]);
+      if(hit&&hit.isEC){
+        _fdemNb.found++;
+        try{ _ecMakeNote(hit.lat, hit.lng, hit.url).addTo(ecNoteLayer);
+             if(!map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map); }catch(_){}
+      }
+      if(i<batch.length-1) await _fdemSleep(FDEM_NB_DELAY);
+    }
+    _fdemNb.idx+=batch.length;
+    const done=_fdemNb.idx>=_fdemNb.list.length;
+    const tally=`${_fdemNb.found} cert${_fdemNb.found===1?'':'s'} found in ${_fdemNb.idx} checked`;
+    if(done){ setTxt(`FDEM neighbours: ${tally} — all nearby parcels checked`); return; } // stays disabled
+    setTxt(`FDEM neighbours: ${tally} — check ${Math.min(FDEM_NB_BATCH,_fdemNb.list.length-_fdemNb.idx)} more in 30 s`);
+    _fdemNb.lastEnd=Date.now();
+    setTimeout(()=>{ try{ btn.disabled=false;
+      btn.textContent=`📝 Check ${Math.min(FDEM_NB_BATCH,_fdemNb.list.length-_fdemNb.idx)} more neighbours at FDEM (${tally})`; }catch(_){}} , FDEM_NB_COOLDOWN);
+  } finally { _fdemNb.busy=false; }
 }
 
 /* ---------- Geocoding (Esri primary, Nominatim fallback) ---------- */
@@ -14223,6 +14533,13 @@ async function runLookup(lat,lng,searchCtx){
   const pEC = _ecLayerUrl
     ? _timed('elevation certificate', _queryEcWithFallback(_ecLayerUrl,_ecLayerAlt,lat,lng).catch(e=>({err:e.message})))
     : Promise.resolve(null);
+  /* FDEM statewide tier fires for EVERY lookup, in parallel — it's the only EC source at all for
+     counties with no wired layer, and even in wired counties it can hold a newer certificate the
+     county hasn't published (surveyors file with the state within 30 days). Cheap: two small
+     relayed calls. Rendered in the EC card after the county result. */
+  const pFdemEC = (typeof queryForerunnerEC==='function' && FDEM_PROXY)
+    ? queryForerunnerEC(lat, lng, (searchCtx && searchCtx.raw) ? String(searchCtx.raw) : null).catch(e=>({err:e.message}))
+    : Promise.resolve(null);
   // Neighborhood 📝 notes are wired AFTER the main cards render (see the EC card below) so their
   // extra query never competes with the search's own requests to the same GIS host.
   window.__ecAreaUrl = null; window.__ecAreaPinned=false; _ecAreaKey=''; clearTimeout(_ecAreaTimer);
@@ -16012,6 +16329,81 @@ async function runLookup(lat,lng,searchCtx){
     }
   }
 
+  /* --- FDEM statewide tier (Forerunner via relay) ---
+     Renders for EVERY county: it's the only EC source where no county layer is wired, and in
+     wired counties it can carry a certificate the county layer lacks (or a newer one). Kept
+     separate from ecRendered so a county "no certificate found" doesn't suppress a state hit. */
+  {
+    const fdem = await pFdemEC;
+    if(myId!==runId) return;
+    if(fdem && !fdem.err){
+      const ecDocs = (fdem.docs||[]).filter(d=>d.isEC);
+      const otherDocs = (fdem.docs||[]).filter(d=>!d.isEC);
+      /* 📝 marker on the map at the subject property when FDEM holds a certificate — same look as
+         the county-layer markers, so the map and the card agree. FDEM's API is one-property-at-a-
+         time (no bounding-box query exists), so unlike wired counties this can only mark the
+         SEARCHED property, never the neighbours. Drops at the lookup point itself; skipped when a
+         county-layer marker already rendered for this property (ecRendered) to avoid two 📝 on the
+         same rooftop. */
+      if(ecDocs.length && !ecRendered){
+        try{
+          _ecMakeNote(lat, lng, ecDocs[0].url).addTo(ecNoteLayer);
+          if(!map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map);
+        }catch(e){/* marker is decoration — never break the card */}
+      }
+      if(ecDocs.length){
+        html += `<div class="freshline snap" style="margin-top:10px"><span class="badge ok">FDEM</span> statewide filing (F.S. 472.0366) — certificate on file with the Division</div>`;
+        if(fdem.fullAddress) html += fieldRow('FDEM property record', esc(fdem.fullAddress));
+        for(const d of ecDocs){
+          const dt = d.issuedAt ? ` (issued ${esc(String(d.issuedAt))})` : '';
+          html += `<a class="palink" href="${esc(d.url)}" target="_blank" rel="noopener" style="margin-top:8px">↗ ${esc(d.name)}${dt} — FDEM statewide copy (PDF)</a>`;
+        }
+        /* Surveyed Section C values, parsed by FDEM from the filed certificate — WITH datum.
+           Rendered even in counties whose own layer also carried values: FDEM's copy is often
+           newer (a fresh survey hits the state within 30 days, before counties republish). */
+        const sv = fdem.surveyed;
+        if(sv && (sv.ffe!=null || sv.mach!=null || sv.lag!=null)){
+          const dTag = sv.datum ? ` <span class="muted">${esc(/1988|88/.test(String(sv.datum))?'NAVD 88':String(sv.datum))}</span>`
+                                : ' <span style="color:var(--warn);font-weight:600">datum not stated</span>';
+          if(sv.ffe!=null)    html += fieldRow('Finished floor (EC item a, per FDEM)', '<b>'+esc(String(sv.ffe))+' ft</b>'+dTag);
+          if(sv.mach!=null)   html += fieldRow('Lowest machinery (EC item e, per FDEM)', '<b>'+esc(String(sv.mach))+' ft</b>'+dTag);
+          if(sv.garage!=null) html += fieldRow('Attached garage slab (EC item d)', '<b>'+esc(String(sv.garage))+' ft</b>'+dTag);
+          if(sv.lag!=null)    html += fieldRow('Lowest adjacent grade (EC item f)', '<b>'+esc(String(sv.lag))+' ft</b>'+dTag);
+          if(sv.hag!=null)    html += fieldRow('Highest adjacent grade (EC item g)', '<b>'+esc(String(sv.hag))+' ft</b>'+dTag);
+          if(sv.diagram)      html += fieldRow('Building diagram', esc(String(sv.diagram)));
+          if(sv.mach!=null && sv.lag!=null){
+            html += `<div class="note">Per the FDEM-filed certificate, existing equipment sits <b>${esc(String(Math.round((sv.mach-sv.lag)*10)/10))} ft</b> above lowest grade. Item (e) is the line a generator is measured against — surveyed figures, not estimates, but confirm nothing has been regraded since ${sv.issuedAt?esc(String(sv.issuedAt)):'certification'}.</div>`;
+          }
+        }
+        if(otherDocs.length){
+          for(const d of otherDocs) html += `<a class="palink" href="${esc(d.url)}" target="_blank" rel="noopener" style="margin-top:6px">↗ ${esc(d.name)} (FDEM)</a>`;
+        }
+        html += `<a class="palink" href="${esc(fdem.propertyUrl)}" target="_blank" rel="noopener" style="margin-top:6px">↗ Full FDEM property page (flood info, FIRM, all documents)</a>`;
+      } else if((fdem.docs||[]).length){
+        // Documents on file, none typed as an EC — show them anyway; typing at FDEM is inconsistent.
+        html += `<div class="freshline snap" style="margin-top:10px"><span class="badge unk">FDEM</span> statewide filing — documents on file with the Division</div>`;
+        for(const d of fdem.docs) html += `<a class="palink" href="${esc(d.url)}" target="_blank" rel="noopener" style="margin-top:6px">↗ ${esc(d.name)} (FDEM)</a>`;
+        html += `<a class="palink" href="${esc(fdem.propertyUrl)}" target="_blank" rel="noopener" style="margin-top:6px">↗ Full FDEM property page</a>`;
+      } else if(fdem.propertyUrl && !ecRendered){
+        /* State knows the property but holds no document, and no county certificate rendered
+           either — link the FDEM property page so the user can confirm with one click. Note the
+           statewide mandate only started 2017 (digital 2023), so older structures are often
+           simply absent there. */
+        html += `<div class="note">No certificate on file with FDEM's statewide registry for this property (surveyors have only been required to file since 2017, so older structures are often absent). <a href="${esc(fdem.propertyUrl)}" target="_blank" rel="noopener" style="color:var(--blueprint)">Open the FDEM property page</a> to double-check or view flood data.</div>`;
+      }
+    } else if(fdem && fdem.err && !ecRendered){
+      // Relay/API hiccup on a property with no county EC either — say so quietly, keep links below.
+      html += `<div class="note">FDEM statewide EC check didn't respond (${esc(fdem.err)}) — the links below still work for a manual search.</div>`;
+    }
+    /* Neighbour check button — offered whenever the FDEM relay is up, since a nearby certificate
+       is often the best read on grade for the block when the subject has none. Nothing runs until
+       pressed; each press checks 5 more nearest parcels, politely. */
+    if(fdem && !fdem.err && FDEM_PROXY){
+      html += `<div style="margin-top:8px"><button type="button" class="fdemnb" data-lat="${esc(String(lat))}" data-lng="${esc(String(lng))}" style="font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--unk-line);background:var(--unk-bg);color:var(--dim);cursor:pointer">📝 Checking closest neighbour at FDEM…</button></div>`
+        + `<div class="note" style="margin-top:4px">The closest parcel is checked automatically through the statewide registry a moment after this panel loads — a 📝 drops if it holds a certificate. Press the button to check 5 more, closest first.</div>`;
+    }
+  }
+
   // --- Always offer the human EC map / search page as fallback ---
   if(docCfg){
     // Don't re-link the same portal the FEMA Flood Hazard card already linked (same tab, one URL).
@@ -16273,6 +16665,17 @@ async function runLookup(lat,lng,searchCtx){
   results.innerHTML = setStatus('ok','Done — '+(new Date()).toLocaleTimeString())
     + _bc + _sum + '<div class="cardflow">' + html + '</div>';
   tabifyResults(results);
+  /* ---- FDEM NEIGHBOUR AUTO-RUN (non-blocking) --------------------------------------------------
+     Automatically check the single CLOSEST parcel through the statewide registry a moment after
+     the panel paints — a 📝 drops if it holds a certificate. Uses the exact same polite machinery
+     as the manual button (session-cached, Worker-capped), self-triggered once per lookup at a
+     cost of ~3 relayed calls. The button remains for walking outward 5 at a time. 2 s delay so
+     the auto-run never competes with the lookup's own tail-end requests. */
+  setTimeout(()=>{
+    if(myId!==runId) return;                     // a newer search superseded this one
+    try{ const b=results.querySelector('.fdemnb');
+         if(b && !b.disabled && !_fdemNb.busy) runFdemNeighborCheck(b, 1); }catch(e){}
+  }, 2000);
   _timings.push({label:'▸ total (to full render)', ms:Math.round(performance.now()-_T0), milestone:true});
   renderLookupTiming(_timings);
   document.body.classList.add('has-results');   // hides the intro disclaimer now that the breadcrumb/summary carry context
