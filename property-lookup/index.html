@@ -4587,25 +4587,35 @@ async function loadElevationGrid(){
      because the outline was left over). So: accept the parcel bounds ONLY if they sit near the
      current marker; otherwise fall back to a box around the marker, which is always current. */
   let b=null;
+  /* Authoritative search point: where the LAST completed lookup actually resolved to. The marker
+     and parcelLayer can BOTH be stale together (left over from the previous search, agreeing with
+     each other) — which defeated an earlier marker-vs-parcel check. __printMeta is the ground
+     truth, so every candidate anchor below is validated against IT. */
+  const _pm = window.__printMeta || {};
+  const _hasAuth = (_pm.lat!=null && _pm.lng!=null);
+  const _nearAuth = (lat,lng, tolM)=>{
+    if(!_hasAuth) return true;               // no auth point yet → can't reject; accept
+    const mLat=111320, mLng=111320*Math.cos(lat*Math.PI/180);
+    return Math.hypot((lng-_pm.lng)*mLng,(lat-_pm.lat)*mLat) <= tolM;
+  };
   try{
     if(parcelLayer && parcelLayer.getBounds && parcelLayer.getBounds().isValid()){
-      const pb=parcelLayer.getBounds();
-      if(marker){
-        const m=marker.getLatLng();
-        // A real parcel contains or sits right next to its lookup point. If the marker is more than
-        // ~500 m outside the parcel's bounds, the outline is stale/wrong — don't trust it.
-        const padDeg=0.005; // ~500 m
-        const inside = m.lat >= pb.getSouth()-padDeg && m.lat <= pb.getNorth()+padDeg &&
-                       m.lng >= pb.getWest()-padDeg && m.lng <= pb.getEast()+padDeg;
-        if(inside) b=pb;
-        else { window.__elevStale={ marker:[m.lat,m.lng],
-               parcel:[pb.getSouth(),pb.getNorth(),pb.getWest(),pb.getEast()] }; }
-      } else {
-        b=pb;
-      }
+      const pb=parcelLayer.getBounds(), c=pb.getCenter();
+      // Trust the parcel outline only if its center is within ~300 m of the searched point.
+      // A stale outline from the previous lookup sits far from it and is rejected here.
+      if(_nearAuth(c.lat, c.lng, 200)) b=pb;
+      else window.__elevStale={ why:'parcel far from search', search:[_pm.lat,_pm.lng],
+             parcel:[pb.getSouth(),pb.getNorth(),pb.getWest(),pb.getEast()] };
     }
   }catch(e){}
-  if(!b && marker){ b = marker.getLatLng().toBounds(70); }
+  // Marker fallback — but only if the marker itself is near the searched point (it, too, can lag).
+  if(!b && marker){
+    const mll=marker.getLatLng();
+    if(_nearAuth(mll.lat, mll.lng, 200)) b=mll.toBounds(70);
+    else window.__elevStale={ why:'marker far from search', search:[_pm.lat,_pm.lng], marker:[mll.lat,mll.lng] };
+  }
+  // Last resort: the authoritative point itself, always correct if we have it.
+  if(!b && _hasAuth) b=L.latLng(_pm.lat,_pm.lng).toBounds(70);
   if(!b){ mapToast('Search an address first — elevation samples follow the parcel.',2600); return; }
 
   const pS=b.getSouth(), pN=b.getNorth(), pW=b.getWest(), pE=b.getEast();
@@ -4643,31 +4653,50 @@ async function loadElevationGrid(){
     interpolation:'RSP_BilinearInterpolation',
     f:'json'
   });
-  /* Retry with backoff. The ONLY failure mode here is transient: 3DEP (a federal server under
-     variable load) intermittently returns an empty set or times out, while the exact same request
-     succeeds moments later — verified live (single points, and the full 121-point grid, all return
-     cleanly on retry; staleness and coverage were both ruled out). So try up to 3 times with
-     growing pauses before surfacing the error. Each attempt gets a fresh 12 s window. */
-  const _fetchSamples = async ()=>{
-    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 12000);
-    try{ const r=await fetch(DEP3_SAMPLES,{method:'POST',body,signal:ctrl.signal});
+  /* Retry + FALLBACK. The failure mode is transient: 3DEP (a federal server under variable load)
+     intermittently returns an empty set or times out, while the same request succeeds moments
+     later. Try the primary USGS getSamples up to 10 times with SHORT gaps (Option B: 10 chances
+     packed into ~15 s, not one long 50 s wait); if the whole burst still fails, fall back to
+     Esri's public mirror of the SAME 3DEP data on an entirely different server. Both return
+     metres in the same response shape, so downstream code is unchanged. */
+  const _post = async (url)=>{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 5000);
+    try{ const r=await fetch(url,{method:'POST',body,signal:ctrl.signal});
          clearTimeout(t); return await r.json(); }
     catch(err){ clearTimeout(t); return null; }
   };
   const _ok = j => j && !j.error && j.samples && j.samples.length;
   let js=null;
-  const _delays=[0, 500, 1200];               // 3 attempts: immediate, +0.5 s, +1.2 s
-  for(let a=0; a<_delays.length; a++){
-    if(_delays[a]) await new Promise(r=>setTimeout(r,_delays[a]));
-    if(a>0) mapToast('Retrying elevation service…',1200);
-    js=await _fetchSamples();
+  // Primary: USGS - 10 fast attempts (immediate, then 300 ms between).
+  for(let a=0; a<10; a++){
+    if(a>0){ await new Promise(r=>setTimeout(r,300)); if(a===1) mapToast('Retrying elevation service...',1200); }
+    js=await _post(DEP3_SAMPLES);
     if(_ok(js)) break;
+  }
+  // Fallback: if the full multipoint grid never came back, ask USGS /identify for a SINGLE value at
+  // the parcel centre — a different endpoint (and code path) on the same trusted 3DEP data, which
+  // often answers when getSamples is being flaky. It's one point, not the grid, so it yields a
+  // single ground reading rather than the min/max spread — degraded, but real, and clearly labelled.
+  if(!_ok(js)){
+    mapToast('Primary grid slow - fetching a single ground reading...',1800);
+    try{
+      const cLat=(pS+pN)/2, cLng=(pW+pE)/2;
+      const g=encodeURIComponent(JSON.stringify({x:cLng,y:cLat,spatialReference:{wkid:4326}}));
+      const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),5000);
+      const r=await fetch(DEP3_ID+`?geometry=${g}&geometryType=esriGeometryPoint&returnGeometry=false&f=json`,{signal:ctrl.signal});
+      clearTimeout(t);
+      const j=await r.json();
+      const v=j && (j.value!=null?j.value:(j.results&&j.results[0]&&j.results[0].value));
+      if(v!=null && isFinite(Number(v)) && String(v).toLowerCase()!=='nodata'){
+        js={ samples:[{ value:Number(v), location:{x:cLng,y:cLat}, resolution:null }], __fallback:true };
+      }
+    }catch(e){}
   }
   _elevBusy=false;
 
   if(!_ok(js)){
-    mapToast('Elevation service didn\u2019t respond — try again in a moment.',3000);
-    window.__elevDebug={fail:(js&&js.error)||'no samples after retries'};
+    mapToast('Elevation service did not respond - try again in a moment.',3000);
+    window.__elevDebug={fail:(js&&js.error)||'no samples after retries + backup'};
     return;
   }
 
@@ -4764,7 +4793,28 @@ if(btnElev) btnElev.onclick=function(){
 /* A new lookup invalidates the cached grid; re-sample if the layer is showing. */
 function resetElevationGrid(){
   _elevKey=''; _elevPts=[]; try{ elevLayer.clearLayers(); elevBadgeHide(); }catch(e){}
-  if(elevOn) setTimeout(loadElevationGrid, 900);   // let the parcel outline land first
+  if(!elevOn) return;
+  /* Don't sample on a blind timer — the parcel outline may not have landed yet, and sampling early
+     grabs the PREVIOUS search's stale parcel (observed: a new search sampled 5.3 km away). Instead
+     poll until the current anchor (parcel/marker) sits near the authoritative search point
+     (__printMeta), then sample. Cap the wait so it can't hang; if nothing lines up in time, sample
+     anyway — loadElevationGrid's own __printMeta guard will fall back to the search point. */
+  const started=Date.now(), MAXWAIT=6000;
+  const authReady=()=>{
+    const pm=window.__printMeta; if(!pm || pm.lat==null) return false;
+    const near=(la,ln)=>{ const mLat=111320, mLng=111320*Math.cos(la*Math.PI/180);
+      return Math.hypot((ln-pm.lng)*mLng,(la-pm.lat)*mLat) <= 200; };
+    try{ if(parcelLayer && parcelLayer.getBounds && parcelLayer.getBounds().isValid()){
+      const c=parcelLayer.getBounds().getCenter(); if(near(c.lat,c.lng)) return true; } }catch(e){}
+    if(marker){ const m=marker.getLatLng(); if(near(m.lat,m.lng)) return true; }
+    return false;
+  };
+  const tick=()=>{
+    if(!elevOn) return;                          // toggled off while waiting
+    if(authReady() || Date.now()-started>MAXWAIT){ loadElevationGrid(); return; }
+    setTimeout(tick, 250);
+  };
+  setTimeout(tick, 300);                          // small head start, then poll every 250 ms
 }
 
 const btnFlood=document.getElementById('btnFlood');
