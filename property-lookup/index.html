@@ -2067,6 +2067,18 @@ const COUNTY_FLOOD_LIVE = {
      (live-tested Aug 2026 from the browser). Service SR is 2237 (State Plane FL West, feet), but
      the server reprojects from the inSR=4326 point we send, so no client-side projection needed.
      Field auto-detection handles FLD_ZONE/ZONE_SUBTY as usual. */
+  /* Charlotte's adopted FEMA_2022 (effective 12/15/2022) carries the full NFHL schema plus COBRA,
+     Floodway and Panel. ✅ CORS-open (agis3, verified Aug 2026). */
+  /* Sarasota hosts a full FEMA stack on ags3.scgov.net — zones, BFE lines, LiMWA, panels, LOMCs,
+     plus a county-run CommunityFloodZone model. ✅ CORS-open (verified Aug 2026). */
+  SARASOTA: { label:"Sarasota County FEMA Flood Zone",
+    viewer:"https://experience.arcgis.com/experience/48741ab2a7b24c0fb5f360d0f40824d5",
+    urls:[ "https://ags3.scgov.net/server/rest/services/Hosted/FEMAFloodZone/FeatureServer/0/query" ]},
+  CHARLOTTE: { label:"Charlotte County FEMA 2022",
+    viewer:"https://agis.charlottecountyfl.gov/ccgis/",
+    urls:[
+      "https://agis3.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGISLayers/MapServer/135/query"
+    ]},
   LEE: { label:"Lee County FIRM (county GIS)",
     viewer:"https://gisexplorer.leegov.com/",
     urls:[
@@ -2223,6 +2235,32 @@ const DOCS_COUNTY = {
     ecNote:  "Lee County's Elevation Certificates are in its Forerunner resident portal (linked above) — search by address; that's the fastest route. Lee publishes no public EC map layer. If it isn't there, Lee can search by permit record # (RES/COM/MRV) — find the # for the address/STRAP in eConnect first, or email FIRMinfo@leegov.com.",
     permit:  "https://accelaaca.leegov.com/aca/",   // eConnect / ACA portal
     permitBy:"address"
+  },
+  SARASOTA: {
+    /* Sarasota's EC layer is markers + documents (the Collier model), NOT surveyed values like
+       Charlotte's — it carries permitno / propaccount / stampdate / ecfilename but no Section C
+       elevations. ecfilename is a BARE FILENAME; EC_DOC_BASE turns it into a link using the prefix
+       Sarasota's own popup uses. 2,881 certificates. */
+    ecLayer: "https://ags3.scgov.net/server/rest/services/Hosted/FemaElevationCert/FeatureServer/0/query",
+    ecMap:   "https://experience.arcgis.com/experience/48741ab2a7b24c0fb5f360d0f40824d5/page/Certificates-Map",
+    ecNote:  "Sarasota County publishes its Elevation Certificates as a public GIS layer — the PDF link above opens the certificate itself. The layer records the permit number and stamp date but not the surveyed Section C elevations, so open the PDF for the actual finished-floor, machinery and grade figures.",
+    permit:  "https://ceportal.scgov.net/",
+    permitBy:"address"
+  },
+  CHARLOTTE: {
+    /* ✅ Charlotte publishes the richest EC layer of any county wired here. Unlike Collier's — which
+       is a marker plus a PDF link — Charlotte's carries the Section C SURVEYED VALUES as attributes:
+         BASEFLOODE  base flood elevation
+         LOWESTGRAD  lowest adjacent grade (item f)
+         Lowest_Machinery_Elevation  item (e) — the governing line for equipment like a generator
+         FLOORELEVA  finished floor (item a)
+         Datum, PANELNUMBE, DATEOFFIRM, License_Number, LINK (the PDF)
+       ecDetect() picks these up generically, so no Charlotte-specific parsing is needed. */
+    ecLayer: "https://agis3.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGISLayers/MapServer/13/query",
+    ecMap:   "https://agis.charlottecountyfl.gov/ccgis/",
+    ecNote:  "Charlotte County's Elevation Certificates are a public GIS layer — the surveyed values above come straight from it, and the PDF link opens the certificate itself. If a structure isn't listed, check the county GIS viewer or Community Development.",
+    permit:  "https://charlottefl-energovweb.tylerhost.net/apps/selfservice",
+    permitBy:"address"
   }
 };
 /* Countywide Elevation Certificate layers — apply for the WHOLE county regardless of city. Collier's
@@ -2231,7 +2269,10 @@ const DOCS_COUNTY = {
    has its own portal. The city's own EC portal link still shows alongside — this just ADDS the county
    certificate/PDF when one is on file. Keyed by normalized county name. */
 const COUNTY_EC_LAYERS = {
-  COLLIER: "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Elevation_Certificates_view/FeatureServer/36/query"
+  COLLIER: "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Elevation_Certificates_view/FeatureServer/36/query",
+  // Charlotte's covers Punta Gorda too (city addresses appear on the county GIS map).
+  CHARLOTTE: "https://agis3.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGISLayers/MapServer/13/query",
+  SARASOTA:  "https://ags3.scgov.net/server/rest/services/Hosted/FemaElevationCert/FeatureServer/0/query"
 };
 
 /* Resolve documents config: city first (by municipality), else county. */
@@ -4654,7 +4695,11 @@ const FEMA_NFHL_QUERY = FEMA_NFHL_MS + "/28/query";
    hosted and typically answer in a few hundred ms. Same data, county-adopted. */
 const COUNTY_ZONE_LAYERS = {
   COLLIER: { url:"https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FEMA24_FloodZones/FeatureServer/0/query",
-             label:"Collier County 2024 DFIRM" }
+             label:"Collier County 2024 DFIRM" },
+  CHARLOTTE: { url:"https://agis3.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGISLayers/MapServer/135/query",
+               label:"Charlotte County FEMA 2022" },
+  SARASOTA:  { url:"https://ags3.scgov.net/server/rest/services/Hosted/FEMAFloodZone/FeatureServer/0/query",
+               label:"Sarasota County FEMA Flood Zone" }
 };
 async function queryFloodZonesOnParcel(parcelFeature, countyName){
   // --- fast path: the county's own layer, when we have one ---
@@ -5053,6 +5098,8 @@ async function queryCollierPanels(parcelFeature){
    administers, and they're usually faster and more current than the NFHL rollup.
    Collier: FEMA24_BFE, 6,775 polylines, field ELEV. Verified Aug 2026. */
 const COUNTY_BFE_LINES = {
+  SARASOTA: { url:"https://ags3.scgov.net/server/rest/services/Hosted/FemaBaseFloodElevation/FeatureServer/0/query",
+              field:"elev", label:"Sarasota County BFE lines" },
   COLLIER: { url:"https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FEMA24_BFE/FeatureServer/0/query",
              field:"ELEV", label:"Collier County 2024 DFIRM" }
 };
@@ -7311,15 +7358,42 @@ function pick(a, ...keys){ for(const k of keys){ if(a[k]!=null && String(a[k]).t
 /* ---------- Elevation Certificate live query (point → feature → PDF attachment) ----------
    Returns { features:[{attributes, oid}], docs:[{name,url}], date, err } or {err}. */
 function ecLayerRoot(u){ return (u||'').trim().replace(/\/query$/i,'').replace(/\/+$/,''); }
+/* Base folder for EC layers that store only a FILENAME rather than a full URL. Keyed by a pattern
+   matched against the layer's service root. Sourced from each county's own web-map popup config —
+   Sarasota's is an Arcade expression in the "FEMA Flood Elevation Certificate and Change Map"
+   web map, which concatenates this prefix with $feature.ecfilename. */
+const EC_DOC_BASE = [
+  [/ags3\.scgov\.net.*FemaElevationCert/i, "https://ags3.scgov.net/adv/FemaElevationCerts/"]
+];
+function ecDocBase(root){
+  for(const [re,base] of EC_DOC_BASE){ if(re.test(root)) return base; }
+  return null;
+}
+
 function ecDetect(fields){
   const F=fields.map(f=>String(f).toUpperCase());
   const find=res=>{ for(const re of res){ const i=F.findIndex(f=>re.test(f)); if(i>=0) return fields[i]; } return null; };
   return {
-    date: find([/ISSUE.?DATE/,/CERT.?DATE/,/SURVEY.?DATE/,/^DATE$/,/EFF.?DATE/,/_DATE$/,/DATE.?ENTERED/,/^DATEENTERED$/]),
+    date: find([/ISSUE.?DATE/,/CERT.?DATE/,/SURVEY.?DATE/,/^DATE$/,/EFF.?DATE/,/^STAMP.?DATE$/,/_DATE$/,/DATE.?ENTERED/,/^DATEENTERED$/]),
     permit: find([/PERMIT/,/RECORD.?N/,/CASE.?N/]),
-    addr: find([/SITE.?ADDR/,/SITUS/,/^ADDRESS$/,/LOCATION/,/PHY.?ADDR/,/^STREETADDRESS$/,/STREET.?ADDR/]),
-    link: find([/URL$/,/HYPERLINK/,/DOC.?LINK/,/PDF/,/^LINK$/,/WEBLINK/,/DOC.?PATH/,/^CERTIFICATE$/,/CERT.?URL/]),
-    bfe:  find([/^BFE$/,/BASE.?FLOOD/,/^STATIC.?BFE$/])
+    addr: find([/SITE.?ADDR/,/SITUS/,/^ADDRESS$/,/LOCATION/,/PHY.?ADDR/,/^STREETADDRESS$/,/STREET.?ADDR/,/^FULL_ADDRESS$/]),
+    link: find([/URL$/,/HYPERLINK/,/DOC.?LINK/,/PDF/,/^LINK$/,/WEBLINK/,/DOC.?PATH/,/^CERTIFICATE$/,/CERT.?URL/,/^ECFILENAME$/,/EC.?FILE/,/FILE.?NAME/]),
+    bfe:  find([/^BFE$/,/BASE.?FLOOD/,/^STATIC.?BFE$/,/^BASEFLOODE$/]),
+    /* SURVEYED elevations off the certificate itself. Most counties publish an EC layer that is
+       little more than a marker plus a PDF link — Charlotte publishes the Section C values as
+       attributes, which is far more useful: these are the numbers a surveyor sealed, so they beat
+       any LiDAR estimate for the same lot.
+         lag  — lowest adjacent grade  (EC item f)
+         mach — lowest machinery/equipment servicing the building (EC item e) ← the line that
+                governs where a generator can sit
+         ffe  — top of bottom floor / finished floor (EC item a)
+       Named loosely because field naming varies: Charlotte uses both LOWESTGRAD (points) and
+       Lowest_Adjacent_Grade (polygons) for the same value. */
+    lag:  find([/LOWEST.?ADJ/,/^LOWESTGRAD/,/^LAG$/]),
+    mach: find([/LOWEST.?MACH/,/MACHINERY/,/EQUIP.*ELEV/]),
+    ffe:  find([/FLOOR.?ELEV/,/^FLOORELEVA/,/^FFE$/,/BOTTOM.?FLOOR/]),
+    datum:find([/^DATUM$/,/V_DATUM/,/VERT.?DATUM/]),
+    panel:find([/^PANEL$/,/^PANELNUMBE/,/PANEL.?NUM/,/FIRM.?PAN/])
   };
 }
 async function queryEC(ecLayerUrl, lat, lng){
@@ -7359,7 +7433,24 @@ async function queryEC(ecLayerUrl, lat, lng){
     const oid=f0.attributes[oidField] ?? f0.attributes.OBJECTID ?? f0.attributes.FID;
     const docs=[];
     // 1) direct hyperlink field, if any
-    if(det.link){ const u=pick(f0.attributes,det.link); if(u && /^https?:/i.test(u)) docs.push({name:'Elevation Certificate (PDF)',url:u}); }
+    /* 1) direct hyperlink field, if any.
+       Some counties store a FULL url (Collier's Certificate field). Others store only a BARE
+       FILENAME and their web app prepends a fixed folder — Sarasota's ecfilename is
+       "EC0127060003_REC24-00000-02409_17.pdf" and its popup builds the link with an Arcade
+       expression: 'https://ags3.scgov.net/adv/FemaElevationCerts/' + $feature.ecfilename.
+       EC_DOC_BASE maps a layer host/name to that prefix so the filename becomes a working link
+       instead of being discarded for not looking like a URL. */
+    if(det.link){
+      const u=pick(f0.attributes,det.link);
+      if(u){
+        const raw=String(u).trim();
+        if(/^https?:/i.test(raw)) docs.push({name:'Elevation Certificate (PDF)',url:raw});
+        else if(/\.(pdf|tif{1,2}|jpe?g|png)$/i.test(raw)){
+          const base=ecDocBase(root);
+          if(base) docs.push({name:'Elevation Certificate (PDF)',url:base+encodeURIComponent(raw)});
+        }
+      }
+    }
     // 2) ArcGIS attachments
     if(hasAtt && oid!=null){
       try{
@@ -7374,11 +7465,20 @@ async function queryEC(ecLayerUrl, lat, lng){
     let bfe=null;
     if(det.bfe){ const b=pick(f0.attributes,det.bfe); if(b!=null && b!=='' && isFinite(Number(b))) bfe=Number(b); }
     const ecAddr=det.addr?pick(f0.attributes,det.addr):null;
+    /* Surveyed elevations, when the layer carries them. Guarded hard: a 0 is a legitimate elevation
+       in coastal Florida, so test for null/blank rather than falsiness, and drop anything
+       non-numeric or obviously a sentinel. */
+    const num=k=>{ if(!k) return null; const v=pick(f0.attributes,k);
+      if(v==null||v==='') return null; const n=Number(v);
+      return (isFinite(n) && n>-100 && n<500) ? n : null; };
+    const surveyed = { lag:num(det.lag), mach:num(det.mach), ffe:num(det.ffe),
+                       datum:det.datum?pick(f0.attributes,det.datum):null,
+                       panel:det.panel?pick(f0.attributes,det.panel):null };
     // EC point's own coordinates (WGS84, outSR=4326) — used to drop the 📝 note marker on the map.
     let ecLat=null, ecLng=null;
     try{ const g0=f0.geometry; const gx=g0?(g0.x!=null?g0.x:g0.X):null, gy=g0?(g0.y!=null?g0.y:g0.Y):null;
          if(gx!=null && gy!=null){ ecLng=Number(gx); ecLat=Number(gy); } }catch(e){}
-    return { features:feats, docs, det, oid, date, bfe, ecAddr, ecDistM, hasAtt, ecLat, ecLng };
+    return { features:feats, docs, det, oid, date, bfe, ecAddr, ecDistM, hasAtt, ecLat, ecLng, surveyed };
   }catch(e){ clearTimeout(t); return { err:e.message }; }
 }
 
@@ -12647,11 +12747,23 @@ async function refreshEcAreaNotes(){
       if(feats.length) _ecLinkFieldCache[root]=linkField;
     }
     ecNoteLayer.clearLayers();
+    /* Same filename-vs-URL handling as queryEC(): some counties store a full URL in the link field,
+       others (Sarasota) store only "EC1234_5678.pdf" and rely on a fixed folder. Without this the
+       sweep's markers said "no PDF attached" for every neighbour even though the certificate was
+       one string-concat away — which is exactly what happened on Siesta Key. */
+    const _base = ecDocBase(root);
     for(const f of feats){
       const g=f.geometry; const gx=g?(g.x!=null?g.x:g.X):null, gy=g?(g.y!=null?g.y:g.Y):null;
       if(gx==null||gy==null) continue;
       let pdf=null;
-      if(linkField && f.attributes){ const u=f.attributes[linkField]; if(u && /^https?:/i.test(u)) pdf=u; }
+      if(linkField && f.attributes){
+        const u=f.attributes[linkField];
+        if(u){
+          const raw=String(u).trim();
+          if(/^https?:/i.test(raw)) pdf=raw;
+          else if(_base && /\.(pdf|tif{1,2}|jpe?g|png)$/i.test(raw)) pdf=_base+encodeURIComponent(raw);
+        }
+      }
       _ecMakeNote(Number(gy), Number(gx), pdf).addTo(ecNoteLayer);
     }
     if(feats.length && !map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map);
@@ -15625,6 +15737,57 @@ async function runLookup(lat,lng,searchCtx){
       }
       if(ec.ecAddr) html += fieldRow('Certificate address', esc(String(ec.ecAddr)));
       if(ec.bfe!=null) html += fieldRow('Base flood elev. (per EC)', esc(String(ec.bfe))+' ft');
+      /* SURVEYED values, where the county publishes them as attributes (Charlotte does; most
+         counties only give a marker + PDF). These are sealed survey numbers — they outrank every
+         LiDAR-derived figure elsewhere on this card for the same structure, so they're shown
+         together and labelled by their EC item letter. */
+      { const sv = ec.surveyed || {};
+        /* DATUM FLAG. An Elevation Certificate written on NGVD 29 cannot be compared directly with a
+           BFE on NAVD 88 — in Southwest Florida NGVD 29 readings run roughly 1.2 ft HIGHER for the
+           same ground. Subtracting one from the other silently produces a number that looks fine and
+           is wrong by more than a foot, which on a pad height is the difference between passing and
+           failing. So when the certificate says NGVD 29 we (a) mark the datum RED next to every
+           surveyed value and (b) SUPPRESS the equipment-vs-BFE comparison below rather than doing
+           cross-datum arithmetic. Only NGVD 29 is flagged; NAVD 88 and anything else render plain. */
+        /* Match NGVD explicitly, or a 29/1929 that's clearly a datum year — not a bare "29"
+           anywhere in the string, which would flag a panel number or community ID if this field
+           ever holds something unexpected. A value naming BOTH datums (e.g. "NAVD 88 converted
+           from NGVD 29") is already on NAVD 88, so it isn't flagged. */
+        const _dRaw = String(sv.datum||'');
+        const isNGVD29 = /NGVD/i.test(_dRaw) || /\b(19)?29\b/.test(_dRaw);
+        const _isNAVD88 = /NAVD/i.test(_dRaw) || /\b(19)?88\b/.test(_dRaw);
+        const _flagDatum = isNGVD29 && !_isNAVD88;
+        const dtm = sv.datum
+          ? (_flagDatum
+              ? ' <span style="color:var(--warn);font-weight:600">'+esc(_dRaw)+'</span>'
+              : ' <span class="muted">'+esc(_dRaw)+'</span>')
+          : '';
+        if(sv.ffe!=null)  html += fieldRow('Finished floor (EC item a)', '<b>'+esc(String(sv.ffe))+' ft</b>'+dtm);
+        if(sv.mach!=null) html += fieldRow('Lowest machinery (EC item e)', '<b>'+esc(String(sv.mach))+' ft</b>'+dtm);
+        if(sv.lag!=null)  html += fieldRow('Lowest adjacent grade (EC item f)', '<b>'+esc(String(sv.lag))+' ft</b>'+dtm);
+        if(sv.panel)      html += fieldRow('FIRM panel (per EC)', esc(String(sv.panel)));
+
+        if(_flagDatum){
+          html += `<div class="note warnbox"><b>This certificate is on NGVD 29.</b> The effective FIRM and the base flood elevation above are <b>NAVD 88</b> — the two datums are not interchangeable, and in this area an NGVD 29 reading is roughly <b>1.2 ft higher</b> than the same ground on NAVD 88. Convert before comparing anything here with a BFE or a required elevation, and have a surveyor restate the figures if they're going on a permit. The comparison this card would normally show has been left out rather than subtracting values on two different references.</div>`;
+        }
+
+        if(!_flagDatum && (sv.mach!=null || sv.lag!=null)){
+          /* The practical number for this trade: how high existing equipment sits above grade, and
+             where the BFE falls relative to both. Item (e) is the line an EC uses for machinery
+             servicing the building — i.e. the standard a generator is judged against.
+             Gated on the datum matching — see the NGVD 29 note above. */
+          const bits=[];
+          if(sv.mach!=null && sv.lag!=null)
+            bits.push(`existing equipment sits <b>${esc((Math.round((sv.mach-sv.lag)*10)/10))} ft</b> above lowest grade`);
+          const refB = (ec.bfe!=null?ec.bfe:null);
+          if(refB!=null && sv.mach!=null){
+            const d=Math.round((sv.mach-refB)*10)/10;
+            bits.push(d>=0 ? `and <b>${esc(d)} ft above</b> the ${esc(refB)} ft BFE`
+                           : `and <b>${esc(Math.abs(d))} ft below</b> the ${esc(refB)} ft BFE`);
+          }
+          if(bits.length) html += `<div class="note">Per the certificate, ${bits.join(' ')}. Item (e) is the elevation an EC records for <b>machinery and equipment servicing the building</b> — the same line a generator is measured against. These are surveyed figures, not estimates, but they describe the structure as certified: confirm nothing has been regraded since.</div>`;
+        }
+      }
       if(ec.date) html += fieldRow('Cert / issue date', esc(String(ec.date)));
       if(ec.docs && ec.docs.length){
         for(const d of ec.docs){
