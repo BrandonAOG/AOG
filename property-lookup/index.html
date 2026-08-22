@@ -4586,7 +4586,7 @@ async function identifyElevationSource(lat,lng){
      is only the compare-source picker, a nice-to-have that appears when either endpoint cooperates
      and quietly hides when neither does. */
   const _tryIdentify = async ()=>{
-    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 3000);   // fail fast
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 12000);  // 12s cap for slow post-outage USGS
     try{
       const r=await fetch(DEP3_ID+`?geometry=${g}&geometryType=esriGeometryPoint`
         +`&returnCatalogItems=true&returnGeometry=false&f=json`, {signal:ctrl.signal});
@@ -4602,7 +4602,7 @@ async function identifyElevationSource(lat,lng){
     }catch(e){ clearTimeout(t); return null; }
   };
   const _trySamples = async ()=>{
-    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 3000);   // fail fast
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 12000);  // 12s cap for slow post-outage USGS
     try{
       const body=new URLSearchParams({
         geometry:JSON.stringify({points:[[lng,lat]],spatialReference:{wkid:4326}}),
@@ -4621,17 +4621,16 @@ async function identifyElevationSource(lat,lng){
       return out.filter(o=>isFinite(o.px));
     }catch(e){ clearTimeout(t); return null; }
   };
-  /* Up to 3 rounds. Each round fires BOTH endpoints in parallel (identify for years, getSamples for
-     resolution) and waits at most 3 s; we stop the instant either returns data, preferring
-     identify's year-labelled result. Worst case ~9-10 s only when everything fails all three rounds
-     (e.g. USGS hard-blocking, as it does some days); a healthy service answers on round one in
-     ~1-3 s. The elevation GRID is independent of this — the picker is a nice-to-have on top. */
-  let real=null;
-  for(let round=0; round<3; round++){
+  /* 2 rounds, each: try identify (years) first, then getSamples (resolution) if identify's empty.
+     Each fetch is capped at 12 s internally. Take the first good answer, prefer identify's labels.
+     The elevation GRID is independent — this picker is a bonus. (12 s is a temporary accommodation
+     for USGS being slow post-outage; trim once it's fast again.) */
+  let real = null;
+  for(let round=0; round<2; round++){
     if(round>0) await new Promise(r=>setTimeout(r,300));
-    const [idRes, smRes] = await Promise.all([ _tryIdentify(), _trySamples() ]);
-    real = (idRes && idRes.length) ? idRes : smRes;
-    if(real && real.length) break;               // got collects → stop retrying
+    real = await _tryIdentify();
+    if(!real || !real.length){ real = await _trySamples(); }
+    if(real && real.length) break;
   }
   try{
     if(!real || !real.length){ _elevCollects=[];
@@ -4717,6 +4716,15 @@ async function loadElevationGrid(){
   if(_elevBusy) return;
   _elevBusy=true;
 
+  /* Fire source discovery NOW, in parallel with the grid sampling below — not after it. Both hit the
+     same (possibly slow) USGS server, so running them back-to-back stacked two long waits and the
+     caret never appeared within a usable time. Launched here, discovery resolves alongside the grid;
+     we await the already-running promise later. Only for the default (Auto) load — a pinned collect
+     is labelled from the known entry without a lookup. */
+  let _srcPromise = (_elevLockOid==null)
+    ? identifyElevationSource((pS+pN)/2, (pW+pE)/2)
+    : Promise.resolve(null);
+
   const pts=[];
   // INNER: dense, parcel bounds only
   for(let i=0;i<ELEV_INNER_N;i++) for(let j=0;j<ELEV_INNER_N;j++)
@@ -4752,16 +4760,18 @@ async function loadElevationGrid(){
      Esri's public mirror of the SAME 3DEP data on an entirely different server. Both return
      metres in the same response shape, so downstream code is unchanged. */
   const _post = async (url)=>{
-    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 5000);
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), 12000);  // 12s cap for slow post-outage USGS
     try{ const r=await fetch(url,{method:'POST',body,signal:ctrl.signal});
          clearTimeout(t); return await r.json(); }
     catch(err){ clearTimeout(t); return null; }
   };
   const _ok = j => j && !j.error && j.samples && j.samples.length;
   let js=null;
-  // Primary: USGS - 10 fast attempts (immediate, then 300 ms between).
-  for(let a=0; a<10; a++){
-    if(a>0){ await new Promise(r=>setTimeout(r,300)); if(a===1) mapToast('Retrying elevation service...',1200); }
+  // Primary: USGS. Each attempt now waits up to 20 s (USGS is crawling as it recovers), so 3 tries
+  // is plenty — 10 patient tries could stack to minutes. Drops back to a snappy count once USGS is
+  // fast again; the 20 s cap is the temporary accommodation, not the retry count.
+  for(let a=0; a<2; a++){
+    if(a>0){ await new Promise(r=>setTimeout(r,300)); mapToast('Retrying elevation service...',1200); }
     js=await _post(DEP3_SAMPLES);
     if(_ok(js)) break;
   }
@@ -4774,7 +4784,7 @@ async function loadElevationGrid(){
     try{
       const cLat=(pS+pN)/2, cLng=(pW+pE)/2;
       const g=encodeURIComponent(JSON.stringify({x:cLng,y:cLat,spatialReference:{wkid:4326}}));
-      const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),5000);
+      const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);  // 12s cap for slow post-outage USGS
       const r=await fetch(DEP3_ID+`?geometry=${g}&geometryType=esriGeometryPoint&returnGeometry=false&f=json`,{signal:ctrl.signal});
       clearTimeout(t);
       const j=await r.json();
@@ -4822,7 +4832,7 @@ async function loadElevationGrid(){
   // and label straight from the pinned entry.
   let src, cov=null;
   if(_elevLockOid==null){
-    src = await identifyElevationSource((pS+pN)/2, (pW+pE)/2);
+    src = await _srcPromise;                      // was launched in parallel at the top of the load
     cov = await esriElevCoverage((pS+pN)/2, (pW+pE)/2);
     if(cov) window.__elevCoverage=cov;
   } else {
@@ -5400,7 +5410,12 @@ async function queryGroundElevation(parcelFeature){
              + `&geometryType=esriGeometryPolygon&f=json`;
   const st = await grab(sUrl, BUDGET*0.7);      // leave ~30% for the centroid fallback
   const s = st && st.statistics && st.statistics[0];
-  if(s && isFinite(s.min) && isFinite(s.max)){
+  /* Guard against a degenerate all-zero result. When 3DEP is erroring/slow it sometimes returns a
+     stats object with min=max=mean=0 (or the empty-pixel NoData sentinel), which is NOT a real
+     sea-level reading — showing "0 ft NAVD88" as if surveyed would be dangerously misleading for
+     pad siting. A genuine SW-Florida lot is never exactly 0.0 across its whole extent, so treat an
+     exact-zero (or non-finite) min/max as a miss and fall through to the centroid identify. */
+  if(s && isFinite(s.min) && isFinite(s.max) && !(s.min===0 && s.max===0)){
     const res = { min:r1(s.min*M_TO_FT), max:r1(s.max*M_TO_FT), med:r1(s.mean*M_TO_FT),
                   src:'USGS 3DEP', method:'parcel statistics' };
     window.__groundElevDebug={ ...res, rawMeters:{min:s.min,max:s.max,mean:s.mean},
@@ -5415,8 +5430,8 @@ async function queryGroundElevation(parcelFeature){
   const id = await grab(`${DEP3_BASE}/identify?geometry=${encodeURIComponent(pt)}`
                       + `&geometryType=esriGeometryPoint&returnGeometry=false&f=json`);
   const v = id && Number(id.value);
-  if(!isFinite(v)) {
-    window.__groundElevDebug={fail:'stats and identify both failed or out of budget',
+  if(!isFinite(v) || v===0) {                    // 0 = NoData/error sentinel, not a real reading
+    window.__groundElevDebug={fail:'stats and identify both failed, out of budget, or returned 0',
                              ms:Math.round(performance.now()-t0)};
     return null;
   }
