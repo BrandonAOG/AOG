@@ -5782,7 +5782,7 @@ async function swfwmdElevationFt(lat, lng, timeoutMs){
     return v;    // already feet, NAVD88
   }catch(e){ clearTimeout(t); return null; }
 }
-async function queryGroundElevation(parcelFeature, countyName){
+async function queryGroundElevation(parcelFeature, countyName, budgetOverride){
   const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
   if(!rings0 || !rings0.length) return null;
   /* Outer ring only, thinned and rounded. computeStatisticsHistograms has to rasterise whatever
@@ -5796,7 +5796,7 @@ async function queryGroundElevation(parcelFeature, countyName){
      whole-parcel Promise.all, that one straggler set the render time for the entire flood card.
      Now: a short shared budget, and the fallback only runs if there's budget LEFT. Worst case is
      the budget, not double the budget. */
-  const BUDGET = PARCEL_EXTRA_TIMEOUT;          // 3 s desktop / 5 s mobile
+  const BUDGET = (typeof budgetOverride==='number' && budgetOverride>0) ? budgetOverride : PARCEL_EXTRA_TIMEOUT;  // default 3s desktop / 5s mobile; retry passes 12s
   const t0 = performance.now();
   const left = () => BUDGET - (performance.now() - t0);
   const grab = async (url, ms) => {
@@ -16656,41 +16656,64 @@ async function runLookup(lat,lng,searchCtx){
           if(window.__exportData) window.__exportData.contours = contours.elevs.join(', ');
         }
         /* --- Existing ground elevation, and how far it sits below the BFE --- */
-        if(gElev){
-          const spread = (gElev.max - gElev.min).toFixed(1);
-          const flat = gElev.max === gElev.min;
-          const shown = flat ? `${esc(gElev.med)} ft`
-                             : `${esc(gElev.min)}–${esc(gElev.max)} ft <span class="muted">(avg ${esc(gElev.med)})</span>`;
-          html += `<div class="field"><div class="k">Ground elev.</div><div class="v">${shown} <span class="muted" style="font-size:11px">NAVD88 · ${esc(gElev.src||'LiDAR')}</span></div></div>`;
-          /* Reference BFE for the comparison below, best source first: a mapped BFE line, then a
-             polygon's static BFE, then Lee's Zone A ESTIMATE. The estimate is last on purpose —
-             it's the county's working figure, not an adopted number — but in Zone A it's the only
-             thing there is, and "4 ft below grade" is more use than a blank row. */
-          let refBfe = (bl && bl.elevs.length) ? bl.elevs[bl.elevs.length-1]
-                     : (pz && pz.length && pz[0].bfe!=null) ? pz[0].bfe : null;
-          let refEst = false;
-          if(refBfe==null && leeZoneA && leeZoneA.length){
-            refBfe = leeZoneA[leeZoneA.length-1].el;   // highest estimate = conservative
-            refEst = true;
+        // 3DEP occasionally returns nothing (capped by BATCH_CEILING → null) or a bogus all-zero
+        // reading — either way the row is useless/misleading ("0 ft"). Detect that, show a placeholder,
+        // and RETRY queryGroundElevation in the background (it has its own Esri-mirror + EPQS fallback),
+        // injecting the real value when it lands. runId-guarded. pFeat/countyName/isLee stay in scope.
+        const _geBad = (g)=> !g || g.med==null || (Number(g.min)===0 && Number(g.max)===0 && Number(g.med)===0);
+        const _geSlotId = 'groundElev-'+runId;
+        // Reference BFE (best source first): a mapped BFE line, then a polygon static BFE, then Lee's
+        // Zone A estimate (last — it's a working figure, but in Zone A it's all there is).
+        let _geRefBfe = (bl && bl.elevs.length) ? bl.elevs[bl.elevs.length-1]
+                      : (pz && pz.length && pz[0].bfe!=null) ? pz[0].bfe : null;
+        let _geRefEst = false;
+        if(_geRefBfe==null && leeZoneA && leeZoneA.length){ _geRefBfe = leeZoneA[leeZoneA.length-1].el; _geRefEst = true; }
+        const _geRefCtx = { refBfe:_geRefBfe, refEst:_geRefEst };
+        const _buildGroundElevRow = (g, ref)=>{
+          if(_geBad(g)) return '';
+          const spread = (g.max - g.min).toFixed(1);
+          const flat = g.max === g.min;
+          const shown = flat ? `${esc(g.med)} ft`
+                             : `${esc(g.min)}–${esc(g.max)} ft <span class="muted">(avg ${esc(g.med)})</span>`;
+          let out = `<div class="field"><div class="k">Ground elev.</div><div class="v">${shown} <span class="muted" style="font-size:11px">NAVD88 · ${esc(g.src||'LiDAR')}</span></div></div>`;
+          if(ref.refBfe!=null){
+            const gap = Math.round((ref.refBfe - g.med)*10)/10;
+            const tag = ref.refEst ? ' <span class="muted">(est.)</span>' : '';
+            out += fieldRow(ref.refEst ? 'Avg grade vs est. BFE' : 'Avg grade vs BFE', gap>0
+              ? `<b>${esc(gap)} ft below</b> the ${esc(ref.refBfe)} ft BFE${tag}`
+              : `${esc(Math.abs(gap))} ft above the ${esc(ref.refBfe)} ft BFE${tag}`);
           }
-          if(refBfe!=null){
-            const gap = Math.round((refBfe - gElev.med)*10)/10;
-            const tag = refEst ? ' <span class="muted">(est.)</span>' : '';
-            html += fieldRow(refEst ? 'Avg grade vs est. BFE' : 'Avg grade vs BFE', gap>0
-              ? `<b>${esc(gap)} ft below</b> the ${esc(refBfe)} ft BFE${tag}`
-              : `${esc(Math.abs(gap))} ft above the ${esc(refBfe)} ft BFE${tag}`);
-          }
-          const detail = gElev.n ? `${esc(gElev.n)} LiDAR points on this lot`
-                       : (gElev.method==='centroid point only'
+          const detail = g.n ? `${esc(g.n)} LiDAR points on this lot`
+                       : (g.method==='centroid point only'
                             ? 'single reading at the parcel centre — the rest of the lot was not sampled'
                             : 'sampled across the parcel');
-          html += `<div class="note">Bare-earth ground surface (${detail}) — this is <b>existing grade</b>, not a flood elevation, and not a survey.${flat?'':` Grade varies ${esc(spread)} ft across the parcel, so any specific pad location may differ from the average.`} A surveyed elevation is what the permit will require, and an Elevation Certificate is what the floodplain office will accept.</div>`;
-          if(window.__exportData){
-            window.__exportData.groundElevMin = gElev.min;
-            window.__exportData.groundElevMed = gElev.med;
-            window.__exportData.groundElevMax = gElev.max;
-            window.__exportData.groundElevSrc = gElev.src||'';
-          }
+          out += `<div class="note">Bare-earth ground surface (${detail}) — this is <b>existing grade</b>, not a flood elevation, and not a survey.${flat?'':` Grade varies ${esc(spread)} ft across the parcel, so any specific pad location may differ from the average.`} A surveyed elevation is what the permit will require, and an Elevation Certificate is what the floodplain office will accept.</div>`;
+          return out;
+        };
+        const _geExport = (g)=>{ if(window.__exportData){ window.__exportData.groundElevMin=g.min;
+          window.__exportData.groundElevMed=g.med; window.__exportData.groundElevMax=g.max; window.__exportData.groundElevSrc=g.src||''; } };
+        if(!_geBad(gElev)){
+          html += `<div id="${_geSlotId}">` + _buildGroundElevRow(gElev, _geRefCtx) + `</div>`;
+          _geExport(gElev);
+        } else {
+          html += `<div id="${_geSlotId}"><div class="field"><div class="k">Ground elev.</div>`
+                + `<div class="v"><span class="muted">checking USGS 3DEP… </span><span class="zone-spin" aria-hidden="true"></span></div></div></div>`;
+          (async()=>{
+            let g=null;
+            // Background retry — the card's already up, so give 3DEP a generous 12 s to come back with
+            // a real reading (vs the ~3 s inline budget). Lee's own LiDAR is tried first where it applies.
+            try{ g = await (isLee ? queryLeeGroundElevation(pFeat).then(r=>r||queryGroundElevation(pFeat, countyName, 12000))
+                                  : queryGroundElevation(pFeat, countyName, 12000)); }catch(_){}
+            if(myId!==runId) return;
+            const slot=document.getElementById(_geSlotId); if(!slot) return;
+            if(_geBad(g)){
+              slot.innerHTML = `<div class="field"><div class="k">Ground elev.</div>`
+                + `<div class="v"><span class="muted">USGS 3DEP didn't return a reading here — use the Elevation Heights tool or an Elevation Certificate</span></div></div>`;
+            } else {
+              slot.innerHTML = _buildGroundElevRow(g, _geRefCtx);
+              _geExport(g);
+            }
+          })();
         }
         if(leeLimwa || colLimwa){
           html += `<div class="field"><div class="k">LiMWA</div><div class="v"><span class="badge sfha">Inside Limit of Moderate Wave Action</span></div></div>`;
