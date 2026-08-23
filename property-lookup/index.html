@@ -14663,19 +14663,51 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
     // Runs only when the file gave us nothing (no file for this county, file failed, or no points
     // in view). Same centroid-only query as before.
     if(!usedFile){
+      // County-authoritative override: the statewide cadastral (PARCEL_FS) can lag behind a sale by
+      // many months — e.g. 3369 Runaway Ln reads "FARRISH" statewide but "HOLLEY" (current) in
+      // Collier's own roll. Where a county has a hosted parcel layer that carries owner + site address,
+      // query THAT so the neighbour labels match the live card. Each entry maps the county's own field
+      // names onto the {addr, pid, owner, liv} the label loop expects. Falls back to statewide otherwise.
+      const LABEL_COUNTY_SVC = {
+        COLLIER: { url:"https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Parcel/FeatureServer/2/query",
+                   fields:"SiteStreetAddress,Folio,OwnerLine1", addr:"SiteStreetAddress", pid:"Folio", owner:"OwnerLine1", liv:null }
+      };
+      const _lc = window.__lastCounty ? norm(window.__lastCounty) : null;
+      const _svc = _lc ? LABEL_COUNTY_SVC[_lc] : null;
       // Centroid-only query (no polygon geometry) keeps it fast. Fields: address + parcel id for the
-      // label/match, plus owner name (OWN_NAME) and living area (TOT_LVG_AR) for the hover tooltip.
-      const url=PARCEL_FS+`?geometry=${encodeURIComponent(env)}&geometryType=esriGeometryEnvelope&inSR=4326`+
-        `&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=${encodeURIComponent('PHY_ADDR1,PARCEL_ID,OWN_NAME,TOT_LVG_AR')}`+
+      // label/match, plus owner name and living area for the hover tooltip.
+      const _flds = _svc ? _svc.fields : 'PHY_ADDR1,PARCEL_ID,OWN_NAME,TOT_LVG_AR';
+      const _base = _svc ? _svc.url : PARCEL_FS;
+      const url=_base+`?geometry=${encodeURIComponent(env)}&geometryType=esriGeometryEnvelope&inSR=4326`+
+        `&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=${encodeURIComponent(_flds)}`+
         `&returnGeometry=false&returnCentroid=true&outSR=4326&resultRecordCount=800&f=json`;
       const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
       let j=null;
       try{ const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(t); if(r.ok) j=await r.json(); }
       catch(e){ clearTimeout(t); }
+      // If a county-specific service failed or returned nothing, fall back to the statewide cadastral
+      // so we never end up with NO labels just because the county host hiccuped.
+      if(_svc && (!j || j.error || !(j.features&&j.features.length))){
+        try{
+          const fb=PARCEL_FS+`?geometry=${encodeURIComponent(env)}&geometryType=esriGeometryEnvelope&inSR=4326`+
+            `&spatialRel=esriSpatialRelIntersects&where=1%3D1&outFields=${encodeURIComponent('PHY_ADDR1,PARCEL_ID,OWN_NAME,TOT_LVG_AR')}`+
+            `&returnGeometry=false&returnCentroid=true&outSR=4326&resultRecordCount=800&f=json`;
+          const ctrl2=new AbortController(); const t2=setTimeout(()=>ctrl2.abort(),12000);
+          const r2=await fetch(fb,{signal:ctrl2.signal}); clearTimeout(t2); if(r2.ok) j=await r2.json();
+        }catch(e){}
+        _svc && (j && j.features) && (j.__usedStatewide=true);
+      }
       if(j && !j.error && j.features && j.features.length){
+        const useCty = _svc && !j.__usedStatewide;   // map fields only when the county service answered
         for(const f of j.features){
           if(labels.length>=450) break;                       // safety cap (scaled to the padded box)
-          const a=f.attributes||{};
+          let a=f.attributes||{};
+          // Normalise a county service's own field names onto the ones the tooltip/label expect,
+          // so downstream code (parcelAddrText, OWN_NAME lookup) works unchanged.
+          if(useCty){
+            a = { PHY_ADDR1: a[_svc.addr], PARCEL_ID: a[_svc.pid], OWN_NAME: a[_svc.owner],
+                  TOT_LVG_AR: _svc.liv ? a[_svc.liv] : null };
+          }
           const txt=parcelAddrText(a);                        // auto-detects SITEADDR/PHY_ADDR1/SITUS/etc.
           const hn=houseNum(txt);
           if(!hn) continue;
@@ -14684,7 +14716,7 @@ async function showNeighborNumbers(subjectHN, subjLat, subjLng, subjPid, forceAn
           if(cx==null||cy==null){ const fc=featCentroid(f); if(!fc) continue; cx=fc[0]; cy=fc[1]; }
           const key=hn+'@'+cx.toFixed(5)+','+cy.toFixed(5);
           if(seen.has(key)) continue; seen.add(key);
-          labels.push({ hn, lat:cy, lng:cx, feat:f, txt });
+          labels.push({ hn, lat:cy, lng:cx, feat:{attributes:a}, txt });
         }
       }
     }
