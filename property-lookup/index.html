@@ -5465,7 +5465,7 @@ async function tempClick(e){
   if(_tempMetric==='temp' || _tempMetric==='apt'){
     const cur=await currentTempNear(e.latlng.lat, e.latlng.lng);
     const obsVal = cur ? (_tempMetric==='apt' ? cur.feelsF : cur.tempF) : null;
-    if(cur && obsVal!=null) curLine=`<div style="margin-top:4px;color:#2b7fff"><b>Now observed: ${obsVal}°F</b><br><span style="color:#8a8a8a;font-size:10.5px">nearest station: ${cur.station}${cur.ageMin!=null?` · ${cur.ageMin} min ago`:''}</span></div>`;
+    if(cur && obsVal!=null) curLine=`<div style="margin-top:4px;color:#2b7fff"><b>Now observed: ${obsVal}°F</b>${cur.windMph!=null?`<br><span style="color:#5a9;font-size:11px">wind ${cur.windMph==0?'calm':cur.windMph+' mph'+(cur.dirTxt?' '+cur.dirTxt:'')}${cur.gustMph!=null&&cur.gustMph>cur.windMph?', gusts '+cur.gustMph+' mph':''}</span>`:''}<br><span style="color:#8a8a8a;font-size:10.5px">nearest station: ${cur.station}${cur.ageMin!=null?` · ${cur.ageMin} min ago`:''}</span></div>`;
   }
   pop.setContent(`<div style="font:12px/1.45 system-ui;min-width:160px">
       <div style="font-weight:700;margin-bottom:3px">${NDFD_NAME[_tempMetric]} · ${when}</div>
@@ -5501,8 +5501,17 @@ async function currentTempNear(lat, lng){
       const hiC = obs.properties.heatIndex && obs.properties.heatIndex.value;
       const wcC = obs.properties.windChill && obs.properties.windChill.value;
       const feelsC = (hiC!=null) ? hiC : (wcC!=null ? wcC : null);
+      // Wind — NWS reports speed/gust in km/h (unitCode wmoUnit:km_h-1). Convert to mph (×0.621371).
+      const wsK = obs.properties.windSpeed && obs.properties.windSpeed.value;
+      const wgK = obs.properties.windGust && obs.properties.windGust.value;
+      const wdir = obs.properties.windDirection && obs.properties.windDirection.value;
+      const KMH_TO_MPH = 0.621371;
+      const windMph = wsK!=null ? Math.round(wsK*KMH_TO_MPH) : null;
+      const gustMph = wgK!=null ? Math.round(wgK*KMH_TO_MPH) : null;
+      const dirTxt = wdir!=null ? ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(wdir/22.5)%16] : null;
       return { tempF: Math.round(c*9/5+32), station: first.properties.name||sid, ageMin,
-               feelsF: feelsC!=null ? Math.round(feelsC*9/5+32) : null };
+               feelsF: feelsC!=null ? Math.round(feelsC*9/5+32) : null,
+               windMph, gustMph, dirTxt };
     }catch(_){ return null; }
   })();
   return _curTempCache[key];
@@ -5529,7 +5538,11 @@ function _tempHover(e){
       if(myKey!==_tempHoverKey) return;               // superseded while fetching the observation
       const obsVal = _tempMetric==='apt' ? (cur&&cur.feelsF) : (cur&&cur.tempF);
       if(cur && obsVal!=null && el.classList.contains('show')){
-        el.innerHTML = forecastHtml + `<div class="ct-desc" style="color:#8fd3ff;margin-top:2px">now observed: ${obsVal}°F <span style="color:#7a8a96">· ${cur.station}</span></div>`;
+        let windStr='';
+        if(cur.windMph!=null){
+          windStr = ` <span style="color:#7a8a96">· wind ${cur.windMph==0?'calm':cur.windMph+' mph'+(cur.dirTxt?' '+cur.dirTxt:'')}${cur.gustMph!=null&&cur.gustMph>cur.windMph?', gusts '+cur.gustMph:''}</span>`;
+        }
+        el.innerHTML = forecastHtml + `<div class="ct-desc" style="color:#8fd3ff;margin-top:2px">now observed: ${obsVal}°F <span style="color:#7a8a96">· ${cur.station}</span>${windStr}</div>`;
         if(_tempHoverCp) placeFloat(el,_tempHoverCp);
       }
     }
