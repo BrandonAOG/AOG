@@ -5457,20 +5457,56 @@ async function tempIdentifyAt(latlng){
   return isFinite(num) ? num : null;
 }
 async function tempClick(e){
-  const pop=L.popup({maxWidth:200}).setLatLng(e.latlng)
+  const pop=L.popup({maxWidth:220}).setLatLng(e.latlng)
     .setContent('<div style="font:12px/1.4 system-ui">Reading forecast…</div>').openOn(map);
   const v=await tempIdentifyAt(e.latlng);
   const when=_tempHr==='00'?'now':'+'+parseInt(_tempHr,10)+'h';
-  pop.setContent(`<div style="font:12px/1.45 system-ui;min-width:150px">
+  let curLine='';
+  if(_tempMetric==='temp' || _tempMetric==='apt'){
+    const cur=await currentTempNear(e.latlng.lat, e.latlng.lng);
+    const obsVal = cur ? (_tempMetric==='apt' ? cur.feelsF : cur.tempF) : null;
+    if(cur && obsVal!=null) curLine=`<div style="margin-top:4px;color:#2b7fff"><b>Now observed: ${obsVal}°F</b><br><span style="color:#8a8a8a;font-size:10.5px">nearest station: ${cur.station}${cur.ageMin!=null?` · ${cur.ageMin} min ago`:''}</span></div>`;
+  }
+  pop.setContent(`<div style="font:12px/1.45 system-ui;min-width:160px">
       <div style="font-weight:700;margin-bottom:3px">${NDFD_NAME[_tempMetric]} · ${when}</div>
-      <div>${v==null?'no data here':(v+' '+NDFD_UNIT[_tempMetric])}</div>
-      <div style="margin-top:5px;color:#8a8a8a;font-size:10.5px">NOAA NDFD forecast</div></div>`);
+      <div>${v==null?'no data here':(v+' '+NDFD_UNIT[_tempMetric])+' <span style="color:#8a8a8a;font-size:10.5px">(forecast)</span>'}</div>
+      ${curLine}
+      <div style="margin-top:5px;color:#8a8a8a;font-size:10.5px">Forecast: NOAA NDFD${(_tempMetric==='temp'||_tempMetric==='apt')?' · Observed: NWS station':''}</div></div>`);
 }
 let _tempHoverTimer=null,_tempHoverKey='',_tempHoverCp=null;
 function _tempFloatEl(){ let el=document.getElementById('tempFloat');
   if(!el){ el=document.createElement('div'); el.id='tempFloat'; el.className='wx-cone-float';
     (document.getElementById('map')||document.body).appendChild(el); } return el; }
 function _tempHoverOut(){ const el=document.getElementById('tempFloat'); if(el) el.classList.remove('show'); }
+// Current observed temperature from the nearest NWS station (live, not forecast). Cached per rounded
+// location so a moving cursor reuses it instead of hammering the API — the nearest station covers a
+// wide area anyway. Returns { tempF, station, ageMin } or null. Free, no token.
+const _curTempCache = {};
+async function currentTempNear(lat, lng){
+  const key = lat.toFixed(2)+','+lng.toFixed(2);
+  if(_curTempCache[key]!==undefined) return _curTempCache[key];
+  _curTempCache[key] = (async()=>{
+    try{
+      const pts=await (await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lng.toFixed(4)}`)).json();
+      const stationsUrl=pts.properties&&pts.properties.observationStations; if(!stationsUrl) return null;
+      const st=await (await fetch(stationsUrl)).json();
+      const first=st.features&&st.features[0]; if(!first) return null;
+      const sid=first.properties.stationIdentifier;
+      const obs=await (await fetch(`https://api.weather.gov/stations/${sid}/observations/latest`)).json();
+      const c=obs.properties&&obs.properties.temperature&&obs.properties.temperature.value;
+      if(c==null) return null;
+      const ageMin = obs.properties.timestamp ? Math.round((Date.now()-new Date(obs.properties.timestamp).getTime())/60000) : null;
+      // NWS also reports a computed heat index / wind chill in the observation — the observed "feels
+      // like". Prefer heat index (hot), fall back to wind chill (cold); null when neither applies (mild).
+      const hiC = obs.properties.heatIndex && obs.properties.heatIndex.value;
+      const wcC = obs.properties.windChill && obs.properties.windChill.value;
+      const feelsC = (hiC!=null) ? hiC : (wcC!=null ? wcC : null);
+      return { tempF: Math.round(c*9/5+32), station: first.properties.name||sid, ageMin,
+               feelsF: feelsC!=null ? Math.round(feelsC*9/5+32) : null };
+    }catch(_){ return null; }
+  })();
+  return _curTempCache[key];
+}
 function _tempHover(e){
   if(!tempOn) return;
   _tempHoverCp=e.containerPoint;
@@ -5478,11 +5514,25 @@ function _tempHover(e){
   if(key===_tempHoverKey) return; _tempHoverKey=key;
   clearTimeout(_tempHoverTimer);
   _tempHoverTimer=setTimeout(async()=>{
+    const myKey=key;                                  // this hover's identity
     const v=await tempIdentifyAt(e.latlng);
+    if(myKey!==_tempHoverKey) return;                 // a newer hover superseded this one
     const el=_tempFloatEl();
     const when=_tempHr==='00'?'now':'+'+parseInt(_tempHr,10)+'h';
-    el.innerHTML=`<div class="ct-name" style="color:#ff8c42">${NDFD_NAME[_tempMetric]} · ${when}</div><div class="ct-desc">${v==null?'—':(v+' '+NDFD_UNIT[_tempMetric])}</div>`;
+    const forecastHtml=`<div class="ct-name" style="color:#ff8c42">${NDFD_NAME[_tempMetric]} · ${when}</div><div class="ct-desc">${v==null?'—':(v+' '+NDFD_UNIT[_tempMetric])}</div>`;
+    el.innerHTML=forecastHtml;
     el.classList.add('show'); if(_tempHoverCp) placeFloat(el,_tempHoverCp);
+    // Live current reading from the nearest station (air-temp and feels-like metrics only — humidity
+    // observed isn't wired). Rebuild the WHOLE box in one assignment and bail if a newer hover started.
+    if(_tempMetric==='temp' || _tempMetric==='apt'){
+      const cur=await currentTempNear(e.latlng.lat, e.latlng.lng);
+      if(myKey!==_tempHoverKey) return;               // superseded while fetching the observation
+      const obsVal = _tempMetric==='apt' ? (cur&&cur.feelsF) : (cur&&cur.tempF);
+      if(cur && obsVal!=null && el.classList.contains('show')){
+        el.innerHTML = forecastHtml + `<div class="ct-desc" style="color:#8fd3ff;margin-top:2px">now observed: ${obsVal}°F <span style="color:#7a8a96">· ${cur.station}</span></div>`;
+        if(_tempHoverCp) placeFloat(el,_tempHoverCp);
+      }
+    }
   }, 140);
 }
 const btnTemp=document.getElementById('btnTemp');
