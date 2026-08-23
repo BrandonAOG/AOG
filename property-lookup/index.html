@@ -223,6 +223,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .dot.busy{background:var(--signal);animation:pulse 1s infinite}
   .dot.ok{background:var(--good)} .dot.err{background:var(--warn)}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  .zone-spin{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--signal,#39d3ff);animation:pulse 0.9s infinite;vertical-align:middle;margin-left:2px}
 
   .card{background:var(--panel2);border:1px solid var(--line);border-radius:9px;margin-top:11px;overflow:hidden}
   .card .ch{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--card-head-bg)}
@@ -16803,12 +16804,46 @@ async function runLookup(lat,lng,searchCtx){
      setbacks from the local ordinance, and the live polygon only CONFIRMS which district the point
      falls in. So give it a short window; if it misses, render everything else and say the live
      confirmation was skipped. Same treatment the wind card and the county flood cross-check get. */
-  const ZONING_CEILING = 2000;
-  const zhit = await Promise.race([ pZoning,
-    new Promise(res=>setTimeout(()=>res({__slow:true}), ZONING_CEILING)) ]);
+  // Give the live zoning lookup the SAME window its own query already allows (ENRICH_TIMEOUT, 6 s
+  // desktop). The old 2 s ceiling here killed zoning that would have finished in 2–4 s — the common
+  // case — so it "skipped" constantly even though the answer was seconds away. Now it waits the full
+  // query window; only a genuinely dead zoning service (which burns the whole ENRICH_TIMEOUT anyway)
+  // trips the skip. The card's setbacks/rules come from the adopted code regardless, so a rare true
+  // timeout still degrades gracefully.
+  // FAST CARD + BACKGROUND ZONING: race the live zoning lookup at a short window so the card paints
+  // right away. If zoning is ready by then, render it inline (fast path, unchanged). If it's slow, we
+  // drop a "confirming district…" placeholder into the card NOW, let the query keep running in the
+  // background (up to its full ENRICH_TIMEOUT), and INJECT the finished zoning HTML into the
+  // placeholder when it lands — guarded by runId so a late result can't land on a newer lookup.
+  const ZONING_FAST = 2000;                                         // card-paint window
+  const ZONING_MAX  = (typeof ENRICH_TIMEOUT==='number' ? ENRICH_TIMEOUT : 6000) + 300;  // true-timeout window
+  const _zoneSlotId = 'zoningLive-' + runId;
+  let zhit = await Promise.race([ pZoning,
+    new Promise(res=>setTimeout(()=>res({__slow:true}), ZONING_FAST)) ]);
   if(myId!==runId) return;
-  if(zhit && zhit.__slow){
-    _timings.push({label:'zoning (skipped — over '+ZONING_CEILING+'ms)', ms:ZONING_CEILING, err:true});
+  const _zoneSlow = !!(zhit && zhit.__slow);
+  if(_zoneSlow){
+    // Placeholder shown while zoning keeps loading; replaced in the background when it resolves.
+    html += `<div id="${_zoneSlotId}" class="freshline snap" style="margin-top:10px">`
+          + `<span class="badge unk">▣ ZONING</span> confirming live district… `
+          + `<span class="zone-spin" aria-hidden="true"></span></div>`;
+    // Background: wait for the real result (bounded by ZONING_MAX), then build + inject its HTML.
+    (async()=>{
+      const late = await Promise.race([ pZoning,
+        new Promise(res=>setTimeout(()=>res({__timeout:true}), Math.max(0, ZONING_MAX-ZONING_FAST))) ]);
+      if(myId!==runId) return;                          // a newer lookup superseded this one — drop it
+      const slot=document.getElementById(_zoneSlotId);
+      if(!slot) return;
+      const built = _buildZoningInner(late && !late.__timeout ? late : {__slow:true});
+      slot.outerHTML = built;
+    })();
+  }
+  // Build the zoning inner HTML for a given result. Called inline (fast) or from the background inject.
+  // Returns a STRING; identical branch logic whether rendered now or a moment later.
+  function _buildZoningInner(zhit){
+    let html = '';
+    if(zhit && zhit.__slow){
+    _timings.push({label:'zoning (skipped — over '+ZONING_MAX+'ms)', ms:ZONING_MAX, err:true});
     html += `<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> live district lookup skipped — the ${esc(jurName)} zoning service didn't respond in time</div>`;
     html += `<div class="note">The setbacks and district rules below come from the adopted code and still apply. Only the live point-in-polygon confirmation of <b>which</b> district this parcel sits in was skipped — confirm the district on the jurisdiction's zoning map before relying on the setbacks.</div>`;
   } else
@@ -16953,6 +16988,10 @@ async function runLookup(lat,lng,searchCtx){
     html += `<a class="palink" href="https://www.collierclerk.com/zoning-maps/" target="_blank" rel="noopener" style="margin-top:8px">↗ Official adopted zoning map sheets (Clerk of Courts)</a>`;
     html += `<div class="note">Collier's legally adopted zoning map, archived as searchable map sheets. Not point-queryable, so use it to confirm the district above for any legal/permitting decision.</div>`;
   }
+    return html;
+  }
+  // FAST PATH: zoning was ready within ZONING_FAST — render it inline right now.
+  if(!_zoneSlow){ html += _buildZoningInner(zhit); }
   html += `</div></div>`;
 
   /* ---- Permits & Documents: Elevation Certificate (live where wired) + Survey/Site Plan links ---- */
