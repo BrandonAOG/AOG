@@ -283,9 +283,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   footer:not(.collapsed) #footBody{max-height:min(70vh,640px);overflow-y:auto;padding:2px 16px 12px}
   footer:not(.collapsed) #footToggle .fchev{transform:rotate(180deg)}
 
-  .layerswitch{position:absolute;z-index:1000;bottom:18px;right:18px;display:flex;background:var(--search-bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;box-shadow:0 6px 20px var(--shadow-soft)}
-  .layerswitch button{background:transparent;border:none;color:var(--dim);font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.05em;padding:9px 14px;cursor:pointer;text-transform:uppercase}
+  .layerswitch{position:absolute;z-index:1000;bottom:18px;left:600px;right:0;margin-inline:auto;width:max-content;display:flex;background:var(--search-bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;box-shadow:0 6px 20px var(--shadow-soft)}
+  .layerswitch button{background:transparent;border:none;color:var(--dim);font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.05em;padding:9px 14px;cursor:pointer;text-transform:uppercase;white-space:nowrap}
   .layerswitch button.active{background:var(--signal);color:var(--signal-ink)}
+  #tlToolbarBtn{border-right:1px solid var(--line)}
   /* basemap picker: one button that opens a small popup of the 3 mutually-exclusive basemaps */
   .basemap-pick{position:relative;display:flex}
   .weather-pick{position:relative;display:flex}
@@ -299,6 +300,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     opacity:.4; transition:opacity .12s, background .12s; }
   .surge-cat:hover{ opacity:.75; }
   .surge-cat.active{ background:var(--sc,#888); color:#111; opacity:1; }
+  #surgeCatRow{ flex-wrap:nowrap; }
+  #surgeCatRow .surge-cat{ width:24px; height:24px; }
   .surge-cat-lbl{ color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.04em; margin-right:2px; }
   .depth-cat{ width:24px; height:24px; padding:0; border:1px solid var(--line); background:transparent;
     color:var(--dim); font-family:var(--mono,monospace); font-size:12px; font-weight:700; border-radius:5px; cursor:pointer; }
@@ -312,7 +315,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .basemap-pick .bm-caret{font-size:9px;opacity:.7;margin-left:2px}
   .basemap-menu{position:fixed;display:flex;flex-direction:column;
     background:var(--search-bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;
-    box-shadow:0 6px 20px var(--shadow-soft);min-width:130px;z-index:1100}
+    box-shadow:0 6px 20px var(--shadow-soft);min-width:200px;z-index:1100}
   .basemap-menu[hidden]{display:none}
   .basemap-menu button{background:transparent;border:none;color:var(--dim);font-family:var(--disp);
     font-weight:600;font-size:12px;letter-spacing:.05em;padding:9px 14px;cursor:pointer;
@@ -333,13 +336,13 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;max-width:80vw;text-align:center}
   .maptoast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   /* Radar frame-time readout (shown only while the loop is playing) */
-  .radarclock{position:absolute;z-index:1000;bottom:64px;right:18px;display:none;
+  .radarclock{position:absolute;z-index:1000;top:90px;right:18px;display:none;
     font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--blueprint);
     background:var(--search-bg);border:1px solid var(--line);padding:5px 11px;border-radius:7px;
     box-shadow:0 4px 14px var(--shadow-soft);pointer-events:none}
   .radarclock.show{display:block}
-  .zoning-legend{position:absolute;z-index:1000;bottom:18px;left:14px;display:none;
-    flex-direction:column;gap:8px;max-height:50vh;overflow:auto;align-items:flex-start}
+  .zoning-legend{position:absolute;z-index:1000;top:124px;right:18px;left:auto;display:none;
+    flex-direction:column;gap:8px;max-height:60vh;overflow:auto;align-items:flex-end}
   .zoning-legend.show{display:flex}
   .zoning-legend .zl-card{background:var(--search-bg);border:1px solid var(--line);border-radius:8px;
     padding:8px 10px;font-family:var(--disp);font-size:11px;color:var(--dim);
@@ -496,7 +499,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .ec-note:hover{transform:scale(1.25)}
   /* thin stem connecting the raised note down to its point, so it's clear which structure it marks */
   .ec-note-stem{width:2px;height:16px;margin:0 auto;background:linear-gradient(to bottom, #ffb000, rgba(255,176,0,0));pointer-events:none}
-  .crosshair{position:absolute;z-index:999;bottom:18px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:10.5px;color:var(--dim);background:var(--crosshair-bg);border:1px solid var(--line);padding:5px 12px;border-radius:20px;pointer-events:none}
+  .crosshair{position:absolute;z-index:999;top:56px;right:18px;font-family:var(--mono);font-size:10.5px;color:var(--dim);background:var(--crosshair-bg);border:1px solid var(--line);padding:5px 12px;border-radius:20px;pointer-events:none}
 
   .empty{text-align:center;color:var(--faint);font-family:var(--mono);font-size:12px;padding:26px 10px;line-height:1.6}
 
@@ -730,7 +733,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     }
     #map{ inset:var(--abh,48px) 0 0 600px; }
     .cardflow{ column-count:1; }   /* one category at a time — no masonry in tabbed mode */
-    .zoning-legend{ left:614px; bottom:18px; }  /* clear the 600px sidebar; lower-left of map */
+    .zoning-legend{ right:18px; top:124px; left:auto; bottom:auto; }  /* top-right, under lat/lng + radar clock */
     .wx-legend{ left:614px; }                    /* clear the 600px sidebar */
   }
 
@@ -784,7 +787,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     .field{flex-direction:column;gap:2px}
     .field .k{width:auto}
     .field .v{text-align:left}
-    .layerswitch{bottom:auto;top:calc(var(--abh,48px) + 8px);right:12px}
+    .layerswitch{bottom:auto;top:calc(var(--abh,48px) + 8px);right:12px;left:auto;margin-inline:0;width:auto}
     .crosshair{display:none}
     footer{display:none}             /* hide sources/hub footer on phones */
     .suggest .sg{padding:13px 12px;font-size:13px}  /* bigger tap targets */
@@ -1123,6 +1126,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 </div>
 <button class="sheet-tab" id="sheetTab" aria-label="Show property panel">⌃ Property panel</button>
 <div class="layerswitch">
+  <button id="tlToolbarBtn" title="Time-lapse — see how this spot changed over the years (Esri Wayback + county aerials). Search or center a spot first.">⏱ <span class="tl-tb-lbl">Time-lapse</span></button>
   <div class="basemap-pick">
     <button id="btnBasemap" title="Switch the base map (Satellite / Street / Topo)">🗺 <span id="basemapLbl">Satellite</span> <span class="bm-caret">▾</span></button>
     <div id="basemapMenu" class="basemap-menu" hidden>
@@ -1162,17 +1166,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   <div class="weather-pick">
     <button id="btnWeather" title="Storm &amp; weather layers (radar, hurricane cone, NWS warnings)">🌩 Weather <span class="bm-caret">▾</span></button>
     <div id="weatherMenu" class="basemap-menu" hidden>
-      <button id="btnRadar" title="Animated rain/storm radar (RainViewer). Loops the last ~2h and, when rain is nearby, the projected next ~30 min (labelled 'forecast'). Zoom to your area.">◵ Radar</button>
       <button id="btnCone" title="NHC forecast cone &amp; track for any active tropical system">⬢ Hurricane cone</button>
-      <button id="btnWarn" title="Live NWS watches &amp; warnings (tornado, flood, tropical, severe)">⚠ NWS warnings</button>
-      <button id="btnSurge" title="Shade hurricane evacuation zones by category (1 = evacuates first / most flood-prone low ground … 5 = evacuates only in the strongest storms / higher ground). FDEM SLOSH-based. Zoom in to see it. Note: this shows which evac zone a property is in — not water depth.">🚨 Evacuation zones</button>
-      <div id="surgeCatRow" class="surge-cat-row" hidden title="Toggle which evacuation-zone categories to show. Each is independent — pick any combination. Colors match the map shading (1 = worst / floods easiest).">
-        <button class="surge-cat active" data-cat="1" style="--sc:#e23b3b">1</button>
-        <button class="surge-cat active" data-cat="2" style="--sc:#f2792b">2</button>
-        <button class="surge-cat active" data-cat="3" style="--sc:#f2c12b">3</button>
-        <button class="surge-cat active" data-cat="4" style="--sc:#7ec94b">4</button>
-        <button class="surge-cat active" data-cat="5" style="--sc:#4bb0c9">5</button>
-      </div>
       <button id="btnSurgeDepth" title="NOAA SLOSH storm-surge INUNDATION — actual water depth by hurricane category (worst-case / MOM). Pick a category below, then click any spot for the depth in feet. Shows how deep water gets in a Cat 1…5 storm.">🌊 Surge depth</button>
       <div id="surgeDepthRow" class="surge-cat-row" hidden title="Pick the hurricane category to model. Shows NOAA's worst-case surge inundation for that strength. Click the map for depth in feet.">
         <span class="surge-cat-lbl">Cat</span>
@@ -1182,6 +1176,15 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
         <button class="depth-cat" data-dcat="4">4</button>
         <button class="depth-cat" data-dcat="5">5</button>
       </div>
+      <button id="btnSurge" title="Shade hurricane evacuation zones by category (1 = evacuates first / most flood-prone low ground … 5 = evacuates only in the strongest storms / higher ground). FDEM SLOSH-based. Zoom in to see it. Note: this shows which evac zone a property is in — not water depth.">🚨 Evacuation zones</button>
+      <div id="surgeCatRow" class="surge-cat-row" hidden title="Toggle which evacuation-zone categories to show. Each is independent — pick any combination. Colors match the map shading (1 = worst / floods easiest).">
+        <button class="surge-cat active" data-cat="1" style="--sc:#e23b3b">1</button>
+        <button class="surge-cat active" data-cat="2" style="--sc:#f2792b">2</button>
+        <button class="surge-cat active" data-cat="3" style="--sc:#f2c12b">3</button>
+        <button class="surge-cat active" data-cat="4" style="--sc:#7ec94b">4</button>
+        <button class="surge-cat active" data-cat="5" style="--sc:#4bb0c9">5</button>
+      </div>
+      <button id="btnWarn" title="Live NWS watches &amp; warnings (tornado, flood, tropical, severe)">⚠ NWS warnings</button>
       <button id="btnTemp" title="NOAA NDFD forecast — air temperature, feels-like (heat index), or humidity, now through the next 24 hours. Shaded overlay; hover or click for the value at a spot. Pick metric and time below.">🌡 Temperature</button>
       <div id="tempMetricRow" class="surge-cat-row" hidden title="Which reading to shade: air temp, feels-like (heat index — matters for crew heat safety), or relative humidity.">
         <button class="depth-cat tmetric active" data-metric="temp">Temp</button>
@@ -1196,6 +1199,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
         <button class="depth-cat ttime" data-hr="12">+12h</button>
         <button class="depth-cat ttime" data-hr="24">+24h</button>
       </div>
+      <button id="btnRadar" title="Animated rain/storm radar (RainViewer). Loops the last ~2h and, when rain is nearby, the projected next ~30 min (labelled 'forecast'). Zoom to your area.">◵ Radar</button>
     </div>
   </div>
 </div>
@@ -4217,10 +4221,10 @@ document.addEventListener('click', closeBasemapMenu);
   // ---- UI ----
   const css=document.createElement('style');
   css.textContent=`
-    #tlBtn{position:absolute;z-index:1200;left:10px;bottom:24px;background:#12181f;color:#dff6ff;border:1px solid #2a3a46;
+    #tlBtn{position:absolute;z-index:1200;left:10px;bottom:66px;background:#12181f;color:#dff6ff;border:1px solid #2a3a46;
       font-family:var(--disp,monospace);font-size:12px;padding:6px 10px;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.45)}
     #tlBtn:hover{background:#1b2530}
-    #tlPanel{position:absolute;z-index:1200;left:50%;transform:translateX(-50%);bottom:22px;width:min(560px,92%);
+    #tlPanel{position:absolute;z-index:1200;left:50%;transform:translateX(-50%);bottom:74px;width:min(560px,92%);
       background:rgba(10,16,22,.95);border:1px solid #2a3a46;border-radius:9px;padding:9px 12px;color:#dff6ff;
       font-family:var(--disp,monospace);display:none;box-shadow:0 6px 20px rgba(0,0,0,.55)}
     #tlPanel.show{display:block}
@@ -4258,9 +4262,11 @@ document.addEventListener('click', closeBasemapMenu);
     _playing=true; elPlay.textContent='⏸';
     _timer=setInterval(()=>{ showFrame(_tlIdx>=_tlFrames.length-1?0:_tlIdx+1); }, 1000);
   }
-  function closeTL(){ stop(); panel.classList.remove('show'); if(map.hasLayer(tlLayer)) map.removeLayer(tlLayer); TL_REF.frame=null; }
+  function closeTL(){ stop(); panel.classList.remove('show'); if(map.hasLayer(tlLayer)) map.removeLayer(tlLayer); TL_REF.frame=null;
+    const tb=document.getElementById('tlToolbarBtn'); if(tb) tb.classList.remove('active'); }
   async function openTL(){
     const c=map.getCenter();
+    const tb=document.getElementById('tlToolbarBtn'); if(tb) tb.classList.add('active');
     panel.classList.add('show'); elDate.textContent='scanning…'; elSrc.textContent=''; elSlider.max=0;
     if(map.getZoom()<15) map.setZoom(18);
     let frames=[]; try{ frames=await buildFrames(c.lat,c.lng); }catch(e){}
@@ -4274,6 +4280,14 @@ document.addEventListener('click', closeBasemapMenu);
   elPlay.onclick=play;
   panel.querySelector('#tlClose').onclick=closeTL;
   btn.onclick=()=>{ if(panel.classList.contains('show')) closeTL(); else openTL(); };
+  // The time-lapse trigger now lives in the layer toolbar (left of Satellite). Hide the old floating
+  // button and route the toolbar button to the same open/close logic.
+  btn.style.display='none';
+  const _tlTb=document.getElementById('tlToolbarBtn');
+  if(_tlTb){
+    L.DomEvent.disableClickPropagation(_tlTb);
+    _tlTb.onclick=()=>{ if(panel.classList.contains('show')) closeTL(); else openTL(); };
+  }
   window.__tlClose = closeTL;   // let setBasemap() close the panel when switching to Local HD
 })();
 
