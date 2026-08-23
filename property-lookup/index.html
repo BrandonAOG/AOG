@@ -14020,6 +14020,21 @@ function drawParcel(g, info){
         if(isFinite(clat)&&isFinite(clng)) drawHomeWithinTract(clat, clng, acres, info);
       } else {
         map.fitBounds(parcelLayer.getBounds(),{maxZoom:19,padding:[60,60]});
+        // MARKER SNAP (cosmetic): the orange dot starts at the raw geocode point, which for some
+        // addresses (interpolated, or coastal lots on Estero Blvd etc.) lands off the actual lot —
+        // even on a neighbour. The PARCEL is matched by address, not by the dot, so the data is
+        // correct; only the dot looks wrong. Move it to the polygon's true centroid so it sits on the
+        // right lot. If the centroid somehow falls outside a concave lot, fall back to bounds-center.
+        try{
+          if(marker && parcelLayer){
+            let c = parcelLayer.getCenter && parcelLayer.getCenter();   // Leaflet polygon centroid
+            const b = parcelLayer.getBounds();
+            // Guard: if the computed centroid isn't inside the lot's bounds (rare concave case), use
+            // the bounds center instead — still far better than the stray geocode point.
+            if(!c || !b.contains(c)) c = b.getCenter();
+            if(c && isFinite(c.lat) && isFinite(c.lng)){ marker.setLatLng(c); saveLoc(c.lat, c.lng); }
+          }
+        }catch(e){}
       }
     }
   }catch(e){}
