@@ -1144,23 +1144,6 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
         <button class="rc-cat" data-rc="III" title="Risk Category III — substantial hazard to human life (schools, assembly). Higher design wind speed.">III</button>
         <button class="rc-cat" data-rc="IV" title="Risk Category IV — essential facilities (hospitals, fire, emergency). Highest design wind speed.">IV</button>
       </div>
-      <button id="btnSurge" title="Shade hurricane evacuation zones by category (1 = evacuates first / most flood-prone low ground … 5 = evacuates only in the strongest storms / higher ground). FDEM SLOSH-based. Zoom in to see it. Note: this shows which evac zone a property is in — not water depth.">🚨 Evacuation zones</button>
-      <div id="surgeCatRow" class="surge-cat-row" hidden title="Toggle which evacuation-zone categories to show. Each is independent — pick any combination. Colors match the map shading (1 = worst / floods easiest).">
-        <button class="surge-cat active" data-cat="1" style="--sc:#e23b3b">1</button>
-        <button class="surge-cat active" data-cat="2" style="--sc:#f2792b">2</button>
-        <button class="surge-cat active" data-cat="3" style="--sc:#f2c12b">3</button>
-        <button class="surge-cat active" data-cat="4" style="--sc:#7ec94b">4</button>
-        <button class="surge-cat active" data-cat="5" style="--sc:#4bb0c9">5</button>
-      </div>
-      <button id="btnSurgeDepth" title="NOAA SLOSH storm-surge INUNDATION — actual water depth by hurricane category (worst-case / MOM). Pick a category below, then click any spot for the depth in feet. Shows how deep water gets in a Cat 1…5 storm.">🌊 Surge depth</button>
-      <div id="surgeDepthRow" class="surge-cat-row" hidden title="Pick the hurricane category to model. Shows NOAA's worst-case surge inundation for that strength. Click the map for depth in feet.">
-        <span class="surge-cat-lbl">Cat</span>
-        <button class="depth-cat active" data-dcat="1">1</button>
-        <button class="depth-cat" data-dcat="2">2</button>
-        <button class="depth-cat" data-dcat="3">3</button>
-        <button class="depth-cat" data-dcat="4">4</button>
-        <button class="depth-cat" data-dcat="5">5</button>
-      </div>
     </div>
   </div>
   <button id="btnElev" title="Sample bare-earth ground elevation on a grid across the parcel and its immediate neighbours (USGS 3DEP, NAVD88). Search an address first.">⛭ Elevation heights <span id="elevSrcCaret" class="bm-caret" style="display:none" title="Compare elevation source (which LiDAR collect)">▾</span></button>
@@ -1179,6 +1162,23 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       <button id="btnRadar" title="Animated rain/storm radar (RainViewer · last ~2h, looping)">◵ Radar</button>
       <button id="btnCone" title="NHC forecast cone &amp; track for any active tropical system">⬢ Hurricane cone</button>
       <button id="btnWarn" title="Live NWS watches &amp; warnings (tornado, flood, tropical, severe)">⚠ NWS warnings</button>
+      <button id="btnSurge" title="Shade hurricane evacuation zones by category (1 = evacuates first / most flood-prone low ground … 5 = evacuates only in the strongest storms / higher ground). FDEM SLOSH-based. Zoom in to see it. Note: this shows which evac zone a property is in — not water depth.">🚨 Evacuation zones</button>
+      <div id="surgeCatRow" class="surge-cat-row" hidden title="Toggle which evacuation-zone categories to show. Each is independent — pick any combination. Colors match the map shading (1 = worst / floods easiest).">
+        <button class="surge-cat active" data-cat="1" style="--sc:#e23b3b">1</button>
+        <button class="surge-cat active" data-cat="2" style="--sc:#f2792b">2</button>
+        <button class="surge-cat active" data-cat="3" style="--sc:#f2c12b">3</button>
+        <button class="surge-cat active" data-cat="4" style="--sc:#7ec94b">4</button>
+        <button class="surge-cat active" data-cat="5" style="--sc:#4bb0c9">5</button>
+      </div>
+      <button id="btnSurgeDepth" title="NOAA SLOSH storm-surge INUNDATION — actual water depth by hurricane category (worst-case / MOM). Pick a category below, then click any spot for the depth in feet. Shows how deep water gets in a Cat 1…5 storm.">🌊 Surge depth</button>
+      <div id="surgeDepthRow" class="surge-cat-row" hidden title="Pick the hurricane category to model. Shows NOAA's worst-case surge inundation for that strength. Click the map for depth in feet.">
+        <span class="surge-cat-lbl">Cat</span>
+        <button class="depth-cat active" data-dcat="1">1</button>
+        <button class="depth-cat" data-dcat="2">2</button>
+        <button class="depth-cat" data-dcat="3">3</button>
+        <button class="depth-cat" data-dcat="4">4</button>
+        <button class="depth-cat" data-dcat="5">5</button>
+      </div>
     </div>
   </div>
 </div>
@@ -5242,7 +5242,7 @@ const btnSurge=document.getElementById('btnSurge');
 if(btnSurge) btnSurge.onclick=function(){
   surgeOn=!surgeOn; this.classList.toggle('active',surgeOn);
   const row=document.getElementById('surgeCatRow'); if(row) row.hidden=!surgeOn;
-  if(typeof repositionHazardsMenu==='function') repositionHazardsMenu();
+  if(typeof repositionWeatherMenu==='function') repositionWeatherMenu();
   if(surgeOn){ surgeLayer.addTo(map); _surgeKey=''; refreshSurge(); }
   else { map.removeLayer(surgeLayer); surgeLayer.clearLayers(); }
 };
@@ -5314,7 +5314,7 @@ const btnSurgeDepth=document.getElementById('btnSurgeDepth');
 if(btnSurgeDepth) btnSurgeDepth.onclick=function(){
   surgeDepthOn=!surgeDepthOn; this.classList.toggle('active',surgeDepthOn);
   const row=document.getElementById('surgeDepthRow'); if(row) row.hidden=!surgeDepthOn;
-  if(typeof repositionHazardsMenu==='function') repositionHazardsMenu();
+  if(typeof repositionWeatherMenu==='function') repositionWeatherMenu();
   if(surgeDepthOn){ _buildSurgeDepthTiles(); map.on('click', surgeDepthClick);
     map.on('mousemove', _surgeDepthHover); map.on('mouseout', _surgeDepthHoverOut);
     if(map.getZoom()<7) mapToast('Zoom in to see surge-depth shading — then hover or click for feet.',2800);
@@ -5400,8 +5400,8 @@ if(btnHazards) btnHazards.onclick=(e)=>{ e.stopPropagation(); if(hazardsMenu.hid
 if(hazardsMenu) hazardsMenu.addEventListener('click',(e)=>e.stopPropagation());
 document.addEventListener('click', closeHazardsMenu);
 // reflect "any hazard layer on" on the Hazards button
-function syncHazardsBtn(){ if(btnHazards) btnHazards.classList.toggle('active', floodOn||windLayerOn||surgeOn||surgeDepthOn); }
-['btnFlood','btnWindLayer','btnSurge','btnSurgeDepth'].forEach(id=>{ const b=document.getElementById(id); if(b){ const o=b.onclick; b.onclick=function(ev){ if(o) o.call(this,ev); setTimeout(syncHazardsBtn,0); }; }});
+function syncHazardsBtn(){ if(btnHazards) btnHazards.classList.toggle('active', floodOn||windLayerOn); }
+['btnFlood','btnWindLayer'].forEach(id=>{ const b=document.getElementById(id); if(b){ const o=b.onclick; b.onclick=function(ev){ if(o) o.call(this,ev); setTimeout(syncHazardsBtn,0); }; }});
 
 /* ---------- Flood-zone BOUNDARIES (vector, on top of the PNG fill) ----------
    The PNG above gives the fast color fill. Here we additionally pull the FEMA zone
@@ -7785,21 +7785,23 @@ if(btnWarn) btnWarn.onclick=function(){
 const btnWeather=document.getElementById('btnWeather');
 const weatherMenu=document.getElementById('weatherMenu');
 function closeWeatherMenu(){ if(weatherMenu) weatherMenu.hidden=true; }
-function openWeatherMenu(){
+function _positionWeatherMenu(){
   const r=btnWeather.getBoundingClientRect();
-  weatherMenu.hidden=false;
   const mh=weatherMenu.offsetHeight||120, mw=weatherMenu.offsetWidth||160;
   let top=r.top-mh-6; if(top<8) top=r.bottom+6;
   let left=r.left; if(left+mw>window.innerWidth-8) left=window.innerWidth-mw-8;
   weatherMenu.style.top=top+'px'; weatherMenu.style.left=left+'px';
 }
+function openWeatherMenu(){ weatherMenu.hidden=false; _positionWeatherMenu(); }
+// Re-anchor when a picker row (surge/evac categories) changes the menu height.
+function repositionWeatherMenu(){ if(weatherMenu && !weatherMenu.hidden) requestAnimationFrame(_positionWeatherMenu); }
 if(btnWeather) btnWeather.onclick=(e)=>{ e.stopPropagation(); if(weatherMenu.hidden) openWeatherMenu(); else closeWeatherMenu(); };
 // keep the menu open when clicking a toggle inside it (so you can flip several)
 if(weatherMenu) weatherMenu.addEventListener('click',(e)=>e.stopPropagation());
 document.addEventListener('click', closeWeatherMenu);
 // reflect "any weather layer on" on the Weather button itself
-function syncWeatherBtn(){ if(btnWeather) btnWeather.classList.toggle('active', radarOn||coneOn||warnOn); }
-['btnRadar','btnCone','btnWarn'].forEach(id=>{ const b=document.getElementById(id); if(b){ const o=b.onclick; b.onclick=function(ev){ if(o) o.call(this,ev); setTimeout(syncWeatherBtn,0); }; }});
+function syncWeatherBtn(){ if(btnWeather) btnWeather.classList.toggle('active', radarOn||coneOn||warnOn||surgeOn||surgeDepthOn); }
+['btnRadar','btnCone','btnWarn','btnSurge','btnSurgeDepth'].forEach(id=>{ const b=document.getElementById(id); if(b){ const o=b.onclick; b.onclick=function(ev){ if(o) o.call(this,ev); setTimeout(syncWeatherBtn,0); }; }});
 
 
 /* ---------- Helpers ---------- */
