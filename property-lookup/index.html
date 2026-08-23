@@ -288,6 +288,23 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   /* basemap picker: one button that opens a small popup of the 3 mutually-exclusive basemaps */
   .basemap-pick{position:relative;display:flex}
   .weather-pick{position:relative;display:flex}
+  .hazards-pick{position:relative;display:flex}
+  .surge-cat-row{ display:flex; align-items:center; justify-content:center; gap:6px; padding:6px 12px 8px; }
+  .surge-cat-row[hidden]{ display:none; }
+  .surge-cat{ width:26px; height:26px; padding:0; border:2px solid var(--sc,#888); background:transparent;
+    color:var(--dim); font-family:var(--mono,monospace); font-size:12px; font-weight:700; border-radius:5px; cursor:pointer;
+    opacity:.4; transition:opacity .12s, background .12s; }
+  .surge-cat:hover{ opacity:.75; }
+  .surge-cat.active{ background:var(--sc,#888); color:#111; opacity:1; }
+  .surge-cat-lbl{ color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.04em; margin-right:2px; }
+  .depth-cat{ width:24px; height:24px; padding:0; border:1px solid var(--line); background:transparent;
+    color:var(--dim); font-family:var(--mono,monospace); font-size:12px; font-weight:700; border-radius:5px; cursor:pointer; }
+  .depth-cat:hover{ background:rgba(57,211,255,.12); color:#dff6ff; }
+  .depth-cat.active{ background:#2b7fff; color:#fff; border-color:#2b7fff; }
+  .rc-cat{ min-width:26px; height:24px; padding:0 5px; border:1px solid var(--line); background:transparent;
+    color:var(--dim); font-family:var(--mono,monospace); font-size:11px; font-weight:700; border-radius:5px; cursor:pointer; }
+  .rc-cat:hover{ background:rgba(201,75,255,.14); color:#f0dcff; }
+  .rc-cat.active{ background:#c94bff; color:#fff; border-color:#c94bff; }
   .layers-pick{position:relative;display:flex}
   .basemap-pick .bm-caret{font-size:9px;opacity:.7;margin-left:2px}
   .basemap-menu{position:fixed;display:flex;flex-direction:column;
@@ -576,6 +593,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     text-align:center; white-space:nowrap; line-height:1.25; pointer-events:none;
     transform:translate(-50%,-50%);
     text-shadow:0 0 3px #10151b,0 0 3px #10151b,1px 1px 2px #10151b,-1px -1px 2px #10151b }
+  .wind-lbl{ pointer-events:none; transform:translate(-50%,-50%); }
+  .wind-lbl span{ display:inline-block; background:#c94bff; color:#fff; font-family:var(--mono,monospace);
+    font-size:10px; font-weight:700; line-height:1; padding:2px 5px; border-radius:9px; white-space:nowrap;
+    box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.5); }
 
   /* ---- Search history dropdown ---- */
   .history{position:absolute;z-index:1200;left:0;right:0;top:calc(100% + 4px);
@@ -1111,7 +1132,37 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       <button data-bm="topo" title="USGS topographic / terrain basemap — elevation &amp; contour context for low-ground / pad siting">⛰ Topo</button>
     </div>
   </div>
-  <button id="btnFlood" title="Shade FEMA flood-hazard zones (AE / AH / VE / X) plus BFE elevation contour lines — live NFHL. Zoom in to see it.">≋ Flood</button>
+  <div class="hazards-pick">
+    <button id="btnHazards" title="Site hazards — flood shading and design-wind contours. Open to pick which to show.">≋ Hazards <span class="bm-caret">▾</span></button>
+    <div id="hazardsMenu" class="basemap-menu" hidden>
+      <button id="btnFlood" title="Shade FEMA flood-hazard zones (AE / AH / VE / X) plus BFE contour lines — live NFHL. Zoom in to see it.">≋ Flood zones</button>
+      <button id="btnWindLayer" title="Shade ASCE 7-22 design-wind-speed contours (ultimate design wind speed). Pick a Risk Category below — the required wind speed rises with building importance (I=minor structures … IV=hospitals/essential). Statewide.">🌀 Wind speed</button>
+      <div id="windRcRow" class="surge-cat-row" hidden title="ASCE 7-22 Risk Category — the design wind speed a structure must withstand rises with how critical it is. II = normal homes; III = assembly (schools); IV = essential (hospitals, emergency). Pick the one matching what the generator serves.">
+        <span class="surge-cat-lbl">Risk</span>
+        <button class="rc-cat" data-rc="I" title="Risk Category I — minor structures (barns, sheds). Lowest design wind speed.">I</button>
+        <button class="rc-cat active" data-rc="II" title="Risk Category II — normal buildings (homes, most structures). The standard.">II</button>
+        <button class="rc-cat" data-rc="III" title="Risk Category III — substantial hazard to human life (schools, assembly). Higher design wind speed.">III</button>
+        <button class="rc-cat" data-rc="IV" title="Risk Category IV — essential facilities (hospitals, fire, emergency). Highest design wind speed.">IV</button>
+      </div>
+      <button id="btnSurge" title="Shade hurricane evacuation zones by category (1 = evacuates first / most flood-prone low ground … 5 = evacuates only in the strongest storms / higher ground). FDEM SLOSH-based. Zoom in to see it. Note: this shows which evac zone a property is in — not water depth.">🚨 Evacuation zones</button>
+      <div id="surgeCatRow" class="surge-cat-row" hidden title="Toggle which evacuation-zone categories to show. Each is independent — pick any combination. Colors match the map shading (1 = worst / floods easiest).">
+        <button class="surge-cat active" data-cat="1" style="--sc:#e23b3b">1</button>
+        <button class="surge-cat active" data-cat="2" style="--sc:#f2792b">2</button>
+        <button class="surge-cat active" data-cat="3" style="--sc:#f2c12b">3</button>
+        <button class="surge-cat active" data-cat="4" style="--sc:#7ec94b">4</button>
+        <button class="surge-cat active" data-cat="5" style="--sc:#4bb0c9">5</button>
+      </div>
+      <button id="btnSurgeDepth" title="NOAA SLOSH storm-surge INUNDATION — actual water depth by hurricane category (worst-case / MOM). Pick a category below, then click any spot for the depth in feet. Shows how deep water gets in a Cat 1…5 storm.">🌊 Surge depth</button>
+      <div id="surgeDepthRow" class="surge-cat-row" hidden title="Pick the hurricane category to model. Shows NOAA's worst-case surge inundation for that strength. Click the map for depth in feet.">
+        <span class="surge-cat-lbl">Cat</span>
+        <button class="depth-cat active" data-dcat="1">1</button>
+        <button class="depth-cat" data-dcat="2">2</button>
+        <button class="depth-cat" data-dcat="3">3</button>
+        <button class="depth-cat" data-dcat="4">4</button>
+        <button class="depth-cat" data-dcat="5">5</button>
+      </div>
+    </div>
+  </div>
   <button id="btnElev" title="Sample bare-earth ground elevation on a grid across the parcel and its immediate neighbours (USGS 3DEP, NAVD88). Search an address first.">⛭ Elevation heights <span id="elevSrcCaret" class="bm-caret" style="display:none" title="Compare elevation source (which LiDAR collect)">▾</span></button>
   <div class="layers-pick">
     <button id="btnLayers" title="Property boundary overlays (city limits, parcels, zoning)">▦ Layers <span class="bm-caret">▾</span></button>
@@ -5039,8 +5090,318 @@ if(btnFlood) btnFlood.onclick=function(){
     if(map.getZoom()<10) mapToast('Zoom in to see flood-zone shading.',2400);
     else refreshFloodEdges(); }
   else { map.removeLayer(floodLayer); map.removeLayer(floodEdgeLayer); map.removeLayer(floodLblLayer); floodLblLayer.clearLayers(); }
-
 };
+
+/* ---------- Wind-speed contour shading (ASCE 7-22 Risk Cat II) ----------
+   The ASCE design-wind-speed data is a contour-LINE service (layer 2, CONTOUR = mph). We render it
+   as a Leaflet layer of the contour lines for the current view, each labelled with its mph value, so
+   you can see how the design wind speed steps across the map. Independent toggle in the Hazards menu.
+   In most of SW Florida the value is near-uniform (~170 mph), so lines are sparse here — they get
+   denser toward the coast and up/down the peninsula where the speed changes. */
+const windLineLayer = L.layerGroup();
+let windLayerOn=false, _windLayerBusy=false, _windLayerKey='', _windRc='II';
+// ASCE 7-22 publishes separate wind-contour services per Risk Category (I/II/III/IV). Same layer 2
+// (CONTOUR = mph) in each; higher risk category → higher required design wind speed at a location.
+const ASCE_RC_SVC = { 'I':'w2022_Tile_RC_I', 'II':'w2022_Tile_RC_II', 'III':'w2022_Tile_RC_III', 'IV':'w2022_Tile_RC_IV' };
+function _asceWindUrl(){ return `https://gis.asce.org/arcgis/rest/services/ASCE722/${ASCE_RC_SVC[_windRc]||'w2022_Tile_RC_II'}/MapServer/2/query`; }
+async function refreshWindLines(){
+  if(!windLayerOn || _windLayerBusy) return;
+  if(map.getZoom()<7){ windLineLayer.clearLayers(); mapToast('Zoom in to see wind-speed contours.',2000); return; }
+  const b=map.getBounds();
+  const key=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(v=>v.toFixed(2)).join(',');
+  if(key===_windLayerKey) return;
+  _windLayerBusy=true;
+  try{
+    const env=JSON.stringify({xmin:b.getWest(),ymin:b.getSouth(),xmax:b.getEast(),ymax:b.getNorth(),spatialReference:{wkid:4326}});
+    const u=_asceWindUrl()+`?geometry=${encodeURIComponent(env)}&geometryType=esriGeometryEnvelope&inSR=4326`
+      +`&spatialRel=esriSpatialRelIntersects&outFields=CONTOUR&returnGeometry=true&outSR=4326&f=json`;
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),10000);
+    const j=await (await fetch(u,{signal:ctrl.signal})).json(); clearTimeout(t);
+    windLineLayer.clearLayers();
+    for(const f of (j.features||[])){
+      const mph=f.attributes&&f.attributes.CONTOUR;
+      for(const path of ((f.geometry&&f.geometry.paths)||[])){
+        const latlngs=path.map(([x,y])=>[y,x]);
+        const pl=L.polyline(latlngs,{color:'#c94bff',weight:2,opacity:0.9,dashArray:'6 4'});
+        if(mph!=null) pl.bindTooltip(`${mph} mph`,{permanent:false,sticky:true});
+        pl.addTo(windLineLayer);
+        // Permanent value labels spaced ALONG the line (not just one) so the mph reads wherever you
+        // look. Roughly one label per ~90 vertices, min 1, capped so very long lines don't over-label.
+        if(mph!=null && latlngs.length){
+          const step = Math.max(1, Math.floor(latlngs.length/6));   // ~6 labels max along a line
+          const placed = new Set();
+          for(let idx=Math.floor(step/2); idx<latlngs.length; idx+=step){
+            if(placed.has(idx)) continue; placed.add(idx);
+            L.marker(latlngs[idx],{ interactive:false, icon:L.divIcon({
+              className:'wind-lbl', html:`<span>${mph}</span>`, iconSize:[0,0]
+            })}).addTo(windLineLayer);
+          }
+        }
+      }
+    }
+    _windLayerKey=key;
+    if(!(j.features||[]).length) mapToast('No wind contours in view — design wind speed is uniform here.',2200);
+  }catch(_){ mapToast('Wind-contour lookup unavailable right now.',2200); }
+  finally{ _windLayerBusy=false; }
+}
+
+const btnWindLayer=document.getElementById('btnWindLayer');
+if(btnWindLayer) btnWindLayer.onclick=function(){
+  windLayerOn=!windLayerOn; this.classList.toggle('active',windLayerOn);
+  const row=document.getElementById('windRcRow'); if(row) row.hidden=!windLayerOn;
+  if(typeof repositionHazardsMenu==='function') repositionHazardsMenu();
+  if(windLayerOn){ windLineLayer.addTo(map); _windLayerKey=''; refreshWindLines(); }
+  else { map.removeLayer(windLineLayer); windLineLayer.clearLayers(); }
+};
+// Risk Category picker: switch which ASCE 7-22 wind-contour service feeds the layer.
+document.querySelectorAll('#windRcRow .rc-cat').forEach(btn=>{
+  btn.onclick=(e)=>{
+    e.stopPropagation();
+    _windRc=btn.dataset.rc;
+    document.querySelectorAll('#windRcRow .rc-cat').forEach(b=>b.classList.toggle('active', b===btn));
+    if(windLayerOn){ _windLayerKey=''; refreshWindLines(); mapToast('Wind: ASCE Risk Category '+_windRc,1800); }
+  };
+});
+
+/* ---------- Storm-surge zone shading (FDEM SLOSH evacuation zones, by category) ----------
+   FDEM's Storm Surge Zones layer — SLOSH-modelled evacuation zones. CAT = the storm category that
+   first floods that zone (1 = floods in a weak storm and is worst; 5 = only the strongest). We fetch
+   the polygons in view and shade them, warmer = more vulnerable (CAT 1 red → CAT 5 pale). For a
+   generator install, a low CAT number is a real flag to elevate equipment. Polygons are big, so this
+   loads from z9. */
+/* Dedicated pane for the surge fill so it sits ABOVE the flood PNG wash (z240) but BELOW all the
+   crisp vector overlays — parcel lines, flood-zone edges, zoning, labels (overlayPane z400+) — and
+   below markers. Surge is a translucent background shading; nothing important should ever hide behind
+   it, and it should never cover the lines you actually trace a lot boundary with. z-index 260 puts it
+   just over the flood fill and comfortably under everything vector. */
+map.createPane('surgePane');
+map.getPane('surgePane').style.zIndex = 260;
+const surgeLayer = L.geoJSON(null, {
+  pane:'surgePane',
+  style: f=>{
+    const cat=String((f.properties&&f.properties.CAT)||'').trim();
+    const col = cat==='1'?'#e23b3b': cat==='2'?'#f2792b': cat==='3'?'#f2c12b':
+                cat==='4'?'#7ec94b': cat==='5'?'#4bb0c9':'#9a7fc9';
+    return { color:col, weight:1, opacity:0.9, fillColor:col, fillOpacity:0.28 };
+  },
+  onEachFeature:(f,ly)=>{
+    const p=f.properties||{};
+    const cat=String(p.CAT||'?').trim();
+    ly.bindTooltip(`Evacuation zone — Cat ${cat}<br>${p.COUNTY||''}`,{sticky:true,direction:'top',className:'parcel-tip',opacity:1});
+  }
+});
+let surgeOn=false, _surgeBusy=false, _surgeKey='';
+let _surgeCats=new Set(['1','2','3','4','5']), _surgeGj=null;   // picker: show only these categories; all on by default
+const SURGE_QUERY = "https://services.arcgis.com/3wFbqsFPLeKqOlIK/ArcGIS/rest/services/Storm_Surge_Zones_FeatureLayer/FeatureServer/0/query";
+/* Repaint the surge layer from the cached GeoJSON, keeping only the categories currently toggled on.
+   Filtering the already-loaded data means flipping a category is INSTANT (no re-fetch). */
+function renderSurgeFiltered(){
+  surgeLayer.clearLayers();
+  if(!_surgeGj || !_surgeGj.features) return;
+  const feats = _surgeGj.features.filter(f=>{
+    const c=String((f.properties&&f.properties.CAT)||'').trim();
+    return _surgeCats.has(c);
+  });
+  // Draw HIGHEST category first (bottom) so lower/worse categories render ON TOP where zones overlap.
+  // Cat 1 (most vulnerable, red) ends up on top and always wins visually — the worst-case zone is what
+  // you see at any given spot, which is the safe reading for siting decisions.
+  feats.sort((a,b)=>{
+    const ca=parseInt(String(a.properties.CAT),10)||0, cb=parseInt(String(b.properties.CAT),10)||0;
+    return cb-ca;   // 5,4,3,2,1 → Cat 1 added last = on top
+  });
+  const kept = { type:'FeatureCollection', features:feats };
+  if(kept.features.length) surgeLayer.addData(kept);
+}
+async function refreshSurge(){
+  if(!surgeOn || _surgeBusy) return;
+  if(map.getZoom()<9){ surgeLayer.clearLayers(); mapToast('Zoom in to see evacuation zones.',2000); return; }
+  const b=map.getBounds();
+  const key=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(v=>v.toFixed(2)).join(',');
+  if(key===_surgeKey) return;
+  _surgeBusy=true;
+  try{
+    const env=JSON.stringify({xmin:b.getWest(),ymin:b.getSouth(),xmax:b.getEast(),ymax:b.getNorth(),spatialReference:{wkid:4326}});
+    // Surge zones are large, highly-detailed polygons — full-resolution geometry can be multi-MB and
+    // hang the request. maxAllowableOffset simplifies the outline to roughly one map pixel (in degrees
+    // at this latitude), so the shapes look identical on screen but transfer a fraction of the data.
+    const degPerPx = (b.getEast()-b.getWest()) / (map.getSize().x || 800);
+    const u=SURGE_QUERY+`?geometry=${encodeURIComponent(env)}&geometryType=esriGeometryEnvelope&inSR=4326`
+      +`&spatialRel=esriSpatialRelIntersects&outFields=CAT,COUNTY&returnGeometry=true&outSR=4326`
+      +`&maxAllowableOffset=${degPerPx.toFixed(6)}&geometryPrecision=5&f=geojson`;
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
+    const gj=await (await fetch(u,{signal:ctrl.signal})).json(); clearTimeout(t);
+    _surgeGj = gj;                         // cache the full fetch so the picker can filter instantly
+    renderSurgeFiltered();                 // draw, honouring the current category cap
+    if(!(gj && gj.features && gj.features.length)) mapToast('No evacuation zones in view here.',1800);
+    _surgeKey=key;
+  }catch(err){ mapToast('Evacuation-zone lookup unavailable right now.',2200); }
+  finally{ _surgeBusy=false; }
+}
+
+const btnSurge=document.getElementById('btnSurge');
+if(btnSurge) btnSurge.onclick=function(){
+  surgeOn=!surgeOn; this.classList.toggle('active',surgeOn);
+  const row=document.getElementById('surgeCatRow'); if(row) row.hidden=!surgeOn;
+  if(typeof repositionHazardsMenu==='function') repositionHazardsMenu();
+  if(surgeOn){ surgeLayer.addTo(map); _surgeKey=''; refreshSurge(); }
+  else { map.removeLayer(surgeLayer); surgeLayer.clearLayers(); }
+};
+// Category picker: each button independently toggles its category on/off in the display.
+// Filters the already-loaded data instantly (no re-fetch).
+document.querySelectorAll('#surgeCatRow .surge-cat').forEach(btn=>{
+  btn.onclick=(e)=>{
+    e.stopPropagation();
+    const cat=btn.dataset.cat;
+    if(_surgeCats.has(cat)){ _surgeCats.delete(cat); btn.classList.remove('active'); }
+    else { _surgeCats.add(cat); btn.classList.add('active'); }
+    renderSurgeFiltered();
+  };
+});
+
+/* ---------- Storm-surge INUNDATION DEPTH by hurricane category (NOAA SLOSH MOM) ----------
+   The real "how much water at Cat X" data: NOAA's National Storm Surge Hazard Maps, worst-case
+   (Maximum-of-Maximums) inundation depth per hurricane category. Served as raster images on a
+   MapServer, so we overlay the chosen category's Image sublayer as PNG export tiles (same technique
+   as the FEMA flood fill). One category shown at a time (picked below). Clicking the map runs an
+   ArcGIS identify to report the actual surge depth in feet at that spot — the number you need to
+   decide how high to elevate a generator for that storm scenario.
+   Layer IDs on the US East & Gulf Coast group: Cat1 Image=5, Cat2=9, Cat3=13, Cat4=17, Cat5=21. */
+const SURGE_DEPTH_MS = "https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/StormSurgeRisk/MapServer";
+const SURGE_DEPTH_IMG = { '1':5, '2':9, '3':13, '4':17, '5':21 };  // US East/Gulf "Image" sublayer per category
+let surgeDepthOn=false, _surgeDepthCat='1', surgeDepthTiles=null;
+function _buildSurgeDepthTiles(){
+  if(surgeDepthTiles){ map.removeLayer(surgeDepthTiles); surgeDepthTiles=null; }
+  const imgId = SURGE_DEPTH_IMG[_surgeDepthCat] || 5;
+  const url = SURGE_DEPTH_MS + "/export?dpi=96&transparent=true&format=png32&bboxSR=3857&imageSR=3857"
+            + "&size=512,512&f=image&layers=show:"+imgId+"&bbox={bbox}";
+  surgeDepthTiles = new ArcGISExportTiles(url,
+    { tileSize:512, opacity:0.6, minZoom:6, maxZoom:23, maxNativeZoom:19, zIndex:242,
+      attribution:'Surge inundation &copy; NOAA/NHC (SLOSH MOM)' });
+  if(surgeDepthOn) surgeDepthTiles.addTo(map);
+}
+// Click any point → NOAA identify → surge depth in feet for the selected category
+async function surgeDepthClick(e){
+  const lat=e.latlng.lat, lng=e.latlng.lng, imgId=SURGE_DEPTH_IMG[_surgeDepthCat]||5;
+  const pop=L.popup({maxWidth:230}).setLatLng(e.latlng)
+    .setContent('<div style="font:12px/1.4 system-ui">Reading surge depth…</div>').openOn(map);
+  try{
+    const b=map.getBounds(), sz=map.getSize();
+    const ext=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',');
+    const u=SURGE_DEPTH_MS+`/identify?geometry=${encodeURIComponent(lng+','+lat)}`
+      +`&geometryType=esriGeometryPoint&sr=4326&tolerance=2&mapExtent=${encodeURIComponent(ext)}`
+      +`&imageDisplay=${sz.x},${sz.y},96&layers=all:${imgId}&returnGeometry=false&f=json`;
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),9000);
+    const j=await (await fetch(u,{signal:ctrl.signal})).json(); clearTimeout(t);
+    const res=(j.results||[])[0];
+    let depth='Dry — no surge flooding at this spot in a Cat '+_surgeDepthCat;
+    if(res){
+      const a=res.attributes||{};
+      const pv=a['Service Pixel Value'] || a['UniqueValue.Pixel Value'] || a['Pixel Value'] || a['Stretched.Pixel Value'];
+      if(pv!=null && !/nodata|null/i.test(String(pv))){
+        const label=_inunLabel ? _inunLabel(a, res.layerName) : '';
+        depth = (label && /ft|feet|-|greater/i.test(label)) ? label : (pv+' ft above ground');
+      }
+    }
+    pop.setContent(
+      `<div style="font:12px/1.45 system-ui;min-width:170px">
+         <div style="font-weight:700;margin-bottom:3px">Storm-surge depth — Cat ${_surgeDepthCat}</div>
+         <div>${depth}</div>
+         <div style="margin-top:5px;color:#8a8a8a;font-size:10.5px">NOAA SLOSH worst-case (MOM), above ground</div>
+       </div>`);
+  }catch(_){ pop.setContent('<div style="font:12px/1.4 system-ui">Surge-depth lookup failed — try again.</div>'); }
+}
+const btnSurgeDepth=document.getElementById('btnSurgeDepth');
+if(btnSurgeDepth) btnSurgeDepth.onclick=function(){
+  surgeDepthOn=!surgeDepthOn; this.classList.toggle('active',surgeDepthOn);
+  const row=document.getElementById('surgeDepthRow'); if(row) row.hidden=!surgeDepthOn;
+  if(typeof repositionHazardsMenu==='function') repositionHazardsMenu();
+  if(surgeDepthOn){ _buildSurgeDepthTiles(); map.on('click', surgeDepthClick);
+    map.on('mousemove', _surgeDepthHover); map.on('mouseout', _surgeDepthHoverOut);
+    if(map.getZoom()<7) mapToast('Zoom in to see surge-depth shading — then hover or click for feet.',2800);
+    else mapToast('Showing Cat '+_surgeDepthCat+' surge depth. Hover the map to read feet.',2600); }
+  else { if(surgeDepthTiles){ map.removeLayer(surgeDepthTiles); } map.off('click', surgeDepthClick);
+    map.off('mousemove', _surgeDepthHover); map.off('mouseout', _surgeDepthHoverOut);
+    const el=document.getElementById('surgeDepthFloat'); if(el) el.classList.remove('show'); }
+};
+
+/* Cursor-follow surge-depth readout. As the mouse moves over the map, a small floating box shows the
+   surge depth in feet at the cursor for the selected category. Debounced (~140 ms after the cursor
+   pauses) and cached by rounded lat/lng so a still cursor never re-queries — keeps NOAA's server
+   happy while feeling live. */
+let _sdHoverTimer=null, _sdHoverKey='', _sdHoverCp=null;
+function _surgeDepthFloatEl(){
+  let el=document.getElementById('surgeDepthFloat');
+  if(!el){ el=document.createElement('div'); el.id='surgeDepthFloat'; el.className='wx-cone-float';
+    (document.getElementById('map')||document.body).appendChild(el); }
+  return el;
+}
+function _surgeDepthHoverOut(){ const el=document.getElementById('surgeDepthFloat'); if(el) el.classList.remove('show'); }
+function _surgeDepthHover(e){
+  if(!surgeDepthOn || map.getZoom()<7) return;
+  _sdHoverCp=e.containerPoint;
+  const lat=e.latlng.lat, lng=e.latlng.lng;
+  const key=_surgeDepthCat+':'+lat.toFixed(4)+','+lng.toFixed(4);
+  if(key===_sdHoverKey) return;               // cursor essentially still — reuse last
+  _sdHoverKey=key;
+  clearTimeout(_sdHoverTimer);
+  _sdHoverTimer=setTimeout(async()=>{
+    const imgId=SURGE_DEPTH_IMG[_surgeDepthCat]||5;
+    try{
+      const b=map.getBounds(), sz=map.getSize();
+      const ext=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',');
+      const u=SURGE_DEPTH_MS+`/identify?geometry=${encodeURIComponent(lng+','+lat)}`
+        +`&geometryType=esriGeometryPoint&sr=4326&tolerance=2&mapExtent=${encodeURIComponent(ext)}`
+        +`&imageDisplay=${sz.x},${sz.y},96&layers=all:${imgId}&returnGeometry=false&f=json`;
+      const j=await (await fetch(u)).json();
+      const res=(j.results||[])[0];
+      let txt='Dry (Cat '+_surgeDepthCat+')';
+      if(res){
+        const a=res.attributes||{};
+        const pv=a['Service Pixel Value']||a['UniqueValue.Pixel Value']||a['Pixel Value']||a['Stretched.Pixel Value'];
+        if(pv!=null && !/nodata|null/i.test(String(pv))){
+          const label=_inunLabel ? _inunLabel(a,res.layerName) : '';
+          txt=(label && /ft|feet|-|greater/i.test(label)) ? label : (pv+' ft');
+        }
+      }
+      const el=_surgeDepthFloatEl();
+      el.innerHTML=`<div class="ct-name" style="color:#2b7fff">Surge · Cat ${_surgeDepthCat}</div><div class="ct-desc">${txt}</div>`;
+      el.classList.add('show');
+      if(_sdHoverCp) placeFloat(el,_sdHoverCp);
+    }catch(_){}
+  }, 140);
+}
+document.querySelectorAll('#surgeDepthRow .depth-cat').forEach(btn=>{
+  btn.onclick=(e)=>{
+    e.stopPropagation();
+    _surgeDepthCat=btn.dataset.dcat;
+    document.querySelectorAll('#surgeDepthRow .depth-cat').forEach(b=>b.classList.toggle('active', b===btn));
+    if(surgeDepthOn){ _buildSurgeDepthTiles(); mapToast('Showing Cat '+_surgeDepthCat+' surge depth.',1800); }
+  };
+});
+
+/* ---------- Hazards dropdown menu (Flood + Wind independent toggles) ---------- */
+const btnHazards=document.getElementById('btnHazards');
+const hazardsMenu=document.getElementById('hazardsMenu');
+function closeHazardsMenu(){ if(hazardsMenu) hazardsMenu.hidden=true; }
+function _positionHazardsMenu(){
+  const r=btnHazards.getBoundingClientRect();
+  const mh=hazardsMenu.offsetHeight||100, mw=hazardsMenu.offsetWidth||150;
+  let top=r.top-mh-6; if(top<8) top=r.bottom+6;
+  let left=r.left; if(left+mw>window.innerWidth-8) left=window.innerWidth-mw-8;
+  hazardsMenu.style.top=top+'px'; hazardsMenu.style.left=left+'px';
+}
+function openHazardsMenu(){
+  hazardsMenu.hidden=false;
+  _positionHazardsMenu();
+}
+// When a picker row shows/hides the menu changes height; re-anchor so it doesn't drift off the button.
+function repositionHazardsMenu(){ if(hazardsMenu && !hazardsMenu.hidden) requestAnimationFrame(_positionHazardsMenu); }
+if(btnHazards) btnHazards.onclick=(e)=>{ e.stopPropagation(); if(hazardsMenu.hidden) openHazardsMenu(); else closeHazardsMenu(); };
+if(hazardsMenu) hazardsMenu.addEventListener('click',(e)=>e.stopPropagation());
+document.addEventListener('click', closeHazardsMenu);
+// reflect "any hazard layer on" on the Hazards button
+function syncHazardsBtn(){ if(btnHazards) btnHazards.classList.toggle('active', floodOn||windLayerOn||surgeOn||surgeDepthOn); }
+['btnFlood','btnWindLayer','btnSurge','btnSurgeDepth'].forEach(id=>{ const b=document.getElementById(id); if(b){ const o=b.onclick; b.onclick=function(ev){ if(o) o.call(this,ev); setTimeout(syncHazardsBtn,0); }; }});
 
 /* ---------- Flood-zone BOUNDARIES (vector, on top of the PNG fill) ----------
    The PNG above gives the fast color fill. Here we additionally pull the FEMA zone
@@ -5795,7 +6156,9 @@ map.on('moveend zoomend', ()=>{
       try{ drawFloodLabels(); }catch(e){}
     } else { floodLblLayer.clearLayers(); }
   }
-  clearTimeout(floodEdgeTimer); floodEdgeTimer=setTimeout(refreshFloodEdges,BOUNDS_DEBOUNCE); });
+  clearTimeout(floodEdgeTimer); floodEdgeTimer=setTimeout(refreshFloodEdges,BOUNDS_DEBOUNCE);
+  if(windLayerOn){ clearTimeout(window._windLineTimer); window._windLineTimer=setTimeout(refreshWindLines,BOUNDS_DEBOUNCE); }
+  if(surgeOn){ clearTimeout(window._surgeTimer); window._surgeTimer=setTimeout(refreshSurge,BOUNDS_DEBOUNCE); } });
 
 /* ---------- Parcel / lot-line overlay (statewide cadastral) ----------
    Same FL DOR cadastral the panel reads on click, drawn as thin lines across the view. Parcels are
