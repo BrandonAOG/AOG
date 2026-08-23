@@ -4532,6 +4532,25 @@ let floodOn=false;
    at load and kills the entire script. Same host, spelled out. */
 const DEP3_SAMPLES = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/getSamples";
 const DEP3_ID      = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/identify";
+/* EPQS — USGS Elevation Point Query Service. A separate, simpler endpoint than the ImageServer:
+   a plain GET that returns ONE elevation for an x/y, already in feet (units=Feet). Same underlying
+   3DEP data (same rasterIds), not CORS-blocked from the browser (verified Aug 2026), and often a
+   cleaner single-point answer than /identify. Used as the single-reading fallback for the grid and
+   the flood-card ground elevation — NOT a grid replacement (it's one point per call). Returns a
+   number in FEET, or null on any failure / NoData. */
+const EPQS = "https://epqs.nationalmap.gov/v1/json";async function epqsElevationFt(lat, lng, timeoutMs){
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeoutMs||12000);
+  try{
+    const u=EPQS+'?'+new URLSearchParams({ x:String(lng), y:String(lat), units:'Feet', crs:'4326' });
+    const r=await fetch(u,{signal:ctrl.signal}); clearTimeout(t);
+    const j=await r.json();
+    const v = j && (j.value!=null ? j.value : (j.location && j.location.value));
+    const n = Number(v);
+    // Guard the NoData/error sentinels (huge negatives, exact 0) the same way the grid does.
+    if(!isFinite(n) || n===0 || n < -1000) return null;
+    return n;    // already feet
+  }catch(e){ clearTimeout(t); return null; }
+}
 /* Esri's public WorldElevation coverage/extent layer (NO auth needed — only the VALUES service is
    gated). Returns provenance for the elevation data at a point: ProductName (e.g. "3DEP_1m"),
    PixelSize, VerticalDatum. Confirmed Aug 2026 that Cape Coral resolves to USGS 3DEP_1m / NAVD88 —
@@ -4775,22 +4794,19 @@ async function loadElevationGrid(){
     js=await _post(DEP3_SAMPLES);
     if(_ok(js)) break;
   }
-  // Fallback: if the full multipoint grid never came back, ask USGS /identify for a SINGLE value at
-  // the parcel centre — a different endpoint (and code path) on the same trusted 3DEP data, which
-  // often answers when getSamples is being flaky. It's one point, not the grid, so it yields a
-  // single ground reading rather than the min/max spread — degraded, but real, and clearly labelled.
+  // Fallback: if the full multipoint grid never came back, ask EPQS for a SINGLE ground value at the
+  // parcel centre — a separate, simpler USGS endpoint (plain GET, feet-native) on the same 3DEP data
+  // that often answers when getSamples is flaky. One point, not the grid, so it's a single reading
+  // rather than the min/max spread — degraded but real, and flagged __fallback. EPQS returns FEET;
+  // downstream code multiplies samples by ELEV_M_TO_FT, so we store metres (ft / 3.28084) to keep
+  // the final display correct.
   if(!_ok(js)){
     mapToast('Primary grid slow - fetching a single ground reading...',1800);
     try{
       const cLat=(pS+pN)/2, cLng=(pW+pE)/2;
-      const g=encodeURIComponent(JSON.stringify({x:cLng,y:cLat,spatialReference:{wkid:4326}}));
-      const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);  // 12s cap for slow post-outage USGS
-      const r=await fetch(DEP3_ID+`?geometry=${g}&geometryType=esriGeometryPoint&returnGeometry=false&f=json`,{signal:ctrl.signal});
-      clearTimeout(t);
-      const j=await r.json();
-      const v=j && (j.value!=null?j.value:(j.results&&j.results[0]&&j.results[0].value));
-      if(v!=null && isFinite(Number(v)) && String(v).toLowerCase()!=='nodata'){
-        js={ samples:[{ value:Number(v), location:{x:cLng,y:cLat}, resolution:null }], __fallback:true };
+      const ft = await epqsElevationFt(cLat, cLng, 12000);
+      if(ft!=null){
+        js={ samples:[{ value: ft/ELEV_M_TO_FT, location:{x:cLng,y:cLat}, resolution:null }], __fallback:true };
       }
     }catch(e){}
   }
@@ -5380,7 +5396,31 @@ async function queryLeeLimwa(parcelFeature){
    the actual lot rather than a bounding box. Falls back to a centroid identify if stats fail. */
 const DEP3_BASE = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer";
 const M_TO_FT = 3.28084;
-async function queryGroundElevation(parcelFeature){
+/* SWFWMD district-wide 2017-2020 DEM — the Southwest Florida Water Management District's own LiDAR,
+   2.5 ft resolution, NAVD88, feet-native, token-free. Verified Aug 2026 to match USGS EPQS to within
+   0.1 ft at Charlotte/Sarasota/Punta Gorda. An INDEPENDENT source (state agency, not USGS infra), so
+   it answers when 3DEP is down — but ONLY within the SWFWMD district, so it's gated to those counties
+   and never consulted for Collier/Lee (SFWMD territory, no coverage here). Of the district, the
+   counties relevant to this tool's SW-FL work are Charlotte and Sarasota; the full set is listed so
+   a northern lookup anywhere in the district can use it. */
+const SWFWMD_DEM = "https://www45.swfwmd.state.fl.us/arcgisimg/rest/services/DEM/SWFWMD_2017_2020_DEM/ImageServer/getSamples";
+const SWFWMD_COUNTIES = new Set(['CHARLOTTE','SARASOTA','MANATEE','HILLSBOROUGH','PINELLAS','PASCO',
+  'HERNANDO','CITRUS','DESOTO','HARDEE','HIGHLANDS','LAKE','LEVY','MARION','POLK','SUMTER']);
+async function swfwmdElevationFt(lat, lng, timeoutMs){
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeoutMs||12000);
+  try{
+    const body=new URLSearchParams({
+      geometry:JSON.stringify({points:[[lng,lat]],spatialReference:{wkid:4326}}),
+      geometryType:'esriGeometryMultipoint', returnFirstValueOnly:'false', f:'json' });
+    const r=await fetch(SWFWMD_DEM,{method:'POST',body,signal:ctrl.signal}); clearTimeout(t);
+    const j=await r.json();
+    const s=j.samples&&j.samples[0];
+    const v=s&&Number(s.value);
+    if(!isFinite(v) || v<-1000) return null;     // no-coverage/NoData sentinel
+    return v;    // already feet, NAVD88
+  }catch(e){ clearTimeout(t); return null; }
+}
+async function queryGroundElevation(parcelFeature, countyName){
   const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
   if(!rings0 || !rings0.length) return null;
   /* Outer ring only, thinned and rounded. computeStatisticsHistograms has to rasterise whatever
@@ -5430,15 +5470,44 @@ async function queryGroundElevation(parcelFeature){
   const id = await grab(`${DEP3_BASE}/identify?geometry=${encodeURIComponent(pt)}`
                       + `&geometryType=esriGeometryPoint&returnGeometry=false&f=json`);
   const v = id && Number(id.value);
-  if(!isFinite(v) || v===0) {                    // 0 = NoData/error sentinel, not a real reading
-    window.__groundElevDebug={fail:'stats and identify both failed, out of budget, or returned 0',
-                             ms:Math.round(performance.now()-t0)};
-    return null;
+  if(isFinite(v) && v!==0){
+    const ft = r1(v*M_TO_FT);
+    const res = { min:ft, max:ft, med:ft, src:'USGS 3DEP', method:'centroid point only' };
+    window.__groundElevDebug={ ...res, rawMeters:v, ms:Math.round(performance.now()-t0) };
+    return res;
   }
-  const ft = r1(v*M_TO_FT);
-  const res = { min:ft, max:ft, med:ft, src:'USGS 3DEP', method:'centroid point only' };
-  window.__groundElevDebug={ ...res, rawMeters:v, ms:Math.round(performance.now()-t0) };
-  return res;
+  /* SWFWMD district DEM fallback — only inside the district's counties (Charlotte, Sarasota, etc.),
+     where it's verified accurate NAVD88. An INDEPENDENT source, so it can answer when USGS is down.
+     Feet-native. Tried before EPQS for in-district lookups because it's a separate agency's server. */
+  const inSwfwmd = countyName && SWFWMD_COUNTIES.has(norm(countyName));
+  if(inSwfwmd){
+    const swMs = Math.max(0, left());
+    if(swMs >= 400){
+      const ft = await swfwmdElevationFt(cy/n, cx/n, swMs);
+      if(ft!=null){
+        const f = r1(ft);
+        const res = { min:f, max:f, med:f, src:'SWFWMD 2017-20 DEM', method:'centroid point only' };
+        window.__groundElevDebug={ ...res, swfwmdFeet:ft, ms:Math.round(performance.now()-t0) };
+        return res;
+      }
+    }
+  }
+  /* Final fallback: EPQS (separate USGS endpoint, feet-native, plain GET) at the centroid. Often
+     answers when the ImageServer's stats/identify are flaky. Uses whatever budget remains; if none,
+     it's skipped. Returns a single reading, clearly the coarsest of the three methods. */
+  const epqsMs = Math.max(0, left());
+  if(epqsMs >= 400){
+    const ft = await epqsElevationFt(cy/n, cx/n, epqsMs);
+    if(ft!=null){
+      const f = r1(ft);
+      const res = { min:f, max:f, med:f, src:'USGS 3DEP (EPQS)', method:'centroid point only' };
+      window.__groundElevDebug={ ...res, epqsFeet:ft, ms:Math.round(performance.now()-t0) };
+      return res;
+    }
+  }
+  window.__groundElevDebug={fail:'stats, identify, and EPQS all failed or out of budget',
+                           ms:Math.round(performance.now()-t0)};
+  return null;
 }
 
 /* ---------- Collier County LiMWA + FIRM panels (county-hosted 2024 DFIRM) ----------
@@ -16076,8 +16145,8 @@ async function runLookup(lat,lng,searchCtx){
           _fpMark('jurisdiction', isLee ? queryLeePanelJurisdiction(pFeat) : Promise.resolve(null)),
           /* Ground elevation: Lee's own 2018 LiDAR is a 50-ft point grid — finer than 3DEP's ~10 m
              raster — so prefer it there and fall back to 3DEP everywhere else. */
-          _fpMark('ground elev',  isLee ? queryLeeGroundElevation(pFeat).then(r => r || queryGroundElevation(pFeat))
-                                        : queryGroundElevation(pFeat)),
+          _fpMark('ground elev',  isLee ? queryLeeGroundElevation(pFeat).then(r => r || queryGroundElevation(pFeat, countyName))
+                                        : queryGroundElevation(pFeat, countyName)),
           _fpMark('LiMWA',        isLee ? queryLeeLimwa(pFeat) : Promise.resolve(false)),
           _fpMark('est Zone A',   isLee ? queryLeeEstZoneABfe(pFeat) : Promise.resolve(null)),
           _fpMark('LiMWA (Col)',  isCollier ? queryCollierLimwa(pFeat) : Promise.resolve(false)),
