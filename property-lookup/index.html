@@ -290,8 +290,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .basemap-pick{position:relative;display:flex}
   .weather-pick{position:relative;display:flex}
   .hazards-pick{position:relative;display:flex}
-  .surge-cat-row{ display:flex; align-items:center; justify-content:center; gap:6px; padding:6px 12px 8px; }
+  .surge-cat-row{ display:flex; align-items:center; justify-content:center; gap:6px; padding:6px 12px 8px; flex-wrap:wrap; }
   .surge-cat-row[hidden]{ display:none; }
+  #tempMetricRow .depth-cat, #tempTimeRow .depth-cat{ min-width:0; width:auto; padding:0 7px; height:23px; font-size:11px; }
+  #tempMetricRow{ padding-bottom:2px; }
   .surge-cat{ width:26px; height:26px; padding:0; border:2px solid var(--sc,#888); background:transparent;
     color:var(--dim); font-family:var(--mono,monospace); font-size:12px; font-weight:700; border-radius:5px; cursor:pointer;
     opacity:.4; transition:opacity .12s, background .12s; }
@@ -1160,7 +1162,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   <div class="weather-pick">
     <button id="btnWeather" title="Storm &amp; weather layers (radar, hurricane cone, NWS warnings)">🌩 Weather <span class="bm-caret">▾</span></button>
     <div id="weatherMenu" class="basemap-menu" hidden>
-      <button id="btnRadar" title="Animated rain/storm radar (RainViewer · last ~2h, looping)">◵ Radar</button>
+      <button id="btnRadar" title="Animated rain/storm radar (RainViewer). Loops the last ~2h and, when rain is nearby, the projected next ~30 min (labelled 'forecast'). Zoom to your area.">◵ Radar</button>
       <button id="btnCone" title="NHC forecast cone &amp; track for any active tropical system">⬢ Hurricane cone</button>
       <button id="btnWarn" title="Live NWS watches &amp; warnings (tornado, flood, tropical, severe)">⚠ NWS warnings</button>
       <button id="btnSurge" title="Shade hurricane evacuation zones by category (1 = evacuates first / most flood-prone low ground … 5 = evacuates only in the strongest storms / higher ground). FDEM SLOSH-based. Zoom in to see it. Note: this shows which evac zone a property is in — not water depth.">🚨 Evacuation zones</button>
@@ -1179,6 +1181,20 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
         <button class="depth-cat" data-dcat="3">3</button>
         <button class="depth-cat" data-dcat="4">4</button>
         <button class="depth-cat" data-dcat="5">5</button>
+      </div>
+      <button id="btnTemp" title="NOAA NDFD forecast — air temperature, feels-like (heat index), or humidity, now through the next 24 hours. Shaded overlay; hover or click for the value at a spot. Pick metric and time below.">🌡 Temperature</button>
+      <div id="tempMetricRow" class="surge-cat-row" hidden title="Which reading to shade: air temp, feels-like (heat index — matters for crew heat safety), or relative humidity.">
+        <button class="depth-cat tmetric active" data-metric="temp">Temp</button>
+        <button class="depth-cat tmetric" data-metric="apt">Feels</button>
+        <button class="depth-cat tmetric" data-metric="rh">Hum</button>
+      </div>
+      <div id="tempTimeRow" class="surge-cat-row" hidden title="Forecast time — now, or hours ahead. NOAA NDFD updates hourly.">
+        <span class="surge-cat-lbl">at</span>
+        <button class="depth-cat ttime active" data-hr="00">Now</button>
+        <button class="depth-cat ttime" data-hr="03">+3h</button>
+        <button class="depth-cat ttime" data-hr="06">+6h</button>
+        <button class="depth-cat ttime" data-hr="12">+12h</button>
+        <button class="depth-cat ttime" data-hr="24">+24h</button>
       </div>
     </div>
   </div>
@@ -5380,6 +5396,103 @@ document.querySelectorAll('#surgeDepthRow .depth-cat').forEach(btn=>{
   };
 });
 
+/* ---------- NDFD forecast temperature / feels-like / humidity (NOAA) ----------
+   NOAA's National Digital Forecast Database, served as raster tiles. Three metrics (air temp,
+   apparent/feels-like temp = heat index, relative humidity), each at forecast hours 0/3/6/12/24 ahead.
+   The MapServer exposes a named group layer per metric+hour; we show one as a shaded PNG export
+   overlay and identify it for the value at a hovered/clicked point — same pattern as surge depth.
+   Layer IDs (the group parent that renders): Temp 00/03/06/12/24 = 5/9/13/21/37; AptTemp = 46/50/54/62/78;
+   RH = 87/91/95/103/119. */
+const NDFD_TEMP_MS = "https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_temp/MapServer";
+// Layer IDs = the "Image" child that actually holds data. Verified by probing: the earliest slices
+// (ids 4,8) are expired NoData; live data starts at id 12 = current, then +3h steps. Temp curve at
+// Cape Coral confirmed sensible (87 now → 79 overnight → 92 next afternoon).
+// Temp Images:  now=12, +3h=16, +6h=20, +12h=28, +24h=40.  Feels/RH follow the same +offset blocks.
+const NDFD_LAYER = {
+  temp:{ '00':12, '03':16, '06':20, '12':28, '24':40 },
+  apt: { '00':53, '03':57, '06':61, '12':69, '24':81 },
+  rh:  { '00':94, '03':98, '06':102,'12':110,'24':122 }
+};
+const NDFD_UNIT = { temp:'°F', apt:'°F', rh:'%' };
+const NDFD_NAME = { temp:'Temp', apt:'Feels-like', rh:'Humidity' };
+let tempOn=false, _tempMetric='temp', _tempHr='00', tempTiles=null;
+function _ndfdLayerId(){ return (NDFD_LAYER[_tempMetric]||NDFD_LAYER.temp)[_tempHr] ?? 5; }
+function _buildTempTiles(){
+  if(tempTiles){ map.removeLayer(tempTiles); tempTiles=null; }
+  const id=_ndfdLayerId();
+  const url = NDFD_TEMP_MS + "/export?dpi=96&transparent=true&format=png32&bboxSR=3857&imageSR=3857"
+            + "&size=512,512&f=image&layers=show:"+id+"&bbox={bbox}";
+  tempTiles = new ArcGISExportTiles(url,
+    { tileSize:512, opacity:0.55, minZoom:4, maxZoom:23, maxNativeZoom:19, zIndex:241,
+      attribution:'Forecast &copy; NOAA/NWS NDFD' });
+  if(tempOn) tempTiles.addTo(map);
+}
+async function tempIdentifyAt(latlng){
+  const id=_ndfdLayerId();
+  const b=map.getBounds(), sz=map.getSize();
+  const ext=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',');
+  const u=NDFD_TEMP_MS+`/identify?geometry=${encodeURIComponent(latlng.lng+','+latlng.lat)}`
+    +`&geometryType=esriGeometryPoint&sr=4326&tolerance=2&mapExtent=${encodeURIComponent(ext)}`
+    +`&imageDisplay=${sz.x},${sz.y},96&layers=all:${id}&returnGeometry=false&f=json`;
+  const j=await (await fetch(u)).json();
+  const res=(j.results||[])[0];
+  if(!res) return null;
+  const v = res.value ?? (res.attributes && (res.attributes['Pixel Value']||res.attributes['Service Pixel Value']));
+  if(v==null || /nodata|null/i.test(String(v))) return null;
+  const num=Math.round(parseFloat(v));
+  return isFinite(num) ? num : null;
+}
+async function tempClick(e){
+  const pop=L.popup({maxWidth:200}).setLatLng(e.latlng)
+    .setContent('<div style="font:12px/1.4 system-ui">Reading forecast…</div>').openOn(map);
+  const v=await tempIdentifyAt(e.latlng);
+  const when=_tempHr==='00'?'now':'+'+parseInt(_tempHr,10)+'h';
+  pop.setContent(`<div style="font:12px/1.45 system-ui;min-width:150px">
+      <div style="font-weight:700;margin-bottom:3px">${NDFD_NAME[_tempMetric]} · ${when}</div>
+      <div>${v==null?'no data here':(v+' '+NDFD_UNIT[_tempMetric])}</div>
+      <div style="margin-top:5px;color:#8a8a8a;font-size:10.5px">NOAA NDFD forecast</div></div>`);
+}
+let _tempHoverTimer=null,_tempHoverKey='',_tempHoverCp=null;
+function _tempFloatEl(){ let el=document.getElementById('tempFloat');
+  if(!el){ el=document.createElement('div'); el.id='tempFloat'; el.className='wx-cone-float';
+    (document.getElementById('map')||document.body).appendChild(el); } return el; }
+function _tempHoverOut(){ const el=document.getElementById('tempFloat'); if(el) el.classList.remove('show'); }
+function _tempHover(e){
+  if(!tempOn) return;
+  _tempHoverCp=e.containerPoint;
+  const key=_tempMetric+_tempHr+':'+e.latlng.lat.toFixed(3)+','+e.latlng.lng.toFixed(3);
+  if(key===_tempHoverKey) return; _tempHoverKey=key;
+  clearTimeout(_tempHoverTimer);
+  _tempHoverTimer=setTimeout(async()=>{
+    const v=await tempIdentifyAt(e.latlng);
+    const el=_tempFloatEl();
+    const when=_tempHr==='00'?'now':'+'+parseInt(_tempHr,10)+'h';
+    el.innerHTML=`<div class="ct-name" style="color:#ff8c42">${NDFD_NAME[_tempMetric]} · ${when}</div><div class="ct-desc">${v==null?'—':(v+' '+NDFD_UNIT[_tempMetric])}</div>`;
+    el.classList.add('show'); if(_tempHoverCp) placeFloat(el,_tempHoverCp);
+  }, 140);
+}
+const btnTemp=document.getElementById('btnTemp');
+if(btnTemp) btnTemp.onclick=function(){
+  tempOn=!tempOn; this.classList.toggle('active',tempOn);
+  const mr=document.getElementById('tempMetricRow'), tr=document.getElementById('tempTimeRow');
+  if(mr) mr.hidden=!tempOn; if(tr) tr.hidden=!tempOn;
+  if(typeof repositionWeatherMenu==='function') repositionWeatherMenu();
+  if(tempOn){ _buildTempTiles(); map.on('click',tempClick); map.on('mousemove',_tempHover); map.on('mouseout',_tempHoverOut);
+    mapToast('NOAA '+NDFD_NAME[_tempMetric]+' forecast. Hover for the value.',2400); }
+  else { if(tempTiles) map.removeLayer(tempTiles); map.off('click',tempClick); map.off('mousemove',_tempHover); map.off('mouseout',_tempHoverOut);
+    const el=document.getElementById('tempFloat'); if(el) el.classList.remove('show'); }
+};
+document.querySelectorAll('#tempMetricRow .tmetric').forEach(btn=>{
+  btn.onclick=(e)=>{ e.stopPropagation(); _tempMetric=btn.dataset.metric;
+    document.querySelectorAll('#tempMetricRow .tmetric').forEach(b=>b.classList.toggle('active',b===btn));
+    _tempHoverKey=''; if(tempOn){ _buildTempTiles(); mapToast(NDFD_NAME[_tempMetric]+' forecast.',1500); } };
+});
+document.querySelectorAll('#tempTimeRow .ttime').forEach(btn=>{
+  btn.onclick=(e)=>{ e.stopPropagation(); _tempHr=btn.dataset.hr;
+    document.querySelectorAll('#tempTimeRow .ttime').forEach(b=>b.classList.toggle('active',b===btn));
+    _tempHoverKey=''; if(tempOn){ _buildTempTiles(); const when=_tempHr==='00'?'now':'+'+parseInt(_tempHr,10)+'h'; mapToast('Forecast '+when+'.',1400); } };
+});
+
 /* ---------- Hazards dropdown menu (Flood + Wind independent toggles) ---------- */
 const btnHazards=document.getElementById('btnHazards');
 const hazardsMenu=document.getElementById('hazardsMenu');
@@ -5818,9 +5931,27 @@ async function queryGroundElevation(parcelFeature, countyName, budgetOverride){
      pad siting. A genuine SW-Florida lot is never exactly 0.0 across its whole extent, so treat an
      exact-zero (or non-finite) min/max as a miss and fall through to the centroid identify. */
   if(s && isFinite(s.min) && isFinite(s.max) && !(s.min===0 && s.max===0)){
-    const res = { min:r1(s.min*M_TO_FT), max:r1(s.max*M_TO_FT), med:r1(s.mean*M_TO_FT),
-                  src:'USGS 3DEP', method:'parcel statistics' };
-    window.__groundElevDebug={ ...res, rawMeters:{min:s.min,max:s.max,mean:s.mean},
+    // 3DEP's computeStatisticsHistograms can fold NoData/edge pixels into min/max (a huge negative
+    // sentinel, or values that bracket the mean nonsensically), while mean stays computed over valid
+    // pixels only. That yields a real average with a garbage range — e.g. "-4.1 to -7.3 ft (avg 4.7)".
+    // Detect a contaminated range and, when found, report the mean alone rather than a misleading spread.
+    let mn=s.min*M_TO_FT, mx=s.max*M_TO_FT, me=s.mean*M_TO_FT;
+    if(mn>mx){ const t=mn; mn=mx; mx=t; }                    // fix inverted order if present
+    const meanFinite = isFinite(me);
+    // "Bogus" = a sentinel-scale value, or a range that doesn't contain its own mean (impossible for
+    // a true min/mean/max), or an absurd spread. Any of these means min/max can't be trusted.
+    const sentinel = Math.abs(mn) > 100000 || Math.abs(mx) > 100000;
+    const meanOutside = meanFinite && (me < mn - 0.5 || me > mx + 0.5);
+    const absurdSpread = (mx - mn) > 500;
+    const rangeBad = sentinel || meanOutside || absurdSpread || !isFinite(mn) || !isFinite(mx);
+    let res;
+    if(rangeBad && meanFinite){
+      const m=r1(me);
+      res = { min:m, max:m, med:m, src:'USGS 3DEP', method:'parcel mean (range unavailable)' };
+    } else {
+      res = { min:r1(mn), max:r1(mx), med:r1(me), src:'USGS 3DEP', method:'parcel statistics' };
+    }
+    window.__groundElevDebug={ ...res, rawMeters:{min:s.min,max:s.max,mean:s.mean}, rangeBad,
                                ms:Math.round(performance.now()-t0) };
     return res;
   }
@@ -6828,6 +6959,7 @@ function makeRadarFrame(frame){
     attribution:'Radar &copy; <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a>'
   });
   lyr._radarDate=new Date(frame.time*1000);
+  lyr._radarFuture=!!frame.future;
   lyr.setZIndex(250);   // above basemap, below vector overlays
   return lyr;
 }
@@ -6842,7 +6974,13 @@ async function fetchRadarFrames(){
   radarHost=j.host||'https://tilecache.rainviewer.com';
   const past=(j.radar&&j.radar.past)?j.radar.past:[];
   if(!past.length) throw new Error('no radar frames');
-  return past.slice(-RADAR_FRAMES);   // newest N, oldest → newest
+  // RainViewer also provides `nowcast` — the projected next ~30 min of precipitation (10-min steps),
+  // populated whenever there's rain in the system to extrapolate. Tag each so the player can badge the
+  // future frames differently. When it's dry, nowcast is [] and the loop is just the past, as before.
+  const nowcast=(j.radar&&j.radar.nowcast)?j.radar.nowcast:[];
+  const pastTagged = past.slice(-RADAR_FRAMES).map(f=>({...f, future:false}));
+  const futTagged  = nowcast.map(f=>({...f, future:true}));
+  return pastTagged.concat(futTagged);   // oldest → now → future
 }
 async function buildRadar(){
   clearRadarFrames();
@@ -6851,12 +6989,13 @@ async function buildRadar(){
   radarFrames.forEach(f=>f.addTo(map));   // preload all frames (hidden at opacity 0)
 }
 function showRadarFrame(i){
-  radarFrames.forEach((f,j)=>f.setOpacity(j===i?RADAR_OPACITY:0));
+  radarFrames.forEach((f,j)=>f.setOpacity(j===i ? (f._radarFuture ? RADAR_OPACITY*0.72 : RADAR_OPACITY) : 0));
   radarIdx=i;
   const f=radarFrames[i];
   if(f && f._radarDate){
     const t=f._radarDate.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
-    const clk=document.getElementById('radarClock'); if(clk) clk.textContent='◵ Radar · '+t;
+    const clk=document.getElementById('radarClock');
+    if(clk) clk.textContent = (f._radarFuture ? '◵ Radar · '+t+' · forecast' : '◵ Radar · '+t);
   }
 }
 function radarTick(){
@@ -7801,8 +7940,8 @@ if(btnWeather) btnWeather.onclick=(e)=>{ e.stopPropagation(); if(weatherMenu.hid
 if(weatherMenu) weatherMenu.addEventListener('click',(e)=>e.stopPropagation());
 document.addEventListener('click', closeWeatherMenu);
 // reflect "any weather layer on" on the Weather button itself
-function syncWeatherBtn(){ if(btnWeather) btnWeather.classList.toggle('active', radarOn||coneOn||warnOn||surgeOn||surgeDepthOn); }
-['btnRadar','btnCone','btnWarn','btnSurge','btnSurgeDepth'].forEach(id=>{ const b=document.getElementById(id); if(b){ const o=b.onclick; b.onclick=function(ev){ if(o) o.call(this,ev); setTimeout(syncWeatherBtn,0); }; }});
+function syncWeatherBtn(){ if(btnWeather) btnWeather.classList.toggle('active', radarOn||coneOn||warnOn||surgeOn||surgeDepthOn||tempOn); }
+['btnRadar','btnCone','btnWarn','btnSurge','btnSurgeDepth','btnTemp'].forEach(id=>{ const b=document.getElementById(id); if(b){ const o=b.onclick; b.onclick=function(ev){ if(o) o.call(this,ev); setTimeout(syncWeatherBtn,0); }; }});
 
 
 /* ---------- Helpers ---------- */
@@ -16674,7 +16813,7 @@ async function runLookup(lat,lng,searchCtx){
           const spread = (g.max - g.min).toFixed(1);
           const flat = g.max === g.min;
           const shown = flat ? `${esc(g.med)} ft`
-                             : `${esc(g.min)}–${esc(g.max)} ft <span class="muted">(avg ${esc(g.med)})</span>`;
+                             : `${esc(g.min)} to ${esc(g.max)} ft <span class="muted">(avg ${esc(g.med)})</span>`;
           let out = `<div class="field"><div class="k">Ground elev.</div><div class="v">${shown} <span class="muted" style="font-size:11px">NAVD88 · ${esc(g.src||'LiDAR')}</span></div></div>`;
           if(ref.refBfe!=null){
             const gap = Math.round((ref.refBfe - g.med)*10)/10;
