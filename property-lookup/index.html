@@ -8203,15 +8203,19 @@ async function _fdemCoordSearch(lat,lng){
   const take=list=>{ for(const r of list){ if(seen[r.id]) continue; seen[r.id]=1;
     if(distM(r)>25) out.push(r); } };          // >25 m drops the subject parcel itself
   take(await one(lat,lng));
-  /* FDEM's search only returns what IT considers nearby — a sparse block can come back with 3-4
-     parcels. When the first pass lands under 5 neighbours, widen the net with ring searches ~120 m
-     N/S/E/W of the subject (one polite call each, stopping as soon as 5 are gathered), then
-     re-sort everything by TRUE distance from the subject so "closest first" still holds. */
-  if(out.length<5){
+  /* FDEM's coordinate search is spatially biased — it often returns a cluster to ONE side of the
+     subject (e.g. only the rising odd-numbered houses up the street) and misses the other side
+     entirely, so a certificated neighbour like the one directly across can be absent even when the
+     first pass returns a healthy count. Previously the ring expansion only fired when the first pass
+     returned <5; that left the biased-but-plentiful case uncovered. Now we ALWAYS sweep the four
+     ~120 m rings (N/S/E/W) unless we've already filled the list, then re-sort by true distance.
+     Costs up to 4 extra polite calls (300 ms apart) per lookup — affordable, and it's what makes
+     "show the neighbours with certificates" actually mean all four directions. */
+  if(out.length < FDEM_NB_MAXLIST){
     const dLat=120/mLat, dLng=120/mLng;
     const ring=[[lat+dLat,lng],[lat-dLat,lng],[lat,lng+dLng],[lat,lng-dLng]];
     for(const [la,ln] of ring){
-      if(out.length>=5) break;
+      if(out.length>=FDEM_NB_MAXLIST) break;
       try{ take(await one(la,ln)); }catch(e){/* a ring miss must not kill the gather */}
       await _fdemSleep(300);
     }
@@ -8287,8 +8291,9 @@ async function runFdemNeighborCheck(btn, batchSize){
       const hit=await _fdemCheckOne(batch[i]);
       if(hit&&hit.isEC){
         _fdemNb.found++;
-        try{ _ecMakeNote(hit.lat, hit.lng, hit.url).addTo(ecNoteLayer);
-             if(!map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map); }catch(_){}
+        try{ _ecMakeNote(hit.lat, hit.lng, hit.url).addTo(ecLookupLayer);   // protected layer
+             window.__ecFromLookup = true;
+             if(!map.hasLayer(ecLookupLayer)) ecLookupLayer.addTo(map); }catch(_){}
       }
       if(i<batch.length-1) await _fdemSleep(FDEM_NB_DELAY);
     }
@@ -13503,7 +13508,13 @@ updateNbrScale();
    has no downloadable file, the click shows a small popup explaining that instead. Cleared on
    every new lookup so a stale note never lingers on the wrong property. */
 const ecNoteLayer = L.layerGroup();
-function clearEcNote(){ try{ ecNoteLayer.clearLayers(); if(map.hasLayer(ecNoteLayer)) map.removeLayer(ecNoteLayer); }catch(e){} }
+/* Separate layer for markers that belong to an actual lookup — the searched property's own EC note
+   and the FDEM/Forerunner statewide markers. These must NOT share the area-sweep's layer, because
+   the sweep does clearLayers()+repaint on every pan/zoom to refresh county notes, which was silently
+   discarding the FDEM markers (they're not in the county query results, so the repaint dropped them).
+   Keeping them in their own layer means the sweep never touches them and they survive all map moves. */
+const ecLookupLayer = L.layerGroup();
+function clearEcNote(){ try{ ecNoteLayer.clearLayers(); if(map.hasLayer(ecNoteLayer)) map.removeLayer(ecNoteLayer); ecLookupLayer.clearLayers(); if(map.hasLayer(ecLookupLayer)) map.removeLayer(ecLookupLayer); window.__ecFromLookup=false; }catch(e){} }
 function _ecMakeNote(latN, lngN, pdf){
   const tip = pdf ? 'Elevation Certificate on file — click to open the PDF'
                   : 'Elevation Certificate record here (no PDF attached — see the EC card)';
@@ -13524,8 +13535,9 @@ function addEcNoteMarker(ec){
   try{
     if(!ec || ec.err || ec.ecLat==null || ec.ecLng==null || !isFinite(ec.ecLat) || !isFinite(ec.ecLng)) return;
     const pdf = (ec.docs && ec.docs.length) ? ec.docs[0].url : null;
-    _ecMakeNote(ec.ecLat, ec.ecLng, pdf).addTo(ecNoteLayer);
-    if(!map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map);
+    _ecMakeNote(ec.ecLat, ec.ecLng, pdf).addTo(ecLookupLayer);   // protected layer — sweep won't wipe it
+    if(!map.hasLayer(ecLookupLayer)) ecLookupLayer.addTo(map);
+    window.__ecFromLookup = true;
   }catch(e){/* best-effort — never break the lookup */}
 }
 
@@ -13568,12 +13580,16 @@ async function refreshEcAreaNotes(){
       linkField = (det && det.link) ? det.link : '';
       if(feats.length) _ecLinkFieldCache[root]=linkField;
     }
-    ecNoteLayer.clearLayers();
-    /* Same filename-vs-URL handling as queryEC(): some counties store a full URL in the link field,
-       others (Sarasota) store only "EC1234_5678.pdf" and rely on a fixed folder. Without this the
-       sweep's markers said "no PDF attached" for every neighbour even though the certificate was
-       one string-concat away — which is exactly what happened on Siesta Key. */
+    /* Don't wipe existing notes for an empty result. At very high zoom the visible extent can be a
+       single rooftop, so the bbox query legitimately catches zero certificate points nearby — that
+       must NOT blank the markers already on screen (observed: zooming from 19→20.5 cleared all 11
+       and the tiny-extent requery found 0, leaving the map empty). Build the new markers first,
+       then swap them in atomically; if there are none, leave what's there untouched. */
+    if(!feats.length){ _ecAreaKey=key; return; }
     const _base = ecDocBase(root);
+    /* Same filename-vs-URL handling as queryEC(): some counties store a full URL in the link field,
+       others (Sarasota) store only "EC1234_5678.pdf" and rely on a fixed folder. */
+    const _fresh=[];
     for(const f of feats){
       const g=f.geometry; const gx=g?(g.x!=null?g.x:g.X):null, gy=g?(g.y!=null?g.y:g.Y):null;
       if(gx==null||gy==null) continue;
@@ -13586,9 +13602,12 @@ async function refreshEcAreaNotes(){
           else if(_base && /\.(pdf|tif{1,2}|jpe?g|png)$/i.test(raw)) pdf=_base+encodeURIComponent(raw);
         }
       }
-      _ecMakeNote(Number(gy), Number(gx), pdf).addTo(ecNoteLayer);
+      _fresh.push(_ecMakeNote(Number(gy), Number(gx), pdf));
     }
-    if(feats.length && !map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map);
+    if(!_fresh.length){ _ecAreaKey=key; return; }   // nothing valid built — keep current notes
+    ecNoteLayer.clearLayers();                        // now safe: we have replacements in hand
+    _fresh.forEach(mk=>mk.addTo(ecNoteLayer));
+    if(!map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map);
     _ecAreaKey=key;
   }catch(e){/* best-effort; try again on next move */}
   finally{ _ecAreaBusy=false; }
@@ -13616,9 +13635,11 @@ async function autoArmEcLayer(){
     if(url && url!==window.__ecAreaUrl){
       window.__ecAreaUrl=url; _ecAreaKey='';      // new layer → force the next sweep to actually run
       refreshEcAreaNotes();
-    } else if(!url && window.__ecAreaUrl && !window.__ecAreaPinned){
-      // Panned into a county with no wired EC layer — drop the stale notes rather than leaving
-      // another county's certificates floating over unrelated ground.
+    } else if(!url && window.__ecAreaUrl && !window.__ecAreaPinned && !window.__ecFromLookup){
+      // Panned into a county with no wired EC layer — drop stale AUTO-ARMED area notes rather than
+      // leaving another county's certificates floating over unrelated ground. But NEVER wipe notes
+      // that came from an actual address lookup (subject property + FDEM statewide markers): those
+      // belong to the property you searched and must survive panning/zooming anywhere on the map.
       window.__ecAreaUrl=null; _ecAreaKey='';
       try{ ecNoteLayer.clearLayers(); }catch(e){}
     }
@@ -16705,8 +16726,9 @@ async function runLookup(lat,lng,searchCtx){
          same rooftop. */
       if(ecDocs.length && !ecRendered){
         try{
-          _ecMakeNote(lat, lng, ecDocs[0].url).addTo(ecNoteLayer);
-          if(!map.hasLayer(ecNoteLayer)) ecNoteLayer.addTo(map);
+          _ecMakeNote(lat, lng, ecDocs[0].url).addTo(ecLookupLayer);   // protected layer — sweep won't wipe it
+          window.__ecFromLookup = true;
+          if(!map.hasLayer(ecLookupLayer)) ecLookupLayer.addTo(map);
         }catch(e){/* marker is decoration — never break the card */}
       }
       if(ecDocs.length){
@@ -17032,7 +17054,7 @@ async function runLookup(lat,lng,searchCtx){
   setTimeout(()=>{
     if(myId!==runId) return;                     // a newer search superseded this one
     try{ const b=results.querySelector('.fdemnb');
-         if(b && !b.disabled && !_fdemNb.busy) runFdemNeighborCheck(b, 1); }catch(e){}
+         if(b && !b.disabled && !_fdemNb.busy) runFdemNeighborCheck(b, 3); }catch(e){}
   }, 2000);
   _timings.push({label:'▸ total (to full render)', ms:Math.round(performance.now()-_T0), milestone:true});
   renderLookupTiming(_timings);
