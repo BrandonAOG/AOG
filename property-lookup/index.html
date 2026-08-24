@@ -18473,6 +18473,19 @@ const COUNTY_PARCEL_RESOLVERS = {
     addrField: "FullPropertyAddress",
     folioField:"ACCOUNT",
     ownerField:"ownersname"
+  },
+  // Sarasota County's hosted parcel-appraisal layer (ParcelProperty). Like Lee, it files each condo
+  // unit as its own parcel record with a dedicated `unit` column, its own `account` (parcel id) and
+  // `name1` (owner). So a typed/clicked unit resolves to the exact record via house# + street + unit —
+  // no folio bridge needed. fulladdress is the combined site address; locn/locs are the number/street.
+  SARASOTA: {
+    url: "https://ags3.scgov.net/server/rest/services/Hosted/ParcelProperty/FeatureServer/0/query",
+    addrField: "fulladdress",
+    cityField: "loccity",
+    zipField:  "loczip",
+    folioField:"account",
+    ownerField:"name1",
+    parcelUnitField:"unit"       // dedicated unit column — a typed unit resolves to the exact record
   }
 };
 /* Suffix/abbreviation folding so "Rd"/"Road", "Ct"/"Court", "Dr"/"Drive" etc. all compare equal,
