@@ -15732,7 +15732,11 @@ async function runLookup(lat,lng,searchCtx){
       const _num=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
       // living area — prefer the county appraiser file (primary-structure figure) over the statewide
       // roll, which can sum secondary structures (e.g. 4300 Brynwood: roll 23,724 vs appraiser 11,862).
-      if(!det.liv){
+      // For COLLIER the file carries the appraiser's OWN under-air figure (INT_BUILDINGS, screen
+      // enclosures excluded), so it OVERRIDES even when the roll already populated det.liv — otherwise
+      // a roll value (e.g. 2,818) would win over the authoritative file value (3,047). For other
+      // counties keep the gap-fill-only behaviour (only runs when nothing was detected yet).
+      if(!det.liv || norm(countyName)==='COLLIER'){
         let _fileSqft=null, _rollLiv=pick(_ra,'TOT_LVG_AR','TOTLVGAR','HEATED_AREA','HEATEDAREA','LIVING_AREA','LIVINGAREA','BLDG_SQFT');
         try{
           const _fileUrl = countyName ? ADDRPOINT_FILES[norm(countyName)] : null;
@@ -15746,15 +15750,11 @@ async function runLookup(lat,lng,searchCtx){
             }
           }
         }catch(e){}
-        if(_num(_fileSqft) && _num(_rollLiv)){
-          // Collier's compact file now carries the appraiser's OWN living-area figure (primary-
-          // structure BaseArea, built from INT_BUILDINGS), so it is authoritative — use it and
-          // ignore the statewide roll entirely (the roll sums secondary structures: e.g. 652
-          // Bougainvillea appraiser 2,638 vs roll 12,246). For other counties keep the prior
-          // min() heuristic, which guards against either source carrying a gross/summed figure.
-          if(norm(countyName)==='COLLIER'){
-            _la.TOT_LVG_AR=_fileSqft; det.liv='TOT_LVG_AR';
-          } else {
+        // COLLIER: the file value is authoritative (appraiser's own under-air). Whenever we have it,
+        // use it outright — don't let the roll's min() heuristic or a prior det.liv keep 2,818.
+        if(norm(countyName)==='COLLIER' && _num(_fileSqft)){
+          _la.TOT_LVG_AR=_fileSqft; det.liv='TOT_LVG_AR';
+        } else if(_num(_fileSqft) && _num(_rollLiv)){
             // Both sources have a value. Heated/living area is always <= an adjusted/under-roof
             // figure (e.g. Collier "Adj Area") and <= a multi-structure sum, so take the SMALLER:
             // it corrects the file when IT carries the gross figure (this parcel) AND the roll when
@@ -15763,7 +15763,6 @@ async function runLookup(lat,lng,searchCtx){
             const _small=Math.min(_f,_r), _big=Math.max(_f,_r);
             _la.TOT_LVG_AR=_small; det.liv='TOT_LVG_AR';
             if(_big-_small>1) window.__livOverride={shown:_small, other:_big};
-          }
         } else if(_num(_fileSqft)){ _la.TOT_LVG_AR=_fileSqft; det.liv='TOT_LVG_AR';
         } else if(_num(_rollLiv)){ _la.TOT_LVG_AR=_rollLiv; det.liv='TOT_LVG_AR'; }
       }
