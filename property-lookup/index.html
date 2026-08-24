@@ -9358,7 +9358,7 @@ function houseNum(s){
   m=str.match(/(?:^|\s)(\d{1,6})(?=\s|,|$)/);
   return m?m[1]:null;
 }
-function searchUnit(s){ const m=(s||'').match(/(?:#|\bunit\b|\bapt\b|\bste\b)\s*([A-Za-z0-9\-]+)/i); return m?m[1].toUpperCase().replace(/[^A-Z0-9]/g,''):null; }
+function searchUnit(s){ const m=(s||'').match(/(?:#|\bunits?\b|\bapt\b|\bapartment\b|\bste\b|\bsuite\b|\bbldg\b)\.?\s*#?\s*([A-Za-z0-9\-]+)/i); return m?m[1].toUpperCase().replace(/[^A-Z0-9]/g,''):null; }
 /* Short map-label parts: house number + the street portion of an address, so duplicate numbers in a
    park/condo (200, 200, 200…) read as "200 / EAST", "200 / WEST" etc. Drops the city/state/zip tail.
    Returns {num, street}; street is '' when none is found. */
@@ -18947,6 +18947,23 @@ async function doSearch(){
     }
     for(const {cty, r:pr} of ordered){
       if(pr && pr.multi && pr.candidates && pr.candidates.length){
+        // TYPED-UNIT JUMP: before dumping all lots, if the user typed a unit, the compact file can map
+        // it to that unit's folio (self-addressed Naples/Marco towers the live layer can't split). Pull
+        // the exact parcel live by that folio and jump straight to it instead of the ambiguous list.
+        if(searchCtx && searchCtx.unit && searchCtx.hn){
+          const _ff = await fileUnitToFolio(cty, searchCtx.hn, searchCtx.raw, searchCtx.unit).catch(()=>null);
+          if(_ff){
+            const _ctxF = Object.assign({}, searchCtx, { folioHint:_ff, countyHint:cty });
+            let _jlat=pr.candidates[0].lat, _jlng=pr.candidates[0].lng;
+            const _hit=pr.candidates.find(c=>String(c.folio||'').replace(/\D/g,'')===String(_ff).replace(/\D/g,''));
+            if(_hit && isFinite(_hit.lat) && isFinite(_hit.lng)){ _jlat=_hit.lat; _jlng=_hit.lng; }
+            addToHistory(searchCtx.raw || q);
+            results.innerHTML=setStatus('busy','Pinpointing unit '+esc(searchCtx.unit)+'…');
+            if(isFinite(_jlat)&&isFinite(_jlng)) map.setView([_jlat,_jlng],18);
+            await runLookup(_jlat, _jlng, _ctxF);
+            return;
+          }
+        }
         // Several lots share this number+street — show them rather than guess one.
         renderParcelCandidates(pr.candidates, q);   // clickable rows — click runs the lookup on that lot
         return;
@@ -19188,6 +19205,22 @@ async function chooseSuggestion(it){
     const pr=await resolveCountyParcel(county, searchCtx).catch(()=>null);
     if(stale()) return;
     if(pr && pr.multi && pr.candidates && pr.candidates.length){
+      // TYPED-UNIT JUMP (see the twin block above): map a typed unit to its folio via the file and
+      // jump straight to that unit live, instead of showing the whole ambiguous tower list.
+      if(searchCtx && searchCtx.unit && searchCtx.hn){
+        const _ff = await fileUnitToFolio(county, searchCtx.hn, searchCtx.raw, searchCtx.unit).catch(()=>null);
+        if(_ff){
+          const _ctxF = Object.assign({}, searchCtx, { folioHint:_ff, countyHint:county });
+          let _jlat=pr.candidates[0].lat, _jlng=pr.candidates[0].lng;
+          const _hit=pr.candidates.find(c=>String(c.folio||'').replace(/\D/g,'')===String(_ff).replace(/\D/g,''));
+          if(_hit && isFinite(_hit.lat) && isFinite(_hit.lng)){ _jlat=_hit.lat; _jlng=_hit.lng; }
+          addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr);
+          results.innerHTML=setStatus('busy','Pinpointing unit '+esc(searchCtx.unit)+'…');
+          if(isFinite(_jlat)&&isFinite(_jlng)) map.setView([_jlat,_jlng],18);
+          await runLookup(_jlat, _jlng, _ctxF);
+          return;
+        }
+      }
       addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr);
       renderParcelCandidates(pr.candidates, basis);   // clickable rows — click runs the lookup on that lot
       return;
