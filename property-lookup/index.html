@@ -16766,6 +16766,29 @@ async function runLookup(lat,lng,searchCtx){
     }
     const le=liveMeta&&liveMeta.lastEdit;
     html += `<div class="freshline"><span class="badge live">● LIVE</span> ${esc((liveMeta&&liveMeta.name)||'county parcel service')}${le?' · updated '+esc(le.toLocaleDateString()):' · real-time query'}</div>`;
+    // CONDO UNIT CORRECTION: self-addressed City-of-Naples / Marco towers aren't in the live address
+    // layer, so the live feed resolves the tower to ONE parcel by coordinate — wrong unit. When the
+    // click carried the compact file's authoritative per-unit owner (searchCtx.fileOwner/fileUnit, set
+    // only on a condo-label click) and the resolved parcel isn't that unit, overwrite the owner (and
+    // splice the unit into the address) on the attributes object renderParcelGeneric reads. Scoped to
+    // exactly this case; normal lookups are untouched.
+    try{
+      if(searchCtx && searchCtx.fileOwner && searchCtx.fileUnit){
+        const _la2=liveRes.features[0].attributes;
+        const _nu=v=>String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
+        const _pu=_nu(pick(_la2,'UNIT','SITEUNIT','UNITNUM','UNIT_NO')||parcelUnit(_la2)||'');
+        const _wu=_nu(searchCtx.fileUnit);
+        if(_wu && _pu!==_wu){
+          if(det.owner){ _la2[det.owner]=searchCtx.fileOwner; }
+          else { _la2.OWN_NAME=searchCtx.fileOwner; if(!det.owner) det.owner='OWN_NAME'; }
+          // splice the unit into the shown site address if it isn't already there
+          if(det.site && _la2[det.site] && String(_la2[det.site]).indexOf('#')<0){
+            _la2[det.site]=String(_la2[det.site]).replace(/,|$/, m=> ' #'+searchCtx.fileUnit+(m||''));
+          }
+          liveRes.__fileOwnerCorrected=true;
+        }
+      }
+    }catch(e){}
     html += renderParcelGeneric(liveRes.features[0].attributes, det);
     html += addrPointBadgeHTML(det.pid?pick(liveRes.features[0].attributes,det.pid):null);
     if(liveRes.__ngLat && marker){ try{ marker.setLatLng([liveRes.__ngLat, liveRes.__ngLng]); saveLoc(liveRes.__ngLat, liveRes.__ngLng); }catch(e){} }
