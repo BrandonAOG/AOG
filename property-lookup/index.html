@@ -566,7 +566,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     background:var(--search-bg);color:var(--ink);border:1px solid var(--drop-line);border-radius:8px;width:calc(100% - 32px)}
   .ufilter:focus{outline:none;border-color:var(--signal)}
   .ugrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;
-    padding:12px 16px;overflow:auto}
+    padding:12px 16px;overflow-y:auto;max-height:52vh;-webkit-overflow-scrolling:touch}
   .ucell{padding:12px 6px;font-family:var(--mono);font-size:14px;font-weight:700;color:var(--ink);
     background:var(--search-bg);border:1px solid var(--drop-line);border-radius:8px;cursor:pointer;
     text-align:center;transition:background .12s,border-color .12s,color .12s}
@@ -18679,10 +18679,11 @@ async function lookupCountyParcelByFolio(countyName, folio){
    Rows are also keyboard-reachable (Enter/Space) for accessibility. */
 window.__pcCands=null;
 function renderParcelCandidates(cands, basisText){
-  // A condo stack can run well past 8 units — truncating to 8 hides the one you want. Show more
-  // when the rows are unit-labeled (they're compact and scannable); keep the old cap otherwise.
+  // Show ALL candidates (a condo tower can be 30-100+ units) inside a scrollable container, so the
+  // one you want is never hidden by a cap. A high safety ceiling guards against a pathological result
+  // set; in practice a single address returns at most a few hundred.
   const anyUnits = cands.some(c=>c.unit);
-  window.__pcCands = cands.slice(0, anyUnits?40:8);
+  window.__pcCands = cands.slice(0, 300);
   const list = window.__pcCands.map((c,i)=>
     `<div class="pcand" role="button" tabindex="0" data-pc="${i}">`+
       `<span>`+
@@ -18696,12 +18697,14 @@ function renderParcelCandidates(cands, basisText){
       `</span>`+
     `</div>`).join('');
   const shown = window.__pcCands.length;
-  const more = cands.length>shown ? ` (showing ${shown})` : '';
+  const more = cands.length>shown ? ` (showing first ${shown})` : '';
   const head = anyUnits
-    ? `Found ${cands.length} units at “${esc(basisText)}”${more}. Pick the unit below.`
-    : `Found ${cands.length} lots matching “${esc(basisText)}”${more}. Click the right one below, or add a unit / more detail.`;
+    ? `Found ${cands.length} units at “${esc(basisText)}”${more}. Scroll and pick the unit below.`
+    : `Found ${cands.length} lots matching “${esc(basisText)}”${more}. Scroll and click the right one, or add a unit / more detail.`;
+  // Scrollable list: caps the visible height and scrolls when there are more rows than fit, so a
+  // 32-unit tower is fully reachable instead of truncated.
   results.innerHTML = setStatus('err',head)
-    + `<div style="margin-top:6px">${list}</div>`;
+    + `<div class="pcand-scroll" style="margin-top:6px;max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:8px">${list}</div>`;
   // When the match is a genuine multi-unit stack, put the choice front and centre in a modal rather
   // than leaving it buried in the results panel. The inline rows above stay as the fallback: closing
   // the modal returns you to them, and they still work if the modal never opens.
