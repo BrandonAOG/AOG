@@ -18659,7 +18659,11 @@ async function resolveCountyParcel(countyName, searchCtx){
                   _nuU((String(addr).match(/\s(\d+[A-Z]?)$/)||[])[1]||'');
     matches.push({
       lat:c[1], lng:c[0],
-      label:[addr, a[cfg.cityField], a[cfg.zipField]].filter(Boolean).join(', '),
+      // Don't re-append city/zip when the address field is already a full address (contains a comma,
+      // e.g. Sarasota's "149 ENGLEWOOD ISLES PKWY 602, ENGLEWOOD FL, 34223") — that duplicated them.
+      label: (String(addr).indexOf(',')>=0)
+                ? String(addr).trim()
+                : [addr, a[cfg.cityField], a[cfg.zipField]].filter(Boolean).join(', '),
       folio:a[cfg.folioField]||null, owner:a[cfg.ownerField]||null, unit:pUnit||''
     });
   }
