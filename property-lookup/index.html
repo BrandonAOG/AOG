@@ -4159,15 +4159,30 @@ document.addEventListener('click', closeBasemapMenu);
   const TL_REF = { frame:null };
   const TLLayer = L.TileLayer.extend({
     getTileUrl:function(coords){
-      const f=TL_REF.frame; if(!f) return L.Util.emptyImageUrl;
+      const f=(this._tlFrame!==undefined ? this._tlFrame : TL_REF.frame); if(!f) return L.Util.emptyImageUrl;
       if(f.type==='wayback') return f.tpl.replace('{z}',coords.z).replace('{y}',coords.y).replace('{x}',coords.x);
       const n=Math.pow(2,coords.z), t=2*R_MERC/n;
       const xmin=-R_MERC+coords.x*t, xmax=-R_MERC+(coords.x+1)*t, ymax=R_MERC-coords.y*t, ymin=R_MERC-(coords.y+1)*t;
       return f.base+"/exportImage?f=image&format=jpeg&bbox="+[xmin,ymin,xmax,ymax].join(",")+"&bboxSR=3857&imageSR=3857&size=256,256";
     }
   });
-  const tlLayer = new TLLayer("", { maxZoom:23, maxNativeZoom:20, minZoom:11, updateWhenIdle:false,
-    updateWhenZooming:false, keepBuffer:4, crossOrigin:true });
+  // Two tile layers that ping-pong: the visible one stays up while the next frame loads into the
+  // hidden one; we only swap once the new tiles are ready. This kills the flash-to-blank that a single
+  // layer's redraw() causes (redraw purges all tiles, so you briefly see through to the basemap).
+  function _makeTLLayer(){
+    const lyr=new TLLayer("", { maxZoom:23, maxNativeZoom:20, minZoom:11, updateWhenIdle:false,
+      updateWhenZooming:false, keepBuffer:6, crossOrigin:true, opacity:0 });
+    // Fade the whole tile container so the reveal dissolves instead of snapping. Applied once the
+    // layer's container element exists (on add).
+    lyr.on('add', ()=>{ const c=lyr.getContainer && lyr.getContainer(); if(c){ c.style.transition='opacity .28s ease'; } });
+    return lyr;
+  }
+  let tlLayerA=_makeTLLayer(), tlLayerB=_makeTLLayer();
+  let _tlVisible=null;   // whichever layer is currently shown
+  // Each layer needs its OWN frame reference (they show different dates during the crossfade).
+  tlLayerA._tlGetFrame = ()=>tlLayerA._tlFrame;
+  tlLayerB._tlGetFrame = ()=>tlLayerB._tlFrame;
+  const tlLayer = tlLayerA;  // back-compat alias for addTo/removeLayer/hasLayer checks below
 
   async function waybackFrames(){
     if(_wbFrames) return _wbFrames;
@@ -4252,9 +4267,35 @@ document.addEventListener('click', closeBasemapMenu);
   function showFrame(i){
     if(!_tlFrames.length) return;
     _tlIdx=Math.max(0,Math.min(_tlFrames.length-1,i));
-    const f=_tlFrames[_tlIdx]; TL_REF.frame=f; tlLayer.redraw();
+    const f=_tlFrames[_tlIdx]; TL_REF.frame=f;
     elDate.textContent=f.date; elSlider.value=_tlIdx;
     elSrc.textContent=(f.type==='export'? f.label+' · 3-inch aerial' : 'Esri Wayback · ~1 m');
+    // Load into whichever layer is NOT currently visible, keeping the visible one up until the new
+    // tiles finish — then fade the new one in and drop the old. No flash-to-basemap.
+    const incoming = (_tlVisible===tlLayerA) ? tlLayerB : tlLayerA;
+    const outgoing = _tlVisible;
+    incoming._tlFrame = f;
+    if(!map.hasLayer(incoming)){ incoming.addTo(map); incoming.setZIndex(351); }
+    incoming.setZIndex(outgoing ? 352 : 351);
+    incoming.redraw();
+    let done=false;
+    const reveal=()=>{
+      if(done) return; done=true;
+      // Incoming fades in ON TOP (higher z) while outgoing stays fully opaque UNDERNEATH — so the map
+      // is always fully covered during the .28s fade (no see-through-to-basemap dip). Once the fade
+      // finishes, hide the now-hidden outgoing layer.
+      incoming.setZIndex(353);
+      incoming.setOpacity(1);
+      const prev=outgoing;
+      _tlVisible=incoming;
+      incoming.off('load', reveal);
+      if(prev && prev!==incoming){
+        setTimeout(()=>{ if(_tlVisible!==prev) prev.setOpacity(0); }, 320);  // after the fade completes
+      }
+    };
+    incoming.on('load', reveal);
+    // Fallback: if 'load' doesn't fire (all tiles cached, or a partial), reveal shortly anyway.
+    setTimeout(reveal, 450);
   }
   function stop(){ _playing=false; elPlay.textContent='▶'; if(_timer){clearInterval(_timer);_timer=null;} }
   function play(){
@@ -4262,7 +4303,10 @@ document.addEventListener('click', closeBasemapMenu);
     _playing=true; elPlay.textContent='⏸';
     _timer=setInterval(()=>{ showFrame(_tlIdx>=_tlFrames.length-1?0:_tlIdx+1); }, 1000);
   }
-  function closeTL(){ stop(); panel.classList.remove('show'); if(map.hasLayer(tlLayer)) map.removeLayer(tlLayer); TL_REF.frame=null;
+  function closeTL(){ stop(); panel.classList.remove('show');
+    if(map.hasLayer(tlLayerA)) map.removeLayer(tlLayerA);
+    if(map.hasLayer(tlLayerB)) map.removeLayer(tlLayerB);
+    _tlVisible=null; TL_REF.frame=null;
     const tb=document.getElementById('tlToolbarBtn'); if(tb) tb.classList.remove('active'); }
   async function openTL(){
     const c=map.getCenter();
@@ -4272,7 +4316,9 @@ document.addEventListener('click', closeBasemapMenu);
     let frames=[]; try{ frames=await buildFrames(c.lat,c.lng); }catch(e){}
     _tlFrames=frames;
     if(!frames.length){ elDate.textContent='no history'; elSrc.textContent='archive unavailable here'; return; }
-    tlLayer.addTo(map); tlLayer.setZIndex(350);
+    // reset both layers for a fresh session
+    _tlVisible=null;
+    tlLayerA.setOpacity(0); tlLayerB.setOpacity(0);
     elSlider.min=0; elSlider.max=frames.length-1;
     showFrame(frames.length-1);   // start at the most recent
   }
