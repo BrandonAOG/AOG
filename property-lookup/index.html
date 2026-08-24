@@ -9358,7 +9358,24 @@ function houseNum(s){
   m=str.match(/(?:^|\s)(\d{1,6})(?=\s|,|$)/);
   return m?m[1]:null;
 }
-function searchUnit(s){ const m=(s||'').match(/(?:#|\bunits?\b|\bapt\b|\bapartment\b|\bste\b|\bsuite\b|\bbldg\b)\.?\s*#?\s*([A-Za-z0-9\-]+)/i); return m?m[1].toUpperCase().replace(/[^A-Z0-9]/g,''):null; }
+function searchUnit(s){
+  const str=String(s||'');
+  const m=str.match(/(?:#|\bunits?\b|\bapt\b|\bapartment\b|\bste\b|\bsuite\b|\bbldg\b)\.?\s*#?\s*([A-Za-z0-9\-]+)/i);
+  if(m) return m[1].toUpperCase().replace(/[^A-Z0-9]/g,'');
+  // BARE TRAILING UNIT (Lee-style "100 ESTERO BLVD 133"): a short number/alnum at the very end, after
+  // a street-suffix word, with a house number up front. The condo pattern where the unit is appended
+  // with no marker. Guarded so it never fires on "123 Main St" (no trailing token) or "8th Ave S".
+  const SUF=/(?:BLVD|BOULEVARD|DR|DRIVE|AVE|AVENUE|ST|STREET|RD|ROAD|LN|LANE|CT|COURT|WAY|PL|PLACE|TER|TERRACE|CIR|CIRCLE|PKWY|PARKWAY|TRL|TRAIL|HWY|HIGHWAY|CV|COVE|PT|POINT|LOOP|RUN|WALK|ROW|PASS|BEND)\b/i;
+  const startsHouse=/^\s*\d+\s+\S/.test(str);
+  const t2=str.trim().match(/\s([0-9]{1,5}[A-Za-z]?)\s*$/);
+  if(startsHouse && t2){
+    const before=str.trim().slice(0, str.trim().length - t2[0].length);
+    if(SUF.test(before) && !/\b[NSEW]\s*$/i.test(before)){
+      return t2[1].toUpperCase().replace(/[^A-Z0-9]/g,'');
+    }
+  }
+  return null;
+}
 /* Short map-label parts: house number + the street portion of an address, so duplicate numbers in a
    park/condo (200, 200, 200…) read as "200 / EAST", "200 / WEST" etc. Drops the city/state/zip tail.
    Returns {num, street}; street is '' when none is found. */
@@ -18410,6 +18427,21 @@ const COUNTY_PARCEL_RESOLVERS = {
     apUnitField:     "UNITID",
     apUnitTypeField: "UNITTYPE"
   },
+  // Lee County's hosted parcel layer. UNLIKE Collier, Lee files every condo unit as its own parcel
+  // record with a dedicated SITEUNIT field (e.g. "100 ESTERO BLVD 133" → SITEUNIT=133), each with its
+  // own STRAP + owner. So no folio bridge is needed — we match house# + street + SITEUNIT directly on
+  // this one layer. parcelUnitField tells the parcel-layer path to filter candidates by the typed unit.
+  LEE: {
+    url: "https://services2.arcgis.com/LvWGAAhHwbCJ2GMP/arcgis/rest/services/Lee_County_Parcels/FeatureServer/0/query",
+    addrField: "SITEADDR",
+    cityField: "SITECITY",
+    zipField:  "SITEZIP",
+    folioField:"STRAP",
+    ownerField:"O_NAME",
+    parcelUnitField:"SITEUNIT",   // dedicated unit column — lets a typed unit resolve to the exact record
+    numField:  "SITENUMBER",      // house number as its own field (SITEADDR jams unit onto the end)
+    streetField:"SITESTREET"
+  },
   // Charlotte County's own live parcel layer (the same layer that draws the correct per-parcel
   // address labels on the map). Site address = FullPropertyAddress, parcel id = ACCOUNT,
   // owner = ownersname. This layer has NO separate city/zip field — the address is a single
@@ -18541,7 +18573,7 @@ async function resolveCountyParcel(countyName, searchCtx){
   // (suffix-folded) so Rd/Ct/Road/etc. don't cause misses or false hits.
   const where = `${cfg.addrField} LIKE '${hn} %' OR ${cfg.addrField} = '${hn}'`;
   const params = `where=${encodeURIComponent(where)}`+
-    `&outFields=${encodeURIComponent([cfg.addrField,cfg.cityField,cfg.zipField,cfg.folioField,cfg.ownerField].filter(Boolean).join(','))}`+
+    `&outFields=${encodeURIComponent([cfg.addrField,cfg.cityField,cfg.zipField,cfg.folioField,cfg.ownerField,cfg.parcelUnitField].filter(Boolean).join(','))}`+
     `&returnGeometry=true&outSR=4326&resultRecordCount=100&f=json`;
   let feats;
   try{
@@ -18559,6 +18591,8 @@ async function resolveCountyParcel(countyName, searchCtx){
   // address must contain them too — so "8th Ave S" can never match "8th St N".
   const DIRSUF = new Set([...Object.values(DIRMAP), ...Object.values(SUFMAP)]);
   const wantDS = streetTokens(searchCtx.raw||'').filter(t=>DIRSUF.has(t));
+  const _nuU = v => String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const wantUnit = searchCtx.unit ? _nuU(searchCtx.unit) : null;
   const matches=[];
   for(const f of feats){
     const a=f.attributes||{}; const addr=a[cfg.addrField]; if(!addr) continue;
@@ -18570,13 +18604,26 @@ async function resolveCountyParcel(countyName, searchCtx){
     }
     if(wantDS.length && !wantDS.every(t=>toks.has(t))) continue; // typed Ave/S/etc. must match too
     const c=featCentroid(f); if(!c) continue;       // [x,y] = [lng,lat]
+    // UNIT: capture each parcel's own unit (dedicated column preferred, else parsed from the address
+    // tail — Lee's SITEADDR is "100 ESTERO BLVD 133"). Lets us both filter to the typed unit and label.
+    const pUnit = cfg.parcelUnitField ? _nuU(a[cfg.parcelUnitField]) :
+                  _nuU((String(addr).match(/\s(\d+[A-Z]?)$/)||[])[1]||'');
     matches.push({
       lat:c[1], lng:c[0],
       label:[addr, a[cfg.cityField], a[cfg.zipField]].filter(Boolean).join(', '),
-      folio:a[cfg.folioField]||null, owner:a[cfg.ownerField]||null
+      folio:a[cfg.folioField]||null, owner:a[cfg.ownerField]||null, unit:pUnit||''
     });
   }
   if(!matches.length) return null;
+  // If the user typed a unit and this county carries per-unit records, keep only that unit.
+  if(wantUnit){
+    const uHits=matches.filter(m=>m.unit && m.unit===wantUnit);
+    if(uHits.length){
+      const m=uHits[0];
+      return { lat:m.lat, lng:m.lng, label:m.label, folio:m.folio, owner:m.owner,
+               src:titleCase(countyName)+' County parcel', multi:false };
+    }
+  }
   if(matches.length===1){
     const m=matches[0];
     return { lat:m.lat, lng:m.lng, label:m.label, folio:m.folio, owner:m.owner,
