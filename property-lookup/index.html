@@ -9359,19 +9359,25 @@ function houseNum(s){
   return m?m[1]:null;
 }
 function searchUnit(s){
-  const str=String(s||'');
+  let str=String(s||'');
+  // 1) Explicit markers anywhere: #, Unit(s), Apt, Apartment, Ste, Suite, Bldg.
   const m=str.match(/(?:#|\bunits?\b|\bapt\b|\bapartment\b|\bste\b|\bsuite\b|\bbldg\b)\.?\s*#?\s*([A-Za-z0-9\-]+)/i);
   if(m) return m[1].toUpperCase().replace(/[^A-Z0-9]/g,'');
-  // BARE TRAILING UNIT (Lee-style "100 ESTERO BLVD 133"): a short number/alnum at the very end, after
-  // a street-suffix word, with a house number up front. The condo pattern where the unit is appended
-  // with no marker. Guarded so it never fires on "123 Main St" (no trailing token) or "8th Ave S".
+  // 2) BARE TRAILING UNIT (Lee/Sarasota "100 ESTERO BLVD 133"): a short number/alnum right after the
+  //    street. CRITICAL: strip any ", CITY ST, ZIP" tail first — otherwise the trailing token is the
+  //    ZIP (e.g. "...PKWY 602, ENGLEWOOD FL, 34223" would wrongly parse 34223). Only the part BEFORE
+  //    the first comma is the street line; the unit lives at the end of THAT.
+  const streetLine = str.split(',')[0].trim();
   const SUF=/(?:BLVD|BOULEVARD|DR|DRIVE|AVE|AVENUE|ST|STREET|RD|ROAD|LN|LANE|CT|COURT|WAY|PL|PLACE|TER|TERRACE|CIR|CIRCLE|PKWY|PARKWAY|TRL|TRAIL|HWY|HIGHWAY|CV|COVE|PT|POINT|LOOP|RUN|WALK|ROW|PASS|BEND)\b/i;
-  const startsHouse=/^\s*\d+\s+\S/.test(str);
-  const t2=str.trim().match(/\s([0-9]{1,5}[A-Za-z]?)\s*$/);
+  const startsHouse=/^\s*\d+\s+\S/.test(streetLine);
+  const t2=streetLine.match(/\s([0-9]{1,5}[A-Za-z]?)\s*$/);
   if(startsHouse && t2){
-    const before=str.trim().slice(0, str.trim().length - t2[0].length);
-    if(SUF.test(before) && !/\b[NSEW]\s*$/i.test(before)){
-      return t2[1].toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const before=streetLine.slice(0, streetLine.length - t2[0].length);
+    // must come after a street suffix, not be a direction, and NOT be a 5-digit ZIP-looking token
+    const tok=t2[1];
+    const looksZip=/^\d{5}$/.test(tok);
+    if(SUF.test(before) && !/\b[NSEW]\s*$/i.test(before) && !looksZip){
+      return tok.toUpperCase().replace(/[^A-Z0-9]/g,'');
     }
   }
   return null;
