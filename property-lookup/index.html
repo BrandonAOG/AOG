@@ -18589,12 +18589,22 @@ async function resolveCountyParcel(countyName, searchCtx){
       }
     }catch(e){ /* fall through to parcel-layer resolution */ }
   }
-  // Pull every parcel whose site address STARTS with the house number, then match the street locally
-  // (suffix-folded) so Rd/Ct/Road/etc. don't cause misses or false hits.
-  const where = `${cfg.addrField} LIKE '${hn} %' OR ${cfg.addrField} = '${hn}'`;
+  // Pull parcels whose site address STARTS with the house number, then match the street locally
+  // (suffix-folded) so Rd/Ct/Road/etc. don't cause misses or false hits. IMPORTANT: a bare
+  // "<hn> %" LIKE matches every address with that house number COUNTY-WIDE (e.g. "100 " hits
+  // hundreds of streets), and the row cap then truncates the result — so a condo unit past the cap
+  // (e.g. 100 Estero Blvd 634) silently vanishes and the search falls to an ambiguous list. Add the
+  // most distinctive street token to the WHERE so we fetch THIS building's units, not 100 random lots.
+  const _coreToks = streetCore(searchCtx.raw||'').filter(t=>t && t.length>=3);
+  const _distinct = _coreToks.sort((a,b)=>b.length-a.length)[0] || null;   // longest = most selective
+  let where = `${cfg.addrField} LIKE '${hn} %' OR ${cfg.addrField} = '${hn}'`;
+  if(_distinct){
+    const _d = String(_distinct).replace(/'/g,"''");
+    where = `(${cfg.addrField} LIKE '${hn} %' OR ${cfg.addrField} = '${hn}') AND ${cfg.addrField} LIKE '%${_d}%'`;
+  }
   const params = `where=${encodeURIComponent(where)}`+
     `&outFields=${encodeURIComponent([cfg.addrField,cfg.cityField,cfg.zipField,cfg.folioField,cfg.ownerField,cfg.parcelUnitField].filter(Boolean).join(','))}`+
-    `&returnGeometry=true&outSR=4326&resultRecordCount=100&f=json`;
+    `&returnGeometry=true&outSR=4326&resultRecordCount=400&f=json`;
   let feats;
   try{
     const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
