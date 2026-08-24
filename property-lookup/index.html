@@ -13362,7 +13362,7 @@ const ADDRPOINT_FEEDS = {
 // Bump this whenever you replace ANY compact county file, so browsers load the new data instead of
 // a cached copy. It appends ?v=DATA_VERSION to each file URL — changing the string forces a fresh
 // fetch (and a fresh parse). Use the file's build date, e.g. '2026-08-24'.
-const DATA_VERSION = '2026-08-24b';
+const DATA_VERSION = '2026-08-24c';
 const _addrFile = (name) => name + '?v=' + DATA_VERSION;
 const ADDRPOINT_FILES = {
   // Lee's full address-point set, served as one compact file sitting next to this
@@ -13434,6 +13434,7 @@ async function loadHostedFileIndex(url){
         unit = (r[4]!=null && r[4]!=='') ? r[4] : null;
         own  = (r[5]!=null && r[5]>=0 && owners[r[5]]) ? owners[r[5]] : null;
         sqft = (r[6]!=null && r[6]>0) ? r[6] : null;
+        var folio = (r.length>=8 && r[7]) ? String(r[7]) : null;   // condo rows carry folio for live-owner lookup
       } else {
         x = lon0 + r[0]/scale;   // OLD: lon first
         y = lat0 + r[1]/scale;
@@ -13444,7 +13445,7 @@ async function loadHostedFileIndex(url){
       const k=_cellKey(cx,cy);
       let cell=grid.get(k); if(!cell){ cell=[]; grid.set(k,cell); }
       // store decoded x,y, number, streetIdx, and (new) unit/owner/sqft
-      cell.push([x,y,num,si,unit,own,sqft]);
+      cell.push([x,y,num,si,unit,own,sqft,folio]);
     }
     return { grid, streets };
   }).catch(()=>null);
@@ -13468,7 +13469,7 @@ async function queryHostedFile(url, b){
         const p=cell[i], x=p[0], y=p[1];
         if(x>=W && x<=E && y>=S && y<=N){
           const num=p[2], street=streets[p[3]]||'';
-          const unit=p[4]||null, own=p[5]||null, sqft=p[6]||null;
+          const unit=p[4]||null, own=p[5]||null, sqft=p[6]||null, folio=p[7]||null;
           // include the unit in the displayed address (e.g. "140 Seaview CT #405S")
           let full=(num+' '+street).trim();
           if(unit) full += ' #'+unit;
@@ -13476,6 +13477,7 @@ async function queryHostedFile(url, b){
           if(unit) attrs.UNITID=unit;
           if(own)  attrs.OWN_NAME=own;
           if(sqft) attrs.TOT_LVG_AR=sqft;
+          if(folio) attrs.FOLIO=folio;   // condo folio → lets the click fetch the CURRENT owner live
           out.push({ attributes:attrs, geometry:{ x, y } });
         }
       }
@@ -14653,7 +14655,10 @@ function _nbrClickCtx(txt, attrs){
     if(attrs){
       const fileOwner = pick(attrs,'OWN_NAME','OWNER','NAME1');
       const fileUnit  = pick(attrs,'UNITID','UNIT','SITEUNIT');
-      if(fileOwner && fileUnit){ ctx.fileOwner=String(fileOwner).trim(); ctx.fileUnit=String(fileUnit).trim(); }
+      // fileUnit is needed by the live-owner-by-folio correction even when no owner is stored, so set
+      // it whenever a unit is present. fileOwner is the fallback if the live-by-folio fetch fails.
+      if(fileUnit) ctx.fileUnit=String(fileUnit).trim();
+      if(fileOwner) ctx.fileOwner=String(fileOwner).trim();
       const fileSqft = pick(attrs,'TOT_LVG_AR','TOTLVGAR','LIVING_AREA');
       if(fileSqft) ctx.fileSqft=fileSqft;
     }
@@ -16766,26 +16771,31 @@ async function runLookup(lat,lng,searchCtx){
     }
     const le=liveMeta&&liveMeta.lastEdit;
     html += `<div class="freshline"><span class="badge live">● LIVE</span> ${esc((liveMeta&&liveMeta.name)||'county parcel service')}${le?' · updated '+esc(le.toLocaleDateString()):' · real-time query'}</div>`;
-    // CONDO UNIT CORRECTION: self-addressed City-of-Naples / Marco towers aren't in the live address
-    // layer, so the live feed resolves the tower to ONE parcel by coordinate — wrong unit. When the
-    // click carried the compact file's authoritative per-unit owner (searchCtx.fileOwner/fileUnit, set
-    // only on a condo-label click) and the resolved parcel isn't that unit, overwrite the owner (and
-    // splice the unit into the address) on the attributes object renderParcelGeneric reads. Scoped to
-    // exactly this case; normal lookups are untouched.
+    // CONDO UNIT CORRECTION (live-owner-by-folio): self-addressed City-of-Naples / Marco towers aren't
+    // in the live address layer, so the live parcel feed resolves the whole tower to ONE parcel by
+    // coordinate — the wrong unit. The compact file carries each unit's FOLIO (searchCtx.folio, set on
+    // a condo-label click). We fetch the CURRENT owner for THAT folio live from the parcel layer — so
+    // the shown owner is always fresh (never stale from the file) AND correct for the clicked unit.
+    // Falls back to the file owner only if the live fetch fails. Scoped to the condo-click case.
     try{
-      if(searchCtx && searchCtx.fileOwner && searchCtx.fileUnit){
+      if(searchCtx && searchCtx.folio && searchCtx.fileUnit){
         const _la2=liveRes.features[0].attributes;
         const _nu=v=>String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
         const _pu=_nu(pick(_la2,'UNIT','SITEUNIT','UNITNUM','UNIT_NO')||parcelUnit(_la2)||'');
         const _wu=_nu(searchCtx.fileUnit);
         if(_wu && _pu!==_wu){
-          if(det.owner){ _la2[det.owner]=searchCtx.fileOwner; }
-          else { _la2.OWN_NAME=searchCtx.fileOwner; if(!det.owner) det.owner='OWN_NAME'; }
-          // splice the unit into the shown site address if it isn't already there
-          if(det.site && _la2[det.site] && String(_la2[det.site]).indexOf('#')<0){
-            _la2[det.site]=String(_la2[det.site]).replace(/,|$/, m=> ' #'+searchCtx.fileUnit+(m||''));
+          let _liveOwner=null;
+          try{ const _byF=await lookupCountyParcelByFolio(countyName, searchCtx.folio);
+               if(_byF && _byF.owner) _liveOwner=_byF.owner; }catch(e){}
+          const _useOwner = _liveOwner || searchCtx.fileOwner;   // live preferred; file as fallback
+          if(_useOwner){
+            if(det.owner){ _la2[det.owner]=_useOwner; } else { _la2.OWN_NAME=_useOwner; det.owner='OWN_NAME'; }
+            if(det.site && _la2[det.site] && String(_la2[det.site]).indexOf('#')<0){
+              _la2[det.site]=String(_la2[det.site]).replace(/,|$/, m=> ' #'+searchCtx.fileUnit+(m||''));
+            }
+            liveRes.__fileOwnerCorrected=true;
+            liveRes.__ownerLiveByFolio=!!_liveOwner;
           }
-          liveRes.__fileOwnerCorrected=true;
         }
       }
     }catch(e){}
