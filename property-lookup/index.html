@@ -16870,6 +16870,18 @@ async function runLookup(lat,lng,searchCtx){
           }
         }
       }
+      // SHARED-ACCOUNT COUNTIES (Sarasota): the resolver already isolated the correct unit's owner,
+      // but there's no per-unit folio to re-fetch (the account is the building's). When the context
+      // carries a trusted fileOwner+fileUnit and the re-resolved parcel's owner differs, trust the
+      // resolver's owner. No folio needed — the resolver's unit-filtered match is authoritative.
+      else if(searchCtx && searchCtx.fileOwner && searchCtx.fileUnit && !searchCtx.folio){
+        const _la2=liveRes.features[0].attributes;
+        const _curOwner=det.owner?pick(_la2,det.owner):null;
+        if(!_curOwner || String(_curOwner).trim().toUpperCase()!==String(searchCtx.fileOwner).trim().toUpperCase()){
+          if(det.owner){ _la2[det.owner]=searchCtx.fileOwner; } else { _la2.OWN_NAME=searchCtx.fileOwner; det.owner='OWN_NAME'; }
+          liveRes.__fileOwnerCorrected=true;
+        }
+      }
     }catch(e){}
     html += renderParcelGeneric(liveRes.features[0].attributes, det);
     // STACKED-CONDO MAP-CLICK NOTE: some counties (e.g. Lee) file every condo unit at ONE coordinate,
@@ -19330,7 +19342,16 @@ async function chooseSuggestion(it){
       STORE.set('fl_addr',addrEl.value); addToHistory(addrEl.value);
       results.innerHTML=setStatus('busy','Pinpointing the parcel…');
       map.setView([pr.lat,pr.lng], 18);
-      await runLookup(pr.lat, pr.lng, searchCtx);
+      // The resolver already isolated the CORRECT unit (owner + label). For counties whose parcel
+      // records SHARE one account across all units (Sarasota's `account` is the building's, not the
+      // unit's), a folio re-fetch inside runLookup would grab the whole building and pick the wrong
+      // unit. So carry the resolver's trusted owner/unit through the context; the condo-correction
+      // block honours it (fileOwner/fileUnit) instead of re-resolving by coordinate/shared folio.
+      let _ctxR = searchCtx;
+      if(pr.owner && searchCtx && searchCtx.unit){
+        _ctxR = Object.assign({}, searchCtx, { fileOwner:pr.owner, fileUnit:searchCtx.unit });
+      }
+      await runLookup(pr.lat, pr.lng, _ctxR);
       if(stale()) return;
       const fol = pr.folio ? ` · Folio ${esc(pr.folio)}` : '';
       const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(pr.src)}): <b style="color:var(--ink)">${esc(pr.label)}</b>${fol} — authoritative county parcel; confirm the marker is on the right lot.</div>`;
