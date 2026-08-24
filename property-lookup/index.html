@@ -14764,7 +14764,9 @@ function _nbrRenderParcelLabels(labels, subjIdx){
         for(let n=0;n<idxs.length;n++){
           const col=Math.floor(n/PER_COL), row=n%PER_COL;
           const L0=labels[idxs[n]];
-          const dlat=baseLat - row*STEP_Y, dlng=baseLng + col*STEP_X;
+          // Start the fan ONE row below the badge (row+1), so the first unit isn't drawn directly on
+          // top of the collapsed badge — where the badge intercepted its clicks (couldn't select #101).
+          const dlat=baseLat - (row+1)*STEP_Y, dlng=baseLng + col*STEP_X;
           const m=makeUnitMarker(L0, idxs[n]===subjIdx, dlat, dlng);
           m.on('mouseover', ()=>clearTimeout(leaveT));  // staying in the cluster keeps it open
           m.on('mouseout', scheduleCollapse);
