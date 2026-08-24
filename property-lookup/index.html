@@ -13452,6 +13452,38 @@ async function loadHostedFileIndex(url){
   _fileCache.set(url, p);
   return p;
 }
+// Find a condo unit's FOLIO from the compact file by (house number + street + unit). Used when the
+// user TYPES a unit (e.g. "2171 Gulf Shore Blvd N #801") for a self-addressed tower whose units the
+// live layer can't distinguish — the file's folio then drives a live owner lookup. Returns the folio
+// string or null. Scans the whole index once (cached), matching house#, street tokens, and unit.
+async function fileUnitToFolio(county, hn, streetRaw, unit){
+  try{
+    if(!county || !hn || !unit) return null;
+    const url = ADDRPOINT_FILES[norm(county)];
+    if(!url || url.indexOf('REPLACE-ME')>=0) return null;
+    const idx = await loadHostedFileIndex(url);
+    if(!idx || !idx.grid) return null;
+    const streets = idx.streets||[];
+    const _nu = v => String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const wantU = _nu(unit), wantHN = String(hn).trim();
+    const wantToks = new Set(streetTokens(streetRaw||''));
+    for(const cell of idx.grid.values()){
+      for(const p of cell){
+        // cell row: [x,y,num,streetIdx,unit,own,sqft,folio]
+        if(p.length<8 || !p[7]) continue;              // must carry a folio
+        if(String(p[2]).trim()!==wantHN) continue;      // house number
+        if(_nu(p[4])!==wantU) continue;                 // unit
+        if(wantToks.size){                              // street must overlap
+          const stoks=new Set(streetTokens(streets[p[3]]||''));
+          let ov=false; wantToks.forEach(t=>{ if(stoks.has(t)) ov=true; });
+          if(!ov) continue;
+        }
+        return String(p[7]);                            // folio
+      }
+    }
+  }catch(e){}
+  return null;
+}
 // Return Esri-shaped features inside the given Leaflet bounds, building address strings
 // only for the points actually in view.
 async function queryHostedFile(url, b){
@@ -15774,6 +15806,23 @@ async function runLookup(lat,lng,searchCtx){
                 // The resolver came back with the authoritative unit address — upgrade the search
                 // box to it so the box, the pin and the card all read the same thing.
                 if(rc.label) _nbrSetAddrBox(rc.label);
+              }
+            }
+          }
+          // 0b-file) FILE UNIT→FOLIO: the live address layer can't distinguish units in self-addressed
+          //   City-of-Naples / Marco towers (all units share one point, no folio). The compact file
+          //   DOES carry each unit's folio. When a typed unit hasn't resolved above, map it to a folio
+          //   via the file, then pull the EXACT parcel live by that folio — so "2171 Gulf Shore #801"
+          //   jumps straight to unit 801's current owner instead of the ambiguous building record.
+          if(!al && searchCtx && searchCtx.unit && searchCtx.hn){
+            const _ff = await fileUnitToFolio(countyName, searchCtx.hn, searchCtx.raw, searchCtx.unit).catch(()=>null);
+            if(_ff){
+              const pin3 = await fetchCountyParcelFeatureByFolio(countyName, _ff).catch(()=>null);
+              if(pin3 && pin3.features && pin3.features[0]){
+                al={features:[pin3.features[0]]};
+                al.__authByFolio=true; al.__byFolioPin=true;
+                matchedAddr = searchCtx.raw || null; multi=1;
+                try{ const _c=featCentroid(pin3.features[0]); if(_c){ al.__ngLat=_c[1]; al.__ngLng=_c[0]; } }catch(e){}
               }
             }
           }
@@ -18710,7 +18759,7 @@ function renderParcelCandidates(cands, basisText){
   const more = cands.length>shown ? ` (showing first ${shown})` : '';
   const head = anyUnits
     ? `Found ${cands.length} units at “${esc(basisText)}”${more}. Scroll and pick the unit below.`
-    : `Found ${cands.length} lots matching “${esc(basisText)}”${more}. Scroll and click the right one, or add a unit / more detail.`;
+    : `Found ${cands.length} lots at “${esc(basisText)}”${more}. Scroll and pick by owner/folio below, or type the unit (e.g. “#801”) to jump to it.`;
   // Scrollable list: caps the visible height and scrolls when there are more rows than fit, so a
   // 32-unit tower is fully reachable instead of truncated.
   results.innerHTML = setStatus('err',head)
