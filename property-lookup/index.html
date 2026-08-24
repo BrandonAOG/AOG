@@ -4214,14 +4214,32 @@ document.addEventListener('click', closeBasemapMenu);
     });
   }
   async function countyFrames(lat,lng){
+    // County bounding boxes are rough rectangles and OVERLAP where counties meet (e.g. northern
+    // Collier falls inside both the Lee and Collier boxes). Prefer the AUTHORITATIVE county name the
+    // tool already resolved (FDOT boundary query → window.__lastCounty). Only if that's unavailable
+    // do we fall back to the nearest-center box guess (and even that beats first-match).
     let key=null;
-    for(const k in LOCAL_AERIAL){ const b=LOCAL_AERIAL[k].bounds;
-      if(lng>=b[0]&&lng<=b[2]&&lat>=b[1]&&lat<=b[3]){ key=k; break; } }
+    const known = (typeof window!=='undefined' && window.__lastCounty) ? String(window.__lastCounty).toUpperCase().replace(/[^A-Z]/g,'') : null;
+    // Trust the resolved county name ONLY if the point we're building frames for actually falls inside
+    // that county's box. This handles the overlap zones (uses the authoritative name there) without
+    // wrongly reusing a stale county if the user panned far from where they searched.
+    if(known && LOCAL_AERIAL[known]){
+      const kb=LOCAL_AERIAL[known].bounds;
+      if(lng>=kb[0]&&lng<=kb[2]&&lat>=kb[1]&&lat<=kb[3]) key=known;
+    }
+    if(!key){
+      let bestD=Infinity;
+      for(const k in LOCAL_AERIAL){ const b=LOCAL_AERIAL[k].bounds;
+        if(lng>=b[0]&&lng<=b[2]&&lat>=b[1]&&lat<=b[3]){
+          const cx=(b[0]+b[2])/2, cy=(b[1]+b[3])/2, d=(lng-cx)*(lng-cx)+(lat-cy)*(lat-cy);
+          if(d<bestD){ bestD=d; key=k; }
+        } }
+    }
     if(!key) return [];
     const seen={}, out=[];
     for(const url of LOCAL_AERIAL[key].candidates){
       const ym=url.match(/(20\d{2})/); if(!ym) continue; const yr=+ym[1]; if(seen[yr]) continue;
-      if(await probeExport(url,lat,lng)){ seen[yr]=1; out.push({type:'export',date:yr+'-06-30',year:yr,base:url,label:LOCAL_AERIAL[key].label}); }
+      if(await probeExport(url,lat,lng)){ seen[yr]=1; out.push({type:'export',date:String(yr),year:yr,yearOnly:true,base:url,label:LOCAL_AERIAL[key].label}); }
     }
     return out;
   }
@@ -4269,7 +4287,12 @@ document.addEventListener('click', closeBasemapMenu);
     _tlIdx=Math.max(0,Math.min(_tlFrames.length-1,i));
     const f=_tlFrames[_tlIdx]; TL_REF.frame=f;
     elDate.textContent=f.date; elSlider.value=_tlIdx;
-    elSrc.textContent=(f.type==='export'? f.label+' · 3-inch aerial' : 'Esri Wayback · ~1 m');
+    // Be honest about what the date means. County aerials: we only know the YEAR (the flight year from
+    // the service name) — no real day, so show just the year. Esri Wayback: the date is Esri's basemap
+    // RELEASE date, not necessarily when this exact spot was photographed — label it so.
+    elSrc.textContent=(f.type==='export'
+      ? f.label+' · 3-inch aerial · '+f.year+' flight'
+      : 'Esri Wayback · ~1 m · released '+f.date);
     // Load into whichever layer is NOT currently visible, keeping the visible one up until the new
     // tiles finish — then fade the new one in and drop the old. No flash-to-basemap.
     const incoming = (_tlVisible===tlLayerA) ? tlLayerB : tlLayerA;
