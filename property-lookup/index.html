@@ -16866,6 +16866,26 @@ async function runLookup(lat,lng,searchCtx){
       }
     }catch(e){}
     html += renderParcelGeneric(liveRes.features[0].attributes, det);
+    // STACKED-CONDO MAP-CLICK NOTE: some counties (e.g. Lee) file every condo unit at ONE coordinate,
+    // so a map-click can't tell which unit you meant — it resolves whichever the point-query returns.
+    // When the clicked parcel carries a unit AND this was a map-click that didn't specify one AND we
+    // didn't authoritatively match by folio, warn that the owner shown is for ONE unit at this spot,
+    // and to search the address (which offers the unit picker) for a specific unit. Honest, not noisy:
+    // only fires on unit-bearing parcels reached without a confirmed unit.
+    try{
+      if(!liveRes.__fileOwnerCorrected && !(liveRes.__authByFolio && searchCtx && searchCtx.unit)){
+        const _ua=liveRes.features[0].attributes||{};
+        const _cfgU = COUNTY_PARCEL_RESOLVERS[norm(countyName)];
+        const _clickedUnit = (searchCtx && searchCtx.unit) ? searchCtx.unit : null;
+        // unit on the resolved parcel (dedicated field, else trailing token in the address)
+        const _cfgUnitField = _cfgU && _cfgU.parcelUnitField;
+        let _parcelUnit = _cfgUnitField ? _ua[_cfgUnitField] : null;
+        if(!_parcelUnit && det.site){ const _m=String(pick(_ua,det.site)||'').match(/\s(\d+[A-Za-z]?)$/); if(_m) _parcelUnit=_m[1]; }
+        if(_parcelUnit && !_clickedUnit){
+          html += `<div class="note warnbox">This building has multiple units stacked at one point. Showing unit <b>${esc(String(_parcelUnit))}</b>’s owner — a map-click can’t tell which unit you meant here. <b>Search the address</b> (e.g. “${esc(String(houseNum(pick(_ua,det.site)||'')||''))} ${esc(streetCore(pick(_ua,det.site)||'').join(' '))} #unit”) to pick a specific unit.</div>`;
+        }
+      }
+    }catch(e){}
     html += addrPointBadgeHTML(det.pid?pick(liveRes.features[0].attributes,det.pid):null);
     if(liveRes.__ngLat && marker){ try{ marker.setLatLng([liveRes.__ngLat, liveRes.__ngLng]); saveLoc(liveRes.__ngLat, liveRes.__ngLng); }catch(e){} }
     // CENTER-OF-LOT: place the marker at the parcel's geometric centroid rather than the address
