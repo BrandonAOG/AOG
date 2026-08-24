@@ -8177,6 +8177,115 @@ async function diagnoseLiveFeeds(){
   }
   out.innerHTML=lines.join('');
 }
+/* ---------- Full diagnostic POPUP ----------
+   Triggered by the Test button (and reusable). Runs probeEndpoint for a clear CORS verdict, then —
+   if the layer is reachable & queryable — pulls the ACTUAL record at the last clicked point and lists
+   every field it returned (parcel, owner, sqft, address, etc.). This removes the misleading "X no
+   parcel" (which really meant "CORS was fine, the field was just empty"): CORS status and field
+   contents are now shown as two separate, explicit things. */
+function _diagPopupEl(){
+  let el=document.getElementById('diagPopup');
+  if(!el){
+    el=document.createElement('div'); el.id='diagPopup';
+    el.style.cssText='position:fixed;z-index:99999;top:50%;left:50%;transform:translate(-50%,-50%);'+
+      'width:min(560px,92vw);max-height:82vh;overflow:auto;background:#0b1016;border:1px solid #2a3a46;'+
+      'border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.6);padding:0;font-family:var(--mono,monospace);'+
+      'color:#dfe;font-size:12px;line-height:1.5';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function closeDiagPopup(){ const el=document.getElementById('diagPopup'); if(el) el.remove(); const b=document.getElementById('diagPopupBg'); if(b) b.remove(); }
+function _diagBg(){
+  let b=document.getElementById('diagPopupBg');
+  if(!b){ b=document.createElement('div'); b.id='diagPopupBg';
+    b.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.5)';
+    b.onclick=closeDiagPopup; document.body.appendChild(b); }
+  return b;
+}
+async function showLiveDiagnostic(rawUrl){
+  _diagBg();
+  const el=_diagPopupEl();
+  const url = (rawUrl||document.getElementById('liveUrl').value||'').trim();
+  const head='<div style="position:sticky;top:0;background:#0b1016;border-bottom:1px solid #1c242e;'+
+    'padding:12px 16px;display:flex;justify-content:space-between;align-items:center">'+
+    '<span style="color:#39d3ff;font-weight:700;letter-spacing:.05em">LIVE SOURCE DIAGNOSTIC</span>'+
+    '<span onclick="closeDiagPopup()" style="cursor:pointer;color:#7a8a96;font-size:16px;padding:0 4px">✕</span></div>';
+  if(!url){ el.innerHTML=head+'<div style="padding:16px;color:#f2c94c">Paste a county parcel layer URL in the box first, then hit Test.</div>'; return; }
+  el.innerHTML=head+'<div style="padding:16px;color:#39d3ff">Testing '+esc(url)+' …</div>';
+
+  // 1) CORS / reachability verdict
+  const p=await probeEndpoint(url);
+  const corsLabel = p.cors==='ok' ? '<span style="color:#4ade80;font-weight:700">CORS OK</span>'
+                  : p.cors==='blocked' ? '<span style="color:#f87171;font-weight:700">CORS BLOCKED</span>'
+                  : '<span style="color:#f2c94c;font-weight:700">CORS UNKNOWN (host unreachable)</span>';
+  const verdictText = ({ok:'Reachable, queryable',badpath:'Reachable, but wrong layer path',
+    cors:'Host reachable but blocks browser requests (needs a proxy)',
+    unreachable:'Host did not respond'})[p.verdict];
+
+  let body='<div style="padding:14px 16px">';
+  body+='<div style="margin-bottom:10px">'+corsLabel+'  <span style="color:#8aa">·</span>  <span style="color:#cde">'+esc(verdictText)+'</span></div>';
+  body+='<div style="color:#7a8a96;word-break:break-all;margin-bottom:10px;font-size:11px">'+esc(p.root)+'</div>';
+  body+='<div style="color:#9ab;margin-bottom:12px;font-size:11.5px">'+esc(p.detail)+'</div>';
+
+  // 2) If reachable & queryable, pull the ACTUAL record at the last point and list every field
+  if(p.verdict==='ok' && lastLoc){
+    body+='<div style="border-top:1px solid #1c242e;padding-top:12px;margin-top:6px">'+
+      '<div style="color:#39d3ff;font-weight:700;margin-bottom:8px">RECORD AT LAST POINT '+
+      '<span style="color:#7a8a96;font-weight:400">('+lastLoc.lat.toFixed(5)+', '+lastLoc.lng.toFixed(5)+')</span></div>';
+    try{
+      const root=layerRoot(normalizeLayerUrl(url));
+      const geom=encodeURIComponent(JSON.stringify({x:lastLoc.lng,y:lastLoc.lat,spatialReference:{wkid:4326}}));
+      const qurl=root+'/query?geometry='+geom+'&geometryType=esriGeometryPoint&inSR=4326'+
+        '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json';
+      const j=await (await fetch(qurl)).json();
+      const feat=(j.features||[])[0];
+      if(!feat){
+        body+='<div style="color:#f2c94c">The query worked (CORS fine) but returned NO parcel at this exact point. '+
+          'Try clicking directly on the parcel, or the point may be just outside the polygon.</div>';
+      } else {
+        const a=feat.attributes||{};
+        const d=detectFields(Object.keys(a));
+        // Highlight the key detected fields first
+        const keyRows=[
+          ['Parcel/Folio', d.pid ? (a[d.pid]!=null?a[d.pid]:'(empty)') : '(no parcel field found)', d.pid],
+          ['Owner',        d.owner ? (a[d.owner]!=null&&a[d.owner]!==''?a[d.owner]:'(empty)') : '(no owner field found)', d.owner],
+          ['Living area',  d.liv ? (a[d.liv]!=null?a[d.liv]:'(empty)') : '(no sqft field found)', d.liv],
+          ['Site address', d.site ? (a[d.site]!=null?a[d.site]:'(empty)') : '(no address field found)', d.site]
+        ];
+        body+='<table style="width:100%;border-collapse:collapse;margin-bottom:10px">';
+        for(const [lbl,val,fld] of keyRows){
+          const empty=/^\(/.test(String(val));
+          body+='<tr>'+
+            '<td style="color:#7a8a96;padding:2px 8px 2px 0;white-space:nowrap;vertical-align:top">'+lbl+'</td>'+
+            '<td style="color:'+(empty?'#f2c94c':'#4ade80')+';padding:2px 0;word-break:break-word">'+esc(String(val))+
+              (fld?'<span style="color:#5a6a76;font-size:10px"> ['+esc(fld)+']</span>':'')+'</td></tr>';
+        }
+        body+='</table>';
+        // Full field dump (collapsible)
+        const allKeys=Object.keys(a);
+        body+='<details style="margin-top:6px"><summary style="cursor:pointer;color:#39d3ff">All '+allKeys.length+' fields ▾</summary>'+
+          '<table style="width:100%;border-collapse:collapse;margin-top:6px">';
+        for(const k of allKeys){
+          const v=a[k];
+          const disp = (v==null||v==='') ? '<span style="color:#5a6a76">(empty)</span>' : esc(String(v).slice(0,80));
+          body+='<tr><td style="color:#8aa;padding:1px 8px 1px 0;white-space:nowrap;vertical-align:top;font-size:11px">'+esc(k)+'</td>'+
+            '<td style="color:#cde;padding:1px 0;word-break:break-word;font-size:11px">'+disp+'</td></tr>';
+        }
+        body+='</table></details>';
+      }
+    }catch(e){
+      body+='<div style="color:#f87171">Field query failed: '+esc(e.message)+'</div>';
+    }
+    body+='</div>';
+  } else if(p.verdict==='ok' && !lastLoc){
+    body+='<div style="border-top:1px solid #1c242e;padding-top:12px;color:#f2c94c">Layer is reachable & CORS-OK. '+
+      'Click a point on the map, then Test again to list the parcel/owner/sqft fields at that spot.</div>';
+  }
+  body+='</div>';
+  el.innerHTML=head+body;
+}
+
 function detectFields(fields){
   const F=fields.map(f=>({raw:f,U:String(f).toUpperCase()}));
   const find=(res)=>{ for(const re of res){ const m=F.find(f=>re.test(f.U)); if(m) return m.raw; } return null; };
@@ -18994,7 +19103,7 @@ addrEl.addEventListener('focus', () => {
   if(!addrEl.value.trim()) showHistory();
 });
 addrEl.addEventListener('blur', () => setTimeout(hideHistory, 150));
-document.getElementById('liveTest').onclick=testLiveSource;
+document.getElementById('liveTest').onclick=()=>{ testLiveSource(); showLiveDiagnostic(); };
 document.getElementById('diagBtn').onclick=diagnoseLiveFeeds;
 document.getElementById('liveUrl').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();testLiveSource();}});
 
