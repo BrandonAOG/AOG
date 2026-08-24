@@ -8228,59 +8228,38 @@ async function showLiveDiagnostic(rawUrl){
   body+='<div style="color:#7a8a96;word-break:break-all;margin-bottom:10px;font-size:11px">'+esc(p.root)+'</div>';
   body+='<div style="color:#9ab;margin-bottom:12px;font-size:11.5px">'+esc(p.detail)+'</div>';
 
-  // 2) If reachable & queryable, pull the ACTUAL record at the last point and list every field
-  if(p.verdict==='ok' && lastLoc){
-    body+='<div style="border-top:1px solid #1c242e;padding-top:12px;margin-top:6px">'+
-      '<div style="color:#39d3ff;font-weight:700;margin-bottom:8px">RECORD AT LAST POINT '+
-      '<span style="color:#7a8a96;font-weight:400">('+lastLoc.lat.toFixed(5)+', '+lastLoc.lng.toFixed(5)+')</span></div>';
+  // 2) If reachable & queryable, list the layer's FIELDS (schema) + which key ones we auto-detect.
+  if(p.verdict==='ok'){
     try{
       const root=layerRoot(normalizeLayerUrl(url));
-      const geom=encodeURIComponent(JSON.stringify({x:lastLoc.lng,y:lastLoc.lat,spatialReference:{wkid:4326}}));
-      const qurl=root+'/query?geometry='+geom+'&geometryType=esriGeometryPoint&inSR=4326'+
-        '&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json';
-      const j=await (await fetch(qurl)).json();
-      const feat=(j.features||[])[0];
-      if(!feat){
-        body+='<div style="color:#f2c94c">The query worked (CORS fine) but returned NO parcel at this exact point. '+
-          'Try clicking directly on the parcel, or the point may be just outside the polygon.</div>';
-      } else {
-        const a=feat.attributes||{};
-        const d=detectFields(Object.keys(a));
-        // Highlight the key detected fields first
-        const keyRows=[
-          ['Parcel/Folio', d.pid ? (a[d.pid]!=null?a[d.pid]:'(empty)') : '(no parcel field found)', d.pid],
-          ['Owner',        d.owner ? (a[d.owner]!=null&&a[d.owner]!==''?a[d.owner]:'(empty)') : '(no owner field found)', d.owner],
-          ['Living area',  d.liv ? (a[d.liv]!=null?a[d.liv]:'(empty)') : '(no sqft field found)', d.liv],
-          ['Site address', d.site ? (a[d.site]!=null?a[d.site]:'(empty)') : '(no address field found)', d.site]
-        ];
-        body+='<table style="width:100%;border-collapse:collapse;margin-bottom:10px">';
-        for(const [lbl,val,fld] of keyRows){
-          const empty=/^\(/.test(String(val));
-          body+='<tr>'+
-            '<td style="color:#7a8a96;padding:2px 8px 2px 0;white-space:nowrap;vertical-align:top">'+lbl+'</td>'+
-            '<td style="color:'+(empty?'#f2c94c':'#4ade80')+';padding:2px 0;word-break:break-word">'+esc(String(val))+
-              (fld?'<span style="color:#5a6a76;font-size:10px"> ['+esc(fld)+']</span>':'')+'</td></tr>';
-        }
-        body+='</table>';
-        // Full field dump (collapsible)
-        const allKeys=Object.keys(a);
-        body+='<details style="margin-top:6px"><summary style="cursor:pointer;color:#39d3ff">All '+allKeys.length+' fields ▾</summary>'+
-          '<table style="width:100%;border-collapse:collapse;margin-top:6px">';
-        for(const k of allKeys){
-          const v=a[k];
-          const disp = (v==null||v==='') ? '<span style="color:#5a6a76">(empty)</span>' : esc(String(v).slice(0,80));
-          body+='<tr><td style="color:#8aa;padding:1px 8px 1px 0;white-space:nowrap;vertical-align:top;font-size:11px">'+esc(k)+'</td>'+
-            '<td style="color:#cde;padding:1px 0;word-break:break-word;font-size:11px">'+disp+'</td></tr>';
-        }
-        body+='</table></details>';
+      const meta=await (await fetch(root+'?f=json')).json();
+      const flds=(meta.fields||[]);
+      const names=flds.map(f=>f.name);
+      const d=detectFields(names);
+      body+='<div style="border-top:1px solid #1c242e;padding-top:12px;margin-top:6px">';
+      if(meta.name) body+='<div style="color:#cde;margin-bottom:8px">Layer: <b>'+esc(meta.name)+'</b>'+
+        (meta.editingInfo&&meta.editingInfo.lastEditDate?' <span style="color:#7a8a96">· updated '+new Date(meta.editingInfo.lastEditDate).toLocaleDateString()+'</span>':'')+'</div>';
+      // auto-detected key fields
+      body+='<div style="color:#39d3ff;font-weight:700;margin-bottom:6px">AUTO-DETECTED</div>';
+      const det=[['Owner',d.owner],['Parcel/Folio',d.pid],['Living area',d.liv],['Site address',d.site]];
+      body+='<table style="width:100%;border-collapse:collapse;margin-bottom:12px">';
+      for(const [lbl,fld] of det){
+        body+='<tr><td style="color:#7a8a96;padding:2px 8px 2px 0;white-space:nowrap">'+lbl+'</td>'+
+          '<td style="color:'+(fld?'#4ade80':'#f2c94c')+';padding:2px 0">'+(fld?esc(fld):'(not found)')+'</td></tr>';
       }
+      body+='</table>';
+      // full field list
+      body+='<div style="color:#39d3ff;font-weight:700;margin-bottom:6px">ALL FIELDS ('+flds.length+')</div>';
+      body+='<table style="width:100%;border-collapse:collapse">';
+      for(const f of flds){
+        body+='<tr><td style="color:#cde;padding:1px 8px 1px 0;white-space:nowrap;font-size:11px;vertical-align:top">'+esc(f.name)+'</td>'+
+          '<td style="color:#7a8a96;padding:1px 0;font-size:10.5px">'+esc((f.type||'').replace('esriFieldType',''))+
+            (f.alias&&f.alias!==f.name?' · '+esc(f.alias):'')+'</td></tr>';
+      }
+      body+='</table></div>';
     }catch(e){
-      body+='<div style="color:#f87171">Field query failed: '+esc(e.message)+'</div>';
+      body+='<div style="color:#f87171">Couldn\'t read the field list: '+esc(e.message)+'</div>';
     }
-    body+='</div>';
-  } else if(p.verdict==='ok' && !lastLoc){
-    body+='<div style="border-top:1px solid #1c242e;padding-top:12px;color:#f2c94c">Layer is reachable & CORS-OK. '+
-      'Click a point on the map, then Test again to list the parcel/owner/sqft fields at that spot.</div>';
   }
   body+='</div>';
   el.innerHTML=head+body;
