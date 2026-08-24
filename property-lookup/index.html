@@ -14645,6 +14645,18 @@ function _nbrClickCtx(txt, attrs){
   try{
     const folio = attrs ? pick(attrs,'FOLIO','Folio','folio','PARCEL_ID','PARCELID','STRAP','PARCELNO') : null;
     if(folio) ctx.folio=folio;
+    // Compact-file condo labels carry the CORRECT per-unit owner (OWN_NAME) + unit (UNITID). For the
+    // self-addressed City-of-Naples / Marco condo towers that aren't in Collier's live address layer,
+    // the live feed can't resolve the unit and mis-picks a neighbour unit by coordinate. Carry the
+    // file's owner here so runLookup can trust it over a wrong-unit live pick. Only set when we have
+    // both a unit and a file owner — i.e. exactly the condo-click case.
+    if(attrs){
+      const fileOwner = pick(attrs,'OWN_NAME','OWNER','NAME1');
+      const fileUnit  = pick(attrs,'UNITID','UNIT','SITEUNIT');
+      if(fileOwner && fileUnit){ ctx.fileOwner=String(fileOwner).trim(); ctx.fileUnit=String(fileUnit).trim(); }
+      const fileSqft = pick(attrs,'TOT_LVG_AR','TOTLVGAR','LIVING_AREA');
+      if(fileSqft) ctx.fileSqft=fileSqft;
+    }
   }catch(e){}
   return ctx;
 }
@@ -16852,7 +16864,23 @@ async function runLookup(lat,lng,searchCtx){
     if(_byAddr && _byAddr.feature){ parcel.features=[_byAddr.feature]; parcel.__multi=_byAddr.count; parcel.__matchedAddr=_byAddr.matchedAddr; parcel.__exactUnit=_byAddr.exact; }
     else { const _sel=pickSpecificParcel(parcel.features); parcel.features=[_sel.feature]; parcel.__multi=_sel.count; }
     const a=parcel.features[0].attributes;
-    const owner=pick(a,'OWN_NAME');
+    let owner=pick(a,'OWN_NAME');
+    // CONDO UNIT CORRECTION: for self-addressed City-of-Naples / Marco towers, the live feed can't
+    // resolve the unit and mis-picks a neighbour unit by coordinate. If this click carried the
+    // compact file's authoritative per-unit owner (ctx.fileOwner, only set on a condo-label click) AND
+    // the parcel we resolved does NOT match the clicked unit, trust the file owner instead. Scoped to
+    // exactly that case so normal lookups (where the live feed is right/current) are untouched.
+    try{
+      if(searchCtx && searchCtx.fileOwner && searchCtx.fileUnit){
+        const _nu=v=>String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
+        const _parcelUnit=_nu(pick(a,'UNIT','SITEUNIT','UNITNUM','UNIT_NO')||parcelUnit(a)||'');
+        const _wantUnit=_nu(searchCtx.fileUnit);
+        if(_wantUnit && _parcelUnit!==_wantUnit){
+          owner = searchCtx.fileOwner;   // file has the right owner for the clicked unit
+          parcel.__fileOwnerCorrected = true;
+        }
+      }
+    }catch(e){}
     let own2 =pick(a,'OWN_NAME2','S_OWN_NAM2');
     if(own2 && isAddressLike(own2)) own2=null;   // suppress mailing-address-in-name2 (e.g. Collier)
     const pid  =pick(a,'PARCEL_ID');
@@ -16905,7 +16933,10 @@ async function runLookup(lat,lng,searchCtx){
     const ay=pick(a,'ASMNT_YR');
     const sp=fmtMoney(pick(a,'SALE_PRC1')), sy=pick(a,'SALE_YR1');
     const useTxt=useLabel(pick(a,'DOR_UC','PA_UC','LAND_USE'));
-    try{ window.__parcelMeta = { owner: owner||'', site: [site, siteCity].filter(Boolean).join(', ') }; }catch(e){}
+    try{ let _siteFull=[site, siteCity].filter(Boolean).join(', ');
+      if(parcel.__fileOwnerCorrected && searchCtx && searchCtx.fileUnit && _siteFull && _siteFull.indexOf('#')<0)
+        _siteFull=_siteFull.replace(/,/, ' #'+searchCtx.fileUnit+',');
+      window.__parcelMeta = { owner: owner||'', site:_siteFull }; }catch(e){}
     try{ if(window.__exportData){ const ed=window.__exportData;
       if(owner) ed.owner=owner; if(site) ed.address=site; if(siteCity) ed.city=siteCity;
       if(liv2) ed.sqft=String(liv2).replace(/[^0-9.]/g,''); if(pid) ed.parcelId=String(pid); } }catch(e){}
