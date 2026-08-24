@@ -16560,9 +16560,15 @@ async function runLookup(lat,lng,searchCtx){
           const _fileSqft = _best && _best.attributes ? _best.attributes.TOT_LVG_AR : null;
           if(_fileSqft && Number(_fileSqft)>0){
             const _rollNum = liv2 ? Number(String(liv2).replace(/[^0-9.]/g,'')) : null;
-            // Prefer the smaller of roll vs file: heated/living area is always <= an adjusted/
-            // under-roof figure (Collier "Adj Area") and <= a multi-structure sum.
-            if(_rollNum && _rollNum>0){
+            if(norm(countyName)==='COLLIER'){
+              // Collier's file carries the appraiser's OWN under-air figure (INT_BUILDINGS, screen
+              // enclosures excluded) — authoritative. Use it outright; do NOT min() against the roll,
+              // whose TOT_LVG_AR can be lower/different (e.g. 3369 Runaway: file 3,047 vs roll 2,818).
+              liv2 = fmtNum(_fileSqft);
+              window.__livOverride = null;
+            } else if(_rollNum && _rollNum>0){
+              // Other counties: prefer the smaller of roll vs file — heated/living area is always <= an
+              // adjusted/under-roof figure (Collier "Adj Area") and <= a multi-structure sum.
               const _small=Math.min(_rollNum, Number(_fileSqft)), _big=Math.max(_rollNum, Number(_fileSqft));
               liv2 = fmtNum(_small);
               window.__livOverride = (_big-_small>1) ? {shown:_small, other:_big} : null;
