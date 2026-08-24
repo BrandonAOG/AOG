@@ -41,6 +41,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="preconnect" href="https://basemap.nationalmap.gov" crossorigin>   <!-- USGS Topo basemap tiles -->
 <link rel="preconnect" href="https://mapservices.weather.noaa.gov" crossorigin> <!-- NWS warnings / NOAA overlays -->
 <link rel="preconnect" href="https://tiledimageservices2.arcgis.com" crossorigin> <!-- Collier 2026 LERC tiles -->
+
 <link rel="preconnect" href="https://services2.arcgis.com" crossorigin>       <!-- Collier hosted org: parcels, address points, EC, projects — the busiest data host -->
 <!-- US Census geocoder REMOVED: the service is reachable but sends no Access-Control-Allow-Origin
      header, so every browser request fails CORS (verified — a no-cors fetch returns an opaque
@@ -500,6 +501,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   /* thin stem connecting the raised note down to its point, so it's clear which structure it marks */
   .ec-note-stem{width:2px;height:16px;margin:0 auto;background:linear-gradient(to bottom, #ffb000, rgba(255,176,0,0));pointer-events:none}
   .crosshair{position:absolute;z-index:999;top:56px;right:18px;font-family:var(--mono);font-size:10.5px;color:var(--dim);background:var(--crosshair-bg);border:1px solid var(--line);padding:5px 12px;border-radius:20px;pointer-events:none}
+  #imgMetaReadout{top:84px;font-size:9.5px;opacity:.85}
 
   .empty{text-align:center;color:var(--faint);font-family:var(--mono);font-size:12px;padding:26px 10px;line-height:1.6}
 
@@ -1117,6 +1119,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 </div>
 <div id="map"></div>
 <div class="crosshair" id="coordReadout">click the map to query a point</div>
+<div class="crosshair" id="imgMetaReadout" style="display:none"></div>
 <div class="radarclock" id="radarClock">◵ Radar</div>
 <div class="zoning-legend" id="zoningLegend">
   <div class="zl-card" id="zoningLegendDefault">
@@ -1137,6 +1140,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       <button data-bm="street">Street</button>
       <button data-bm="gray" title="Minimal light-gray basemap — makes parcel / flood / city overlays read clearly">Gray</button>
       <button data-bm="topo" title="USGS topographic / terrain basemap — elevation &amp; contour context for low-ground / pad siting">⛰ Topo</button>
+      <button data-bm="usatopo" title="Classic USGS topographic quads — PLSS section/township/range lines, benchmarks &amp; historic features for legal/survey context">USGS Quad</button>
+      <button data-bm="natgeo" title="National Geographic style — balanced terrain, roads &amp; labels; a cleaner reference look">NatGeo</button>
     </div>
   </div>
   <div class="hazards-pick">
@@ -3680,6 +3685,18 @@ const aerialClean = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/s
 const gray = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
   {maxZoom:23,maxNativeZoom:16,attribution:"&copy; Esri",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
 
+// USA Topo Maps: Esri's cache of the classic USGS topographic quadrangles (the green-and-white paper
+// topo look). Shows PLSS section/township/range lines, survey benchmarks, and historic features that
+// the modern vector Topo doesn't — handy legal/survey context for a parcel. Caps ~z15 (upscales beyond).
+const usatopo = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}",
+  {maxZoom:23,maxNativeZoom:15,attribution:"USGS Topo &copy; Esri, USGS",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
+
+// National Geographic style: balanced terrain + roads + labels in NatGeo's cartography. A cleaner,
+// more readable reference look than the plain street map. Caps ~z16 (upscales beyond).
+const natgeo = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}",
+  {maxZoom:23,maxNativeZoom:16,attribution:"&copy; Esri, NatGeo",updateWhenIdle:L.Browser.mobile,updateWhenZooming:false,keepBuffer:4,crossOrigin:true});
+
+
 // =================== COLLIER 2026 (LERC2D client-side decode — live in Local HD) ===================
 // Collier's ImageryAll2026 service publishes its newest flight ONLY as a LERC2D pre-cached raster
 // (singleFusedMapCache, format LERC2D, max LOD 11) — NOT png/jpg, so a normal <img> tile layer
@@ -3852,11 +3869,11 @@ const LOCAL_AERIAL = {
                  "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer",
                  "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2021/ImageServer" ] },
   COLLIER:  { label:"Collier County", bounds:[-81.90,25.80,-80.85,26.55], kind:"export",
-    // ⚠️ ImageryAll2026 (tiledimageservices2...SlIq32SqARUHIhSx) was investigated and is NOT usable
-    // as a Leaflet tile layer: its cache format is LERC2D (analytical raster, not png/jpeg) and its
-    // max LOD is only 11 — Leaflet's <img> tiles can't decode LERC2D regardless of zoom, so it
-    // renders nothing. Would need Esri's ImageryTileLayer (client-side LERC decode) or a server-
-    // side LERC→PNG conversion to use this source. Leading with the verified FDEP ortho instead.
+    // ImageryAll2026 (tiledimageservices2...SlIq32SqARUHIhSx) publishes newest flight as LERC2D —
+    // handled by the dedicated Collier2026Layer decoder in the Local HD basemap, NOT via this candidate
+    // list (which feeds the county-aerial time-lapse / export path). FDEP statewide ortho leads here.
+    // NOTE (Aug 2026): the ags2.colliercountyfl.gov candidates below returned DNS NXDOMAIN in testing —
+    // kept for now but they will fail the probe and fall through to FDEP. Remove if confirmed retired.
     candidates:[ "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2023/ImageServer",
                  "https://ca.dep.state.fl.us/image/rest/services/FDOT_Yearly_Aerials/Aerial_Imagery_2021/ImageServer",
                  "https://ags2.colliercountyfl.gov/gis/rest/services/Public/Aerials_2024/ImageServer",
@@ -4052,10 +4069,10 @@ function updateLocalAerial(force){
 const btnBasemap=document.getElementById('btnBasemap');
 const basemapMenu=document.getElementById('basemapMenu');
 const basemapLbl=document.getElementById('basemapLbl');
-const BM_LABEL={sat:'Satellite',street:'Street',topo:'⛰ Topo',aerial:'Aerial',gray:'Gray',sarco:'Local HD'};
+const BM_LABEL={sat:'Satellite',street:'Street',topo:'⛰ Topo',usatopo:'USGS Quad',natgeo:'NatGeo',aerial:'Aerial',gray:'Gray',sarco:'Local HD'};
 // The basemaps are mutually exclusive; overlays (city limits / flood / parcels / radar) sit on top.
 // All basemaps live in the low tilePane, so they always render beneath the overlays regardless of order.
-const BM_LAYER={sat:satGroup,street:street,topo:topo,aerial:aerialClean,gray:gray,sarco:sarcoGroup};
+const BM_LAYER={sat:satGroup,street:street,topo:topo,usatopo:usatopo,natgeo:natgeo,aerial:aerialClean,gray:gray,sarco:sarcoGroup};
 let _curBasemap='sat';
 function setBasemap(which){
   Object.values(BM_LAYER).forEach(l=>{ if(map.hasLayer(l)) map.removeLayer(l); });
@@ -4070,6 +4087,29 @@ function setBasemap(which){
   var _tlB=document.getElementById('tlBtn');
   if(_tlB) _tlB.style.display = (which==='sarco') ? 'none' : '';
   if(which==='sarco' && window.__tlClose) window.__tlClose();
+  // The 📷 imagery-date readout reports the ESRI World Imagery capture date. That only matches what
+  // you're actually viewing on Esri-imagery basemaps (Satellite / Aerial). On Local HD you're seeing
+  // the COUNTY's own aerials (a different photo/date), and on Street/Gray/Topo there's no photo at all —
+  // so hide it except on sat/aerial. When switching BACK to sat/aerial, re-fetch it for the last point.
+  var _imgMeta=document.getElementById('imgMetaReadout');
+  if(_imgMeta){
+    if(which==='sat' || which==='aerial'){
+      if(typeof lastLoc!=='undefined' && lastLoc && typeof imageryMetaAt==='function'){
+        const _tok=(window.__imgMetaTok=(window.__imgMetaTok||0)+1);
+        imageryMetaAt(lastLoc.lat, lastLoc.lng).then(m=>{
+          if(_tok!==window.__imgMetaTok || !m) return;
+          if(_curBasemap!=='sat' && _curBasemap!=='aerial') return;
+          const bits=[];
+          if(m.date) bits.push('aerial '+m.date);
+          if(m.res) bits.push(m.res);
+          if(m.source) bits.push(m.source);
+          if(bits.length){ _imgMeta.textContent='📷 '+bits.join(' · '); _imgMeta.style.display=''; }
+        }).catch(()=>{});
+      }
+    } else {
+      _imgMeta.style.display='none';
+    }
+  }
   refreshAerialAttribution();   // set the one county credit on Local HD, clear it on every other basemap
 }
 function closeBasemapMenu(){ basemapMenu.hidden=true; }
@@ -4153,7 +4193,7 @@ document.addEventListener('click', closeBasemapMenu);
      and a top imagery layer; nothing else in the app depends on it. */
 (function(){
   const WAYBACK_CFG = "https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json";
-  let _wbFrames=null, _tlFrames=[], _tlIdx=0, _playing=false, _timer=null;
+  let _wbFrames=null, _tlFrames=[], _tlIdx=0, _playing=false, _timer=null, _tlCapTok=0;
 
   // top imagery layer: renders whichever frame is active (Wayback tile OR county exportImage)
   const TL_REF = { frame:null };
@@ -4194,13 +4234,40 @@ document.addEventListener('click', closeBasemapMenu);
         const m=title.match(/(\d{4})-(\d{2})-(\d{2})/); if(!m) continue;
         let url=it.itemURL||''; if(!url) continue;
         url=url.replace('{level}','{z}').replace('{row}','{y}').replace('{col}','{x}');
-        rows.push({ date:m[0], year:+m[1], tpl:url });
+        // Keep the metadata layer URL so we can later fetch the REAL capture date at the viewed point
+        // (the release date in the title is just when Esri published that basemap version).
+        rows.push({ date:m[0], year:+m[1], tpl:url, metaUrl:it.metadataLayerUrl||null });
       }
       const byYear={};
       for(const r of rows){ if(!byYear[r.year]||r.date>byYear[r.year].date) byYear[r.year]=r; }
-      _wbFrames = Object.keys(byYear).map(y=>({type:'wayback',date:byYear[y].date,year:+y,tpl:byYear[y].tpl,label:'Esri Wayback'}));
+      _wbFrames = Object.keys(byYear).map(y=>({type:'wayback',date:byYear[y].date,year:+y,tpl:byYear[y].tpl,metaUrl:byYear[y].metaUrl,label:'Esri Wayback',releaseDate:byYear[y].date}));
     }catch(e){ _wbFrames=[]; }
     return _wbFrames;
+  }
+  // Fetch the REAL capture date (SRC_DATE) for a Wayback frame's imagery at a specific point. Cached
+  // per frame+cell. Returns 'YYYY-MM-DD' or null. This is the actual flight date, not Esri's release date.
+  const _wbCapCache={};
+  async function waybackCaptureDate(frame, lat, lng){
+    if(!frame || !frame.metaUrl) return null;
+    const ck=frame.year+'@'+lat.toFixed(2)+','+lng.toFixed(2);
+    if(_wbCapCache[ck]!==undefined) return _wbCapCache[ck];
+    _wbCapCache[ck]=(async()=>{
+      try{
+        const geom=encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}));
+        const url=`${frame.metaUrl}/identify?geometry=${geom}&geometryType=esriGeometryPoint&sr=4326&tolerance=1`+
+          `&mapExtent=${lng-0.01},${lat-0.01},${lng+0.01},${lat+0.01}&imageDisplay=400,400,96&returnGeometry=false&f=json`;
+        const j=await (await fetch(url)).json();
+        const a=(j.results&&j.results[0]&&j.results[0].attributes)||null;
+        if(!a) return null;
+        const raw=String(a.SRC_DATE||'');
+        if(/^\d{8}$/.test(raw)){
+          const mm=raw.slice(4,6), dd=raw.slice(6,8);
+          return (mm==='01'&&dd==='01') ? raw.slice(0,4) : `${raw.slice(0,4)}-${mm}-${dd}`;
+        }
+        return null;
+      }catch(e){ return null; }
+    })();
+    return _wbCapCache[ck];
   }
   // probe a county exportImage service by actually loading a tiny tile (no CORS needed; an error
   // response is JSON and fails to load as an <img>, so onload===valid service).
@@ -4288,11 +4355,27 @@ document.addEventListener('click', closeBasemapMenu);
     const f=_tlFrames[_tlIdx]; TL_REF.frame=f;
     elDate.textContent=f.date; elSlider.value=_tlIdx;
     // Be honest about what the date means. County aerials: we only know the YEAR (the flight year from
-    // the service name) — no real day, so show just the year. Esri Wayback: the date is Esri's basemap
-    // RELEASE date, not necessarily when this exact spot was photographed — label it so.
+    // the service name) — no real day, so show just the year. Esri Wayback: the title date is Esri's
+    // basemap RELEASE date; the ACTUAL capture date at this point comes from the release's metadata layer
+    // (fetched below), which can differ by years (e.g. a 2014 release showing 2010 imagery).
     elSrc.textContent=(f.type==='export'
       ? f.label+' · 3-inch aerial · '+f.year+' flight'
-      : 'Esri Wayback · ~1 m · released '+f.date);
+      : 'Esri Wayback · ~1 m · released '+f.date+' · checking capture date…');
+    if(f.type==='wayback'){
+      // Fetch the real capture date at the map center and swap the label in. Token-guarded so a slow
+      // response for a frame you've already scrubbed past can't overwrite the current one.
+      const c=map.getCenter();
+      const capTok=(++_tlCapTok);
+      waybackCaptureDate(f, c.lat, c.lng).then(cap=>{
+        if(capTok!==_tlCapTok || TL_REF.frame!==f) return;
+        if(cap){
+          elDate.textContent=cap;   // show the TRUE capture date as the big label
+          elSrc.textContent='Esri Wayback · ~1 m · captured '+cap+(cap!==f.date?(' · released '+f.date):'');
+        } else {
+          elSrc.textContent='Esri Wayback · ~1 m · released '+f.date+' (capture date n/a here)';
+        }
+      }).catch(()=>{ elSrc.textContent='Esri Wayback · ~1 m · released '+f.date; });
+    }
     // Load into whichever layer is NOT currently visible, keeping the visible one up until the new
     // tiles finish — then fade the new one in and drop the old. No flash-to-basemap.
     const incoming = (_tlVisible===tlLayerA) ? tlLayerB : tlLayerA;
@@ -5551,6 +5634,56 @@ function _tempHoverOut(){ const el=document.getElementById('tempFloat'); if(el) 
 // location so a moving cursor reuses it instead of hammering the API — the nearest station covers a
 // wide area anyway. Returns { tempF, station, ageMin } or null. Free, no token.
 const _curTempCache = {};
+// Aerial imagery provenance for the CURRENT Satellite basemap at a point. Esri's World Imagery layer
+// carries per-tile metadata: capture date, resolution, vendor and source. We surface it honestly —
+// preferring the real capture date embedded in BlockName (…-YYYYMMDD) over the year-only DATE field
+// (which stores Jan 1 as a placeholder). Cached per ~0.01° cell so panning doesn't re-hit it.
+const _imgMetaCache = {};
+async function imageryMetaAt(lat, lng){
+  const key = lat.toFixed(2)+','+lng.toFixed(2);
+  if(_imgMetaCache[key]!==undefined) return _imgMetaCache[key];
+  _imgMetaCache[key] = (async()=>{
+    try{
+      const base="https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer";
+      const geom=encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}));
+      const url=`${base}/identify?geometry=${geom}&geometryType=esriGeometryPoint&sr=4326&tolerance=1`+
+        `&mapExtent=${lng-0.01},${lat-0.01},${lng+0.01},${lat+0.01}&imageDisplay=400,400,96&returnGeometry=false&f=json`;
+      const j=await (await fetch(url)).json();
+      const a=(j.results&&j.results[0]&&j.results[0].attributes)||null;
+      if(!a) return null;
+      // Real capture date: prefer the YYYYMMDD embedded in BlockName (e.g. ...-20250711), which is the
+      // true flight/compile date. Fall back to the DATE field, where a 01-01 value is a year-only
+      // placeholder (store just the year, don't imply a precise Jan-1 date).
+      let dateStr=null, yearOnly=false;
+      const bn=a.BlockName||'';
+      const bnDate=bn.match(/-(\d{4})(\d{2})(\d{2})(?:\D|$)/);
+      const rawDate=String(a['DATE (YYYYMMDD)']||a.DATE||'');
+      if(bnDate && !(bnDate[2]==='01' && bnDate[3]==='01')){
+        // BlockName has a real (non Jan-1) date — most precise, use it.
+        dateStr=`${bnDate[1]}-${bnDate[2]}-${bnDate[3]}`;
+      } else if(/^\d{8}$/.test(rawDate)){
+        const mm=rawDate.slice(4,6), dd=rawDate.slice(6,8);
+        if(mm==='01' && dd==='01'){ dateStr=rawDate.slice(0,4); yearOnly=true; }   // Jan-1 placeholder → year only
+        else dateStr=`${rawDate.slice(0,4)}-${mm}-${dd}`;
+      } else if(bnDate){
+        // Only a Jan-1 BlockName date available → year only (don't imply Jan 1 precision).
+        dateStr=bnDate[1]; yearOnly=true;
+      }
+      // Resolution: metres → cm / inches for a friendly label.
+      let resTxt=null;
+      const rm=Number(a['RESOLUTION (M)']);
+      if(rm>0){ const cm=rm*100, inch=rm*39.3701; resTxt = cm<100 ? `${cm.toFixed(0)} cm (~${inch.toFixed(0)} in)` : `${(cm/100).toFixed(1)} m`; }
+      return {
+        date: dateStr, yearOnly,
+        res: resTxt,
+        vendor: a.DESCRIPTION||null,
+        source: a.SOURCE||null
+      };
+    }catch(e){ return null; }
+  })();
+  return _imgMetaCache[key];
+}
+
 async function currentTempNear(lat, lng){
   const key = lat.toFixed(2)+','+lng.toFixed(2);
   if(_curTempCache[key]!==undefined) return _curTempCache[key];
@@ -15457,7 +15590,26 @@ async function runLookup(lat,lng,searchCtx){
   _subjRings=null;   // reset per lookup; drawParcel re-sets it only for a normal home lot
   _subjTractRings=null;   // ditto: re-set only when an oversized shared tract is drawn
   saveLoc(lat,lng);
-  document.getElementById('coordReadout').textContent=`lat ${lat.toFixed(5)}   lng ${lng.toFixed(5)}`;
+  const _coordReadout=document.getElementById('coordReadout');
+  _coordReadout.textContent=`lat ${lat.toFixed(5)}   lng ${lng.toFixed(5)}`;
+  // Real aerial provenance (capture date · resolution · source) for the Esri imagery at this point —
+  // honest metadata, not a guess. Its OWN element (#imgMetaReadout) so the mousemove coordinate updater
+  // can't wipe it. Async so it never delays the click; token-guarded against out-of-order responses.
+  const _imgMetaEl=document.getElementById('imgMetaReadout');
+  const _imgTok = (window.__imgMetaTok = (window.__imgMetaTok||0) + 1);
+  if(_imgMetaEl){ _imgMetaEl.style.display='none'; }
+  // Only show the Esri imagery date on basemaps that actually display Esri imagery (Satellite/Aerial).
+  // On Local HD (county aerials) or non-photo basemaps the Esri date wouldn't match what's shown.
+  const _bmOK = (typeof _curBasemap==='undefined') || _curBasemap==='sat' || _curBasemap==='aerial';
+  if(_bmOK) imageryMetaAt(lat,lng).then(m=>{
+    if(_imgTok!==window.__imgMetaTok || !m || !_imgMetaEl) return;
+    if(_curBasemap && _curBasemap!=='sat' && _curBasemap!=='aerial') return;  // basemap changed mid-fetch
+    const bits=[];
+    if(m.date) bits.push('aerial '+m.date);
+    if(m.res) bits.push(m.res);
+    if(m.source) bits.push(m.source);
+    if(bits.length){ _imgMetaEl.textContent='📷 '+bits.join(' · '); _imgMetaEl.style.display=''; }
+  }).catch(()=>{});
 
   results.innerHTML = setStatus('busy','Querying official GIS services…');
   if(window.Sheet) Sheet.setState('full');   // bring results into view on mobile
