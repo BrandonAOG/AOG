@@ -13590,6 +13590,8 @@ async function forwardAddrPoint(countyName, ctx, refLat, refLng){
     if(!j.features || !j.features.length) return null;   // field valid but no such number → give up
     // pick the same-number point on the right street, nearest the geocoded ref point when we have one
     let chosen=null, chosenG=null, bestD=Infinity, anyStreet=false, firstValid=null, firstG=null;
+    let unitHit=null, unitHitG=null;   // exact unit match (wins over nearest when a unit was requested)
+    const wantUnit = ctx.unit ? String(ctx.unit).toUpperCase().replace(/[^A-Z0-9]/g,'') : null;
     const haveRef = isFinite(refLat) && isFinite(refLng);
     for(const f of j.features){
       const a=f.attributes||{};
@@ -13602,10 +13604,18 @@ async function forwardAddrPoint(countyName, ctx, refLat, refLng){
       const streetOK = !ctx.raw || sameStreet(ctx.raw, formatAddrPoint(a));
       if(!streetOK) continue;
       anyStreet=true;
+      // If a unit was requested, look for the point whose UNITID matches it. At a stacked condo every
+      // unit shares ~one coordinate, so "nearest" can't tell 804 from 403 — the unit field must.
+      if(wantUnit){
+        const au=String(a.UNITID||a.UNIT||a.SITEUNIT||a.UNITNUM||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+        if(au && au===wantUnit){ unitHit=a; unitHitG={lat:gy,lng:gx}; }
+      }
       const dd = haveRef ? ((gx-refLng)*(gx-refLng)+(gy-refLat)*(gy-refLat)) : 0;
       if(dd<bestD){ bestD=dd; chosen=a; chosenG={lat:gy,lng:gx}; }
-      if(!haveRef) break;     // no ref point to disambiguate — first street match is fine
+      if(!haveRef && !wantUnit) break;     // no ref point AND no unit to disambiguate — first match is fine
     }
+    // An exact unit match beats the nearest-point pick.
+    if(unitHit){ chosen=unitHit; chosenG=unitHitG; }
     // If no point matched the street, only fall back to a bare same-number point when the user gave
     // NO street to match against. If they DID type a street and nothing on it matched, snapping to a
     // random same-number house on a different street is wrong (e.g. "130 Georgetown" silently
