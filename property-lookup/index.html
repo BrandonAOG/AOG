@@ -16169,7 +16169,7 @@ async function runLookup(lat,lng,searchCtx){
         try{
           const _fileUrl = countyName ? ADDRPOINT_FILES[norm(countyName)] : null;
           if(_fileUrl && _fileUrl.indexOf('REPLACE-ME')<0 && isFinite(lat) && isFinite(lng)){
-            const _eps=0.0016, _bb=L.latLngBounds([lat-_eps,lng-_eps],[lat+_eps,lng+_eps]);
+            const _eps=0.0008, _bb=L.latLngBounds([lat-_eps,lng-_eps],[lat+_eps,lng+_eps]);
             const _fr=await queryHostedFile(_fileUrl,_bb);
             if(_fr && _fr.length){
               // anchor to the selected parcel polygon, not the (possibly drifted) geocoded click
@@ -20159,6 +20159,18 @@ window.Sheet=Sheet;
 
 (async function restore(){
   const a=STORE.get('fl_addr'); if(a){ document.getElementById('addr').value=a; updateClearBtn(); }
+  // WARM THE COLLIER FILE EARLY: Collier's sqft (and per-unit condo data) comes from the ~4.6MB
+  // compact file, unlike Lee/Sarasota/Charlotte which read sqft straight from their live layers. On a
+  // cold session the first Collier search raced that download and painted a lean card (no sqft) until
+  // the file finished; the second search — now cached — showed everything. Kicking the download off at
+  // startup (fire-and-forget, non-blocking) means the file is parsed and cached before the first
+  // search, so the first card is complete. Harmless if the user never touches Collier — one cached
+  // fetch. Also warms Lee's file for the same reason.
+  try{
+    [ADDRPOINT_FILES.COLLIER, ADDRPOINT_FILES.LEE].forEach(u=>{
+      if(u && u.indexOf('REPLACE-ME')<0) loadHostedFileIndex(u).catch(()=>{});
+    });
+  }catch(e){}
   // Load the territory polygon files that ship beside this page, in parallel, and WAIT for
   // them before any initial lookup — so the Utilities + Gas cards have data on first render.
   // (We no longer read these from localStorage: the files are big and same-origin, so the
