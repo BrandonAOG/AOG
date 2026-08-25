@@ -16169,7 +16169,7 @@ async function runLookup(lat,lng,searchCtx){
         try{
           const _fileUrl = countyName ? ADDRPOINT_FILES[norm(countyName)] : null;
           if(_fileUrl && _fileUrl.indexOf('REPLACE-ME')<0 && isFinite(lat) && isFinite(lng)){
-            const _eps=0.0008, _bb=L.latLngBounds([lat-_eps,lng-_eps],[lat+_eps,lng+_eps]);
+            const _eps=0.0016, _bb=L.latLngBounds([lat-_eps,lng-_eps],[lat+_eps,lng+_eps]);
             const _fr=await queryHostedFile(_fileUrl,_bb);
             if(_fr && _fr.length){
               // anchor to the selected parcel polygon, not the (possibly drifted) geocoded click
@@ -16177,6 +16177,13 @@ async function runLookup(lat,lng,searchCtx){
               if(_bx && _bx.attributes && Number(_bx.attributes.TOT_LVG_AR)>0) _fileSqft=_bx.attributes.TOT_LVG_AR;
             }
           }
+          // If the bbox re-query missed (drifted coord, parcel polygon absent, or the file point sat
+          // just outside the small box), fall back to the sqft that ALREADY arrived with the clicked/
+          // searched file label (searchCtx.fileSqft, captured in _nbrClickCtx). Same authoritative file
+          // figure — it just skips a re-lookup that can silently miss. THIS is why a search sometimes
+          // showed no sqft while clicking the same house showed it: the re-query missed and the
+          // already-in-hand value was being ignored.
+          if(!_num(_fileSqft) && searchCtx && _num(searchCtx.fileSqft)) _fileSqft=searchCtx.fileSqft;
         }catch(e){}
         // COLLIER: the file value is authoritative (appraiser's own under-air). Whenever we have it,
         // use it outright — don't let the roll's min() heuristic or a prior det.liv keep 2,818.
