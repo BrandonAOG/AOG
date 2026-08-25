@@ -18679,10 +18679,12 @@ async function resolveCountyParcel(countyName, searchCtx){
     }
     if(wantDS.length && !wantDS.every(t=>toks.has(t))) continue; // typed Ave/S/etc. must match too
     const c=featCentroid(f); if(!c) continue;       // [x,y] = [lng,lat]
-    // UNIT: capture each parcel's own unit (dedicated column preferred, else parsed from the address
-    // tail — Lee's SITEADDR is "100 ESTERO BLVD 133"). Lets us both filter to the typed unit and label.
-    const pUnit = cfg.parcelUnitField ? _nuU(a[cfg.parcelUnitField]) :
-                  _nuU((String(addr).match(/\s(\d+[A-Z]?)$/)||[])[1]||'');
+    // UNIT: capture each parcel's own unit — dedicated column when the layer has one (Lee/Sarasota),
+    // otherwise parsed from the address itself. searchUnit handles all markers (#, Unit, -UNIT B, Apt,
+    // and bare trailing numbers), so Charlotte's "43538 NEAL RD -UNIT B" and Lee's "100 ESTERO BLVD 133"
+    // both yield their unit. Falls back to a bare trailing token if searchUnit finds nothing.
+    const pUnit = cfg.parcelUnitField ? _nuU(a[cfg.parcelUnitField])
+                : _nuU(searchUnit(String(addr)) || (String(addr).match(/\s(\d+[A-Z]?)\s*$/)||[])[1] || '');
     matches.push({
       lat:c[1], lng:c[0],
       // Don't re-append city/zip when the address field is already a full address (contains a comma,
