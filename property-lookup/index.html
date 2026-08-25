@@ -16141,6 +16141,14 @@ async function runLookup(lat,lng,searchCtx){
       const _pn=liveRes.features[0].attributes.PARCEL_NUMBER;
       if(_pn!=null && String(_pn).trim()!=='') det.pid='PARCEL_NUMBER';
     }
+    // PARCEL-ID GUARD (Sarasota): the appraiser layer carries BOTH ACCOUNT (the shared condo/building
+    // number — identical across every unit) and ID (unit-unique, e.g. 0485151002). detectFields' generic
+    // pid regex matches /^ACCOUNT$/, so without this every unit in a building shows the same parcel id
+    // and the same appraiser link. Pin to ID so each unit shows its own parcel + its own sc-pa link.
+    if(norm(countyName)==='SARASOTA'){
+      const _id=liveRes.features[0].attributes.ID;
+      if(_id!=null && String(_id).trim()!=='') det.pid='ID';
+    }
     // Some live county feeds are "lean" — they carry owner/value/zoning but NO living-area or
     // year-built (Charlotte's layer 17, Collier's similar layer). The dated statewide FDOR roll
     // DOES carry those (TOT_LVG_AR, ACT_YR_BLT). It's already fetched in parallel (pParcel →
@@ -19348,15 +19356,15 @@ async function chooseSuggestion(it){
       STORE.set('fl_addr',addrEl.value); addToHistory(addrEl.value);
       results.innerHTML=setStatus('busy','Pinpointing the parcel…');
       map.setView([pr.lat,pr.lng], 18);
-      // The resolver already isolated the CORRECT unit (owner + label). For counties whose parcel
-      // records SHARE one account across all units (Sarasota's `account` is the building's, not the
-      // unit's), a folio re-fetch inside runLookup would grab the whole building and pick the wrong
-      // unit. So carry the resolver's trusted owner/unit through the context; the condo-correction
-      // block honours it (fileOwner/fileUnit) instead of re-resolving by coordinate/shared folio.
+      // The resolver already isolated the CORRECT unit (owner + label + unique folio). Pass that folio
+      // as folioHint so runLookup re-fetches the EXACT unit parcel by its unique id — for Sarasota the
+      // ID field is unit-unique (unlike ACCOUNT), so this yields the right ID, owner, sqft and appraiser
+      // link on the card. Also carry the resolver's owner/unit as a fallback for any shared-key county.
       let _ctxR = searchCtx;
-      if(pr.owner && searchCtx && searchCtx.unit){
-        _ctxR = Object.assign({}, searchCtx, { fileOwner:pr.owner, fileUnit:searchCtx.unit });
-      }
+      const _extra = {};
+      if(pr.folio){ _extra.folioHint=pr.folio; _extra.countyHint=cty; }
+      if(pr.owner && searchCtx && searchCtx.unit){ _extra.fileOwner=pr.owner; _extra.fileUnit=searchCtx.unit; }
+      if(Object.keys(_extra).length) _ctxR = Object.assign({}, searchCtx, _extra);
       await runLookup(pr.lat, pr.lng, _ctxR);
       if(stale()) return;
       const fol = pr.folio ? ` · Folio ${esc(pr.folio)}` : '';
