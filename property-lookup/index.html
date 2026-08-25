@@ -1683,8 +1683,13 @@ const COUNTY_LIVE = {
     "https://www.mymanatee.org/gisits/rest/services/publicportal/publicportal/MapServer/0/query",
     "https://www25.swfwmd.state.fl.us/arcgiswmis/rest/services/r27/LocationInfo/MapServer/74/query"
   ]},
-  SARASOTA: { label:"Sarasota (SWFWMD/PA)", urls:[
-    "https://www25.swfwmd.state.fl.us/arcgiswmis/rest/services/r27/LocationInfo/MapServer/79/query"
+  SARASOTA: { label:"Sarasota County (Property Appraiser)", urls:[
+    // Sarasota County Property Appraiser's own parcel layer (Scpao). Authoritative, current (edited
+    // within days), CORS-open. NAME1=owner, ID=UNIT-UNIQUE parcel id (ACCOUNT is the shared building
+    // number), FULLADDRESS/LOCCITY/LOCZIP, LIVING=living sqft, YRBL=year built, JUST=value,
+    // SALE_AMT/SALE_DATE, ZONING. Replaces the old SWFWMD water-district LocationInfo layer, which
+    // only carried a generic owner/parcel and no per-unit or structure detail.
+    "https://services3.arcgis.com/icrWMv7eBkctFu1f/arcgis/rest/services/ParcelProperty_Scpao/FeatureServer/0/query"
   ]},
   GLADES  : { label:"Glades County (Property Appraiser roll, 2026-06-01)", urls:[
     // ✅ verified queryable (capabilities:"Query") public AGOL layer on Glades County's own org —
