@@ -8480,7 +8480,7 @@ function detectFields(fields){
     jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/,/^ASSD_TOT$/,/^JV_HMSTD$/,/^CER_JUST_VALUE$/,/^TOTAL_MKT$/,/^CAD_JUST_VALUE$/]),
     land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/,/^JUST_LAND$/,/^CER_LAND_VALUE$/,/^LAND_MKT$/,/^CAD_JUST_LNDVAL$/]),
     // /^ACT$/ is Hillsborough (Tampa-hosted) "Actual Year Built"; /^EFF$/ is its remodel year (fallback).
-    yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/,/^ACTUAL_YEAR_BUILT$/,/^STRUCT1_ACT_YEAR$/,/^AYB$/,/^EYB$/,/^BLDG_R1_YRBUILT$/,/^BLDG_C1_YRBUILT$/]),
+    yr:    find([/^ACT_?YR_?BLT$/,/^YR_?BLT$/,/^YEAR_?BUILT$/,/YRBLT/,/YEARBUILT/,/ACTYRBLT/,/^EFF_?YR/,/^MAXBUILTY$/,/^NEWBUILT$/,/^ACT$/,/^EFF$/,/^ACTUAL_YEAR_BUILT$/,/^STRUCT1_ACT_YEAR$/,/^AYB$/,/^EYB$/,/^BLDG_R1_YRBUILT$/,/^BLDG_C1_YRBUILT$/,/^YRBL$/]),
     // Marion's Ocala-hosted layer: RESUSESF = heated/living (residential use) sq ft — the TRUE living
     // area; USE_SF matches it. BLD1_SF / RESTOTSF are the larger TOTAL under-roof figure (incl.
     // garage/porch), so they must rank BELOW resusesf/use_sf or living area over-reports. Verified
@@ -8488,7 +8488,7 @@ function detectFields(fields){
     // /^STRUCT1_BASE_SQFT$/ is Hernando's heated/living area — verified base+aux(STRUCT1_AUX_SQFT)=
     // CER_STRU_SQFT (e.g. 9382+250=9632), so CER_STRU_SQFT is the inflated total incl. non-heated aux
     // area and is deliberately NOT added here (same over-reporting trap fixed for Marion's bld1_sf).
-    liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^RESUSESF$/,/^USE_SF$/,/^BLD1_SF$/,/^HEAT_?AR$/,/^STRUCT1_BASE_SQFT$/,/^BLDGS_SQFT_LIVING$/]),
+    liv:   find([/^TOT_?LVG_?AR/,/LIV.*AREA/,/AREA.*LIV/,/^HEATED/,/HEAT.*AREA/,/AREA.*HEAT/,/TOTLIVING/,/LIVINGAREA/,/^GRSAR/,/^BLDG_?SQFT$/,/^BLDGSQFT$/,/^SQFT_?BLDG$/,/^FLOOR_?AREA$/,/^FLOORAREA$/,/^UNDER_?AIR$/,/^UNDERAIR$/,/^CONDITIONED/,/^BLDG_?AREA$/,/^BUILDINGAREA$/,/^CALC_?AREA$/,/^BLDGSF$/,/^BLDG_?SF$/,/^RESUSESF$/,/^USE_SF$/,/^BLD1_SF$/,/^HEAT_?AR$/,/^STRUCT1_BASE_SQFT$/,/^BLDGS_SQFT_LIVING$/,/^LIVING$/]),
     saleP: find([/^SALE_?PRC1$/,/^SALE_?PRICE$/,/^SALEAMT$/,/^LASTSALE/,/SALEPRICE/,/SALE.*AMT/,/^SALE_?PR/,/^S_1AMOUNT$/,/^PR_1$/,/^AMT$/,/^SALE_AMOUNT$/,/^LSALE_PRICE$/,/^SALE_ADJ_VALUE$/,/^SALE_PRICE_LAST$/]),
     saleY: find([/^SALE_?YR1$/,/^SALE_?YEAR$/,/SALEYR/,/SALE.*YEAR/,/SALEDATE1/,/^S_1DATE$/,/^YR1$/,/^SALE_DATE$/,/^LSALE_DATE$/,/^SALE_DATE_LAST$/]),
     mail:  find([/^OWN_?ADDR1$/,/^OWNER_?ADDR/,/^MAIL_?ADDR/,/^MAILING/,/^OWN_?ADDR$/,/MAILADDR/,/^ADD_1$/,/^MAILADD$/,/^PAR_MAIL_ADDR1$/]),
