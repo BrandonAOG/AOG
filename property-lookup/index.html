@@ -18492,18 +18492,19 @@ const COUNTY_PARCEL_RESOLVERS = {
     folioField:"ACCOUNT",
     ownerField:"ownersname"
   },
-  // Sarasota County's hosted parcel-appraisal layer (ParcelProperty). Like Lee, it files each condo
-  // unit as its own parcel record with a dedicated `unit` column, its own `account` (parcel id) and
-  // `name1` (owner). So a typed/clicked unit resolves to the exact record via house# + street + unit —
-  // no folio bridge needed. fulladdress is the combined site address; locn/locs are the number/street.
+  // Sarasota County Property Appraiser's OWN parcel layer (Scpao). Authoritative + very current, and
+  // crucially its ID field is UNIT-UNIQUE (each condo unit has its own ID like 0485151002) — unlike
+  // ACCOUNT which is the shared building number. So we use ID as the folio: a typed/clicked unit
+  // resolves to its exact record by house# + street + UNIT, and the per-unit ID gives a real unique
+  // parcel key (working appraiser link, no shared-account ambiguity). Fields are UPPERCASE here.
   SARASOTA: {
-    url: "https://ags3.scgov.net/server/rest/services/Hosted/ParcelProperty/FeatureServer/0/query",
-    addrField: "fulladdress",
-    cityField: "loccity",
-    zipField:  "loczip",
-    folioField:"account",
-    ownerField:"name1",
-    parcelUnitField:"unit"       // dedicated unit column — a typed unit resolves to the exact record
+    url: "https://services3.arcgis.com/icrWMv7eBkctFu1f/arcgis/rest/services/ParcelProperty_Scpao/FeatureServer/0/query",
+    addrField: "FULLADDRESS",
+    cityField: "LOCCITY",
+    zipField:  "LOCZIP",
+    folioField:"ID",            // UNIT-UNIQUE parcel id (ACCOUNT is the shared building number)
+    ownerField:"NAME1",
+    parcelUnitField:"UNIT"      // dedicated unit column — a typed unit resolves to the exact record
   }
 };
 /* Suffix/abbreviation folding so "Rd"/"Road", "Ct"/"Court", "Dr"/"Drive" etc. all compare equal,
