@@ -7525,12 +7525,22 @@ function _shortStormName(n){
 // The systems in the current cone bundle: one entry per binnumber, with its current position.
 function stormListFrom(data){
   const out=new Map();
-  const add=f=>{ const p=(f&&f.properties)||{}; const bin=_featBin(p)||'AT?';
+  const cones=((data&&data.cone&&data.cone.features)||[]);
+  const points=((data&&data.pts&&data.pts.features)||[]);
+  /* Only a feature that actually CARRIES a bin id creates an entry. Treating a missing id as its own
+     'AT?' system invented a phantom second storm whenever one layer published the field and another
+     didn't — the picker would offer a system that doesn't exist. If NOTHING carries an id, one
+     'AT?' entry stands in for the single storm, and _selIsReal() keeps filtering switched off. */
+  const add=f=>{ const p=(f&&f.properties)||{}; const bin=_featBin(p);
+    if(!bin) return;
     if(!out.has(bin)) out.set(bin,{bin, name:stormName(p), lat:null, lng:null, props:p}); };
-  (((data&&data.cone&&data.cone.features)||[])).forEach(add);
-  (((data&&data.pts&&data.pts.features)||[])).forEach(add);
+  cones.forEach(add); points.forEach(add);
+  if(!out.size){
+    const f=points[0]||cones[0];
+    if(f) out.set('AT?',{bin:'AT?', name:stormName(f.properties||{}), lat:null, lng:null, props:f.properties||{}});
+  }
   // Current position = the forecast point with the lowest TAU, for the auto-pick below.
-  (((data&&data.pts&&data.pts.features)||[])).forEach(f=>{
+  points.forEach(f=>{
     const p=f.properties||{}, e=out.get(_featBin(p)||'AT?');
     const c=f.geometry&&f.geometry.coordinates;
     if(!e||!c) return;
@@ -8437,11 +8447,88 @@ function _arrPointAtFrac(line, frac){
 /* Two labels for the SAME time landing on top of each other is the one case worth suppressing, and
    it is decided in GEOGRAPHIC space (degrees apart), not screen space — so the decision is identical
    at every zoom and nothing ever needs re-evaluating. */
+/* ---- Anchor at the CONE EDGE, not mid-line ----
+   A fraction along the contour can land anywhere, including right on the track — where the D/S/H/M
+   badges live — which is what buried a label under a track pin. The middle of the cone is the
+   busiest part of the map and the contour's ends are the emptiest, so each label is pushed out to
+   where its contour LEAVES the cone: the first vertex past the cone boundary. Most likely takes the
+   northern exit, earliest reasonable the southern one, so the pair still splits.
+   As the cone widens with forecast time those exits move further from the track on their own —
+   exactly the behaviour asked for. Falls back to the fixed fraction when a contour never crosses the
+   cone (or the cone hasn't loaded). Still computed ONCE; still never moves. */
+function _conePolysNow(){
+  const fc=_fcSel(coneCache&&coneCache.cone), out=[];
+  ((fc&&fc.features)||[]).forEach(f=>_featPolys(f).forEach(poly=>out.push(poly)));
+  return out;
+}
+function _arrTrackLines(){
+  const fc=_fcSel(coneCache&&coneCache.track), out=[];
+  ((fc&&fc.features)||[]).forEach(f=>_featLines(f).forEach(l=>out.push(l)));
+  return out;
+}
+/* Where a contour meets the cone, per side.
+   Each side reports a point AND whether it is a real crossing (the contour left the cone there) or
+   just the contour's own end (it stops inside — normal near the storm, where the lines are short).
+   Both are useful: the crossing is the ideal anchor, and the terminal vertex is still the furthest
+   that contour reaches on that side, which is what keeps the two products on OPPOSITE sides even
+   when only one of them actually escapes the cone. */
+function _arrConeExits(line, polys){
+  if(!line || line.length<2 || !polys || !polys.length) return null;
+  const inside=line.map(p=>(p&&typeof p[0]==='number')
+    ? polys.some(poly=>_pointInPoly(p[0],p[1],poly)) : false);
+  let bestA=-1,bestB=-1,a=-1;
+  for(let i=0;i<inside.length;i++){
+    if(inside[i]){ if(a<0) a=i; if(i-a>bestB-bestA){ bestA=a; bestB=i; } }
+    else a=-1;
+  }
+  if(bestA<0) return null;                                   // never enters the cone
+  const loCross=bestA-1>=0, hiCross=bestB+1<=line.length-1;
+  const lo={p:line[loCross?bestA-1:bestA], crossed:loCross};
+  const hi={p:line[hiCross?bestB+1:bestB], crossed:hiCross};
+  if(!lo.p || !hi.p) return null;
+  return (lo.p[1]>=hi.p[1]) ? {north:lo, south:hi} : {north:hi, south:lo};
+}
+// Miles from a point to the nearest track line — used to refuse an anchor that sits on the track.
+function _milesToTrack(p, trk){
+  if(!p || !trk || !trk.length) return Infinity;
+  let d=Infinity;
+  for(const l of trk){ const dd=_distPtLineM(p[0],p[1],l); if(dd<d) d=dd; }
+  return d/1609.34;
+}
+/* Nothing crossed the cone, so get as far from the TRACK as this contour allows: whichever of its
+   two ends is further from the centre line. That is the most outward point available. */
+function _arrFarEnd(line, trk){
+  if(!line || line.length<2) return null;
+  const ends=[line[0], line[line.length-1]].filter(p=>p&&typeof p[0]==='number');
+  if(!ends.length) return null;
+  if(!trk || !trk.length) return ends[ends.length-1];
+  let best=null;
+  for(const p of ends){
+    let d=Infinity;
+    for(const l of trk){ const dd=_distPtLineM(p[0],p[1],l); if(dd<d) d=dd; }
+    if(!best || d>best.d) best={p,d};
+  }
+  return best?best.p:null;
+}
 function _arrLabelAnchors(rows){
-  const out=[], taken=[];
+  const out=[], taken=[], polys=_conePolysNow(), trk=_arrTrackLines();
   for(const r of rows){
     if(!r.time) continue;
-    const p=_arrPointAtFrac(r.line, ARR_FRAC[r.kind]!=null?ARR_FRAC[r.kind]:0.5);
+    const ex=_arrConeExits(r.line, polys);
+    let p=null;
+    if(ex){
+      const mine =(r.kind==='likely')?ex.north:ex.south;
+      const other=(r.kind==='likely')?ex.south:ex.north;
+      /* Staying on the assigned side matters more than clearing the cone: if this contour only
+         escapes on the OTHER side, taking that crossing would stack both products on the same side
+         — which is the whole thing the split exists to prevent. So the contour's own end on the
+         right side wins, provided it isn't sitting on the track. Only if it is do we cross over. */
+      if(mine && (mine.crossed || _milesToTrack(mine.p, trk) >= 15)) p=mine.p;
+      else if(other && other.crossed) p=other.p;
+      else if(mine) p=mine.p;
+    }
+    if(!p) p=_arrFarEnd(r.line, trk);            // never crosses: the end furthest from the track
+    if(!p) p=_arrPointAtFrac(r.line, ARR_FRAC[r.kind]!=null?ARR_FRAC[r.kind]:0.5);
     if(!p) continue;
     const kx=Math.cos(p[1]*Math.PI/180);
     const clash=taken.some(q=>q.t===r.time
