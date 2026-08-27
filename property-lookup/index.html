@@ -7442,18 +7442,31 @@ function stormLabel(props){
   const adv =nhcPick(props,['ADVISNUM','advisnum','ADVNUM']);
   return name + (adv?(' · adv '+adv):'');
 }
+/* NHC fills unknown numeric fields with sentinels (9999, -9999, 999, -999) rather than
+   leaving them null — most visibly MSLP on the FORECAST points, since the advisory only
+   carries a minimum pressure for the current position, not for hours 12–120. nhcPick sees
+   9999 as a real value, so range-check anything we're about to print and drop it if the
+   number is physically impossible. */
+function nhcNum(v, lo, hi){
+  const n=parseFloat(v);
+  if(!isFinite(n)) return null;
+  if(lo!=null && n<lo) return null;
+  if(hi!=null && n>hi) return null;
+  return n;
+}
 // Pull the most useful numbers from a forecast point's properties.
 function pointStats(props){
   props=props||{};
-  const windKt=nhcPick(props,['MAXWIND','maxwind','INTENSITY','WINDSPEED']);
-  const gustKt=nhcPick(props,['GUST','gust','MAXGUST']);
-  const mslp  =nhcPick(props,['MSLP','mslp','PRESSURE','MINPRESS']);
+  const windKt=nhcNum(nhcPick(props,['MAXWIND','maxwind','INTENSITY','WINDSPEED']),0,250);
+  const gustKt=nhcNum(nhcPick(props,['GUST','gust','MAXGUST']),0,300);
+  const mslp  =nhcNum(nhcPick(props,['MSLP','mslp','PRESSURE','MINPRESS']),800,1100);
   const windMph=ktToMph(windKt), gustMph=ktToMph(gustKt);
   let cat=stormType(props);
   if(!cat || /^[hsdt]$/i.test(String(cat))) cat=saffirCat(windMph)||cat; // expand 1-letter dev codes
   const when=nhcPick(props,['FLDATELBL','DATELBL','VALIDTIME','FCSTPRD','TAU']);
-  const moveDir=nhcPick(props,['STORMDIR','MOVEMENTDIR','DIR']);
-  const moveSpd=nhcPick(props,['STORMSPD','MOVEMENTSPD','SPEED']);
+  let moveDir=nhcPick(props,['STORMDIR','MOVEMENTDIR','DIR']);
+  if(moveDir!=null && isFinite(parseFloat(moveDir)) && nhcNum(moveDir,0,360)==null) moveDir=null;
+  const moveSpd=nhcNum(nhcPick(props,['STORMSPD','MOVEMENTSPD','SPEED']),0,120);
   return {windKt,windMph,gustKt,gustMph,mslp,cat,when,moveDir,moveSpd};
 }
 function pointPopupHTML(props){
@@ -7484,7 +7497,7 @@ function buildStormSummary(data){
       const ta=parseFloat(nhcPick(a,['TAU','FCSTHR']))||0, tb=parseFloat(nhcPick(b,['TAU','FCSTHR']))||0; return ta-tb; });
     const cur=pts[0]; const s=pointStats(cur);
     // peak forecast wind across the track
-    let peak=null; byStorm[nm].forEach(p=>{ const w=ktToMph(nhcPick(p,['MAXWIND','INTENSITY'])); if(w!=null&&(peak==null||w>peak)) peak=w; });
+    let peak=null; byStorm[nm].forEach(p=>{ const w=ktToMph(nhcNum(nhcPick(p,['MAXWIND','INTENSITY']),0,250)); if(w!=null&&(peak==null||w>peak)) peak=w; });
     if(i>0) html+='<hr>';
     html+='<div class="wx-storm">';
     html+=`<div><span class="wx-name">${esc(nm)}</span>${s.cat?`<span class="wx-cat">${esc(String(s.cat))}</span>`:''}</div>`;
