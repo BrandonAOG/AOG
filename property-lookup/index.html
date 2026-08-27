@@ -409,9 +409,13 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .wx-legend .wx-subrow{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin:1px 0 5px}
   .wx-legend .wx-subrow b{font-family:var(--mono);font-size:8.5px;font-weight:400;letter-spacing:.04em;
     text-transform:uppercase;color:var(--dim);margin-right:2px}
-  .wx-legend .wx-subrow button{font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:5px;
+  .wx-legend .wx-subrow button{font-family:var(--mono);font-size:9px;padding:2px 5px;border-radius:5px;
     border:1px solid var(--line);background:transparent;color:var(--dim);cursor:pointer;white-space:nowrap}
   .wx-legend .wx-subrow button.on{background:#2b7fff;border-color:#2b7fff;color:#fff;font-weight:700}
+  /* Threshold NHC published nothing for: still clickable, visibly empty */
+  .wx-legend .wx-subrow button.none{opacity:.42;text-decoration:line-through}
+  .wx-legend .wx-subrow button.none.on{opacity:.85;background:transparent;color:var(--dim);
+    border-color:var(--dim);font-weight:700;text-decoration:line-through}
   /* Permanent contour labels on the arrival-time lines (Leaflet tooltips, no plugin needed) */
   .arr-lbl.leaflet-tooltip{background:rgba(8,18,26,.82);border:1px solid rgba(255,210,63,.55);
     color:#ffd23f;font-family:var(--mono);font-size:8.5px;letter-spacing:.03em;padding:1px 4px;
@@ -7701,6 +7705,7 @@ let windGeoms=[], surgeGeoms=[], inunGeoms=[], _stormSubMoveH=null, _stormSubOut
    pastGeoms — already-happened wind swath POLYGONS ({poly, t:34|50|64}) */
 let arrGeoms=[], oddsGeoms=[], pastGeoms=[];
 let oddsKt=34;                 // selected wind-odds threshold: 34 kt (39 mph) · 50 kt (58) · 64 kt (74)
+let _oddsEmpty={};             // kt → true once NHC is known to publish no band at that threshold
 let _nhcAvail=null, _nhcAvailAt=0;   // which products NOAA is actually publishing (12-min cache)
 
 async function _svcLayers(svc){
@@ -8115,10 +8120,28 @@ async function toggleOdds(on){
   if(!on){ oddsGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
   // Both are colored fills over the same coastline — showing them together is mud, so they trade off.
   if(nhcSub.wind.on) await toggleWind(false);
+  const cat=await nhcCatalog();
+  if(!(cat.oddsIdx||[]).length){          // product genuinely absent — nothing to keep the picker open for
+    mapToast('NHC isn’t publishing wind-speed probabilities right now.',2800);
+    nhcSub.odds.on=false; oddsGeoms=[]; _syncStormSubHover(); renderStormControls(); return;
+  }
+  /* Never re-open on a threshold already known to be empty — otherwise turning the chip back on
+     lands straight back on the blank one. */
+  if(_oddsEmpty[oddsKt]){ const alt=[34,50,64].find(k=>!_oddsEmpty[k]); if(alt!=null) oddsKt=alt; }
   const rows=await loadOddsBands(oddsKt);
-  if(!rows.length){ mapToast('No wind-speed probabilities published for this storm right now.',2800);
-    nhcSub.odds.on=false; oddsGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
-  const grp=L.featureGroup(); oddsGeoms=rows;
+  _oddsEmpty[oddsKt]=!rows.length;        // remembered so the button can show as empty
+  oddsGeoms=rows;
+  /* ⚠️ AN EMPTY THRESHOLD MUST NOT SWITCH THE LAYER OFF.
+     NHC often publishes 39 mph odds and nothing at 74 mph (a weak or distant storm has no
+     hurricane-force probability over land). Turning odds OFF here was a one-way trap: switching
+     off hid the 39/58/74 sub-row, which was the ONLY control that could switch back — so picking
+     74+ mph once made the whole feature unreachable until a page reload. Stay on, keep the picker
+     visible, say what's missing. */
+  if(!rows.length){
+    mapToast('NHC published no '+(KT_MPH_LBL[oddsKt]||oddsKt)+'+ mph probability for this advisory — pick another threshold.',3200);
+    _syncStormSubHover(); renderStormControls(); return;
+  }
+  const grp=L.featureGroup();
   rows.forEach(r=>{ const c=_oddsColor(r.pct); if(!c) return;
     L.geoJSON(r.f,{renderer:canvasRenderer,interactive:false,
       style:{color:c,weight:.6,opacity:.5,fillColor:c,fillOpacity:.3}}).addTo(grp); });
@@ -8479,13 +8502,26 @@ function renderStormControls(){
     + chip('past',"Where it's been",nhcSub.past.on)
     + '</div>';
   if(nhcSub.odds.on){
-    h+='<div class="wx-subrow"><b>Odds of</b>'
-      + [34,50,64].map(kt=>`<button data-oddskt="${kt}" class="${kt===oddsKt?'on':''}">${KT_MPH_LBL[kt]}+ mph</button>`).join('')
-      + '</div>'
-      + '<div class="wx-wwleg"><span><i style="background:#2da44e"></i>10%</span>'
+    /* The threshold picker is ALWAYS rendered while odds are on — including when the chosen
+       threshold came back empty — because it is the only way back to one that has data.
+       A threshold NHC published nothing for is marked, not removed. */
+    h+='<div class="wx-subrow"><b>Odds of&nbsp;mph</b>'
+      + [34,50,64].map(kt=>{
+          const cls=(kt===oddsKt?'on':'')+(_oddsEmpty[kt]?' none':'');
+          const tip=_oddsEmpty[kt]?' title="NHC published no '+KT_MPH_LBL[kt]+'+ mph band for this advisory"':'';
+          return `<button data-oddskt="${kt}" class="${cls.trim()}"${tip}>${KT_MPH_LBL[kt]}+</button>`;
+        }).join('')
+      + '</div>';
+    if(oddsGeoms.length){
+      h+='<div class="wx-wwleg"><span><i style="background:#2da44e"></i>10%</span>'
       + '<span><i style="background:#ffd23f"></i>30%</span><span><i style="background:#ff9500"></i>50%</span>'
       + '<span><i style="background:#ff2d2d"></i>70%</span><span><i style="background:#b524f7"></i>90%+</span></div>'
       + '<div class="wx-scrubrd">Chance of ' + (KT_MPH_LBL[oddsKt]||oddsKt) + '+ mph winds within 5 days. Hover for the band.</div>';
+    } else {
+      h+='<div class="wx-scrubrd">Nothing published at ' + (KT_MPH_LBL[oddsKt]||oddsKt)
+        + '+ mph for this advisory — tap another number above. (Weak or distant storms often have no '
+        + 'hurricane-force probability over land.)</div>';
+    }
   }
   if(nhcSub.arr.on){
     h+='<div class="wx-wwleg"><span><i style="background:#ff2d2d"></i>soonest</span>'
