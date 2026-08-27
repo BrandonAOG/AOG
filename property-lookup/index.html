@@ -284,10 +284,20 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   footer:not(.collapsed) #footBody{max-height:min(70vh,640px);overflow-y:auto;padding:2px 16px 12px}
   footer:not(.collapsed) #footToggle .fchev{transform:rotate(180deg)}
 
-  .layerswitch{position:absolute;z-index:1000;bottom:18px;left:600px;right:0;margin-inline:auto;width:max-content;display:flex;background:var(--search-bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;box-shadow:0 6px 20px var(--shadow-soft)}
+  /* z-index sits ABOVE the lower-left weather panel (1002): on a narrower window the panel's bottom
+     edge reaches into the toolbar, and it used to paint over it — which would bury the storm picker,
+     the leftmost control here. A control bar wins over a readout. */
+  .layerswitch{position:absolute;z-index:1003;bottom:18px;left:600px;right:0;margin-inline:auto;width:max-content;display:flex;background:var(--search-bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;box-shadow:0 6px 20px var(--shadow-soft)}
   .layerswitch button{background:transparent;border:none;color:var(--dim);font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.05em;padding:9px 14px;cursor:pointer;text-transform:uppercase;white-space:nowrap}
   .layerswitch button.active{background:var(--signal);color:var(--signal-ink)}
   #tlToolbarBtn{border-right:1px solid var(--line)}
+  /* Storm picker (only visible while the cone is on). Buttons inherit .layerswitch button styling,
+     so the selected storm highlights exactly like the other toolbar toggles. */
+  .storm-pick{display:flex;border-right:1px solid var(--line)}
+  .storm-pick[hidden]{display:none}
+  .storm-pick button{padding:9px 11px}
+  .storm-pick button.active{background:var(--signal);color:var(--signal-ink)}
+  @media (max-width:860px){ .storm-pick button{padding:9px 8px;font-size:11px;letter-spacing:.03em} }
   /* basemap picker: one button that opens a small popup of the 3 mutually-exclusive basemaps */
   .basemap-pick{position:relative;display:flex}
   .weather-pick{position:relative;display:flex}
@@ -362,7 +372,11 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   /* ---- Weather info panel (NHC storm details + NWS warning legend).
      Shares the lower-left slot with the zoning legend; higher z-index so that when both
      are open the weather panel sits on top and hides the zoning legend behind it. ---- */
-  .wx-legend{position:absolute;z-index:1002;bottom:18px;left:14px;
+  /* bottom:66px CLEARS the bottom toolbar instead of fighting it for the same strip. The toolbar
+     sits at bottom:18px and is ~40px tall, so at 18px this panel landed right on top of it — the
+     storm picker (the toolbar's leftmost control) and this panel's own bottom rows drew over each
+     other. On phones the toolbar moves to the top, and the max-width:680px block drops this to 12px. */
+  .wx-legend{position:absolute;z-index:1002;bottom:66px;left:14px;
     background:var(--search-bg);border:1px solid var(--line);border-radius:8px;padding:0;
     font-family:var(--disp);font-size:11px;color:var(--dim);box-shadow:0 6px 20px var(--shadow-soft);line-height:1.5;
     width:230px;max-width:calc(100vw - 28px);max-height:62vh;overflow:hidden;display:none;flex-direction:column}
@@ -824,6 +838,11 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     .field .k{width:auto}
     .field .v{text-align:left}
     .layerswitch{bottom:auto;top:calc(var(--abh,48px) + 8px);right:12px;left:auto;margin-inline:0;width:auto}
+    .wx-legend{ bottom:12px; }        /* toolbar is up top here, so the panel can sit low again */
+    /* The toolbar is anchored by its RIGHT edge here and is wider than a phone screen, so its left
+       end runs off-screen. Flex order moves the storm picker to the visible right end — on desktop
+       it stays where it belongs, immediately left of Time-lapse. */
+    .storm-pick{ order:9; border-right:none; border-left:1px solid var(--line) }
     .crosshair{display:none}
     footer{display:none}             /* hide sources/hub footer on phones */
     .suggest .sg{padding:13px 12px;font-size:13px}  /* bigger tap targets */
@@ -1163,6 +1182,9 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 </div>
 <button class="sheet-tab" id="sheetTab" aria-label="Show property panel">⌃ Property panel</button>
 <div class="layerswitch">
+  <!-- Storm picker: appears only while the hurricane cone is on. Chooses which active system the
+       cone, track, D/S/H/M points, arrival times, past track and the scrubber all follow. -->
+  <div class="storm-pick" id="stormPick" hidden title="Which active tropical system to show — the cone, track, arrival times, past track and the track slider all follow this choice"></div>
   <button id="tlToolbarBtn" title="Time-lapse — see how this spot changed over the years (Esri Wayback + county aerials). Search or center a spot first.">⏱ <span class="tl-tb-lbl">Time-lapse</span></button>
   <div class="basemap-pick">
     <button id="btnBasemap" title="Switch the base map (Satellite / Street / Topo)">🗺 <span id="basemapLbl">Satellite</span> <span class="bm-caret">▾</span></button>
@@ -7440,6 +7462,115 @@ function filterAtlantic(data){
   return { cone:keep(data.cone), track:keep(data.track), pts:keep(data.pts) };
 }
 
+/* ================= Storm picker (toolbar, left of Time-lapse) =================
+   NHC runs up to five Atlantic systems at once (its own service is literally structured AT1…AT5).
+   Everything used to draw at once, which mostly worked EXCEPT that the track slider poured every
+   storm's forecast points into one list sorted by hour — dragging it teleported between storms —
+   and two storms' arrival contours are indistinguishable once their times overlap.
+   So one system is selected at a time, keyed on NHC's own per-storm id (binnumber), and the cone,
+   track, D/S/H/M points, arrival times, past track, wind field, watches and the slider all follow
+   it. Wind ODDS deliberately don't: NHC computes those bands as a cumulative probability across
+   every active system, so filtering them by storm would misstate the number. */
+let stormSel='ALL';                       // 'ALL' or a bin id such as 'AT4'
+const FL_REF={lat:26.6,lng:-81.8};        // SW Florida — used to auto-pick the storm that matters here
+function _featBin(props){
+  const v=nhcPick(props||{},['binnumber','BINNUMBER','Bin_Number','binNumber']);
+  return v!=null&&String(v).trim()?String(v).trim().toUpperCase():null;
+}
+/* Is the current selection a real NHC bin id (AT1…AT5)? Anything else — 'ALL', or the 'AT?'
+   placeholder used when a bundle arrives without binnumbers — means "don't filter". Without this
+   guard a mismatch between layers (one carrying bin ids, another not) silently blanks the map. */
+function _selIsReal(){ return /^[A-Z]{2}[0-9]$/.test(stormSel); }
+function _selKeep(bin){ return !_selIsReal() || bin==null || bin===stormSel; }
+/* Does this feature belong to the selected storm? A feature with NO binnumber is never hidden —
+   fail-open, so a layer that doesn't carry the field can't silently blank the map. */
+function _selMatch(props){ return _selKeep(_featBin(props)); }
+function _fcSel(fc){
+  if(!fc || !fc.features || !_selIsReal()) return fc;
+  return Object.assign({},fc,{features:fc.features.filter(f=>_selMatch(f&&f.properties))});
+}
+// Strip the type words NHC prefixes to the name, so the button reads "DOLLY" not "TROPICAL STORM DOLLY".
+function _shortStormName(n){
+  const s=String(n||'')
+    .replace(/^\s*(potential\s+)?(post[\s-]*)?(sub)?tropical\s+(storm|depression|cyclone)\s+/i,'')
+    .replace(/^\s*(major\s+)?hurricane\s+/i,'')
+    .replace(/^\s*remnants?\s+of\s+/i,'').trim();
+  return s || String(n||'').trim() || 'System';
+}
+// The systems in the current cone bundle: one entry per binnumber, with its current position.
+function stormListFrom(data){
+  const out=new Map();
+  const add=f=>{ const p=(f&&f.properties)||{}; const bin=_featBin(p)||'AT?';
+    if(!out.has(bin)) out.set(bin,{bin, name:stormName(p), lat:null, lng:null}); };
+  (((data&&data.cone&&data.cone.features)||[])).forEach(add);
+  (((data&&data.pts&&data.pts.features)||[])).forEach(add);
+  // Current position = the forecast point with the lowest TAU, for the auto-pick below.
+  (((data&&data.pts&&data.pts.features)||[])).forEach(f=>{
+    const p=f.properties||{}, e=out.get(_featBin(p)||'AT?');
+    const c=f.geometry&&f.geometry.coordinates;
+    if(!e||!c) return;
+    const tau=parseFloat(nhcPick(p,['TAU','FCSTHR']));
+    if(e.lat==null || (isFinite(tau)&&tau===0)){ e.lng=c[0]; e.lat=c[1]; }
+    if(e.name==null||e.name==='Tropical system') e.name=stormName(p);
+  });
+  return [...out.values()].sort((a,b)=>String(a.bin).localeCompare(String(b.bin)));
+}
+// With several systems up, open on the one nearest Florida — that's the one being worked around.
+function _autoPickStorm(list){
+  let best=null;
+  (list||[]).forEach(s=>{ if(s.lat==null) return;
+    const d=Math.abs(s.lat-FL_REF.lat)+Math.abs(s.lng-FL_REF.lng)*Math.cos(FL_REF.lat*Math.PI/180);
+    if(best==null||d<best.d) best={bin:s.bin,d}; });
+  return best?best.bin:(list&&list[0]?list[0].bin:'ALL');
+}
+function _selName(){
+  const s=stormListFrom(coneCache).find(x=>x.bin===stormSel);
+  return s?_shortStormName(s.name):'this system';
+}
+/* Selected storm gone (dissipated, or a new advisory renumbered the bins)? Re-pick rather than
+   filtering the map down to nothing. */
+function _ensureValidSel(data){
+  if(stormSel==='ALL') return;
+  const list=stormListFrom(data);
+  if(!list.some(s=>s.bin===stormSel)){
+    stormSel = list.length ? (list.length>1?_autoPickStorm(list):list[0].bin) : 'ALL';
+    renderStormPick(data);
+  }
+}
+function renderStormPick(data){
+  const el=document.getElementById('stormPick'); if(!el) return;
+  const list=coneOn?stormListFrom(data||coneCache):[];
+  if(!coneOn || !list.length){ el.hidden=true; el.innerHTML=''; return; }
+  let h='';
+  list.forEach((s,i)=>{
+    h+=`<button data-bin="${esc(s.bin)}" class="${stormSel===s.bin?'active':''}"`
+     + ` title="${esc(stormName({STORMNAME:s.name}))} · NHC ${esc(s.bin)} — show only this system">`
+     + (i===0?'⬢ ':'')+esc(_shortStormName(s.name))+'</button>';
+  });
+  if(list.length>1) h+=`<button data-bin="ALL" class="${stormSel==='ALL'?'active':''}" title="Show every active Atlantic system at once">All</button>`;
+  el.innerHTML=h; el.hidden=false;
+  el.querySelectorAll('button').forEach(b=>{ b.onclick=function(){ selectStorm(this.dataset.bin); }; });
+}
+function selectStorm(bin){
+  if(!bin || bin===stormSel) return;
+  stormSel=bin;
+  renderStormPick();
+  if(!coneOn || !coneCache) return;
+  drawCone(coneCache);                                    // cone + track + points + summary + slider
+  try{ if(coneLayer) map.fitBounds(coneLayer.getBounds().pad(0.15),{maxZoom:8}); }catch(e){}
+  /* The geometry caches hold every Atlantic system and the filtering happens in the browser, so
+     switching storms redraws from memory — no refetch, and no cache to invalidate. */
+  if(nhcSub.arr.on)  toggleArrival(true);
+  if(nhcSub.past.on) togglePast(true);
+  if(nhcSub.wind.on) toggleWind(true);
+  if(nhcSub.ww.on)   toggleWW(true);
+  // Availability IS per storm, so re-ask and repaint the chips.
+  _nhcAvail=null;
+  nhcAvailability(true).then(()=>{ if(coneOn) renderStormControls(); }).catch(()=>{});
+  renderStormControls();
+  mapToast(bin==='ALL'?'Showing every active system':'Showing '+_selName()+' only',2200);
+}
+
 /* ---- Shared lower-right weather panel (NHC storm details + NWS warning legend) ----
    Two independent sections live in one box; either can be filled/cleared on its own,
    and the box shows itself whenever at least one section has content. */
@@ -7597,6 +7728,9 @@ function buildStormSummary(data){
   feats.forEach(f=>{ const p=f.properties||{}; const nm=stormName(p);
     (byStorm[nm]=byStorm[nm]||[]).push(p); });
   let html='<div class="wx-title">NHC active systems</div>';
+  // Say so when the panel is showing one of several, and where to change it.
+  const _total=stormListFrom(coneCache).length;
+  if(stormSel!=='ALL' && _total>1) html+='<div class="wx-sub">Showing 1 of '+_total+' systems — switch storms in the toolbar.</div>';
   Object.keys(byStorm).forEach((nm,i)=>{
     // current conditions = point with smallest forecast hour, else max wind
     const pts=byStorm[nm].slice().sort((a,b)=>{
@@ -7719,7 +7853,10 @@ function setupConeHover(data){
   _coneOutH=function(){ el.classList.remove('show'); };
   map.on('mousemove',_coneMoveH); map.on('mouseout',_coneOutH);
 }
-function drawCone(data){
+function drawCone(dataAll){
+  _ensureValidSel(dataAll);
+  // Everything below draws only the selected system (all of them when "All" is picked).
+  const data={ cone:_fcSel(dataAll&&dataAll.cone), track:_fcSel(dataAll&&dataAll.track), pts:_fcSel(dataAll&&dataAll.pts) };
   if(coneLayer){ map.removeLayer(coneLayer); coneLayer=null; }
   coneLayer=L.featureGroup();
   if(data.cone && data.cone.features && data.cone.features.length){
@@ -7755,6 +7892,7 @@ if(btnCone) btnCone.onclick=async function(){
   if(coneOn){  // turn off
     coneOn=false; this.classList.remove('active');
     if(coneLayer){ map.removeLayer(coneLayer); coneLayer=null; }
+    stormSel='ALL'; renderStormPick();                  // hides the toolbar picker
     clearConeHover(); clearStormSub();
     wxSetStorm(''); const ctl=document.getElementById('wxStormCtl'); if(ctl){ ctl.innerHTML=''; wxPanelSync(); }
     clearInterval(coneTimer); coneTimer=null; return;
@@ -7766,15 +7904,26 @@ if(btnCone) btnCone.onclick=async function(){
     mapToast('No active NHC tropical systems right now.', 3200);
     return;
   }
-  coneOn=true; drawCone(data);
+  coneOn=true;
+  /* Open on ONE system: the nearest to Florida when several are up, otherwise the only one there
+     is. The toolbar picker (left of Time-lapse) switches between them, and "All" overlays them. */
+  { const list=stormListFrom(data);
+    stormSel = list.length>1 ? _autoPickStorm(list) : (list.length?list[0].bin:'ALL');
+    renderStormPick(data); }
+  drawCone(data);
   /* Ask NOAA which of the six storm products actually have Atlantic data for this advisory, then
      repaint the chip row so anything empty is greyed out BEFORE it gets tapped. Non-blocking —
      the chips are live immediately, they just sharpen a moment later. */
   nhcAvailability(true).then(()=>{ if(coneOn) renderStormControls(); }).catch(()=>{});
   const n=coneStormCount(data);
-  mapToast(n+' active tropical system'+(n>1?'s':'')+' — showing NHC cone'+(n>1?'s':'')+' & track', 3200);
+  mapToast(n>1
+    ? n+' active systems — showing '+_selName()+'. Tap a name in the toolbar to switch.'
+    : 'Showing the NHC cone & track for '+_selName(), n>1?4200:3200);
   try{ map.fitBounds(coneLayer.getBounds().pad(0.15),{maxZoom:8}); }catch(e){}
-  clearInterval(coneTimer); coneTimer=setInterval(async()=>{ if(coneOn){ coneFetchedAt=0; drawCone(await fetchCone()); refreshStormSub(); } }, 15*60*1000);
+  clearInterval(coneTimer); coneTimer=setInterval(async()=>{ if(coneOn){ coneFetchedAt=0;
+    const fresh=await fetchCone();
+    renderStormPick(fresh);            // a new advisory can add or drop a system
+    drawCone(fresh); refreshStormSub(); } }, 15*60*1000);
 };
 /* Passive check on load: if a system is active, light up the Cone button so it's noticed. */
 (async()=>{ try{ const d=await fetchCone(); if(coneStormCount(d)>0 && btnCone){ btnCone.classList.add('alert');
@@ -7869,6 +8018,10 @@ async function _nhcCount(svc, id){
   if(svc==null || id==null) return null;
   const ask=async w=>{ const j=await _nhcJson(svc+'/'+id+'/query?where='+w+'&returnCountOnly=true&f=json');
     return (j && typeof j.count==='number') ? j.count : null; };
+  /* Count for the SELECTED storm when one is picked, so a chip can't look live just because the
+     other system publishes that product. Bin ids are validated before going into the where clause. */
+  const sel=/^[A-Z]{2}[0-9]$/.test(stormSel) ? encodeURIComponent("binnumber='"+stormSel+"'") : null;
+  if(sel){ const n=await ask(sel); if(n!=null) return n; }
   const atl=await ask(ATL_WHERE);
   if(atl!=null) return atl;
   return await ask('1%3D1');
@@ -7928,7 +8081,8 @@ async function loadArrivalLines(){
   const rows=[];
   const collect=(gj,kind)=>((gj&&gj.features)||[]).forEach(f=>{
     const t=_arrTime(f.properties); if(!t) return;    // NOAA pads each set with a blank-time row
-    _featLines(f).forEach(line=>{ if(line&&line.length>1) rows.push({line,time:t,kind,order:_arrOrder(t)}); });
+    const bin=_featBin(f.properties);                 // remembered so the picker can filter in memory
+    _featLines(f).forEach(line=>{ if(line&&line.length>1) rows.push({line,time:t,kind,bin,order:_arrOrder(t)}); });
   });
   collect(likely,'likely'); collect(early,'early');
   _arrCache=rows; _arrCacheAt=Date.now();
@@ -7986,7 +8140,7 @@ async function toggleWind(on){
   const collected=[];
   for(const wl of (cat.windIdx||[])){
     const lt=(wl.name.match(/\b(34|50|64)\b/)||[])[1];
-    const gj=await _nhcGeo(cat.summary, wl.id);
+    const gj=_fcSel(await _nhcGeo(cat.summary, wl.id));        // selected system only
     if(gj&&gj.features) gj.features.forEach(f=>collected.push({f, t:_windThreshold(f.properties)||(lt?+lt:null)}));
   }
   if(!collected.length){ mapToast('No wind-field radii published for this storm right now.',2800); nhcSub.wind.on=false; windGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
@@ -8014,7 +8168,7 @@ async function toggleWW(on){
   nhcSub.ww.on=on;
   if(!on){ renderStormControls(); return; }
   const cat=await nhcCatalog();
-  const gj=await _nhcGeo(cat.summary, cat.wwLayer);
+  const gj=_fcSel(await _nhcGeo(cat.summary, cat.wwLayer));    // selected system only
   if(!gj||!gj.features||!gj.features.length){ mapToast('No coastal watches/warnings issued for this storm right now.',2800); nhcSub.ww.on=false; renderStormControls(); return; }
   nhcSub.ww.layer=L.geoJSON(gj,{renderer:canvasRenderer,interactive:false,
     style:f=>({color:_wwColor(f.properties),weight:5,opacity:.95})}).addTo(map);
@@ -8236,7 +8390,8 @@ async function toggleArrival(on){
   if(_arrMoveH){ map.off('moveend zoomend', _arrMoveH); _arrMoveH=null; }
   nhcSub.arr.on=on;
   if(!on){ arrGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
-  const rows=await loadArrivalLines();
+  // Cached for the whole basin, then narrowed to the selected system here (see _selMatch).
+  const rows=(await loadArrivalLines()).filter(r=>_selKeep(r.bin));
   if(!rows.length){ mapToast('No wind-arrival times published for this storm right now.',2800);
     nhcSub.arr.on=false; arrGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
   // Rank the DISTINCT times so the color ramp reads soonest (red) → latest (blue/violet)
@@ -8321,11 +8476,12 @@ async function togglePast(on){
   nhcSub.past.on=on;
   if(!on){ pastGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
   const cat=await nhcCatalog();
-  const [swath,track,pts]=await Promise.all([
+  const [swathAll,trackAll,ptsAll]=await Promise.all([
     _nhcGeoAtl(cat.summary, cat.pastSwath),
     _nhcGeoAtl(cat.summary, cat.pastTrack),
     _nhcGeoAtl(cat.summary, cat.pastPts, 0)
   ]);
+  const swath=_fcSel(swathAll), track=_fcSel(trackAll), pts=_fcSel(ptsAll);   // selected system only
   const grp=L.featureGroup(); pastGeoms=[]; let any=false;
   // Swath first (underneath): muted fills, since this is history rather than a forecast.
   const sw=[];
@@ -8372,10 +8528,12 @@ async function stormPointFacts(lat, lng, maxMiles){
   const capM=(maxMiles||60)*1609.34;
   const cat=await nhcCatalog();
   const kts=(cat.oddsIdx||[]).map(o=>o.kt).filter(kt=>KT_MPH_LBL[kt]);
-  const [bandSets, lines]=await Promise.all([
+  const [bandSets, linesAll]=await Promise.all([
     Promise.all(kts.map(kt=>loadOddsBands(kt).then(rows=>({kt,rows})).catch(()=>({kt,rows:[]})))),
     loadArrivalLines().catch(()=>[])
   ]);
+  // Arrival times follow the toolbar's storm selection; the odds bands are basin-wide by design.
+  const lines=(linesAll||[]).filter(r=>_selKeep(r.bin));
   const odds={};
   bandSets.forEach(({kt,rows})=>{
     let best=null;
