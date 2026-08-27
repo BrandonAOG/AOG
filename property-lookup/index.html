@@ -449,6 +449,18 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     border-radius:50%; font-family:var(--mono,monospace); font-size:10px; font-weight:700; line-height:1;
     border:1.5px solid rgba(255,255,255,.92); box-shadow:0 1px 4px rgba(0,0,0,.6); cursor:pointer; }
   .trk-badge:hover span{ transform:scale(1.15); }
+  /* Small section label so each key in the panel says what it belongs to — without these, the
+     colour ramp sat under the D/S/H/M letters and read as part of them. */
+  .wx-legend .wx-leglbl{font-family:var(--mono);font-size:8px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--faint);margin:6px 0 1px;padding-top:3px;border-top:1px solid var(--line);opacity:.9}
+  .wx-legend .wx-title + .wx-leglbl, .wx-legend .wx-chips + .wx-leglbl{border-top:none;padding-top:0}
+  /* Arrival-time ramp: real first/last times flanking a continuous colour bar */
+  .wx-legend .wx-ramp{display:flex;align-items:center;gap:5px;margin:2px 0 3px;
+    font-family:var(--mono);font-size:8.5px;color:var(--ink)}
+  .wx-legend .wx-ramp .rbar{display:inline-flex;flex:none}
+  .wx-legend .wx-ramp .rbar i{width:12px;height:6px;display:inline-block}
+  .wx-legend .wx-ramp .rbar i:first-child{border-radius:3px 0 0 3px}
+  .wx-legend .wx-ramp .rbar i:last-child{border-radius:0 3px 3px 0}
   .wx-legend .wx-trkleg{display:flex;flex-wrap:wrap;gap:7px;margin:3px 0 4px;font-family:var(--mono);
     font-size:8.5px;color:var(--dim);align-items:center}
   .wx-legend .wx-trkleg span{display:inline-flex;align-items:center;gap:3px}
@@ -8909,7 +8921,8 @@ function renderStormControls(){
     + chip('past',"Where it's been",nhcSub.past.on)
     + '</div>';
   // What the letters on the track mean — NHC's own symbols, so it needs saying once.
-  h+='<div class="wx-trkleg"><span><i style="background:#7aa2f7;color:#0b1a26">D</i>depression</span>'
+  h+='<div class="wx-leglbl">Track points</div>'
+    + '<div class="wx-trkleg"><span><i style="background:#7aa2f7;color:#0b1a26">D</i>depression</span>'
     + '<span><i style="background:#f2c200;color:#0b1a26">S</i>storm</span>'
     + '<span><i style="background:#ff8a3c;color:#0b1a26">H</i>hurricane</span>'
     + '<span><i style="background:#e23b3b;color:#fff">M</i>major</span></div>';
@@ -8917,7 +8930,8 @@ function renderStormControls(){
     /* The threshold picker is ALWAYS rendered while odds are on — including when the chosen
        threshold came back empty — because it is the only way back to one that has data.
        A threshold NHC published nothing for is marked, not removed. */
-    h+='<div class="wx-subrow"><b>Odds of&nbsp;mph</b>'
+    h+='<div class="wx-leglbl">Chance of wind by threshold</div>'
+      + '<div class="wx-subrow"><b>Odds of&nbsp;mph</b>'
       + [34,50,64].map(kt=>{
           const cls=(kt===oddsKt?'on':'')+(_oddsEmpty[kt]?' none':'');
           const tip=_oddsEmpty[kt]?' title="NHC published no '+KT_MPH_LBL[kt]+'+ mph band for this advisory"':'';
@@ -8936,25 +8950,44 @@ function renderStormControls(){
     }
   }
   if(nhcSub.arr.on){
-    h+='<div class="wx-wwleg"><span><i style="background:#ff2d2d"></i>soonest</span>'
-      + '<span><i style="background:#ffd23f"></i>→</span><span><i style="background:#39d3ff"></i>→</span>'
-      + '<span><i style="background:#b524f7"></i>latest</span></div>'
-      + '<div class="wx-wwleg"><span><i style="background:#cbd5e1;height:2px"></i>solid = most likely</span></div>'
+    /* This ramp used to read "soonest → latest" with four fixed swatches and NO heading, sitting
+       directly under the D/S/H/M key — so it looked like part of it, and it named no actual times.
+       It now carries a heading and is built from the times actually drawn, with the real first and
+       last time on either end of the bar. */
+    const tmap=new Map();
+    arrGeoms.forEach(g=>{ if(g.time && !tmap.has(g.time)) tmap.set(g.time, g.color||'#ffd23f'); });
+    const ts=[...tmap.entries()].sort((a,b)=>_arrOrder(a[0])-_arrOrder(b[0]));
+    h+='<div class="wx-leglbl">Arrival lines · 39 mph winds</div>';
+    if(ts.length>1){
+      const step=Math.max(1, Math.round((ts.length-1)/6));      // at most ~7 swatches
+      const pick=[]; for(let i=0;i<ts.length;i+=step) pick.push(ts[i]);
+      if(pick[pick.length-1]!==ts[ts.length-1]) pick.push(ts[ts.length-1]);
+      h+='<div class="wx-ramp"><span>'+esc(ts[0][0])+'</span><span class="rbar">'
+        + pick.map(t=>`<i style="background:${t[1]}"></i>`).join('')
+        + '</span><span>'+esc(ts[ts.length-1][0])+'</span></div>';
+    } else if(ts.length===1){
+      h+='<div class="wx-ramp"><span class="rbar"><i style="background:'+ts[0][1]+'"></i></span>'
+        + '<span>'+esc(ts[0][0])+' · the only time published</span></div>';
+    }
+    h+='<div class="wx-wwleg"><span><i style="background:#cbd5e1;height:2px"></i>solid = most likely</span></div>'
       + '<div class="wx-wwleg"><span><i style="background:none;border-top:2px dashed #cbd5e1;height:0;border-radius:0"></i>'
       + 'dashed = earliest reasonable</span></div>'
-      + '<div class="wx-scrubrd">Every line is labelled with the time 39 mph winds reach it — each label is in its own line’s colour.</div>';
+      + '<div class="wx-scrubrd">Line colour = when 39 mph winds reach that line; every line carries its time as a label in the same colour.</div>';
   }
   if(nhcSub.past.on){
-    h+='<div class="wx-windleg"><span><i style="background:#ffd23f"></i>39+ mph</span>'
+    h+='<div class="wx-leglbl">Winds already delivered</div>'
+      + '<div class="wx-windleg"><span><i style="background:#ffd23f"></i>39+ mph</span>'
       + '<span><i style="background:#ff9500"></i>58+</span><span><i style="background:#ff2d2d"></i>74+</span></div>'
       + '<div class="wx-scrubrd">Winds already delivered · dashed line = past track. Tap a dot for that position.</div>';
   }
-  if(nhcSub.wind.on) h+='<div class="wx-windleg"><span><i style="background:#ffd23f"></i>34kt (TS)</span>'
+  if(nhcSub.wind.on) h+='<div class="wx-leglbl">Wind field now</div><div class="wx-windleg"><span><i style="background:#ffd23f"></i>34kt (TS)</span>'
       +'<span><i style="background:#ff9500"></i>50kt</span><span><i style="background:#ff2d2d"></i>64kt (hurr)</span></div>';
-  if(nhcSub.ww.on) h+='<div class="wx-wwleg"><span><i style="background:#c8102e"></i>Hurr Warn</span>'
+  if(nhcSub.ww.on) h+='<div class="wx-leglbl">Coastal watches &amp; warnings</div>'
+      +'<div class="wx-wwleg"><span><i style="background:#c8102e"></i>Hurr Warn</span>'
       +'<span><i style="background:#ff69b4"></i>Hurr Watch</span><span><i style="background:#1f6feb"></i>TS Warn</span>'
       +'<span><i style="background:#f2c200"></i>TS Watch</span></div>';
-  if(nhcSub.surge.on) h+='<div class="wx-wwleg"><span><i style="background:#b524f7"></i>Surge Warn</span>'
+  if(nhcSub.surge.on) h+='<div class="wx-leglbl">Storm surge</div>'
+      +'<div class="wx-wwleg"><span><i style="background:#b524f7"></i>Surge Warn</span>'
       +'<span><i style="background:#db7ff7"></i>Surge Watch</span></div>';
   if(nhcSub.surge.on && inunGeoms.length) h+='<div class="wx-wwleg"><span><i style="background:#1f9be0"></i>&gt;1 ft</span>'
       +'<span><i style="background:#ffd23f"></i>&gt;3 ft</span><span><i style="background:#ff7f11"></i>&gt;6 ft</span>'
