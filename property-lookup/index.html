@@ -453,6 +453,13 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
      colour ramp sat under the D/S/H/M letters and read as part of them. */
   /* Advisory stamp that has outlived its 6-hourly cycle — nothing new has arrived */
   .wx-legend .wx-stale{color:var(--warn);opacity:1}
+  /* "NOAA skipped this storm" — evidence, not a guess, so it gets its own boxed line rather
+     than blending into the grey sub-text under the advisory number. */
+  .wx-legend .wx-skip{margin:3px 0 2px;padding:4px 6px;border-radius:5px;line-height:1.4;
+    font-family:var(--mono);font-size:9.5px;color:var(--warn);
+    background:rgba(226,84,44,.12);                                  /* fallback first */
+    background:color-mix(in srgb, var(--warn) 12%, transparent);
+    border-left:2px solid var(--warn)}
   .wx-legend .wx-leglbl{font-family:var(--mono);font-size:8px;letter-spacing:.07em;text-transform:uppercase;
     color:var(--faint);margin:6px 0 1px;padding-top:3px;border-top:1px solid var(--line);opacity:.9}
   .wx-legend .wx-title + .wx-leglbl, .wx-legend .wx-chips + .wx-leglbl{border-top:none;padding-top:0}
@@ -2356,9 +2363,20 @@ const DOCS_CITY = {
   },
   NAPLES: {
     // City of Naples is its own jurisdiction inside Collier County — separate permitting & flood portal.
-    ecLayer: null,   // Naples EC lookup is via the Forerunner resident portal (not an ArcGIS layer)
+    /* ⚠️ WIRED BUT THE LAYER IS EMPTY TODAY. The city does publish an Elevation Certificates layer
+       in its CityView FloodPlainManagement service, and it is queryable — but it holds ZERO
+       records. Verified 2026-08-28: where=1=1 returns count 0, and so does an envelope covering the
+       whole city, while every sibling layer in the SAME service answers normally (FEMA 2012 Flood
+       Zones 1899, BFE contours 581, LOMA 78, LOMR 38, Coastal High Hazard 12). So this is a real
+       layer with no data in it, not a broken URL.
+       It is wired anyway because the cost is one query that finds nothing, ecDetect() reads its
+       fields generically (SITE_NUMBER / SITE_STREET, LFE = lowest floor elevation, EC_ON_FILE,
+       FILE_NAME), and the card will begin showing certificates on its own the day Naples loads the
+       data — no code change needed. The Forerunner portal below stays the working route meanwhile
+       and is never displaced by this: ecMap/ecNote render regardless of what the layer returns. */
+    ecLayer: "https://g.naplesgov.com/arcgis/rest/services/CityView/CityView_FloodPlainManagement/MapServer/1/query",
     ecMap:   "https://naplesfl.withforerunner.com/explore",
-    ecNote:  "City of Naples (not Collier County): search the address in the Naples flood portal for its Elevation Certificate. City Building Dept (239) 213-5020.",
+    ecNote:  "City of Naples (not Collier County): search the address in the Naples flood portal for its Elevation Certificate — that is the working route today. The city also publishes an EC map layer and this card checks it on every lookup, but it currently holds no records; certificates will appear here automatically once the city loads them. City Building Dept (239) 213-5020.",
     permit:  "https://cityview2.iharriscomputer.com/CityofNaplesFlorida/Permit/Locator",
     permitBy:"address"
   },
@@ -7899,6 +7917,81 @@ function _validLabel(props){
   return t[1].toUpperCase().replace(/\s+/,' ')+(d?' '+d[1]:'');
 }
 // Build the lower-right storm summary from the strongest / first-named forecast point.
+/* ---- "Did NOAA skip this storm?" ------------------------------------------------------------
+   The data-age stamp can say a cone is 10 hours old, but not whether that's normal. It isn't
+   always: measured 2026-08-28 02:40Z, NOAA's 21:00Z run wrote fresh files for Lowell (21:27Z)
+   and Karina (21:13Z) and published NOTHING for Dolly (still 16:02Z, an advisory behind) or
+   Lala (03:13Z, three advisories behind). So the lag is per-storm, not service-wide, and the
+   service tells on itself: the newest idp_filedate across ALL storms is when the pipeline last
+   ran successfully. A storm whose own file is hours older than that was left out of that run.
+   No external source, so no CORS problem and no proxy to maintain. */
+const NHC_RUN_SPREAD_MS = 2*60*60*1000;   // files from one run land ~25 min apart; 2 h is slack
+let _pipeRun=null, _pipeRunAt=0;
+async function nhcPipelineRun(force){
+  if(!force && _pipeRun && (Date.now()-_pipeRunAt) < 5*60*1000) return _pipeRun;
+  const empty={newest:null, rows:[]};
+  try{
+    const cat=await nhcCatalog();
+    const id=(cat.coneLayer==null?7:cat.coneLayer);
+    /* Deliberately UNFILTERED by basin: a Pacific storm getting fresh files is exactly the
+       evidence that the run happened and our Atlantic storm was skipped. */
+    const u=_nhcFresh(cat.summary+'/'+id+'/query?where=1%3D1&outFields=stormname,binnumber,advisnum,idp_filedate&returnGeometry=false&f=json');
+    const j=await fetch(u).then(r=>r.ok?r.json():null);
+    if(j&&j.error) throw new Error('service error');
+    const rows=((j&&j.features)||[]).map(f=>{ const a=f.attributes||{};
+      return { name:nhcPick(a,['stormname','STORMNAME'])||null,
+               bin:nhcPick(a,['binnumber','BINNUMBER'])||null,
+               adv:nhcPick(a,['advisnum','ADVISNUM'])||null,
+               stamp:_dataStamp(a) }; }).filter(r=>r.stamp);
+    _pipeRun = rows.length ? { newest:Math.max.apply(null,rows.map(r=>r.stamp)), rows } : empty;
+  }catch(e){ _pipeRun=empty; }
+  _pipeRunAt=Date.now();
+  return _pipeRun;
+}
+// Most recent scheduled full-advisory boundary (03/09/15/21 UTC) at or before t.
+function _cycleBefore(t){
+  const d=new Date(t), h=d.getUTCHours();
+  const c=[21,15,9,3].find(x=>x<=h);
+  const b=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),(c==null?21:c),0,0,0));
+  if(c==null) b.setUTCDate(b.getUTCDate()-1);
+  return b.getTime();
+}
+/* null = nothing wrong. Otherwise {kind:'peer'|'cycle', …} — 'peer' is hard evidence (NOAA
+   published newer files for named storms), 'cycle' is the weaker single-storm fallback. */
+function _advSkipped(stamp, run){
+  if(!stamp) return null;
+  if(run && run.newest && (run.newest-stamp) >= NHC_RUN_SPREAD_MS){
+    const others=[];
+    (run.rows||[]).forEach(r=>{ if(r.stamp>=run.newest-NHC_RUN_SPREAD_MS && r.name && others.indexOf(r.name)<0) others.push(r.name); });
+    return { kind:'peer', newest:run.newest, others };
+  }
+  /* Reaching here means this storm is within one run's spread of the newest file, so the
+     pipeline's last run DID include it. The only thing left to catch is the whole pipeline
+     stalling — every storm equally old — which the peer test can never see. So compare the
+     NEWEST file in the service against the published clock, not this storm's: comparing this
+     storm's would re-flag one the peer test just cleared. With a single system up the two are
+     the same value, which is exactly the single-storm fallback. One hour of grace for NOAA to
+     write the files after an advisory goes out. */
+  const ref=(run && run.newest) ? Math.max(run.newest, stamp) : stamp;
+  const cyc=_cycleBefore(Date.now()-60*60*1000);
+  if(ref < cyc) return { kind:'cycle', cycle:cyc };
+  return null;
+}
+function _clockHM(ms){
+  try{ return new Date(ms).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); }
+  catch(e){ return ''; }
+}
+function _skipNote(sk){
+  if(!sk) return '';
+  if(sk.kind==='peer'){
+    const who=sk.others.length
+      ? (sk.others.length>2 ? sk.others.slice(0,2).join(', ')+' and others'
+                            : sk.others.join(' and '))
+      : 'other systems';
+    return 'NOAA left this storm out of its '+_clockHM(sk.newest)+' run — it published '+esc(who)+' then, not this one.';
+  }
+  return 'Older than NOAA’s '+_clockHM(sk.cycle)+' advisory run — this may be an advisory behind.';
+}
 function buildStormSummary(data){
   const feats=(data.pts&&data.pts.features)||[];
   if(!feats.length){ if(coneOn) wxSetStorm(''); return; }
@@ -7928,9 +8021,12 @@ function buildStormSummary(data){
       if(iss) bits.push('issued '+esc(iss));
       if(bits.length){
         // Past ~7 h means a scheduled advisory has come and gone without reaching us.
-        const stale=(age!=null && age>7);
+        const sk=_advSkipped(_dataStamp(cur), _pipeRun);
+        // "Skipped" outranks the age heuristic: it is evidence, not a guess about the clock.
+        const stale=!!sk || (age!=null && age>7);
         const agoTxt=(age==null)?'' : (age<1 ? ' · just in' : ' · data '+Math.round(age)+' h old');
         html+=`<div class="wx-sub${stale?' wx-stale':''}">${bits.join(' · ')}${agoTxt}</div>`;
+        if(sk) html+=`<div class="wx-skip">${_skipNote(sk)}</div>`;
       }
       if(val) html+=`<div class="wx-sub">Position valid ${esc(val)}</div>`;
     }
@@ -8077,6 +8173,9 @@ function drawCone(dataAll){
   coneLayer.addTo(map);
   setupConeHover(data);
   buildStormSummary(data);
+  /* Ask the service when it last published anything, then repaint the freshness line. Non-blocking
+     — the panel is correct immediately and gains the "NOAA skipped this storm" note a moment later. */
+  nhcPipelineRun().then(()=>{ if(coneOn) buildStormSummary(data); }).catch(()=>{});
   buildScrubData(data);
   buildDistCenters(data);        // must follow buildScrubData — it falls back to the track's first point
   renderStormControls();
@@ -8212,6 +8311,7 @@ async function nhcCatalog(){
      silently answer a different question ("closest they ever get in the next five days"). */
   cat.windNow  = _pickLayer(sidx, /advisory\s+wind\s+field/i);
   cat.windFcst = _pickLayer(sidx, /forecast\s+wind\s+radii/i);
+  { const cl=_pickLayer(sidx, /forecast\s+cone/i); cat.coneLayer=(cl==null?7:cl); }
   _nhcCat=cat; return cat;
 }
 /* ---- ⚠️ MEASURED BEHAVIOUR OF THIS SERVICE (2026 season, verified against live TS Dolly) ----
@@ -10192,7 +10292,9 @@ function ecDetect(fields){
        datum is usually UNSTATED. See the render for how that's handled. */
     lag:  find([/^C2F_88$/,/^C2H_88$/,/LOWEST.?ADJ/,/^LOWESTGRAD/,/^C2F_LAG_ELEV$/,/^LAG$/]),
     mach: find([/^C2E_88$/,/LOWEST.?MACH/,/MACHINERY/,/EQUIP.*ELEV/]),
-    ffe:  find([/^C2A_88$/,/FLOOR.?ELEV/,/^FLOORELEVA/,/^C2A_TOP_BOTTOM_FLOOR_EL$/,/^FFE$/,/BOTTOM.?FLOOR/]),
+    /* ^LFE$ — City of Naples names its lowest-floor elevation exactly that, and it is the only
+       surveyed value that layer publishes. Anchored, so it can't swallow an unrelated field. */
+    ffe:  find([/^C2A_88$/,/FLOOR.?ELEV/,/^FLOORELEVA/,/^C2A_TOP_BOTTOM_FLOOR_EL$/,/^FFE$/,/^LFE$/,/BOTTOM.?FLOOR/]),
     /* The matching raw (as-certified) value, so we can fall back when the _88 column is empty and
        say plainly which datum it's on — or that the record doesn't state one. */
     lagRaw:  find([/^C2F_LAG_ELEV$/,/^C2H_LOWEST_ADJACENT_GRADE$/]),
@@ -10777,16 +10879,74 @@ function streetTokens(s){
 /* The distinctive street-NAME tokens only (drop suffix, direction, city/state/country words), e.g.
    "5127 Coronado Parkway, Cape Coral, FL" -> ["CORONADO"]. Used to verify a parcel is on the
    street you searched, so a geocoder that returns the wrong street (Coronado vs Del Prado) is caught. */
-const STREET_STOP=new Set(['ST','AVE','BLVD','DR','RD','LN','CT','CIR','TER','PL','PKWY','HWY','TRL','PT','SQ','XING','CV','TRCE','WAY','LOOP','RUN','PASS','PATH','WALK','ROW','PLZ',
-  'N','S','E','W','NE','NW','SE','SW','CAPE','CORAL','FORT','MYERS','NAPLES','BONITA','SPRINGS','ESTERO','SANIBEL','LEE','COLLIER','CHARLOTTE','COUNTY','FLORIDA','FL','UNITED','STATES','USA','BEACH','PORT']);
+/* Split into three groups rather than one flat list, because a NUMBERED street needs the suffix
+   and direction back (see streetCore below). STREET_STOP stays their union, so every existing
+   caller behaves exactly as before. */
+const STREET_SUF=new Set(['ST','AVE','BLVD','DR','RD','LN','CT','CIR','TER','PL','PKWY','HWY','TRL',
+  'PT','SQ','XING','CV','TRCE','WAY','LOOP','RUN','PASS','PATH','WALK','ROW','PLZ']);
+const STREET_DIR=new Set(['N','S','E','W','NE','NW','SE','SW']);
+/* ⚠️ JURISDICTION QUALIFIERS BELONG HERE TOO ('CITY','OF','TOWN','VILLAGE','THE').
+   Without them, typing the address the way a person actually writes it — "112 1st AVE N, City of
+   Naples, 34102" — left CITY and OF in the street core. Two consequences, both measured 2026-08-28:
+     1. _distinct below picks the LONGEST core token as the server-side filter, so CITY (4) beat
+        1ST (3) and the parcel query became `... AND SiteStreetAddress LIKE '%CITY%'`, which matches
+        no Collier address at all. Zero rows → resolver returns null → the whole search falls
+        through to the geocoder chain and the statewide roll. That is slow AND gives a thin card.
+     2. CITY/OF are not ordinals, so _ordinalStreet() went false and the numbered-grid handling
+        never engaged for exactly the input a user types.
+   "Naples" alone was always fine because NAPLES was already a stop word — which is why this hid. */
+const STREET_PLACE=new Set(['CAPE','CORAL','FORT','MYERS','NAPLES','BONITA','SPRINGS','ESTERO','SANIBEL',
+  'LEE','COLLIER','CHARLOTTE','COUNTY','FLORIDA','FL','UNITED','STATES','USA','BEACH','PORT',
+  'CITY','OF','TOWN','VILLAGE','THE']);
+const STREET_STOP=new Set([...STREET_SUF, ...STREET_DIR, ...STREET_PLACE]);
+const _ORDINAL=/^\d+(ST|ND|RD|TH)$/;
+/* ⚠️ IN A NUMBERED GRID THE SUFFIX AND DIRECTION *ARE* THE STREET NAME.
+   Dropping them is right for a named street — "5127 Coronado Parkway" is identified by CORONADO.
+   It is catastrophic in Old Naples and Cape Coral, where measured 2026-08-28:
+       112 1st Ave N · 112 1st St · 112 1st Ave S · 112 1st St N   ALL collapsed to ['1ST']
+       SE 12th Ave · SE 12th Ter · NE 12th Ave                     ALL collapsed to ['12TH']
+   so sameStreet() called four different streets the same street. Searching "112 1st Ave N" in
+   Naples matched TWO Collier address points — folio 14010360001 (1st Ave N) and 77210040003
+   (1st St) — and the resolver, unable to choose, stopped resolving. Cape Coral is built entirely
+   of NE/NW/SE/SW numbered avenues, terraces, courts and streets, so it is affected everywhere.
+   When every distinctive token is an ordinal, keep the suffix and the directional. */
+function _ordinalStreet(toks){
+  const core=toks.filter(t=>!STREET_STOP.has(t) && !/^\d+$/.test(t));
+  return core.length>0 && core.every(t=>_ORDINAL.test(t));
+}
 function streetCore(s){
-  return streetTokens(s).filter(t=>!STREET_STOP.has(t) && !/^\d+$/.test(t));
+  const toks=streetTokens(s);
+  if(_ordinalStreet(toks))
+    return toks.filter(t=>!/^\d+$/.test(t) && !STREET_PLACE.has(t));   // ordinal + suffix + direction
+  return toks.filter(t=>!STREET_STOP.has(t) && !/^\d+$/.test(t));
 }
 /* Does a parcel's address sit on the same street the user searched? Requires the distinctive
    street-name token(s) to overlap. Lenient when we can't parse either side (returns true). */
 function sameStreet(searchStr, parcelAddr){
+  const ta=streetTokens(searchStr), tb=streetTokens(parcelAddr);
   const a=new Set(streetCore(searchStr)), b=new Set(streetCore(parcelAddr));
   if(!a.size || !b.size) return true;            // can't tell — don't block
+  /* NUMBERED GRID: identity is the ORDINAL, plus the suffix and direction wherever both sides
+     state one. A plain "do any tokens overlap" test is wrong here in both directions — it matched
+     1st Ave N to 1st St (sharing 1ST), and once the suffix and quadrant were kept it also matched
+     SE 12th Ave to SE 13th Ave, which share SE and AVE and sit a block apart. So compare the
+     ordinal explicitly and treat suffix/direction as agreements, not as evidence of a match.
+     An omitted suffix or direction is not a contradiction: plenty of records write "1st Ave" for
+     "1st Ave N", so we only reject when both sides state one and they differ.
+     Scoped to the ordinal case on purpose — applying suffix agreement generally would break
+     "St James Ct", where the leading "St" is Saint rather than a street type, and would clash
+     against the CT. */
+  if(_ordinalStreet(ta) && _ordinalStreet(tb)){
+    const ords=t=>t.filter(x=>_ORDINAL.test(x));
+    const A=ords(ta), B=ords(tb);
+    if(A.length && B.length && !A.some(x=>B.indexOf(x)>=0)) return false;
+    const pick=(toks,set)=>{ for(const t of toks){ if(set.has(t)) return t; } return null; };
+    const sa=pick(ta,STREET_SUF), sb=pick(tb,STREET_SUF);
+    if(sa && sb && sa!==sb) return false;
+    const da=pick(ta,STREET_DIR), db=pick(tb,STREET_DIR);
+    if(da && db && da!==db) return false;
+    return true;
+  }
   for(const t of a){ if(b.has(t)) return true; }
   return false;
 }
@@ -20091,7 +20251,12 @@ async function resolveCountyParcel(countyName, searchCtx){
   // (e.g. 100 Estero Blvd 634) silently vanishes and the search falls to an ambiguous list. Add the
   // most distinctive street token to the WHERE so we fetch THIS building's units, not 100 random lots.
   const _coreToks = streetCore(searchCtx.raw||'').filter(t=>t && t.length>=3);
-  const _distinct = _coreToks.sort((a,b)=>b.length-a.length)[0] || null;   // longest = most selective
+  /* Prefer the ORDINAL when the street is numbered — on a grid the number IS the identity, and
+     "longest token wins" is a poor proxy for selectivity there ("1ST" loses to any 4-letter word
+     that leaks in, and the WHERE then filters on the wrong thing and returns nothing). Falls back
+     to longest-wins for named streets, which is what it was always for. */
+  const _ord = _coreToks.filter(t=>_ORDINAL.test(t))[0] || null;
+  const _distinct = _ord || _coreToks.slice().sort((a,b)=>b.length-a.length)[0] || null;
   let where = `${cfg.addrField} LIKE '${hn} %' OR ${cfg.addrField} = '${hn}'`;
   if(_distinct){
     const _d = String(_distinct).replace(/'/g,"''");
@@ -20814,7 +20979,14 @@ async function chooseSuggestion(it){
       // link on the card. Also carry the resolver's owner/unit as a fallback for any shared-key county.
       let _ctxR = searchCtx;
       const _extra = {};
-      if(pr.folio){ _extra.folioHint=pr.folio; _extra.countyHint=cty; }
+      /* `county` — NOT `cty`. This block was copied from doSearch(), where it lives inside
+         `for(const {cty, r:pr} of ordered)` and cty is the loop's county. There is no such
+         variable here, so picking a suggestion whose resolver returned a folio threw
+         "ReferenceError: cty is not defined" and killed the whole click-a-suggestion path
+         mid-flight — the spinner just sat there. Latent until now: it only fires when
+         pr.folio is set, which for Naples only started happening once the numbered-street
+         matching was fixed and the resolver could finally settle on one folio. */
+      if(pr.folio){ _extra.folioHint=pr.folio; _extra.countyHint=county; }
       if(pr.owner && searchCtx && searchCtx.unit){ _extra.fileOwner=pr.owner; _extra.fileUnit=searchCtx.unit; }
       if(Object.keys(_extra).length) _ctxR = Object.assign({}, searchCtx, _extra);
       await runLookup(pr.lat, pr.lng, _ctxR);
