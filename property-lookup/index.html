@@ -11020,6 +11020,43 @@ function ringCentroid(ring){
   a*=0.5; return [cx/(6*a), cy/(6*a)];
 }
 /* centroid of an Esri feature (uses .centroid if present, else largest ring) */
+/* Points to probe the statewide roll with when a query at one spot inside a parcel comes back
+   empty. The roll's polygons do not line up perfectly with a county's live parcel layer, and its
+   coverage has holes — so "no feature at this exact coordinate" does NOT mean "not in the roll".
+   Measured on 112 1st Ave N, Naples: the roll returned nothing at the live parcel's centroid and
+   returned the record 18 m away. Walk in from the centroid toward four spread-out vertices, which
+   stays inside the lot for any normal parcel shape and samples enough of it to find the overlap.
+   Ordered nearest-to-centroid first, and anything within ~5 m of an already-failed point is
+   dropped rather than wasting a round trip repeating it. */
+function _rollProbePoints(f, skipLat, skipLng){
+  const out=[];
+  try{
+    const c=featCentroid(f); if(!c) return out;
+    const rings=(f.geometry&&f.geometry.rings)||[];
+    let ring=null, ba=-1;
+    for(const r of rings){ if(r && r.length>ba){ ba=r.length; ring=r; } }
+    const cand=[[c[0],c[1]]];
+    if(ring && ring.length>=4){
+      for(const frac of [0.35,0.6]){
+        for(const k of [0,0.25,0.5,0.75]){
+          const v=ring[Math.floor(k*(ring.length-1))];
+          if(v && isFinite(v[0]) && isFinite(v[1]))
+            cand.push([c[0]+(v[0]-c[0])*frac, c[1]+(v[1]-c[1])*frac]);
+        }
+      }
+    }
+    const NEAR=3.2e-5;                       // ~3.5 m in degrees
+    const far=(a,b)=>Math.abs(a[1]-b.lat)>NEAR || Math.abs(a[0]-b.lng)>NEAR;
+    const seen=[];
+    for(const p of cand){
+      if(isFinite(skipLat) && isFinite(skipLng) && !far(p,{lat:skipLat,lng:skipLng})) continue;
+      if(seen.some(s=>!far(p,{lat:s[1],lng:s[0]}))) continue;
+      seen.push(p); out.push({lat:p[1], lng:p[0]});
+      if(out.length>=3) break;
+    }
+  }catch(e){}
+  return out;
+}
 function featCentroid(f){
   if(f.centroid && typeof f.centroid.x==='number') return [f.centroid.x, f.centroid.y];
   const rings=(f.geometry&&f.geometry.rings)||[]; if(!rings.length) return null;
@@ -17679,22 +17716,51 @@ async function runLookup(lat,lng,searchCtx){
   if(!_rollAnchor && liveRes && isFinite(liveRes.__ngLat) && isFinite(liveRes.__ngLng)){
     _rollAnchor={lat:liveRes.__ngLat, lng:liveRes.__ngLng};
   }
+  /* ⚠️ AN EMPTY ROLL DESERVES A SECOND POINT, NOT JUST A MOVED ONE.
+     Measured 2026-08-28 on 112 1st Ave N, Naples. resolveCountyParcel() returns the PARCEL'S OWN
+     CENTROID as the search coordinate, so on the search path the anchor and the query point are
+     the same and _dd is ~0 — "didn't move", skip. The roll was therefore asked exactly once, at
+     that centroid, returned 0 rows, and was never asked again. A map click 18 m away landed
+     somewhere the roll does answer and got the record.
+     That one difference is the whole thin-card symptom: the roll supplies TOT_LVG_AR, ACT_YR_BLT,
+     JV, LND_VAL, DOR_UC, LND_SQFOOT and __legal, which are spliced onto the live parcel. Search
+     showed 5 fields, click showed 14, from the same folio and the same live feed.
+     So retry when the primary came back EMPTY as well — and when retrying, use points that are
+     genuinely different from the one that already failed (see _rollProbePoints). */
+  const _rollEmpty = !(parcel && !parcel.__err && parcel.features && parcel.features[0]);
   if(_rollAnchor){
     const _dd=(_rollAnchor.lat-lat)*(_rollAnchor.lat-lat)+(_rollAnchor.lng-lng)*(_rollAnchor.lng-lng);
-    if(_dd > 1e-9){   // ~> a few metres: only re-fetch when the point actually moved
+    if(_dd > 1e-9 || _rollEmpty){   // moved a few metres, OR we got nothing and must try elsewhere
       /* Re-anchored roll fetch. Like the primary roll this only supplies SUPPLEMENTARY fields
          (living area / year built) on top of an already-authoritative live-feed parcel — so it
          does not deserve the patient 3-pass budget the primary roll gets in an unwired county.
          Measured stalling an entire lookup by 11 s on a cold statewide point-in-polygon while
          everything downstream sat waiting for a couple of extra attributes. One pass, 4 s cap:
          it fills the fields when the roll is warm and gets out of the way when it isn't. */
-      const _reParcel = await _timed('parcel roll re-anchor',
-        arcQueryRetry(EP.parcel, _rollAnchor.lat, _rollAnchor.lng, '*', true, 4000, 1, false))
-          .catch(()=>null);
-      if(_reParcel && !_reParcel.__err && _reParcel.features && _reParcel.features[0]){
-        // Trust the re-anchored record only if its house number matches the authoritative address
-        // (guards against the roll itself being sparse at the centroid).
-        parcel = _reParcel;
+      /* Probe list, not a single point. When the primary came back EMPTY the anchor is often the
+         very coordinate that just failed (the search coordinate IS the parcel centroid), so
+         re-asking it would burn a round trip to learn nothing. _rollProbePoints skips anything
+         within ~3.5 m of a point already tried and walks inward from the centroid instead. */
+      const _probes = _rollEmpty
+        ? [_rollAnchor].concat(_rollProbePoints((liveRes&&liveRes.features&&liveRes.features[0])||{}, lat, lng))
+        : [_rollAnchor];
+      const _tried=[];
+      for(const _p of _probes){
+        if(!_p || !isFinite(_p.lat) || !isFinite(_p.lng)) continue;
+        if(_tried.some(t=>Math.abs(t.lat-_p.lat)<3.2e-5 && Math.abs(t.lng-_p.lng)<3.2e-5)) continue;
+        if(_rollEmpty && Math.abs(_p.lat-lat)<3.2e-5 && Math.abs(_p.lng-lng)<3.2e-5) continue;  // already failed there
+        _tried.push(_p);
+        const _reParcel = await _timed('parcel roll re-anchor',
+          arcQueryRetry(EP.parcel, _p.lat, _p.lng, '*', true, 4000, 1, false))
+            .catch(()=>null);
+        if(myId!==runId) return;
+        if(_reParcel && !_reParcel.__err && _reParcel.features && _reParcel.features[0]){
+          // Trust the re-anchored record only if its house number matches the authoritative address
+          // (guards against the roll itself being sparse at the centroid).
+          parcel = _reParcel;
+          break;
+        }
+        if(_tried.length>=3) break;          // cap the extra round trips
       }
     }
   }
