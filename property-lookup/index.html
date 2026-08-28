@@ -667,8 +667,23 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .suggest .sg .sgsrc.approx{color:var(--warn);font-size:12px;font-weight:800;letter-spacing:.04em;padding-top:0}
   .suggest .sg.sg-approx .pin{color:var(--warn)}
   /* "Matched … confirm the marker is on the right lot" — a verify prompt, so make it stand out. */
+  /* TWO tiers, deliberately. .matchconf is for a match we are NOT sure of — the geocoder fallback
+     and the "resolved to a different address" case — and it keeps the warning colour because it is
+     genuinely asking you to go and check. .matchok is the authoritative folio match: the highest
+     confidence the tool can reach, so it states what it found and gets out of the way.
+     Before this split, all four banners were --warn at weight 600, so the most certain result on
+     screen looked exactly like the least certain one. On a condo-heavy street (Cape Coral) that is
+     a red line on literally every search, which teaches you to ignore the colour — and then the one
+     that matters does not stand out either. */
   .matchconf{color:var(--warn)!important;font-size:13px;font-weight:600;line-height:1.4}
   .matchconf b{color:var(--warn)!important}
+  .matchok{color:var(--dim);font-size:12.5px;font-weight:500;line-height:1.45}
+  .matchok b{color:var(--ink)}
+  .matchok .okmark{color:var(--signal2,#7fe0c4);font-weight:700;margin-right:4px}
+  /* "16 units here — choose one": the click path knows the candidates, so let it offer them. */
+  .unitcta{margin-top:6px;font-family:var(--mono);font-size:11.5px;padding:5px 12px;border-radius:6px;
+    border:1px solid var(--signal2,#7fe0c4);background:transparent;color:var(--signal2,#7fe0c4);cursor:pointer}
+  .unitcta:hover{background:rgba(127,224,196,.12)}
   /* Footer "Counties/Cities live" toggles + chips */
   .wiredtoggles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
   .wbtn{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--ink);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.16);border-radius:6px;padding:4px 9px;cursor:pointer}
@@ -11210,16 +11225,67 @@ function ringPolyArea(rings){
   for(const r of rings){ let a=0; for(let i=0,n=r.length,j=n-1;i<n;j=i++){ a+=r[j][0]*r[i][1]-r[i][0]*r[j][1]; } total+=Math.abs(a)/2; }
   return total||Infinity;
 }
+/* Does this parcel record carry a unit of its own? Checks a dedicated column first, then falls
+   back to parsing the site address. Used to keep a condo's COMMON-ELEMENT parcel from being picked
+   as the default: it has a blank unit and is owned by the association, so landing on it reports
+   "BACINO VISTA CONDOMINIUM ASSOC" as the owner instead of whoever owns the home. */
+function _featHasUnit(f){
+  const a=(f&&(f.attributes||f.properties))||{};
+  for(const k in a){
+    if(!/^(SITEUNIT|UNIT|UNITID|UNITNUM|UNIT_NO|SITE_UNIT)$/i.test(k)) continue;
+    if(String(a[k]==null?'':a[k]).trim()) return true;
+  }
+  try{ if(searchUnit(String(parcelAddrText(a)||''))) return true; }catch(e){}
+  return false;
+}
 function pickSpecificParcel(features){
   if(!features||!features.length) return {feature:null,count:0};
   if(features.length===1) return {feature:features[0],count:1};
-  let best=features[0], bestA=Infinity;
-  for(const f of features){
+  /* Smallest polygon wins, as before — that is what picks the unit out of a nested stack. But in a
+     condo every unit shares one footprint, so the areas tie and "smallest" degenerates into
+     "whatever the server listed first", which can be the association's common-element parcel.
+     Prefer records that actually carry a unit whenever any of them do; ties then resolve by area
+     exactly as they always did. Non-condo lookups are untouched — with no unit fields anywhere the
+     candidate set is unchanged. */
+  const unitBearing = features.filter(_featHasUnit);
+  const pool = unitBearing.length ? unitBearing : features;
+  let best=pool[0], bestA=Infinity;
+  for(const f of pool){
     const rings=f.geometry&&f.geometry.rings;
     const a=rings?ringPolyArea(rings):Infinity;
     if(a<bestA){ bestA=a; best=f; }
   }
-  return {feature:best,count:features.length};
+  return {feature:best,count:features.length,all:features};
+}
+/* Turn raw overlapping parcel features into the candidate shape the unit picker already speaks
+   ({label, lat, lng, folio, owner, unit}), so a MAP CLICK can offer the same chooser an address
+   search does. Uses the county's resolver config when there is one (the condo-heavy wired counties
+   all have one) and falls back to generic field detection elsewhere. */
+function _candsFromFeatures(features, countyName){
+  const cfg = countyName ? COUNTY_PARCEL_RESOLVERS[norm(countyName)] : null;
+  const out=[];
+  (features||[]).forEach(f=>{
+    const a=(f&&(f.attributes||f.properties))||{};
+    const c=featCentroid(f); if(!c) return;
+    const addr = (cfg && a[cfg.addrField]) || parcelAddrText(a) || '';
+    let unit = (cfg && cfg.parcelUnitField) ? String(a[cfg.parcelUnitField]==null?'':a[cfg.parcelUnitField]).trim() : '';
+    if(!unit){ try{ unit = searchUnit(String(addr))||''; }catch(e){ unit=''; } }
+    const folio = (cfg && a[cfg.folioField]) || a.FOLIO || a.STRAP || a.PARCELID || a.PARCEL_ID || a.ACCOUNT || null;
+    const owner = (cfg && a[cfg.ownerField]) || a.OWN_NAME || a.OWNER || a.OWNERLINE1 || a.O_NAME || null;
+    const label = String(addr).indexOf(',')>=0 ? String(addr).trim()
+                : [addr, cfg&&a[cfg.cityField], cfg&&a[cfg.zipField]].filter(Boolean).join(', ');
+    out.push({ lat:c[1], lng:c[0], label:label||String(addr), folio:folio||null,
+               owner:owner||null, unit:String(unit||'') });
+  });
+  return out;
+}
+/* Hand the click path's candidates to the picker the search path uses. */
+window.__clickCands=null;
+function openClickUnitPicker(){
+  const cands=window.__clickCands||[];
+  if(cands.filter(c=>c.unit).length<2) return;
+  window.__pcCands = cands.slice(0,300);
+  openUnitPicker((cands[0]&&cands[0].label)||'');
 }
 
 /* ---------- Lot dimensions from parcel geometry (WGS84 rings) ----------
@@ -17540,6 +17606,10 @@ async function runLookup(lat,lng,searchCtx){
           if(!al && pointFeat && (!searchCtx || !searchCtx.hn)){ al={features:[pointFeat]}; }
           if(al && al.features[0]){
             al.__multi=multi; al.__matchedAddr=matchedAddr; al.__exactUnit=exactUnit;
+            // Same as the manual-paste branch: keep every overlapping parcel so a click on a condo
+            // can offer the unit chooser rather than silently settling on one of sixteen.
+            if(multi>1 && pr && pr.features && pr.features.length>1)
+              al.__cands=_candsFromFeatures(pr.features, countyName);
             res=al;
             // LEAN-FEED ADDRESS FILL: if this county's parcel layer carries no site-address field
             // (e.g. Collier), reverse-look-up the address from the county's separate address-point
@@ -17673,6 +17743,9 @@ async function runLookup(lat,lng,searchCtx){
     liveErr = (live && live.__err) ? live.__err : null;
     if(live && live.features && live.features[0]){
       const sel=pickSpecificParcel(live.features);
+      // Keep the full overlapping set so the card can offer a unit chooser instead of only saying
+      // "N parcels share this location" and leaving you with whichever one we guessed.
+      live.__cands=_candsFromFeatures(sel.all||live.features, countyName);
       live.features=[sel.feature]; live.__multi=sel.count;
       liveRes=live; liveMeta=liveSource.info||{};
     }
@@ -18664,7 +18737,14 @@ async function runLookup(lat,lng,searchCtx){
     } else if(searchCtx && searchCtx.unit && !liveRes.__exactUnit){
       html += `<div class="note warnbox">You searched unit <b>${esc(searchCtx.unit)}</b>, but this layer doesn't carry a separate record/geometry for that unit — showing the building/parcel record instead. Verify the specific unit on the appraiser below.</div>`;
     } else if(liveRes.__multi && liveRes.__multi>1){
-      html += `<div class="note">${liveRes.__multi} parcels share this location (condo/multi-unit building). ${liveRes.__matchedAddr?'Matched to <b>'+esc(liveRes.__matchedAddr)+'</b>. ':''}If it's not the unit you meant, verify on the appraiser below.</div>`;
+      /* A map click used to stop at this sentence: it told you sixteen parcels overlap and left you
+         with whichever one we picked. The candidates are right here, and the unit picker the search
+         path uses takes exactly this shape — so offer it instead of only reporting the problem. */
+      const _uc=(liveRes.__cands||[]).filter(c=>c.unit);
+      if(_uc.length>1) window.__clickCands=liveRes.__cands;
+      html += `<div class="note">${liveRes.__multi} parcels share this location (condo/multi-unit building). ${liveRes.__matchedAddr?'Matched to <b>'+esc(liveRes.__matchedAddr)+'</b>. ':''}If it's not the unit you meant, verify on the appraiser below.`
+        + (_uc.length>1 ? `<div><button type="button" class="unitcta noprint" onclick="openClickUnitPicker()">${_uc.length} units here — choose one</button></div>` : '')
+        + `</div>`;
     }
     { const lpid = det.pid?pick(liveRes.features[0].attributes,det.pid):null;
       const vurl = appraiserParcelLink(countyName, lpid);
@@ -20590,7 +20670,21 @@ function openUnitPicker(basisText){
   const el=document.getElementById('unitModal');
   const cands=window.__pcCands||[];
   if(!el || !cands.length) return;
-  const addrLine = (cands[0].label||basisText||'').split(',')[0].trim();
+  /* Name the BUILDING, not whichever unit happened to sort first. cands[0].label is one specific
+     unit ("5126 CORONADO PKWY 3G, CAPE CORAL, 33904"), so taking it verbatim produced the
+     self-contradicting heading "5126 CORONADO PKWY 3G has 16 units". Strip that candidate's own
+     unit token off the end — exact, no guessing — and fall back to the typed basis if that empties. */
+  let addrLine = (cands[0].label||basisText||'').split(',')[0].trim();
+  { const u=String(cands[0].unit||'').trim();
+    if(u){
+      /* (^|\s+) not \s+ — on a lean layer the address field can hold ONLY the unit ("2A"), and a
+         rule that demands whitespace in front of it strips nothing, leaving the heading as
+         "2A has 2 units". Still anchored at $, so "3G Terrace Lane" is untouched. */
+      const re=new RegExp('(^|\\s+)'+u.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*$','i');
+      addrLine = addrLine.replace(re,'').trim();
+    }
+    if(!addrLine) addrLine = String(basisText||'').split(',')[0].trim();
+  }
   const cells = cands.map((c,i)=> c.unit ? {i, c} : null).filter(Boolean);
   if(cells.length<2) return;
   el.innerHTML =
@@ -20789,7 +20883,10 @@ async function doSearch(){
         await runLookup(pr.lat, pr.lng, _ctx);
         if(stale()) return;
         const fol = pr.folio ? ` · Folio ${esc(pr.folio)}` : '';
-        const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(pr.src)}): <b style="color:var(--ink)">${esc(pr.label)}</b>${fol} — authoritative county parcel; confirm the marker is on the right lot.</div>`;
+        /* Authoritative folio match — the strongest result the tool can produce. Say what it
+           matched and stop there; demanding "confirm the marker" here is what made every single
+           Cape Coral search look like a problem. The uncertain variants below keep that wording. */
+        const conf = `<div class="note matchok noprint" style="padding:2px 2px 4px"><span class="okmark">✓</span>Matched (${esc(pr.src)}): <b>${esc(pr.label)}</b>${fol} — matched by folio in the county's own records.</div>`;
         results.insertAdjacentHTML('afterbegin',conf);
         return;
       }
