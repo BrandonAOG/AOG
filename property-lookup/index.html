@@ -451,6 +451,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .trk-badge:hover span{ transform:scale(1.15); }
   /* Small section label so each key in the panel says what it belongs to — without these, the
      colour ramp sat under the D/S/H/M letters and read as part of them. */
+  /* Advisory stamp that has outlived its 6-hourly cycle — nothing new has arrived */
+  .wx-legend .wx-stale{color:var(--warn);opacity:1}
   .wx-legend .wx-leglbl{font-family:var(--mono);font-size:8px;letter-spacing:.07em;text-transform:uppercase;
     color:var(--faint);margin:6px 0 1px;padding-top:3px;border-top:1px solid var(--line);opacity:.9}
   .wx-legend .wx-title + .wx-leglbl, .wx-legend .wx-chips + .wx-leglbl{border-top:none;padding-top:0}
@@ -523,6 +525,9 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .wx-cone-float .ct-row span{font-family:var(--mono);color:var(--dim);white-space:nowrap}
   .wx-cone-float .ct-desc{font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:normal;line-height:1.4;margin-top:1px}
   .wx-cone-float .ct-when{color:var(--faint);font-size:9.5px;font-family:var(--mono);margin-top:5px}
+  /* Distance readout: "not published" must not read like a measurement, "you are inside" must. */
+  .wx-cone-float .ct-row .ct-na{font-family:var(--mono);color:var(--faint);font-style:italic;white-space:nowrap}
+  .wx-cone-float .ct-row .ct-in{font-family:var(--mono);color:var(--warn,#e2542c);font-weight:700;white-space:nowrap}
   /* Combined storm card: divider between folded sections (cone / wind / surge) */
   .wx-cone-float .ct-merge-div{height:1px;background:var(--signal2);opacity:.28;margin:7px 0}
   .wx-cone-float .ct-merge-sec{display:block}
@@ -7435,6 +7440,15 @@ if(btnRadar) btnRadar.onclick=function(){
    (ArcGIS, GeoJSON). Layer 7 = Forecast Cone, 6 = Forecast Track, 5 = Forecast Points.
    If no system is active, the service simply returns zero features and nothing draws. */
 const NHC_BASE='https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather_summary/MapServer';
+/* Every NHC request went out on an identical URL, so a browser or CDN cache could keep handing back
+   the previous advisory package long after the 15-minute refresh fired — stale data with no way to
+   tell. A coarse 5-minute bucket is appended instead: repeated calls inside one render still share
+   the cache (the three cone layers fetch together), but nothing can be served stale for longer than
+   the bucket. */
+function _nhcFresh(u){
+  if(!u) return u;
+  return u + (u.indexOf('?')>=0?'&':'?') + '_=' + Math.floor(Date.now()/300000);
+}
 const NHC_Q='/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson';
 let coneLayer=null, coneOn=false, coneTimer=null, coneFetchedAt=0, coneCache=null;
 
@@ -7442,7 +7456,8 @@ async function fetchCone(){
   // light-cache for 12 min so toggling on/off doesn't re-hit the service
   if(coneCache && (Date.now()-coneFetchedAt) < 12*60*1000) return coneCache;
   const get=u=>fetch(u).then(r=>r.ok?r.json():null).catch(()=>null);
-  const [cone,track,pts]=await Promise.all([ get(NHC_BASE+'/7'+NHC_Q), get(NHC_BASE+'/6'+NHC_Q), get(NHC_BASE+'/5'+NHC_Q) ]);
+  const [cone,track,pts]=await Promise.all([ get(_nhcFresh(NHC_BASE+'/7'+NHC_Q)),
+    get(_nhcFresh(NHC_BASE+'/6'+NHC_Q)), get(_nhcFresh(NHC_BASE+'/5'+NHC_Q)) ]);
   coneCache=filterAtlantic({cone,track,pts}); coneFetchedAt=Date.now(); return coneCache;
 }
 function coneStormCount(data){ return (data && data.cone && data.cone.features) ? data.cone.features.length : 0; }
@@ -7615,7 +7630,9 @@ function renderStormPick(data){
   let h='';
   list.forEach(s=>{
     const bg=_stormBadge(s.props||{}), st=pointStats(s.props||{});
-    const meta=[st.windMph!=null?st.windMph+' mph':null, s.bin].filter(Boolean).join(' · ');
+    // AL04 is the storm's real designation; AT4 is only this service's display slot.
+    const meta=[st.windMph!=null?st.windMph+' mph':null,
+                _stormDesignation(s.props)||s.bin].filter(Boolean).join(' · ');
     h+=`<button data-bin="${esc(s.bin)}" class="sp-row${stormSel===s.bin?' active':''}"`
      + ` title="${esc(String(bg.title))}">`
      + `<i class="sp-dot" style="background:${bg.color};color:${bg.ink}">${bg.letter}</i>`
@@ -7692,6 +7709,20 @@ function nhcPick(props, names){
   return undefined;
 }
 const KT_TO_MPH=1.15078;
+const _COMPASS16=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+function _compass16(deg){ const d=parseFloat(deg);
+  return isFinite(d) ? _COMPASS16[Math.round(((d%360)+360)%360/22.5)%16] : null; }
+/* NHC's real designation for the storm — "AL04" — from the GIS filename subset ("al042026") or
+   from basin + stormnum. This is the number people mean by "storm 4"; binnumber (AT4) is only a
+   display slot in the map service and the two agree by coincidence. */
+function _stormDesignation(props){
+  const sub=String(nhcPick(props||{},['idp_subset','IDP_SUBSET'])||'').trim();
+  const m=sub.match(/^([a-z]{2})(\d{2})(\d{4})$/i);
+  if(m) return (m[1]+m[2]).toUpperCase();
+  const basin=String(nhcPick(props||{},['basin','BASIN'])||'').trim().toUpperCase();
+  const num=nhcNum(nhcPick(props||{},['stormnum','STORMNUM']),1,99);
+  return (basin && num!=null) ? basin+String(Math.round(num)).padStart(2,'0') : null;
+}
 function ktToMph(kt){ const n=parseFloat(kt); return isFinite(n)?Math.round(n*KT_TO_MPH):null; }
 function saffirCat(mph){
   if(mph==null) return null;
@@ -7733,6 +7764,11 @@ function _stormBadge(props){
       else if(/\bLOW\b/.test(t))                            ltr='L';
     }
   }
+  /* 2b. ssnum is NHC's own category number — exact where it exists, so it settles H vs M without
+         inferring anything from wind. 0 means "not a hurricane" and decides nothing. */
+  const ss=nhcNum(nhcPick(props,['ssnum','SSNUM']),0,5);
+  if(ss!=null && ss>=3) ltr='M';
+  else if(ss!=null && ss>=1 && ltr!=='M') ltr='H';
   // 3. Nothing published → the wind decides, on the Saffir-Simpson thresholds NHC uses.
   const kt=nhcNum(nhcPick(props,['MAXWIND','maxwind','INTENSITY','WINDSPEED']),0,250);
   if(ltr==null && kt!=null) ltr = kt>=96?'M' : kt>=64?'H' : kt>=34?'S' : 'D';
@@ -7781,26 +7817,86 @@ function pointStats(props){
   const gustKt=nhcNum(nhcPick(props,['GUST','gust','MAXGUST']),0,300);
   const mslp  =nhcNum(nhcPick(props,['MSLP','mslp','PRESSURE','MINPRESS']),800,1100);
   const windMph=ktToMph(windKt), gustMph=ktToMph(gustKt);
+  // ssnum is NHC's own Saffir-Simpson number (0 = not a hurricane, 1-5 = the category).
+  const ssnum=nhcNum(nhcPick(props,['ssnum','SSNUM']),0,5);
   let cat=stormType(props);
   if(!cat || /^[hsdt]$/i.test(String(cat))) cat=saffirCat(windMph)||cat; // expand 1-letter dev codes
+  if(ssnum!=null && ssnum>=1) cat='Category '+Math.round(ssnum);          // exact, not inferred
   const when=nhcPick(props,['FLDATELBL','DATELBL','VALIDTIME','FCSTPRD','TAU']);
-  let moveDir=nhcPick(props,['STORMDIR','MOVEMENTDIR','DIR']);
-  if(moveDir!=null && isFinite(parseFloat(moveDir)) && nhcNum(moveDir,0,360)==null) moveDir=null;
-  const moveSpd=nhcNum(nhcPick(props,['STORMSPD','MOVEMENTSPD','SPEED']),0,120);
-  return {windKt,windMph,gustKt,gustMph,mslp,cat,when,moveDir,moveSpd};
+  /* ⚠️ The motion fields are tcdir / tcspd — degrees and KNOTS. This code used to look for
+     STORMDIR / STORMSPD / MOVEMENTDIR, none of which exist on the service, so the "Moving" row
+     never rendered once. Verified live against NHC's published "W at 24 mph": tcdir 275 = W,
+     tcspd 21 kt = 24.2 mph. The old names are kept as fallbacks for other layers. */
+  const moveDeg=nhcNum(nhcPick(props,['tcdir','TCDIR','STORMDIR','MOVEMENTDIR']),0,360);
+  const moveKt =nhcNum(nhcPick(props,['tcspd','TCSPD','STORMSPD','MOVEMENTSPD']),0,120);
+  const moveMph=(moveKt!=null)?Math.round(moveKt*KT_TO_MPH):null;
+  const moveCompass=(moveDeg!=null)?_compass16(moveDeg):null;
+  const moveTxt=[moveCompass, (moveMph!=null?'at '+moveMph+' mph':null)].filter(Boolean).join(' ')||null;
+  return {windKt,windMph,gustKt,gustMph,mslp,cat,when,ssnum,
+          moveDeg,moveKt,moveMph,moveCompass,moveTxt,
+          moveDir:moveCompass, moveSpd:moveKt};
 }
 function pointPopupHTML(props){
   const s=pointStats(props), rows=[];
   if(s.windMph!=null) rows.push(`<div class="wx-row"><b>Max sustained</b><span>${s.windMph} mph (${Math.round(parseFloat(s.windKt))} kt)</span></div>`);
   if(s.gustMph!=null) rows.push(`<div class="wx-row"><b>Gusts</b><span>${s.gustMph} mph (${Math.round(parseFloat(s.gustKt))} kt)</span></div>`);
   if(s.mslp!=null)    rows.push(`<div class="wx-row"><b>Pressure</b><span>${Math.round(parseFloat(s.mslp))} mb</span></div>`);
-  if(s.moveDir!=null||s.moveSpd!=null) rows.push(`<div class="wx-row"><b>Moving</b><span>${[s.moveDir,(s.moveSpd!=null?s.moveSpd+' kt':'')].filter(Boolean).join(' @ ')}</span></div>`);
+  if(s.moveTxt) rows.push(`<div class="wx-row"><b>Moving</b><span>${esc(s.moveTxt)}</span></div>`);
   const adv=nhcPick(props,['ADVISNUM','ADVNUM']);
   return `<div class="wx-name">${esc(stormName(props))}</div>`
     + (s.cat?`<div style="color:var(--warnbox-ink);font-family:var(--mono);font-size:10px;letter-spacing:.04em;margin:1px 0 5px">${esc(String(s.cat))}</div>`:'')
     + (rows.join('')||'<div class="wx-row"><span>No intensity data on this point.</span></div>')
     + (s.when?`<div class="wx-when">Forecast valid: ${esc(String(s.when))}</div>`:'')
     + (adv?`<div class="wx-when">NHC advisory ${esc(String(adv))}</div>`:'');
+}
+/* ---- Advisory stamp ----
+   NHC's forecast/advisory carries an initial position valid at the previous synoptic hour and is
+   issued about three hours later, so an 11:00 AM advisory legitimately shows an 8:00 AM position.
+   Reading that position time alone makes a current map look hours stale, so the panel states BOTH,
+   plus how long ago the advisory landed — which is the only way to spot a feed that has stopped
+   updating (advisories come every 6 h, so anything past ~7 h means nothing new has arrived). */
+function _advIssued(props){
+  const raw=String(nhcPick(props,['ADVDATE','advdate','ADVISDATE'])||'').trim();
+  const m=raw.match(/^(\d{1,2})(\d{2})\s*(AM|PM)\s+([A-Z]{2,4})/i);
+  return m ? ((+m[1])+':'+m[2]+' '+m[3].toUpperCase()+' '+m[4].toUpperCase()) : (raw||null);
+}
+const _NHC_TZ={AST:-4,EDT:-4,EST:-5,CDT:-5,CST:-6,MDT:-6,MST:-7,PDT:-7,PST:-8,HST:-10,GMT:0,UTC:0};
+/* When NOAA actually published the GIS file behind this feature. idp_filedate / idp_ingestdate are
+   real timestamps carried IN the data (epoch ms via f=json, ISO text via f=geojson), so they beat
+   parsing "1100 AM AST Thu Aug 27 2026" and guessing at a timezone abbreviation — and they measure
+   when the DATA landed, which is the thing that goes stale. Verified live: 1787846560000 =
+   12:02 PM AST, an hour after advisory 1 was issued. */
+function _dataStamp(props){
+  const v=nhcPick(props||{},['idp_filedate','IDP_FILEDATE','idp_ingestdate','IDP_INGESTDATE']);
+  if(v==null) return null;
+  const t=(typeof v==='number')?v:Date.parse(String(v));
+  return (isFinite(t) && t>0) ? t : null;
+}
+// Hours since this data was published; null when neither the file stamp nor the advisory text reads.
+function _advAgeHours(props){
+  const t=_dataStamp(props);
+  if(t!=null){ const a=(Date.now()-t)/3600000; if(a>=-1 && a<=240) return a; }
+  return _advAgeFromText(props);
+}
+function _advAgeFromText(props){
+  const raw=String(nhcPick(props,['ADVDATE','advdate','ADVISDATE'])||'').trim();
+  const m=raw.match(/^(\d{1,2})(\d{2})\s*(AM|PM)\s+([A-Z]{2,4})\s+\w+\s+([A-Za-z]{3,})\s+(\d{1,2})\s+(\d{4})/);
+  if(!m) return null;
+  const off=_NHC_TZ[m[4].toUpperCase()]; if(off==null) return null;
+  let h=(+m[1])%12; if(/pm/i.test(m[3])) h+=12;
+  const mon=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
+    .indexOf(m[5].slice(0,3).toLowerCase());
+  if(mon<0) return null;
+  const age=(Date.now()-Date.UTC(+m[7],mon,+m[6],h-off,+m[2]))/3600000;
+  return (age>=-1 && age<=96) ? age : null;
+}
+// "2026-08-27 8:00 AM Thu AST" → "8:00 AM Thu"
+function _validLabel(props){
+  const raw=String(nhcPick(props,['FLDATELBL','DATELBL','VALIDTIME'])||'').trim();
+  const t=raw.match(/(\d{1,2}:\d{2}\s*(?:AM|PM))/i);
+  if(!t) return null;
+  const d=raw.match(/\b(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\b/i);
+  return t[1].toUpperCase().replace(/\s+/,' ')+(d?' '+d[1]:'');
 }
 // Build the lower-right storm summary from the strongest / first-named forecast point.
 function buildStormSummary(data){
@@ -7824,10 +7920,24 @@ function buildStormSummary(data){
     if(i>0) html+='<hr>';
     html+='<div class="wx-storm">';
     html+=`<div><span class="wx-name">${esc(nm)}</span>${s.cat?`<span class="wx-cat">${esc(String(s.cat))}</span>`:''}</div>`;
+    /* Freshness, stated plainly: which advisory, when NHC issued it, and when its position is for. */
+    { const adv=nhcPick(cur,['ADVISNUM','advisnum','ADVNUM']);
+      const iss=_advIssued(cur), age=_advAgeHours(cur), val=_validLabel(cur);
+      const bits=[];
+      if(adv!=null) bits.push('Advisory '+esc(String(adv)));
+      if(iss) bits.push('issued '+esc(iss));
+      if(bits.length){
+        // Past ~7 h means a scheduled advisory has come and gone without reaching us.
+        const stale=(age!=null && age>7);
+        const agoTxt=(age==null)?'' : (age<1 ? ' · just in' : ' · data '+Math.round(age)+' h old');
+        html+=`<div class="wx-sub${stale?' wx-stale':''}">${bits.join(' · ')}${agoTxt}</div>`;
+      }
+      if(val) html+=`<div class="wx-sub">Position valid ${esc(val)}</div>`;
+    }
     if(s.windMph!=null) html+=`<div class="wx-row"><b>Max wind</b><span>${s.windMph} mph</span></div>`;
     if(s.gustMph!=null) html+=`<div class="wx-row"><b>Gusts</b><span>${s.gustMph} mph</span></div>`;
     if(s.mslp!=null)    html+=`<div class="wx-row"><b>Pressure</b><span>${Math.round(parseFloat(s.mslp))} mb</span></div>`;
-    if(s.moveDir!=null||s.moveSpd!=null) html+=`<div class="wx-row"><b>Moving</b><span>${[s.moveDir,(s.moveSpd!=null?s.moveSpd+' kt':'')].filter(Boolean).join(' @ ')}</span></div>`;
+    if(s.moveTxt) html+=`<div class="wx-row"><b>Moving</b><span>${esc(s.moveTxt)}</span></div>`;
     if(peak!=null && peak!==s.windMph) html+=`<div class="wx-row"><b>Peak forecast</b><span>${peak} mph</span></div>`;
     html+='<div class="wx-sub">Tap any track point for the full forecast at that time.</div>';
     html+='</div>';
@@ -7845,7 +7955,7 @@ function pointTipHTML(props, distMeters){
   if(s.windMph!=null) h+=`<div class="ct-row"><b>Max wind</b><span>${s.windMph} mph</span></div>`;
   if(s.gustMph!=null) h+=`<div class="ct-row"><b>Gusts</b><span>${s.gustMph} mph</span></div>`;
   if(s.mslp!=null)    h+=`<div class="ct-row"><b>Pressure</b><span>${Math.round(parseFloat(s.mslp))} mb</span></div>`;
-  if(s.moveDir!=null||s.moveSpd!=null) h+=`<div class="ct-row"><b>Moving</b><span>${[s.moveDir,(s.moveSpd!=null?s.moveSpd+' kt':'')].filter(Boolean).join(' @ ')}</span></div>`;
+  if(s.moveTxt) h+=`<div class="ct-row"><b>Moving</b><span>${esc(s.moveTxt)}</span></div>`;
   if(s.when) h+=`<div class="ct-when">Forecast valid: ${esc(String(s.when))}</div>`;
   if(distMeters!=null && isFinite(distMeters)) h+=`<div class="ct-when">Nearest forecast point · ~${Math.round(distMeters/1609.34)} mi</div>`;
   return h || '<div class="ct-row"><span>Forecast cone</span></div>';
@@ -7927,7 +8037,7 @@ function setupConeHover(data){
     // When storm sub-layer tips (wind field / surge) are active, the cone info is
     // folded into that single combined card instead — so the standalone cone float
     // stays hidden and we let _renderStormFloat() draw everything together.
-    if(nhcSub.wind.on || nhcSub.surge.on){ el.classList.remove('show'); return; }
+    if(nhcSub.wind.on || nhcSub.surge.on || nhcSub.dist.on){ el.classList.remove('show'); return; }
     const html=_coneTipFor(e.latlng);
     if(!html){ el.classList.remove('show'); return; }
     el.innerHTML=html;
@@ -7968,6 +8078,7 @@ function drawCone(dataAll){
   setupConeHover(data);
   buildStormSummary(data);
   buildScrubData(data);
+  buildDistCenters(data);        // must follow buildScrubData — it falls back to the track's first point
   renderStormControls();
 }
 const btnCone=document.getElementById('btnCone');
@@ -8024,7 +8135,8 @@ const NHC_FOLDER='https://mapservices.weather.noaa.gov/tropical/rest/services/tr
 const NHC_SVCROOT='https://mapservices.weather.noaa.gov/tropical/rest/services/';
 let _nhcCat=null;
 let nhcSub={ wind:{on:false,layer:null}, ww:{on:false,layer:null}, surge:{on:false,layer:null,tiles:null},
-             arr:{on:false,layer:null}, odds:{on:false,layer:null}, past:{on:false,layer:null} };
+             arr:{on:false,layer:null}, odds:{on:false,layer:null}, past:{on:false,layer:null},
+             dist:{on:false,layer:null} };
 let scrubPts=[], scrubMarker=null, scrubTimer=null, scrubIdx=0;
 let windGeoms=[], surgeGeoms=[], inunGeoms=[], _stormSubMoveH=null, _stormSubOutH=null;
 /* Hover state for the three added products:
@@ -8032,6 +8144,10 @@ let windGeoms=[], surgeGeoms=[], inunGeoms=[], _stormSubMoveH=null, _stormSubOut
    oddsGeoms — probability POLYGONS for the selected threshold ({poly, band:'60-70%', pct:70})
    pastGeoms — already-happened wind swath POLYGONS ({poly, t:34|50|64}) */
 let arrGeoms=[], oddsGeoms=[], pastGeoms=[];
+/* Distance readout ("how far is this spot from the storm right now"):
+   distGeoms   — the CURRENT wind field only ({poly, t:34|50|64}), from NHC's "Advisory Wind Field"
+   distCenters — the TAU-0 forecast position(s) ({ll, name}), i.e. where the center is right now */
+let distGeoms=[], distCenters=[];
 let oddsKt=34;                 // selected wind-odds threshold: 34 kt (39 mph) · 50 kt (58) · 64 kt (74)
 let _oddsEmpty={};             // kt → true once NHC is known to publish no band at that threshold
 let _nhcAvail=null, _nhcAvailAt=0;   // which products NOAA is actually publishing (12-min cache)
@@ -8074,6 +8190,14 @@ async function nhcCatalog(){
   cat.pastTrack= _pickLayer(sidx, /^\s*past\s+track\s*$/i) || _pickLayer(sidx, /past\s+track/i, /info/i);
   cat.pastPts  = _pickLayer(sidx, /past\s+points/i);
   cat.pastSwath= _pickLayer(sidx, /past\s+cumulative\s+wind\s+swath/i);
+  /* Two different wind-field layers, and the difference matters for the distance readout:
+       "Advisory Wind Field"  — the extent RIGHT NOW (tau 0, idp_source …_initialradii)
+       "Forecast Wind Radii"  — every forecast hour out to 5 days
+     "How far are the winds from me?" is a question about now, so the readout uses the first and
+     only falls back to the second trimmed to tau 0. Measuring to all the forecast radii would
+     silently answer a different question ("closest they ever get in the next five days"). */
+  cat.windNow  = _pickLayer(sidx, /advisory\s+wind\s+field/i);
+  cat.windFcst = _pickLayer(sidx, /forecast\s+wind\s+radii/i);
   _nhcCat=cat; return cat;
 }
 /* ---- ⚠️ MEASURED BEHAVIOUR OF THIS SERVICE (2026 season, verified against live TS Dolly) ----
@@ -8091,7 +8215,7 @@ async function nhcCatalog(){
 const ATL_WHERE=encodeURIComponent("binnumber LIKE 'AT%'");
 // ArcGIS answers a bad field name with HTTP 200 + {"error":…}; treat that as a failure, not data.
 async function _nhcJson(url){
-  try{ const j=await fetch(url).then(r=>r.ok?r.json():null);
+  try{ const j=await fetch(_nhcFresh(url)).then(r=>r.ok?r.json():null);
     return (j && !j.error) ? j : null; }catch(e){ return null; }
 }
 /* How many Atlantic features does this layer have right now? Tries the basin filter first and
@@ -8203,7 +8327,7 @@ async function nhcAvailability(force){
 // Fetch one layer as Atlantic-filtered GeoJSON.
 async function _nhcGeo(svc, id){
   if(id==null) return null;
-  try{ const j=await fetch(svc+'/'+id+NHC_Q).then(r=>r.ok?r.json():null);
+  try{ const j=await fetch(_nhcFresh(svc+'/'+id+NHC_Q)).then(r=>r.ok?r.json():null);
     if(!j||!j.features) return j;
     return Object.assign({},j,{features:j.features.filter(f=>_geomTouchesAtl(f&&f.geometry))}); }catch(e){ return null; }
 }
@@ -8233,6 +8357,94 @@ async function toggleWind(on){
     L.geoJSON(f,{renderer:canvasRenderer,interactive:false,style:{color:c,weight:1,opacity:.8,fillColor:c,fillOpacity:.13}}).addTo(grp);
     _featPolys(f).forEach(poly=>windGeoms.push({poly,t})); });
   nhcSub.wind.layer=grp.addTo(map);
+  _syncStormSubHover();
+  renderStormControls();
+}
+
+/* ---- Distance from the cursor to the storm -------------------------------------------------
+   NHC publishes no eye-wall radius, so "distance to the eye wall" has no field to read. What it
+   DOES publish is the wind field: the 34/50/64-kt (39/58/74 mph) quadrant radii around the center.
+   So this measures two honest things — distance to the forecast center, and distance to the edge
+   of each wind field that exists in the current advisory. A threshold a weak storm hasn't got
+   says "not published" rather than quietly falling back to a bigger circle. */
+function _segNearest(lng,lat,a,b,k){
+  const ax=a[0]*k, ay=a[1], bx=b[0]*k, by=b[1], px=lng*k, py=lat;
+  const dx=bx-ax, dy=by-ay, l2=dx*dx+dy*dy;
+  let t = l2 ? ((px-ax)*dx+(py-ay)*dy)/l2 : 0;
+  t = t<0?0:(t>1?1:t);
+  return [(ax+t*dx)/k, ay+t*dy];
+}
+/* Closest point on a polygon's boundary, found in a local equirectangular frame (longitude
+   scaled by cos(lat)) so the cheap planar comparison is fair, then measured geodesically ONCE
+   on the winner. Measuring every candidate geodesically would run map.distance a few hundred
+   times per mousemove for no extra accuracy. */
+function _nearestOnPoly(lng,lat,poly){
+  const k=Math.cos(lat*Math.PI/180)||1e-6;
+  let best=null,bd=Infinity;
+  for(const ring of (poly||[])){
+    if(!ring||ring.length<2) continue;
+    for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+      const p=_segNearest(lng,lat,ring[j],ring[i],k);
+      const dx=(p[0]-lng)*k, dy=p[1]-lat, d=dx*dx+dy*dy;
+      if(d<bd){ bd=d; best=p; }
+    }
+  }
+  return best;
+}
+function _distToPolyM(lng,lat,poly){
+  if(_pointInPoly(lng,lat,poly)) return 0;
+  const p=_nearestOnPoly(lng,lat,poly);
+  if(!p) return null;
+  try{ return map.distance(L.latLng(lat,lng), L.latLng(p[1],p[0])); }catch(e){ return null; }
+}
+/* Nearest distance in metres from a point to any wind field at threshold t, or null if NHC
+   published no field at that threshold for this advisory. 0 means the point is inside it. */
+function _distToThreshold(lng,lat,t){
+  let best=null;
+  for(const g of distGeoms){
+    if(g.t!==t) continue;
+    const d=_distToPolyM(lng,lat,g.poly);
+    if(d==null) continue;
+    if(best==null||d<best) best=d;
+    if(best===0) break;
+  }
+  return best;
+}
+// Where the storm center is RIGHT NOW: the tau-0 forecast position of each drawn system.
+function buildDistCenters(data){
+  distCenters=[];
+  ((data&&data.pts&&data.pts.features)||[]).forEach(f=>{
+    const c=f.geometry&&f.geometry.coordinates;
+    if(!c||!isFinite(c[0])||!isFinite(c[1])) return;
+    const t=nhcNum(nhcPick(f.properties,['tau','TAU','FCSTHR','fcsthr']),0,240);
+    if(t!==0) return;
+    distCenters.push({ ll:L.latLng(c[1],c[0]), name:stormName(f.properties), props:f.properties||{} });
+  });
+  /* Some advisories carry no explicit tau-0 row (and the test fixtures for older products don't
+     either) — fall back to the first point on the drawn track, which is the current position. */
+  if(!distCenters.length && scrubPts.length){
+    distCenters.push({ ll:scrubPts[0].ll, name:stormName(scrubPts[0].props), props:scrubPts[0].props });
+  }
+}
+async function toggleDistance(on){
+  nhcSub.dist.on=on;
+  if(!on){ distGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
+  const cat=await nhcCatalog();
+  distGeoms=[];
+  let gj=_fcSel(await _nhcGeo(cat.summary, cat.windNow));
+  let feats=(gj&&gj.features)||[];
+  if(!feats.length){
+    gj=_fcSel(await _nhcGeo(cat.summary, cat.windFcst));
+    feats=((gj&&gj.features)||[]).filter(f=>
+      nhcNum(nhcPick(f.properties,['tau','TAU','FCSTHR','fcsthr']),0,240)===0);
+  }
+  feats.forEach(f=>{
+    const t=nhcNum(nhcPick(f.properties,['radii','RADII','WINDSPEED']),1,300)||_windThreshold(f.properties);
+    if(t) _featPolys(f).forEach(poly=>distGeoms.push({poly,t}));
+  });
+  /* No wind field at all is NOT a failure — the centre distance still works, and that is the
+     number the feature was asked for. Say what's missing and stay on. */
+  if(!distGeoms.length) mapToast('No wind-field radii in this advisory — showing distance to the center only.',3000);
   _syncStormSubHover();
   renderStormControls();
 }
@@ -8308,7 +8520,7 @@ async function toggleSurge(on){
     const collected=[];
     for(const l of cat.sinIdx){
       try{
-        const j=await fetch(cat.surgeInun+'/'+l.id+'/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset='+off+'&geometryPrecision=4&f=geojson').then(r=>r.ok?r.json():null);
+        const j=await fetch(_nhcFresh(cat.surgeInun+'/'+l.id+'/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&maxAllowableOffset='+off+'&geometryPrecision=4&f=geojson')).then(r=>r.ok?r.json():null);
         const feats=((j&&j.features)||[]).filter(f=>_geomTouchesAtl(f&&f.geometry));
         feats.forEach(f=>{ const label=_inunLabel(f.properties, l.name); collected.push({f,label,rank:_inunRank(label)}); });
       }catch(e){}
@@ -8355,7 +8567,13 @@ function _arrOrder(s){
   const d=_DOW.indexOf(m[1].toLowerCase()); if(d<0) return 1e9;
   let h=+m[2]%12; if(/pm/i.test(m[4])) h+=12;
   const today=new Date().getDay();
-  return ((d-today+7)%7)*24 + h + (+(m[3]||0))/60;
+  let order=((d-today+7)%7)*24 + h + (+(m[3]||0))/60;
+  /* NHC's arrival labels only ever span about five days ahead. A weekday that lands FURTHER out
+     than that is really a time that has just passed — read "Thu 8 pm" at 1 am on Friday and the
+     bare (d-today+7)%7 arithmetic calls it six days away. That inverted the colour ramp's ends and
+     could report a time hours in the past as "≈140 h from now". Wrap it back into the past instead. */
+  if(order>120) order-=168;
+  return order;
 }
 /* "Thu 8 pm" → hours from right now, which is the figure people actually reason with.
    Returns null when it can't be trusted: unparseable, already past, or beyond a week (NHC labels
@@ -8879,6 +9097,25 @@ function _renderStormFloat(){
         +`<div class="ct-desc">${esc(best.band)} chance through 5 days</div>`;
     }
   }
+  if(nhcSub.dist.on){
+    const mi=m=>Math.round(m/1609.34);
+    let near=null,nd=Infinity;
+    for(const s of distCenters){ const d=map.distance(_lastStormLL,s.ll); if(d<nd){ nd=d; near=s; } }
+    if(html) html+='<div class="ct-merge-div"></div>';
+    const who=(near&&near.name&&near.name!=='Tropical system')?near.name:null;
+    html+='<div class="ct-name" style="color:#7fe0c4">Distance from here</div>';
+    if(near) html+=`<div class="ct-row"><b>${who?esc(who)+' center':'Storm center'}</b><span>${mi(nd)} mi</span></div>`;
+    [34,50,64].forEach(t=>{
+      const d=_distToThreshold(lng,lat,t);
+      const lbl=(KT_MPH_LBL[t]||t)+'+ mph winds';
+      const val = d==null ? '<span class="ct-na">not published</span>'
+                : d===0   ? '<span class="ct-in">you are inside</span>'
+                          : '<span>'+mi(d)+' mi</span>';
+      html+=`<div class="ct-row"><b style="color:${_windColor(t)}">${lbl}</b>${val}</div>`;
+    });
+    html+='<div class="ct-when">Straight-line distance to the edge of the wind field published with '
+      + 'this advisory. NHC publishes no eye-wall radius.</div>';
+  }
   if(nhcSub.past.on && pastGeoms.length){
     let best=null; for(const p of pastGeoms){ if(_pointInPoly(lng,lat,p.poly) && (best==null||p.t>best)) best=p.t; }
     if(best!=null){
@@ -8903,7 +9140,8 @@ function _renderStormFloat(){
   const cf=document.getElementById('coneFloat'); if(cf) cf.classList.remove('show');
 }
 function _syncStormSubHover(){
-  const want = nhcSub.wind.on || nhcSub.surge.on || nhcSub.arr.on || nhcSub.odds.on || nhcSub.past.on;
+  const want = nhcSub.wind.on || nhcSub.surge.on || nhcSub.arr.on || nhcSub.odds.on || nhcSub.past.on
+            || nhcSub.dist.on;
   if(want && !_stormSubMoveH){
     _stormFloatEl();
     _stormSubMoveH=function(e){
@@ -8927,11 +9165,12 @@ function refreshStormSub(){
   _nhcAvail=null; clearStormProductCache();          // new advisory → re-ask, re-fetch
   if(nhcSub.wind.on) toggleWind(true); if(nhcSub.ww.on) toggleWW(true); if(nhcSub.surge.on) toggleSurge(true);
   if(nhcSub.arr.on) toggleArrival(true); if(nhcSub.odds.on) toggleOdds(true); if(nhcSub.past.on) togglePast(true);
+  if(nhcSub.dist.on) toggleDistance(true);
 }
 function clearStormSub(){
-  ['wind','ww','surge','arr','odds','past'].forEach(k=>{ if(nhcSub[k].layer){ map.removeLayer(nhcSub[k].layer); nhcSub[k].layer=null; } nhcSub[k].on=false; });
+  ['wind','ww','surge','arr','odds','past','dist'].forEach(k=>{ if(nhcSub[k].layer){ map.removeLayer(nhcSub[k].layer); nhcSub[k].layer=null; } nhcSub[k].on=false; });
   if(nhcSub.surge.tiles){ map.removeLayer(nhcSub.surge.tiles); nhcSub.surge.tiles=null; }
-  windGeoms=[]; surgeGeoms=[]; inunGeoms=[]; arrGeoms=[]; oddsGeoms=[]; pastGeoms=[]; _syncStormSubHover();
+  windGeoms=[]; surgeGeoms=[]; inunGeoms=[]; arrGeoms=[]; oddsGeoms=[]; pastGeoms=[]; distGeoms=[]; distCenters=[]; _syncStormSubHover();
   if(scrubMarker){ map.removeLayer(scrubMarker); scrubMarker=null; }
   if(scrubTimer){ clearInterval(scrubTimer); scrubTimer=null; }
   scrubPts=[];
@@ -8981,6 +9220,7 @@ function wireStormControls(){
       else if(k==='arr') toggleArrival(!nhcSub.arr.on).then(done,done);
       else if(k==='odds') toggleOdds(!nhcSub.odds.on).then(done,done);
       else if(k==='past') togglePast(!nhcSub.past.on).then(done,done);
+      else if(k==='dist') toggleDistance(!nhcSub.dist.on).then(done,done);
     };
   });
   // Wind-odds threshold: 39 / 58 / 74 mph. Switching thresholds reloads that one layer.
@@ -9012,6 +9252,7 @@ function renderStormControls(){
     + chip('arr','Arrival time',nhcSub.arr.on)
     + chip('odds','Wind odds',nhcSub.odds.on)
     + chip('past',"Where it's been",nhcSub.past.on)
+    + chip('dist','Distance',nhcSub.dist.on)
     + '</div>';
   // What the letters on the track mean — NHC's own symbols, so it needs saying once.
   h+='<div class="wx-leglbl">Track points</div>'
@@ -9072,6 +9313,14 @@ function renderStormControls(){
       + '<div class="wx-windleg"><span><i style="background:#ffd23f"></i>39+ mph</span>'
       + '<span><i style="background:#ff9500"></i>58+</span><span><i style="background:#ff2d2d"></i>74+</span></div>'
       + '<div class="wx-scrubrd">Winds already delivered · dashed line = past track. Tap a dot for that position.</div>';
+  }
+  if(nhcSub.dist.on){
+    h+='<div class="wx-leglbl">Distance to the storm</div>'
+      + '<div class="wx-windleg"><span><i style="background:#ffd23f"></i>39+ mph</span>'
+      + '<span><i style="background:#ff9500"></i>58+</span><span><i style="background:#ff2d2d"></i>74+</span></div>'
+      + '<div class="wx-scrubrd">Move the cursor anywhere: the card reports miles to the center and to the '
+      + 'edge of each wind field in the current advisory. NHC publishes no eye-wall radius, so the 74+ mph '
+      + 'edge is the closest thing to it. A threshold this storm hasn’t reached reads “not published”.</div>';
   }
   if(nhcSub.wind.on) h+='<div class="wx-leglbl">Wind field now</div><div class="wx-windleg"><span><i style="background:#ffd23f"></i>34kt (TS)</span>'
       +'<span><i style="background:#ff9500"></i>50kt</span><span><i style="background:#ff2d2d"></i>64kt (hurr)</span></div>';
