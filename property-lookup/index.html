@@ -8139,6 +8139,7 @@ let nhcSub={ wind:{on:false,layer:null}, ww:{on:false,layer:null}, surge:{on:fal
              dist:{on:false,layer:null} };
 let scrubPts=[], scrubMarker=null, scrubTimer=null, scrubIdx=0;
 let windGeoms=[], surgeGeoms=[], inunGeoms=[], _stormSubMoveH=null, _stormSubOutH=null;
+let pssGeoms=[];   // Peak Storm Surge Forecast heights ({poly, range:'4-6 ft', color, place, adv, rank, stamp})
 /* Hover state for the three added products:
    arrGeoms  — arrival-time contour LINES ({line:[[lng,lat],…], time:'Thu 8 pm', kind:'likely'|'early'})
    oddsGeoms — probability POLYGONS for the selected threshold ({poly, band:'60-70%', pct:70})
@@ -8165,7 +8166,19 @@ async function nhcCatalog(){
     const svcs=(fj&&fj.services)||[];
     const find=re=>{ const s=svcs.find(s=>re.test(s.name)); return s?(NHC_SVCROOT+s.name+'/'+s.type):null; };
     cat.summary  = find(/summary/i) || NHC_BASE;
-    cat.surgeWW  = find(/surge.*(watch|warn)|(watch|warn).*surge/i) || find(/surge/i);
+    /* ⚠️ NEVER fall back to a bare /surge/ match for the WATCH/WARNING service. The tropical
+       folder also contains NHC_PeakStormSurge (forecast inundation HEIGHTS, "1-2 ft") and
+       StormSurgeRisk (the static Category 1-5 risk maps). Both match /surge/ and NEITHER is an
+       alert product. The old fallback picked PeakStormSurge, and _surgeLabel() — finding no
+       TCWW/SEVERITY field on it — fell through to "Storm surge" and painted forecast height
+       bands in watch/warning colours. Measured 2026-08-28: it was serving 11 Hawaii polygons
+       from Lala advisory 17, 11 days stale. Harmless only because the Atlantic filter dropped
+       them; an Atlantic peak-surge forecast would have rendered as a Storm Surge Warning. */
+    const findNot=(re,no)=>{ const s=svcs.find(s=>re.test(s.name)&&!no.test(s.name));
+                             return s?(NHC_SVCROOT+s.name+'/'+s.type):null; };
+    cat.surgeWW  = findNot(/surge.*(watch|warn)|(watch|warn).*surge/i, /peak|risk/i)
+                || findNot(/surge/i, /peak|risk/i);
+    cat.surgePeak= find(/peak.*surge|surge.*peak/i);
     cat.surgeInun= find(/inundation/i);
   }catch(e){}
   const sidx=await _svcLayers(cat.summary);
@@ -8174,6 +8187,7 @@ async function nhcCatalog(){
                                && !/probabilistic|swath|past/i.test(l.name));
   cat.swwIdx  = cat.surgeWW   ? await _svcLayers(cat.surgeWW)   : [];
   cat.sinIdx  = cat.surgeInun ? await _svcLayers(cat.surgeInun) : [];
+  cat.pssIdx  = cat.surgePeak ? await _svcLayers(cat.surgePeak) : [];
   /* ---- Added products (discovered by NAME, same as everything above, because NOAA renumbers
      these layers between services and between seasons) ----
        "Earliest Reasonable Arrival Time" / "Most Likely Arrival Time" — POLYLINE contours whose
@@ -8317,7 +8331,8 @@ async function nhcAvailability(force){
     (async()=>{
       const lists=[]; (cat.swwIdx||[]).forEach(l=>lists.push({svc:cat.surgeWW,id:l.id}));
       (cat.sinIdx||[]).forEach(l=>lists.push({svc:cat.surgeInun,id:l.id}));
-      if(!lists.length) return !!(cat.surgeWW||cat.surgeInun);   // raster-only service — can't count, allow it
+      (cat.pssIdx||[]).forEach(l=>lists.push({svc:cat.surgePeak,id:l.id}));
+      if(!lists.length) return !!(cat.surgeWW||cat.surgeInun||cat.surgePeak);  // raster-only — can't count, allow it
       return some(lists);
     })()
   ]);
@@ -8477,6 +8492,42 @@ function _surgeColor(props){
   if(/watch/.test(t))   return '#db7ff7';
   return '#b524f7';
 }
+/* ---- Peak Storm Surge Forecast: a HEIGHT product, not an alert ------------------------------
+   NHC_PeakStormSurge gives the forecast peak water height above ground for each stretch of coast
+   ("Honolulu Oahu...1-2 ft"), with NOAA's own swatch colour inside a JSON `popupinfo` string and
+   the source advisory in `folderpath`. We read NOAA's colour so the map matches NHC's published
+   graphic exactly, and we carry the advisory number and file stamp so stale bands announce
+   themselves instead of sitting there looking current. */
+/* Two different numbers out of one range string, and mixing them up gets the colours wrong:
+     _pssRank → the TOP ("6-9 ft" → 9). Used for draw order and for "deepest band wins" on hover.
+     _pssLow  → the BOTTOM ("6-9 ft" → 6). Used for the colour, because NHC's bands are keyed to
+                the lower bound: >1 blue, >3 yellow, >6 orange, >9 red. Keying colour to the top
+                would paint a 1-3 ft band yellow, one step scarier than NOAA draws it. */
+function _pssRank(r){ const m=String(r==null?'':r).match(/(\d+)\s*(?:-\s*(\d+))?/); return m?+(m[2]||m[1]):0; }
+function _pssLow(r){ const m=String(r==null?'':r).match(/(\d+)/); return m?+m[1]:0; }
+function _pssColor(named, range){
+  const C={blue:'#1f9be0', green:'#2da44e', yellow:'#ffd23f', gold:'#ffd23f',
+           orange:'#ff7f11', red:'#d11149', magenta:'#b524f7', purple:'#b524f7'};
+  const n=String(named==null?'':named).trim().toLowerCase();
+  if(C[n]) return C[n];                       // NOAA published a colour — match its own graphic
+  const r=_pssLow(range);
+  return r>=9?'#d11149':r>=6?'#ff7f11':r>=3?'#ffd23f':'#1f9be0';
+}
+function _pssInfo(props){
+  props=props||{};
+  let range=null, color=null;
+  const raw=nhcPick(props,['popupinfo','POPUPINFO','PopupInfo']);
+  if(raw){ try{ const j=(typeof raw==='string')?JSON.parse(raw):raw;
+      range=j.peak_surge_range||j.PEAK_SURGE_RANGE||j.range||null; color=j.color||null; }catch(e){} }
+  const name=String(nhcPick(props,['name','NAME'])||'');
+  // Fall back to the height baked into the feature name ("Kauai...1-2 ft") if popupinfo is absent.
+  if(!range){ const m=name.match(/([<>]?\s*\d+\s*(?:-\s*\d+)?\s*(?:ft|feet))/i); if(m) range=m[1].trim(); }
+  const place=name.replace(/\s*\.\.\..*$/,'').trim()||null;
+  const fp=String(nhcPick(props,['folderpath','FOLDERPATH'])||'');
+  const adv=(fp.match(/adv:\s*0*(\d+)/i)||[])[1]||null;
+  return { range, color:_pssColor(color,range), place, adv,
+           rank:_pssRank(range), stamp:_dataStamp(props) };
+}
 function _surgeLabel(props){
   const t=_normType(nhcPick(props,['TCWW','SEVERITY','prod_type','TYPE','Label','label'])||'');
   if(/warning/.test(t)) return 'Storm Surge Warning';
@@ -8499,8 +8550,8 @@ async function toggleSurge(on){
   if(nhcSub.surge.layer){ map.removeLayer(nhcSub.surge.layer); nhcSub.surge.layer=null; }
   if(nhcSub.surge.tiles){ map.removeLayer(nhcSub.surge.tiles); nhcSub.surge.tiles=null; }
   nhcSub.surge.on=on;
-  if(!on){ surgeGeoms=[]; inunGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
-  const cat=await nhcCatalog(); const grp=L.featureGroup(); let any=false; surgeGeoms=[]; inunGeoms=[];
+  if(!on){ surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
+  const cat=await nhcCatalog(); const grp=L.featureGroup(); let any=false; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[];
   if(cat.surgeWW){
     for(const l of (cat.swwIdx||[])){
       const gj=await _nhcGeo(cat.surgeWW, l.id);
@@ -8509,6 +8560,24 @@ async function toggleSurge(on){
           style:f=>({color:_surgeColor(f.properties),weight:5,opacity:.95,fillColor:_surgeColor(f.properties),fillOpacity:.18})}).addTo(grp); any=true;
         gj.features.forEach(f=>{ const type=_surgeLabel(f.properties); _featPolys(f).forEach(poly=>surgeGeoms.push({poly,type})); });
       }
+    }
+  }
+  /* Peak Storm Surge Forecast — drawn as filled height bands in NOAA's own colours, deliberately
+     unlike the thick watch/warning lines above so the two can never be read as the same thing. */
+  if(cat.surgePeak){
+    for(const l of (cat.pssIdx||[])){
+      if(!/polygon/i.test(l.name)) continue;      // the Points/Lines layers are label anchors
+      const gj=await _nhcGeo(cat.surgePeak, l.id);
+      const rows=((gj&&gj.features)||[]).map(f=>({f, i:_pssInfo(f.properties)})).filter(r=>r.i.range);
+      if(!rows.length) continue;
+      any=true;
+      rows.sort((a,b)=>a.i.rank-b.i.rank);        // shallowest underneath, deepest on top
+      rows.forEach(({f,i})=>{
+        L.geoJSON(f,{renderer:canvasRenderer,interactive:false,
+          style:{color:i.color,weight:1,opacity:.85,fillColor:i.color,fillOpacity:.42}}).addTo(grp);
+        _featPolys(f).forEach(poly=>pssGeoms.push({poly, range:i.range, color:i.color,
+          place:i.place, adv:i.adv, rank:i.rank, stamp:i.stamp}));
+      });
     }
   }
   // Inundation: try to pull the depth polygons as vectors (so hover can report the band &
@@ -8540,7 +8609,8 @@ async function toggleSurge(on){
       {tileSize:512,opacity:.55,minZoom:5,maxZoom:23,maxNativeZoom:19,zIndex:243,attribution:'Surge &copy; NOAA/NHC'});
     tl.addTo(map); nhcSub.surge.tiles=tl; any=true;
   }
-  if(!any){ mapToast('No storm-surge watch/warning or inundation issued right now.',2800); nhcSub.surge.on=false; surgeGeoms=[]; inunGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
+  if(!any){ mapToast('No storm-surge watch/warning, peak-surge forecast or inundation issued right now.',2800);
+    nhcSub.surge.on=false; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
   if(grp.getLayers().length) nhcSub.surge.layer=grp.addTo(map);
   _syncStormSubHover();
   renderStormControls();
@@ -9134,6 +9204,21 @@ function _renderStormFloat(){
     if(lines.length){ if(html) html+='<div class="ct-merge-div"></div>';
       html+='<div class="ct-name" style="color:#b524f7">Storm surge</div>'+lines.map(t=>`<div class="ct-desc">${t}</div>`).join(''); }
   }
+  if(nhcSub.surge.on && pssGeoms.length){
+    // Deepest band wins where NOAA stacks them, same rule as the inundation depths.
+    let best=null; for(const p of pssGeoms){ if(_pointInPoly(lng,lat,p.poly) && (!best||p.rank>best.rank)) best=p; }
+    if(best){
+      if(html) html+='<div class="ct-merge-div"></div>';
+      html+=`<div class="ct-name" style="color:${best.color}">Peak storm surge forecast</div>`
+        + `<div class="ct-row"><b>${best.place?esc(best.place):'This stretch of coast'}</b>`
+        + `<span>${esc(best.range)}</span></div>`
+        + '<div class="ct-desc">Forecast peak water height above ground — a height, not a watch or warning.</div>';
+      const bits=[]; if(best.adv) bits.push('Advisory '+best.adv);
+      if(best.stamp){ const h=(Date.now()-best.stamp)/3600000;
+        bits.push(h>=48?Math.round(h/24)+' days old':Math.round(h)+' h old'); }
+      if(bits.length) html+=`<div class="ct-when">${esc(bits.join(' · '))}</div>`;
+    }
+  }
   if(!html){ el.classList.remove('show'); return; }
   el.innerHTML=html; el.classList.add('show'); if(_lastStormCp) placeFloat(el,_lastStormCp);
   // Combined card owns the cone info now — keep the standalone cone float hidden.
@@ -9170,7 +9255,7 @@ function refreshStormSub(){
 function clearStormSub(){
   ['wind','ww','surge','arr','odds','past','dist'].forEach(k=>{ if(nhcSub[k].layer){ map.removeLayer(nhcSub[k].layer); nhcSub[k].layer=null; } nhcSub[k].on=false; });
   if(nhcSub.surge.tiles){ map.removeLayer(nhcSub.surge.tiles); nhcSub.surge.tiles=null; }
-  windGeoms=[]; surgeGeoms=[]; inunGeoms=[]; arrGeoms=[]; oddsGeoms=[]; pastGeoms=[]; distGeoms=[]; distCenters=[]; _syncStormSubHover();
+  windGeoms=[]; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; arrGeoms=[]; oddsGeoms=[]; pastGeoms=[]; distGeoms=[]; distCenters=[]; _syncStormSubHover();
   if(scrubMarker){ map.removeLayer(scrubMarker); scrubMarker=null; }
   if(scrubTimer){ clearInterval(scrubTimer); scrubTimer=null; }
   scrubPts=[];
@@ -9331,6 +9416,12 @@ function renderStormControls(){
   if(nhcSub.surge.on) h+='<div class="wx-leglbl">Storm surge</div>'
       +'<div class="wx-wwleg"><span><i style="background:#b524f7"></i>Surge Warn</span>'
       +'<span><i style="background:#db7ff7"></i>Surge Watch</span></div>';
+  if(nhcSub.surge.on && pssGeoms.length) h+='<div class="wx-leglbl">Peak surge forecast · feet above ground</div>'
+      +'<div class="wx-wwleg"><span><i style="background:#1f9be0"></i>1–3 ft</span>'
+      +'<span><i style="background:#ffd23f"></i>3–6</span><span><i style="background:#ff7f11"></i>6–9</span>'
+      +'<span><i style="background:#d11149"></i>9+</span></div>'
+      +'<div class="wx-scrubrd">NHC’s forecast peak water height, in NOAA’s own colors. A height forecast, '
+      +'not an alert — the watch and warning bands are the thick lines above. Hover for the range, the advisory it came from, and how old it is.</div>';
   if(nhcSub.surge.on && inunGeoms.length) h+='<div class="wx-wwleg"><span><i style="background:#1f9be0"></i>&gt;1 ft</span>'
       +'<span><i style="background:#ffd23f"></i>&gt;3 ft</span><span><i style="background:#ff7f11"></i>&gt;6 ft</span>'
       +'<span><i style="background:#d11149"></i>&gt;9 ft</span></div>';
