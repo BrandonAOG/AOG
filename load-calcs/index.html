@@ -160,7 +160,7 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .br-note{font-size:11px;color:var(--text3);}
 
 /* ── AHU TABLE ── */
-.ahu-row{display:grid;grid-template-columns:50px 1fr 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center;}
+.ahu-row{display:grid;grid-template-columns:46px 1fr 1fr 46px;gap:6px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center;}
 .ahu-row:last-child{border-bottom:none;}
 .ahu-lbl{font-weight:700;font-size:12px;color:var(--blue);}
 .ahu-row select{border:1px solid var(--border);border-radius:var(--rs);padding:7px 8px;font-family:'Inter',sans-serif;font-size:12px;width:100%;background:#fff;}
@@ -974,6 +974,13 @@ function buildAHU(){
     h+='<div class="ahu-row"><span class="ahu-lbl">AHU '+(i+1)+'</span>'
       +'<select id="cu'+(i+1)+'" onchange="calc()" style="background:#EEF2FF">'+cu+'</select>'
       +'<select id="sh'+(i+1)+'" onchange="calc()" style="background:#FDF4FF">'+sh+'</select>'
+      +'<label title="Tick if this is a HEAT PUMP (the outdoor unit heats the house). '
+      +'NEC 220.82(C)(3) adds the compressor to 65% of the strip heat, because both run together. '
+      +'Leave unticked for straight A/C where the strips are the only heat." '
+      +'style="display:flex;align-items:center;justify-content:center;gap:2px;font-size:10px;'
+      +'font-weight:700;color:var(--blue);cursor:pointer;white-space:nowrap;">'
+      +'<input type="checkbox" id="hp'+(i+1)+'" onchange="calc()" '
+      +'style="width:13px;height:13px;accent-color:var(--blue);cursor:pointer;">HP</label>'
       +'</div>';
   }
   document.getElementById('ahu_rows').innerHTML=h;
@@ -1391,6 +1398,12 @@ function calc(){
   // kills the call for cooling, which stops the condenser too. No air handler =
   // no thermostat = no A/C. Do not "fix" this to zero only one half.
   var totCU=0, totHeatElement=0, totBlower=0, nHeatUnits=0, noBlower=[];
+  // NEC 220.82(C)(3): a HEAT PUMP runs its compressor AND its strip heat at the
+  // same time (defrost, cold mornings), so the compressor is ADDED to 65% of the
+  // supplemental. Straight A/C is different — the compressor is off all winter —
+  // so those stay in the larger-of-the-two comparison. The HP tickbox is the only
+  // way to tell them apart; the CU dropdown is identical for both.
+  var hpCompressor=0, hpSupplement=0, hpAsked=[];
   for(var i=1;i<=MAX_AHU;i++){
     var cuEl_=document.getElementById('cu'+i);
     var shEl_=document.getElementById('sh'+i);
@@ -1403,7 +1416,18 @@ function calc(){
     var heatEl=_shp.element, blowerEl=_shp.blower;
     // Count as a separately controlled electric heating unit only if it has
     // an actual heat element (gas + blower rows carry heatEl = 0).
-    if(heatEl>0) nHeatUnits++;
+    var isHP_=gc('hp'+i);
+    if(isHP_ && heatEl>0 && cuVal>0){   // no compressor selected = not a heat pump
+      // (C)(3) bucket: compressor @ 100% + supplemental @ 65% (flat — the
+      // 65/40 unit count in (C)(4)/(5) is for resistance space heating, not
+      // for heat pump supplemental), so it does NOT count toward nHeatUnits.
+      hpCompressor+=cuVal;
+      hpSupplement+=heatEl;
+    } else {
+      if(heatEl>0) nHeatUnits++;
+      totHeatElement+=heatEl;
+    }
+    if(cuVal>0 && heatEl>0 && !isHP_) hpAsked.push(i);
     // A condenser with no blower VA means heat is set to "None" — but every
     // air handler has a blower and it runs whenever the A/C runs. Flag it
     // rather than inventing a blower size we weren't told.
@@ -1413,20 +1437,28 @@ function calc(){
     var cuOpt_=cuEl_.options[cuEl_.selectedIndex];
     var isMini_=cuOpt_ ? /mini\s*split/i.test(cuOpt_.textContent||'') : false;
     if(cuVal>0 && blowerEl===0 && !isMini_) noBlower.push(i);
-    totHeatElement+=heatEl;
     totBlower+=blowerEl;
   }
-  var totHeat=totHeatElement+totBlower;  // total heat VA (for display)
+  var totHeat=totHeatElement+hpCompressor+hpSupplement+totBlower;  // total heat VA (for display)
   var totCool=totCU+totBlower;            // cooling = CU + blower @ 100%
   var hf=nHeatUnits>=4?0.40:0.65;  // NEC 220.82(C)(5): four or more → 40%
   // Heat demand: heat element × factor + blower @ 100%
-  var heatDem=totHeatElement*hf+totBlower;
+  var heatDem=totHeatElement*hf + hpCompressor + hpSupplement*0.65 + totBlower;
   var s2=Math.max(heatDem,totCool);
   sv('r2_heat',totHeat);sv('r2_cool',totCool);
   sv('r2_hf',(hf*100).toFixed(0)+'%');
   var bw=document.getElementById('r2_blowerwarn');
   if(bw){
-    if(noBlower.length){
+    if(hpAsked.length){
+      // Any AHU with BOTH a condenser and strip heat is ambiguous: heat pump
+      // (compressor adds) or straight A/C (it doesn't). Ask, don't guess.
+      bw.style.display='block';
+      bw.innerHTML='❓ <strong>AHU '+hpAsked.join(', ')+'</strong> ha'+(hpAsked.length>1?'ve':'s')
+        +' a condenser <em>and</em> strip heat. <strong>Is it a heat pump?</strong> '
+        +'If the outdoor unit heats the house, tick <strong>HP</strong> on that row — '
+        +'NEC 220.82(C)(3) adds the compressor to the strip heat because both run at once. '
+        +'If the strips are the only heat (straight A/C), leave it unticked.';
+    } else if(noBlower.length){
       bw.style.display='block';
       bw.innerHTML='⚠️ <strong>AHU '+noBlower.join(', ')+'</strong> ha'+(noBlower.length>1?'ve':'s')
         +' a condenser but <strong>no blower VA counted</strong> — heat is set to "None". '
@@ -1435,8 +1467,9 @@ function calc(){
     } else { bw.style.display='none'; }
   }
   var hfNote=document.getElementById('r2_hfnote');
-  if(hfNote) hfNote.textContent='VA · '+nHeatUnits+' unit'+(nHeatUnits===1?'':'s')
-    +' → 220.82(C)('+(nHeatUnits>=4?'5':'4')+')';
+  if(hfNote) hfNote.textContent = hpCompressor>0
+    ? 'VA · incl. heat-pump compressor @ 100% + suppl. @ 65% — 220.82(C)(3)'
+    : 'VA · '+nHeatUnits+' unit'+(nHeatUnits===1?'':'s')+' → 220.82(C)('+(nHeatUnits>=4?'5':'4')+')';
   sv('r2_heatdem',Math.round(heatDem));
   sv('r2_s2',Math.round(s2));
   var coolGoverns=totCool>=heatDem;
