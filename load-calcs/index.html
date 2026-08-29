@@ -160,25 +160,30 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .br-note{font-size:11px;color:var(--text3);}
 
 /* ── AHU TABLE ── */
-.ahu-row{display:grid;grid-template-columns:46px 1fr 1fr 46px;gap:6px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center;}
+.ahu-row{display:grid;grid-template-columns:58px minmax(0,1fr) minmax(0,1fr) 104px;gap:6px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center;}
 .ahu-row:last-child{border-bottom:none;}
 .ahu-lbl{font-weight:700;font-size:12px;color:var(--blue);}
-.ahu-row select{border:1px solid var(--border);border-radius:var(--rs);padding:7px 8px;font-family:'Inter',sans-serif;font-size:12px;width:100%;background:#fff;}
+.ahu-row select{border:1px solid var(--border);border-radius:var(--rs);padding:7px 8px;font-family:'Inter',sans-serif;font-size:12px;width:100%;max-width:300px;background:#fff;}
 .ahu-row select:focus{outline:none;border-color:var(--blue);}
+.ahu-flags{display:flex;flex-direction:column;gap:4px;align-items:flex-start;justify-content:center;}
 /* Phones: the HP column squeezed the selects to ~98px and truncated the labels
    ("10 kW + 1,6…"). Stack CU over SH so both stay readable; AHU label and HP
    box span both rows. */
 @media(max-width:560px){
-  .ahu-row{grid-template-columns:44px 1fr 44px;gap:5px 6px;}
+  .ahu-row{grid-template-columns:48px minmax(0,1fr) 104px;gap:5px 6px;}
   .ahu-lbl{grid-column:1;grid-row:1/3;align-self:center;}
   .ahu-row select:nth-of-type(1){grid-column:2;grid-row:1;}
   .ahu-row select:nth-of-type(2){grid-column:2;grid-row:2;}
-  .ahu-row label{grid-column:3;grid-row:1/3;align-self:center;}
+  .ahu-row .ahu-flags{grid-column:3;grid-row:1/3;align-self:center;}
 }
 
 /* ── APPLIANCE TABLE ── */
 .appl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 .appl-tbl{width:100%;border-collapse:collapse;min-width:500px;}
+/* The VA dropdown was taking ~460px of a 918px table. Cap it; the Appliance
+   name column absorbs the freed width, which is where long custom names go. */
+.appl-tbl td:nth-child(4) select,
+.appl-tbl td:nth-child(4) input{max-width:280px;}
 .appl-tbl th{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:7px 8px;border-bottom:2px solid var(--border);background:var(--surface2);text-align:left;white-space:nowrap;}
 .appl-tbl td{padding:5px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 .appl-tbl tr:hover td{background:var(--surface2);}
@@ -230,11 +235,13 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
 .cook-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:10px;}
 .cook-item-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
 .cook-item-title{font-weight:600;font-size:13px;}
-.cook-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-@media(max-width:400px){.cook-fields{grid-template-columns:1fr;}}
+.cook-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start;}
+@media(max-width:560px){.cook-fields{grid-template-columns:1fr;}}
 
 /* ── DRYER SECTION ── */
 .dryer-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:10px;}
+/* Cap the VA controls so the card does not stretch them across half the page. */
+.dryer-item select,.dryer-item input[type=number]{max-width:280px;}
 .dryer-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
 
 /* ── POOL ── */
@@ -566,12 +573,13 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       <div class="appl-wrap">
         <table class="appl-tbl">
           <thead><tr>
-            <th style="min-width:100px">Appliance</th>
-            <th style="width:38px;text-align:center">GAS</th>
+            <th style="min-width:100px;width:auto;">Appliance</th>
+            <th style="width:76px;text-align:center">GAS / MGD</th>
             <th style="width:42px;text-align:center">Qty</th>
-            <th style="min-width:140px">VA</th>
+            <th style="min-width:140px;width:290px;">VA</th>
             <th style="width:64px;text-align:center">Volt</th>
             <th style="width:68px;text-align:right">Total VA</th>
+            <th style="width:34px" aria-label="remove"></th>
           </tr></thead>
           <tbody id="appl_rows"></tbody>
         </table>
@@ -591,7 +599,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
     <div class="card-head">
       <span class="step-tag">STEP 4</span>
       <div class="card-title">Electric Clothes Dryers</div>
-      <div class="card-sub">Art. 220.82(B)(3) — 5,000 VA minimum or nameplate · Gas dryers excluded</div>
+      <div class="card-sub">Art. 220.82(B)(3) — nameplate rating · Gas dryers excluded</div>
     </div>
     <div class="card-body">
       <div id="dryer_list"></div>
@@ -632,10 +640,16 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
     <div class="card-head">
       <div class="card-title">Pool Panel Feeder Calculation</div>
       <div class="card-sub">NEC 680 · Largest continuous motor @ 125% (NEC 430.24) · Phase A &amp; B split · Pool VA included in Step 3</div>
-      <label class="chk-row" style="width:100%;margin-bottom:0;margin-top:4px;">
-        <input type="checkbox" id="has_pool" checked onchange="calc()">
-        <span>This home has a pool / pool sub-panel</span>
-      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;margin-top:4px;">
+        <label class="chk-row" style="margin-bottom:0;">
+          <input type="checkbox" id="has_pool" checked onchange="calc()">
+          <span>This home has a pool / pool sub-panel</span>
+        </label>
+        <label class="chk-row" style="margin-bottom:0;" title="Shed the whole pool sub-panel from the generator demand. The feeder below is still sized — it carries the load on utility power.">
+          <input type="checkbox" id="mgd_pool2" onchange="setPoolManaged(this.checked)" style="accent-color:var(--blue);">
+          <span>Whole pool panel is Managed</span>
+        </label>
+      </div>
     </div>
 
     <!-- Inner sub-tabs -->
@@ -667,6 +681,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
             <th style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:6px 8px;border-bottom:2px solid var(--border);text-align:left;">Load Name</th>
             <th style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:6px 8px;border-bottom:2px solid var(--border);text-align:center;width:72px;">Voltage</th>
             <th style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:6px 8px;border-bottom:2px solid var(--border);text-align:right;width:110px;">VA</th>
+            <th style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:6px 8px;border-bottom:2px solid var(--border);text-align:center;width:86px;">Managed</th>
             <th style="width:36px;border-bottom:2px solid var(--border);"></th>
           </tr>
         </thead>
@@ -721,7 +736,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 4</span> Dryers</h3>
-        <p>Add as many dryers as needed. Check Gas to exclude any. Minimum 5,000 VA per unit per NEC. Type a custom VA if nameplate is larger.</p>
+        <p>Add as many dryers as needed. Check Gas to exclude any (250&nbsp;VA of controls counts). Enter the <strong>nameplate rating</strong> — that is what 220.82(B)(3)c asks for. 5,000&nbsp;VA is the common size, not a floor: the 5,000&nbsp;VA minimum in <strong>220.54</strong> belongs to the <em>standard</em> method (Art. 220 Part III), and the optional method in Part IV is an alternative to Part III, not an addition to it. A compact dryer nameplated below 5,000&nbsp;VA counts at its nameplate.</p>
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 5</span> Cooking</h3>
@@ -895,14 +910,13 @@ function sv(id,v){var e=document.getElementById(id);if(!e)return;e.textContent=(
 function fmt(n,dec){if(dec)return n.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});return Math.round(n).toLocaleString('en-US');}
 
 // ══ STATIC DATA ══
-var CU_OPTS=[[0,'— None —'],['managed','Managed — 0 VA'],[1840,'1 ton (1,840)'],[2200,'1.5 ton (2,200)'],[2850,'2 ton (2,850)'],
+var CU_OPTS=[[0,'— None —'],[1840,'1 ton (1,840)'],[2200,'1.5 ton (2,200)'],[2850,'2 ton (2,850)'],
   [3600,'2.5 ton (3,600)'],[4275,'3 ton (4,275)'],[5000,'3.5 ton (5,000)'],[5700,'4 ton (5,700)'],
   [7130,'5 ton (7,130)'],[1295,'Mini Split DP20'],[1887,'Mini Split DP25'],[2047,'Mini Split DP30']];
 // SH_OPTS: [total_VA, heat_element_VA, blower_VA, label]
 // Blower is always at 100%; only heat_element gets the demand factor
 var SH_OPTS=[
   [0,    0,     0,    '— None (0 VA) —'],
-  ['managed', 0, 0, 'Managed — 0 VA'],
   /* Heat-free rows: gas furnace, hydronic coil, or an air handler with no heat
      strips. Electrically identical — zero heat element, blower @ 100%.
      1,200 keeps its original value (was 'GAS + 1,200 blwr') and 1,800 keeps the
@@ -967,7 +981,7 @@ var POOL_HEATER_OPTS=[
 function buildPoolHeaterSel(id, defVA){
   var s='<select id="'+id+'" onchange="calc()" style="border:1px solid var(--border);'
        +'border-radius:var(--rs);padding:5px 6px;font-size:11px;background:#fff;width:100%;">';
-  s+='<option value="0">— None —</option><option value="managed">Managed — 0 VA</option>';
+  s+='<option value="0">— None —</option>';
   for(var i=0;i<POOL_HEATER_OPTS.length;i++){
     var v=POOL_HEATER_OPTS[i][0];
     s+='<option value="'+v+'"'+(v===defVA?' selected':'')+'>'+POOL_HEATER_OPTS[i][1]+'</option>';
@@ -1078,25 +1092,30 @@ function buildAHU(){
     var cu='',sh='';
     for(var j=0;j<CU_OPTS.length;j++){
       var s=(i===0&&CU_OPTS[j][0]===4275)||(i!==0&&CU_OPTS[j][0]===0)?' selected':'';
-      var cuVal=(CU_OPTS[j][0]==='managed')?'managed':CU_OPTS[j][0];
-      cu+='<option value="'+cuVal+'"'+s+'>'+CU_OPTS[j][1]+'</option>';
+      cu+='<option value="'+CU_OPTS[j][0]+'"'+s+'>'+CU_OPTS[j][1]+'</option>';
     }
     for(var j=0;j<SH_OPTS.length;j++){
       var s=(i===0&&SH_OPTS[j][0]===8800)||(i!==0&&SH_OPTS[j][0]===0)?' selected':'';
-      var shVal=(SH_OPTS[j][0]==='managed'||SH_OPTS[j][0]===0)&&SH_OPTS[j][3].indexOf('Managed')>=0?'managed':SH_OPTS[j][0];
-      sh+='<option value="'+shVal+'"'+s+'>'+SH_OPTS[j][3]+'</option>';
+      sh+='<option value="'+SH_OPTS[j][0]+'"'+s+'>'+SH_OPTS[j][3]+'</option>';
     }
     h+='<div class="ahu-row"><span class="ahu-lbl">AHU '+(i+1)+'</span>'
       +'<select id="cu'+(i+1)+'" onchange="calc()" style="background:#EEF2FF">'+cu+'</select>'
       +'<select id="sh'+(i+1)+'" onchange="calc()" style="background:#FDF4FF">'+sh+'</select>'
+      +'<div class="ahu-flags">'
       +'<label title="Tick if this is a HEAT PUMP (the outdoor unit heats the house). '
       +'NEC 220.82(C)(3) adds the compressor to 65% of the strip heat, because both run together. '
       +'Leave unticked for straight A/C where the strips are the only heat." '
-      +'style="display:flex;align-items:center;justify-content:center;gap:2px;font-size:10px;'
+      +'style="display:flex;align-items:center;gap:4px;font-size:10px;'
       +'font-weight:700;color:var(--blue);cursor:pointer;white-space:nowrap;">'
       +'<input type="checkbox" id="hp'+(i+1)+'" onchange="calc()" '
-      +'style="width:13px;height:13px;accent-color:var(--blue);cursor:pointer;">HP</label>'
-      +'</div>';
+      +'style="width:13px;height:13px;accent-color:var(--blue);cursor:pointer;flex:0 0 auto;">Heat Pump</label>'
+      +'<label title="Load-managed: the shed module is on the air handler, so the whole unit '
+      +'(condenser, heat and blower) drops out of the generator demand." '
+      +'style="display:flex;align-items:center;gap:4px;font-size:10px;'
+      +'font-weight:700;color:var(--amber);cursor:pointer;white-space:nowrap;">'
+      +'<input type="checkbox" id="mgd_ahu'+(i+1)+'" onchange="calc()" '
+      +'style="width:13px;height:13px;accent-color:var(--amber);cursor:pointer;flex:0 0 auto;">Managed</label>'
+      +'</div></div>';
   }
   document.getElementById('ahu_rows').innerHTML=h;
 }
@@ -1111,11 +1130,9 @@ function makeVAcell(id, a, customId){
       var s=(mo.hp!=='custom'&&Math.round(va240)===a.va)?' selected':'';
       if(mo.hp==='custom') s=a.va===0?' selected':'';
       sel+='<option value="'+(mo.hp==='custom'?'custom':va240)+'"'+s+'>'+lbl+'</option>';
-      if(i===0) sel+='<option value="managed">Managed — 0 VA</option>';
     }
   } else {
     sel+='<option value="custom">— type custom VA —</option>';
-    sel+='<option value="managed">Managed — 0 VA</option>';
     for(var j=0;j<a.vaOpts.length;j++){
       var s=(a.vaOpts[j]===a.va&&a.vaOpts.indexOf(a.va)===j)?' selected':'';
       var lbl=(a.vaLabels&&a.vaLabels[j])?a.vaLabels[j]
@@ -1143,9 +1160,13 @@ function buildAppl(){
   var h='';
   for(var i=0;i<APPLS.length;i++){
     var a=APPLS[i];
-    var gasCell=a.canGas
-      ?'<label class="gas-cell" style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;"><input type="checkbox" id="gas_'+a.id+'" onchange="calc()" style="accent-color:var(--amber);width:13px;height:13px;">GAS</label>'
-      :'<span style="color:var(--border2);">—</span>';
+    var flagStyle='display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;';
+    var gasCell='<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;">'
+      +(a.canGas
+        ?'<label title="Gas appliance — only the control load counts." style="'+flagStyle+'color:var(--amber);"><input type="checkbox" id="gas_'+a.id+'" onchange="calc()" style="accent-color:var(--amber);width:13px;height:13px;flex:0 0 auto;">Gas</label>'
+        :'')
+      +'<label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="'+flagStyle+'color:var(--blue);"><input type="checkbox" id="mgd_'+a.id+'" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;flex:0 0 auto;">Managed</label>'
+      +'</div>';
     var voltCell='<select class="volt-cell" id="volt_'+a.id+'" onchange="calc()" style="font-size:10px;">'
       +'<option value="120"'+(a.volt==="120"?" selected":"")+'>120V</option>'
       +'<option value="240"'+(a.volt==="240"?" selected":"")+'>240V</option>'
@@ -1158,6 +1179,7 @@ function buildAppl(){
       +"<td>"+vaCell+"</td>"
       +"<td class='volt-cell'>"+voltCell+"</td>"
       +"<td class='tot-cell' id='tot_"+a.id+"'>—</td>"
+      +"<td></td>"
       +"</tr>";
   }
   // Add Load button row — sits directly above the Pool Equip. Panel row
@@ -1166,11 +1188,12 @@ function buildAppl(){
   // Pool panel — read-only, auto-filled from Pool tab (kept last in the list)
   h+='<tr id="row_pool_panel" style="background:var(--blue-lt);">'
     +'<td><span style="font-size:12px;font-weight:600;color:var(--blue);">Pool Equip. Panel</span><br><span style="font-size:10px;color:var(--text3);">← from Pool tab</span></td>'
-    +'<td style="text-align:center;">—</td>'
+    +'<td><label title="Shed the whole pool sub-panel from the generator demand. The pool feeder is still sized on the Pool tab, because it carries the load on utility power." style="display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;white-space:nowrap;"><input type="checkbox" id="mgd_pool" onchange="setPoolManaged(this.checked)" style="accent-color:var(--blue);width:13px;height:13px;flex:0 0 auto;">Managed</label></td>'
     +'<td style="text-align:center;font-size:12px;">1</td>'
     +'<td style="font-size:11px;color:var(--blue);font-style:italic;">Auto-calculated</td>'
     +'<td style="text-align:center;font-size:10px;color:var(--blue);">240V</td>'
     +'<td class="tot-cell" id="tot_pool_panel" style="color:var(--blue);">—</td>'
+    +'<td></td>'
     +'</tr>';
   document.getElementById("appl_rows").innerHTML=h;
 }
@@ -1181,7 +1204,10 @@ function addExtraAppl(){
   var tr=document.createElement("tr");
   tr.id="xrow_"+n;
   tr.innerHTML="<td><input type='text' id='xname_"+n+"' value='Extra Load "+n+"' style='font-size:12px;'></td>"
-    +"<td style='text-align:center;'><label style='display:flex;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;'><input type='checkbox' id='xgas_"+n+"' onchange='calc()' style='accent-color:var(--amber);width:13px;height:13px;'>GAS</label></td>"
+    +"<td><div style='display:flex;flex-direction:column;gap:3px;align-items:flex-start;'>"
+    +"<label title='Gas appliance — only the 100 VA control load counts.' style='display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;white-space:nowrap;'><input type='checkbox' id='xgas_"+n+"' onchange='calc()' style='accent-color:var(--amber);width:13px;height:13px;flex:0 0 auto;'>Gas</label>"
+    +"<label title='Load-managed — excluded from generator demand.' style='display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;white-space:nowrap;'><input type='checkbox' id='xmgd_"+n+"' onchange='calc()' style='accent-color:var(--blue);width:13px;height:13px;flex:0 0 auto;'>Managed</label>"
+    +"</div></td>"
     +"<td><input type='number' id='xqty_"+n+"' value='1' min='0' oninput='calc()' style='text-align:center;width:45px;'></td>"
     +"<td><input type='number' id='xva_"+n+"' value='0' min='0' oninput='calc()' style='width:100%;border:1px solid var(--border);border-radius:4px;padding:5px 7px;font-family:JetBrains Mono,monospace;font-size:12px;text-align:right;'></td>"
     +"<td class='volt-cell'><select id='xvolt_"+n+"' onchange='calc()' style='font-size:10px;'><option value='120'>120V</option><option value='240' selected>240V</option></select></td>"
@@ -1205,21 +1231,25 @@ function addDryer(isGas, va, qty){
     +'<span style="font-weight:700;font-size:13px;">Dryer '+n+'</span>'
     +'<button class="btn btn-remove" onclick="removeDryer('+n+')">Remove</button>'
     +'</div>'
-    +'<label class="chk-row" style="margin-bottom:8px;">'
-    +'<input type="checkbox" id="gas_dry'+n+'" onchange="calc()"'+(isGas?' checked':'')+'>  <span>Gas Dryer (250 VA ctrl)</span></label>'
-    +'<label class="chk-row">'
-    +'<input type="checkbox" id="mgd_dry'+n+'" onchange="calc()">  <span>Managed — 0 VA</span></label>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">'
+    +'<label class="chk-row" style="margin-bottom:0;" title="Gas dryer — only the 250 VA ignition/control load counts.">'
+    +'<input type="checkbox" id="gas_dry'+n+'" onchange="calc()"'+(isGas?' checked':'')+'>  <span>Gas (250 VA)</span></label>'
+    +'<label class="chk-row" style="margin-bottom:0;" title="Load-managed — shed by the management module, excluded from generator demand.">'
+    +'<input type="checkbox" id="mgd_dry'+n+'" onchange="calc()" style="accent-color:var(--amber);">  <span>Managed</span></label>'
+    +'</div>'
     +'<div class="fg fg-2">'
     +'<div class="field"><label>Quantity</label><input type="number" id="qty_dry'+n+'" value="'+(qty||1)+'" min="0" oninput="calc()"></div>'
     +'<div class="field"><label>VA (type or select)</label>'
     +'<select id="sel_dry'+n+'" onchange="drySelChange('+n+')" style="margin-bottom:3px;">'
-    +'<option value="5000"'+((!va||va===5000)?' selected':'')+'>5,000 VA (standard)</option>'
+    +'<option value="3000"'+(va===3000?' selected':'')+'>3,000 VA (compact/apartment)</option>'
+    +'<option value="4000"'+(va===4000?' selected':'')+'>4,000 VA</option>'
+    +'<option value="5000"'+((!va||va===5000)?' selected':'')+'>5,000 VA (typical)</option>'
     +'<option value="5600"'+(va===5600?' selected':'')+'>5,600 VA</option>'
     +'<option value="6000"'+(va===6000?' selected':'')+'>6,000 VA</option>'
     +'<option value="7200"'+(va===7200?' selected':'')+'>7,200 VA</option>'
     +'<option value="custom">— type custom —</option>'
     +'</select>'
-    +'<input type="number" id="va_dry'+n+'" value="'+(va||5000)+'" min="5000" oninput="calc()" style="font-family:\'JetBrains Mono\',monospace;text-align:right;">'
+    +'<input type="number" id="va_dry'+n+'" value="'+(va||5000)+'" min="0" oninput="calc()" style="font-family:\'JetBrains Mono\',monospace;text-align:right;">'
     +'</div></div>';
   d.appendChild(div);
   calc();
@@ -1233,7 +1263,7 @@ function removeDryer(n){var e=document.getElementById('dryer_'+n);if(e)e.remove(
 
 // ── Cooking ──
 var ctCount=0, ovCount=0;
-function addCookItem(type, isGas, va){
+function addCookItem(type, isGas, va, qty){
   var n=(type==='cooktop')?++ctCount:++ovCount;
   var cid=type+'_'+n;
   var container=document.getElementById(type==='cooktop'?'cook_cooktops':'cook_ovens');
@@ -1242,7 +1272,7 @@ function addCookItem(type, isGas, va){
   div.id='ci_'+cid;
   var label=(type==='cooktop'?'Cooktop':'Oven / Range')+' '+n;
   // Build wattage select 5000-12500 in 500 steps + 0 + custom
-  var opts='<option value="0"'+(va===0?' selected':'')+'>None (0 VA)</option><option value="managed">Managed — 0 VA</option>';
+  var opts='<option value="0"'+(va===0?' selected':'')+'>None (0 VA)</option>';
   for(var w=5000;w<=12500;w+=500){
     var s=(va===w)?' selected':'';
     opts+='<option value="'+w+'"'+s+'>'+(w/1000).toFixed(1)+' kW ('+w.toLocaleString()+' VA)</option>';
@@ -1253,8 +1283,16 @@ function addCookItem(type, isGas, va){
     +'<button class="btn btn-remove" onclick="removeCook(\''+cid+'\')">Remove</button>'
     +'</div>'
     +'<div class="cook-fields">'
-    +'<label class="chk-row" style="margin-bottom:0;">'
-    +'<input type="checkbox" id="gas_'+cid+'" onchange="calc()"'+(isGas?' checked':'')+'>  <span>Gas ('+(type==="cooktop"?"150 VA":"500 VA")+' control)</span></label>'
+    +'<div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">'
+    +'<label class="chk-row" style="margin-bottom:0;" title="Gas appliance — only the '+(type==="cooktop"?"150":"500")+' VA control load counts.">'
+    +'<input type="checkbox" id="gas_'+cid+'" onchange="calc()"'+(isGas?' checked':'')+'>  <span>Gas ('+(type==="cooktop"?"150":"500")+' VA)</span></label>'
+    +'<label class="chk-row" style="margin-bottom:0;" title="Load-managed — shed by the management module, excluded from generator demand.">'
+    +'<input type="checkbox" id="mgd_'+cid+'" onchange="calc()" style="accent-color:var(--amber);">  <span>Managed</span></label>'
+    +'</div>'
+    +'<div class="field"><label>Quantity</label>'
+    +'<input type="number" id="qty_'+cid+'" value="'+(qty===undefined?1:qty)+'" min="0" oninput="calc()">'
+    +'</div></div>'
     +'<div class="field">'
     +'<label>Wattage</label>'
     +'<select id="sel_'+cid+'" onchange="cookSelChange(\''+cid+'\')" style="margin-bottom:3px;">'+opts+'</select>'
@@ -1275,6 +1313,18 @@ function cookSelChange(cid){
 function removeCook(cid){var e=document.getElementById('ci_'+cid);if(e)e.remove();calc();}
 
 // ── Pool ──
+// The pool panel can be shed as a whole. Two tickboxes drive it — one beside
+// the Pool Equip. Panel row in Step 3, one beside "this home has a pool" — so a
+// tech can set it from wherever they are. Both go through here.
+// NOTE: managed removes the panel from the GENERATOR demand only. The pool
+// sub-feeder still carries the load on utility power, so the Pool tab's own
+// conductor/breaker sizing is deliberately left alone.
+function setPoolManaged(v){
+  var a=document.getElementById('mgd_pool'), c=document.getElementById('mgd_pool2');
+  if(a) a.checked=v; if(c) c.checked=v;
+  calc();
+}
+
 function buildPool(){
   var container = document.getElementById('pool_rows');
   if(!container) return;
@@ -1285,7 +1335,9 @@ function buildPool(){
     +' <select id="pvolt_spa" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option></select>'
     +' <label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;margin-left:6px;">'
-    +'<input type="checkbox" id="gas_spa" onchange="calc()" style="accent-color:var(--amber);width:13px;height:13px;"> GAS (500VA)</label>'
+    +'<input type="checkbox" id="gas_spa" onchange="calc()" style="accent-color:var(--amber);width:13px;height:13px;"> Gas (500 VA)</label>'
+    +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
+    +'<input type="checkbox" id="mgd_spa" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
     +'<div class="pool-inp" style="display:flex;align-items:center;gap:6px;">'
     +'<select id="qty_spa" onchange="calc()" style="width:55px;border:1px solid var(--border);border-radius:var(--rs);padding:5px 4px;font-size:12px;background:#fff;">'
@@ -1301,7 +1353,9 @@ function buildPool(){
     +' <select id="pvolt_ph35" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option></select>'
     +' <label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;margin-left:6px;">'
-    +'<input type="checkbox" id="gas_ph35" onchange="calc()" style="accent-color:var(--amber);width:13px;height:13px;"> GAS (500VA)</label>'
+    +'<input type="checkbox" id="gas_ph35" onchange="calc()" style="accent-color:var(--amber);width:13px;height:13px;"> Gas (500 VA)</label>'
+    +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
+    +'<input type="checkbox" id="mgd_ph35" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
     +'<div class="pool-inp" style="display:flex;align-items:center;gap:6px;">'
     +'<select id="qty_ph35" onchange="calc()" style="width:55px;border:1px solid var(--border);border-radius:var(--rs);padding:5px 4px;font-size:12px;background:#fff;">'
@@ -1316,7 +1370,9 @@ function buildPool(){
     +' <select id="pvolt_ph5" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option></select>'
     +' <label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;margin-left:6px;">'
-    +'<input type="checkbox" id="gas_ph5" onchange="calc()" style="accent-color:var(--amber);width:13px;height:13px;"> GAS (500VA)</label>'
+    +'<input type="checkbox" id="gas_ph5" onchange="calc()" style="accent-color:var(--amber);width:13px;height:13px;"> Gas (500 VA)</label>'
+    +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
+    +'<input type="checkbox" id="mgd_ph5" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
     +'<div class="pool-inp" style="display:flex;align-items:center;gap:6px;">'
     +'<select id="qty_ph5" onchange="calc()" style="width:55px;border:1px solid var(--border);border-radius:var(--rs);padding:5px 4px;font-size:12px;background:#fff;">'
@@ -1343,6 +1399,8 @@ function buildPool(){
     +' <select id="pvolt_blower" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option><option value="120">120V</option>'
     +'</select>'
+    +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
+    +'<input type="checkbox" id="mgd_blower" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
     +'<div class="pool-inp">'+buildMotorSel("va_blower",1587,"240")+'</div></div>'
     // ── Dynamic sections ──
@@ -1362,6 +1420,8 @@ function addPoolPump(){
     +' <select id="ppvolt_'+n+'" onchange="updateMotorVolt(\'ppva_\'+'+n+',this.value);calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option><option value="120">120V</option>'
     +'</select>'
+    +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
+    +'<input type="checkbox" id="mgd_pp'+n+'" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
     +'<div class="pool-inp" style="display:flex;align-items:center;gap:6px;">'
     +buildMotorSel('ppva_'+n,0,'240')
@@ -1383,6 +1443,8 @@ function addPoolNC(){
     +' <select id="pncvolt_'+n+'" onchange="updateMotorVolt(\'pncva_\'+'+n+',this.value);calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option><option value="120">120V</option>'
     +'</select>'
+    +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
+    +'<input type="checkbox" id="mgd_pnc'+n+'" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
     +'<div class="pool-inp" style="display:flex;align-items:center;gap:6px;">'
     +buildMotorSel('pncva_'+n,0,'240')
@@ -1442,6 +1504,11 @@ function addPoolExtra(){
     +'style="border:1px solid var(--border);border-radius:4px;padding:5px 7px;'
     +'font-family:JetBrains Mono,monospace;font-size:12px;text-align:right;width:100%;">'
     +'</td>'
+    +'<td style="padding:5px 6px;text-align:center;">'
+    +'<label title="Load-managed — shed by the management module, excluded from generator demand." '
+    +'style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;white-space:nowrap;">'
+    +'<input type="checkbox" id="mgd_pex'+n+'" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
+    +'</td>'
     +'<td style="padding:5px 4px;text-align:center;">'
     +'<button class="btn btn-remove" onclick="removePoolExtra('+n+')" style="padding:3px 7px;font-size:11px;">\u2715</button>'
     +'</td>';
@@ -1483,7 +1550,7 @@ function buildMotorSel(id, defVA, volt){
   var onTable=false;
   for(var t=1;t<MOTOR_OPTS.length;t++){ if(Math.round(hpVA(MOTOR_OPTS[t].hp,v))===defVA) onTable=true; }
   var s='<select id="'+id+'" onchange="calc()" style="border:1px solid var(--border);border-radius:var(--rs);padding:5px 6px;font-size:11px;background:#fff;width:100%;">';
-  s+='<option value="0">— None —</option><option value="managed">Managed — 0 VA</option>';
+  s+='<option value="0">— None —</option>';
   if(defVA>0 && !onTable){
     s+='<option value="'+defVA+'" selected>'+defVA.toLocaleString()+' VA nameplate ('+(defVA/v).toFixed(1)+' A)</option>';
   }
@@ -1533,7 +1600,7 @@ function calc(){
     var cuEl_=document.getElementById('cu'+i);
     var shEl_=document.getElementById('sh'+i);
     if(!cuEl_||!shEl_) continue;
-    if(cuEl_.value==='managed'||shEl_.value==='managed') continue;
+    if(gc('mgd_ahu'+i)) continue;   // whole AHU shed — see the note above
     var cuVal=gv('cu'+i);
     var shTotal=gv('sh'+i);
     totCU+=cuVal;
@@ -1621,20 +1688,21 @@ function calc(){
   // Spa: qty × 11,000 VA (fixed), or 500 VA control if gas
   var spaQty_=gv('qty_spa');
   var gasSpa_=gc('gas_spa');
-  var spaVA_=spaQty_*(gasSpa_?500:gv('va_spa'));   // was hardcoded 11000; now follows the dropdown
+  var spaVA_=gc('mgd_spa')?0:spaQty_*(gasSpa_?500:gv('va_spa'));   // was hardcoded 11000; now follows the dropdown
   // Heaters: full HP VA, or 500 VA control if gas
   var gasPh35_=gc('gas_ph35'), gasPh5_=gc('gas_ph5');
-  var h35VA_=gv('qty_ph35')*(gasPh35_?500:gv('va_ph35'));
-  var h5VA_ =gv('qty_ph5')*(gasPh5_?500:gv('va_ph5'));
+  var h35VA_=gc('mgd_ph35')?0:gv('qty_ph35')*(gasPh35_?500:gv('va_ph35'));
+  var h5VA_ =gc('mgd_ph5')?0:gv('qty_ph5')*(gasPh5_?500:gv('va_ph5'));
   var heaterVA_=h35VA_+h5VA_+spaVA_;
   // Blower and lights
-  var blowerVA_=gv('va_blower');
+  var blowerVA_=gc('mgd_blower')?0:gv('va_blower');
   var lightVA_=gv('qty_plight')*300;
   // Dynamic pool pumps (continuous motors)
   // Dynamic pool pumps — track 120V and 240V separately
   var pmVA240_=0, pmVA120_=0;
   for(var n=1;n<=poolPumpCount;n++){
     if(!document.getElementById('ppump_'+n)) continue;
+    if(gc('mgd_pp'+n)) continue;   // managed: off the generator
     var ppV_=parseInt(gs('ppvolt_'+n))||240;
     if(ppV_===120) pmVA120_+=gv('ppva_'+n);
     else           pmVA240_+=gv('ppva_'+n);
@@ -1644,6 +1712,7 @@ function calc(){
   var pncVA240_=0, pncVA120_=0;
   for(var n=1;n<=poolNcCount;n++){
     if(!document.getElementById('pnc_'+n)) continue;
+    if(gc('mgd_pnc'+n)) continue;   // managed: off the generator
     var pncV_=parseInt(gs('pncvolt_'+n))||240;
     if(pncV_===120) pncVA120_+=gv('pncva_'+n);
     else            pncVA240_+=gv('pncva_'+n);
@@ -1653,6 +1722,7 @@ function calc(){
   var pexVA240_=0, pexVA120_=0;
   for(var n=1;n<=poolExtraCount;n++){
     if(!document.getElementById('pex_'+n)) continue;
+    if(gc('mgd_pex'+n)) continue;   // managed: off the generator
     var pexV_=parseInt(gs('pexvolt_'+n))||240;
     if(pexV_===120) pexVA120_+=gv('pexva_'+n);
     else            pexVA240_+=gv('pexva_'+n);
@@ -1687,12 +1757,17 @@ function calc(){
   // Full feeder VA = max leg amps × 240V = (max per-phase VA / 120) × 240
   var poolFdrVA=Math.max(phI_feeder,phJ_feeder)/120*240;  // full 240V feeder VA for Step 3
   var tc_pool=document.getElementById('tot_pool_panel');
-  if(tc_pool) tc_pool.textContent=fmt(Math.round(poolFdrVA));
+  if(tc_pool) tc_pool.textContent=gc('mgd_pool')?'MGD':fmt(Math.round(poolFdrVA));
 
   // ── Step 3 ──
-  var totApp=poolFdrVA, totNeut120=0, zeroVA=[];  // zeroVA: qty set but VA is 0  // pool panel already included
+  // Managed pool panel: excluded from the service demand, but poolFdrVA itself
+  // is untouched so the Pool tab still sizes the sub-feeder and breaker.
+  var poolManaged=gc('mgd_pool');
+  window.AOG_POOLVA=poolFdrVA;
+  var totApp=(poolManaged?0:poolFdrVA), totNeut120=0, zeroVA=[];  // zeroVA: qty set but VA is 0  // pool panel already included
   for(var i=0;i<APPLS.length;i++){
     var a=APPLS[i];
+    if(gc('mgd_'+a.id)){ var tcM=document.getElementById('tot_'+a.id); if(tcM) tcM.textContent='MGD'; continue; }
     var isGas=a.canGas&&gc('gas_'+a.id);
     var va=isGas?0:gv('va_'+a.id);
     var qty=gq('qty_'+a.id);
@@ -1701,7 +1776,7 @@ function calc(){
     var rowTot=isGas?(qty*gasVA):(qty*va);
     // A quantity with no VA contributes nothing and looks perfectly normal on
     // screen. "Managed" and "GAS" are deliberate zeros; anything else is a miss.
-    if(qty>0 && !isGas && va===0 && gs('sel_'+a.id)!=='managed'){
+    if(qty>0 && !isGas && va===0){
       zeroVA.push(document.getElementById('name_'+a.id)?document.getElementById('name_'+a.id).value:a.name);
     }
     totApp+=rowTot;
@@ -1715,6 +1790,7 @@ function calc(){
   // Extra appliance loads
   for(var n=1;n<=extraApplCount;n++){
     if(!document.getElementById('xrow_'+n)) continue;
+    if(gc('xmgd_'+n)){ var xtcM=document.getElementById('xtot_'+n); if(xtcM) xtcM.textContent='MGD'; continue; }
     var xGas=gc('xgas_'+n);
     var xVa=xGas?0:gv('xva_'+n);
     var xQty=gq('xqty_'+n);
@@ -1762,18 +1838,22 @@ function calc(){
   var s5=0;
   for(var n=1;n<=ctCount;n++){
     if(!document.getElementById('ci_cooktop_'+n)) continue;
+    if(gc('mgd_cooktop_'+n)) continue;   // managed: excluded from demand
+    var qct=gq('qty_cooktop_'+n);
     if(gc('gas_cooktop_'+n)){
-      s5+=150;  // gas cooktop: 150 VA ignition/control
+      s5+=qct*150;  // gas cooktop: 150 VA ignition/control each
     } else {
-      s5+=gv('va_cooktop_'+n);
+      s5+=qct*gv('va_cooktop_'+n);
     }
   }
   for(var n=1;n<=ovCount;n++){
     if(!document.getElementById('ci_oven_'+n)) continue;
+    if(gc('mgd_oven_'+n)) continue;   // managed: excluded from demand
+    var qov=gq('qty_oven_'+n);
     if(gc('gas_oven_'+n)){
-      s5+=500;  // gas range/oven: 500 VA ignition/control
+      s5+=qov*500;  // gas range/oven: 500 VA ignition/control each
     } else {
-      s5+=gv('va_oven_'+n);
+      s5+=qov*gv('va_oven_'+n);
     }
   }
   sv('r5_dem',s5);
@@ -2071,7 +2151,7 @@ function aogScheduleSave(){
   },400);
 }
 
-var _aogRestoreIssues=[];
+var _aogRestoreIssues=[], _aogPendingManaged=[];
 // Friendly name for a field id, for the restore warning.
 function aogFieldLabel(id){
   var m=id.match(/^(?:sel|va|qty|volt)_(.+)$/);
@@ -2089,6 +2169,22 @@ function aogSetEl(id, rec){
   if('v' in rec){
     if(el.tagName==='SELECT'){
       var has=Array.prototype.some.call(el.options,function(o){return o.value===rec.v;});
+      if(!has && rec.v==='managed'){
+        // Legacy: Managed used to be a dropdown option in Step 2 and Step 5.
+        // Translate it into the new tickbox rather than losing the state.
+        var mg=null;
+        if(/^(cu|sh)\d+$/.test(id))              mg='mgd_ahu'+id.replace(/\D/g,'');
+        else if(/^sel_(cooktop|oven)_\d+$/.test(id)) mg='mgd_'+id.slice(4);
+        else if(/^sel_/.test(id))                    mg='mgd_'+id.slice(4);   // Step 3 appliances
+        else if(/^va_(spa|ph35|ph5)$/.test(id))      mg='mgd_'+id.slice(3);   // pool heaters
+        else if(id==='va_blower')                    mg='mgd_blower';
+        else if(/^ppva_\d+$/.test(id))               mg='mgd_pp'+id.replace(/\D/g,'');
+        else if(/^pncva_\d+$/.test(id))              mg='mgd_pnc'+id.replace(/\D/g,'');
+        // Defer: the snapshot also carries this checkbox as {c:false}, and in
+        // document order cu1/sh1 come BEFORE mgd_ahu1 — ticking it here would be
+        // overwritten later in the same loop. Apply after all fields are set.
+        if(mg){ _aogPendingManaged.push(mg); return; }
+      }
       if(!has){
         // The saved value no longer exists — a dropdown changed since this job
         // was saved. The old behaviour fabricated an option with the raw value
@@ -2139,11 +2235,17 @@ function aogRestore(){
   try{ data=JSON.parse(raw); }catch(e){ return false; }
   if(!data||!data.fields) return false;
   _aogRestoring=true;
-  _aogRestoreIssues=[];
+  _aogRestoreIssues=[]; _aogPendingManaged=[];
   try{
     aogClearDyn();
     aogRebuildRows(data.rows);
     Object.keys(data.fields).forEach(function(id){ aogSetEl(id,data.fields[id]); });
+    var _pm=document.getElementById('mgd_pool');
+    var _pm2=document.getElementById('mgd_pool2');
+    if(_pm&&_pm2) _pm2.checked=_pm.checked;   // keep the two mirrors in agreement
+    _aogPendingManaged.forEach(function(cbId){
+      var cb=document.getElementById(cbId); if(cb) cb.checked=true;
+    });
   }catch(e){ console.warn('AOG restore error',e); }
   _aogRestoring=false;
   aogShowRestoreIssues();
@@ -2282,9 +2384,11 @@ function buildReportHTML(){
     if(!nameEl || !totEl) return;
     var name = esc(nameEl.value||'');
     // Check if VA select is managed
-    var selEl = tr.querySelector('select');
-    if(selEl && selEl.value==='managed'){
-      managedLines.push({name:name, reason:'Appliance'});
+    var mgdEl = tr.querySelector('input[id^="mgd_"],input[id^="xmgd_"]');
+    if(mgdEl && mgdEl.checked){
+      var vaEl = tr.querySelector('input[id^="va_"],input[id^="xva_"]');
+      var vaN  = vaEl ? (parseInt(vaEl.value,10)||0) : 0;
+      managedLines.push({name:name+(vaN?' — '+vaN.toLocaleString()+' VA':''), reason:'Appliance'});
       return;
     }
     var tot = (totEl.textContent||'').trim();
@@ -2295,8 +2399,12 @@ function buildReportHTML(){
     applLines.push({name:name, tot:tot});
   });
   var pp = document.getElementById('tot_pool_panel');
-  if(pp && pp.textContent && pp.textContent!=='—')
+  if(gc('mgd_pool')){
+    managedLines.push({name:'Pool Equip. Panel'+(window.AOG_POOLVA?' — '+Math.round(AOG_POOLVA).toLocaleString()+' VA':''),
+                       reason:'Pool sub-panel'});
+  } else if(pp && pp.textContent && pp.textContent!=='—'){
     applLines.push({name:'Pool Equip. Panel', tot:pp.textContent.trim()});
+  }
 
   // ── Dryers ──
   var dryerLines = [];
@@ -2324,20 +2432,26 @@ function buildReportHTML(){
     var selck=document.getElementById('sel_cooktop_'+n);
     var gasck=document.getElementById('gas_cooktop_'+n);
     var vael=document.getElementById('va_cooktop_'+n);
-    if(selck&&selck.value==='managed'){ managedLines.push({name:'Cooktop #'+n, reason:'Cooking'}); continue; }
+    var _mc=document.getElementById('mgd_cooktop_'+n);
+    if(_mc&&_mc.checked){ var _v=parseInt(vael&&vael.value)||0;
+      managedLines.push({name:'Cooktop #'+n+(_v?' — '+_v.toLocaleString()+' VA':''), reason:'Cooking'}); continue; }
     var isgas=gasck&&gasck.checked;
-    var val=isgas?150:(parseInt(vael&&vael.value)||0);
-    if(val) cookLines.push({name:'Cooktop '+(isgas?'(gas 150VA)':'electric'), tot:val.toLocaleString()});
+    var q=parseInt((document.getElementById('qty_cooktop_'+n)||{}).value,10); if(isNaN(q)||q<0) q=0;
+    var val=q*(isgas?150:(parseInt(vael&&vael.value)||0));
+    if(val) cookLines.push({name:'Cooktop '+(isgas?'(gas 150VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
   }
   for(var n=1;n<=ovCount;n++){
     var ci=document.getElementById('ci_oven_'+n); if(!ci) continue;
     var selck=document.getElementById('sel_oven_'+n);
     var gasck=document.getElementById('gas_oven_'+n);
     var vael=document.getElementById('va_oven_'+n);
-    if(selck&&selck.value==='managed'){ managedLines.push({name:'Oven/Range #'+n, reason:'Cooking'}); continue; }
+    var _mo=document.getElementById('mgd_oven_'+n);
+    if(_mo&&_mo.checked){ var _v=parseInt(vael&&vael.value)||0;
+      managedLines.push({name:'Oven/Range #'+n+(_v?' — '+_v.toLocaleString()+' VA':''), reason:'Cooking'}); continue; }
     var isgas=gasck&&gasck.checked;
-    var val=isgas?500:(parseInt(vael&&vael.value)||0);
-    if(val) cookLines.push({name:'Oven/Range '+(isgas?'(gas 500VA)':'electric'), tot:val.toLocaleString()});
+    var q=parseInt((document.getElementById('qty_oven_'+n)||{}).value,10); if(isNaN(q)||q<0) q=0;
+    var val=q*(isgas?500:(parseInt(vael&&vael.value)||0));
+    if(val) cookLines.push({name:'Oven/Range '+(isgas?'(gas 500VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
   }
   // Group identical cooking units into one line with ×N and summed VA
   (function(){
@@ -2359,9 +2473,10 @@ function buildReportHTML(){
     var cus=document.getElementById('cu'+i);
     var shs=document.getElementById('sh'+i);
     if(!cus||!shs) continue;
-    var cuManaged=cus.value==='managed', shManaged=shs.value==='managed';
-    if(cuManaged||shManaged){
-      managedLines.push({name:'AHU '+i, reason:'HVAC'+(cuManaged?' CU':'')+(shManaged?' Heat':'')});
+    if(document.getElementById('mgd_ahu'+i) && document.getElementById('mgd_ahu'+i).checked){
+      var _cuv=parseInt(cus.value)||0, _shp=shParts(parseFloat(shs.value)||0);
+      managedLines.push({name:'AHU '+i+(_cuv?' — CU '+_cuv.toLocaleString()+' VA':'')
+        +(_shp.total?' / Heat '+_shp.total.toLocaleString()+' VA':''), reason:'HVAC'});
       continue;
     }
     // Heat VA = element + blower resolved from SH_OPTS, NOT the raw option
@@ -2373,25 +2488,37 @@ function buildReportHTML(){
   // ── Pool Equipment — managed loads ──
   if(typeof poolPumpCount!=='undefined'){
     for(var n=1;n<=poolPumpCount;n++){
-      var ppEl=document.getElementById('ppva_'+n);
-      if(ppEl&&ppEl.value==='managed') managedLines.push({name:'Pool Pump '+n, reason:'Pool Equipment'});
+      if(gc('mgd_pp'+n)){ var _v=gv('ppva_'+n);
+        managedLines.push({name:'Pool Pump '+n+(_v?' — '+_v.toLocaleString()+' VA':''), reason:'Pool Equipment'}); }
     }
   }
   if(typeof poolNcCount!=='undefined'){
     for(var n=1;n<=poolNcCount;n++){
-      var pncEl=document.getElementById('pncva_'+n);
-      if(pncEl&&pncEl.value==='managed'){
-        var pncNameEl=document.getElementById('pncname_'+n);
-        managedLines.push({name:esc(pncNameEl?pncNameEl.value||'NC Load '+n:'NC Load '+n), reason:'Pool Non-Continuous'});
+      if(gc('mgd_pnc'+n)){
+        var pncNameEl=document.getElementById('pncname_'+n), _ncv=gv('pncva_'+n);
+        managedLines.push({name:esc(pncNameEl&&pncNameEl.value?pncNameEl.value:'NC Load '+n)
+                                +(_ncv?' — '+_ncv.toLocaleString()+' VA':''), reason:'Pool Non-Continuous'});
       }
     }
   }
-  var ph35El=document.getElementById('va_ph35');
-  if(ph35El&&ph35El.value==='managed') managedLines.push({name:'Pool Heater 1', reason:'Pool Equipment'});
-  var ph5El=document.getElementById('va_ph5');
-  if(ph5El&&ph5El.value==='managed') managedLines.push({name:'Pool Heater 2', reason:'Pool Equipment'});
-  var blowerEl=document.getElementById('va_blower');
-  if(blowerEl&&blowerEl.value==='managed') managedLines.push({name:'Pool Blower', reason:'Pool Equipment'});
+  [['spa','Spa Heater'],['ph35','Pool Heater 1'],['ph5','Pool Heater 2']].forEach(function(h){
+    if(gc('mgd_'+h[0])){
+      var v=gv('va_'+h[0]);
+      managedLines.push({name:h[1]+(v?' — '+v.toLocaleString()+' VA':''), reason:'Pool Equipment'});
+    }
+  });
+  if(typeof poolExtraCount!=='undefined'){
+    for(var n=1;n<=poolExtraCount;n++){
+      if(!document.getElementById('pex_'+n)) continue;
+      if(gc('mgd_pex'+n)){
+        var pexNameEl=document.getElementById('pexname_'+n), _pxv=gv('pexva_'+n);
+        managedLines.push({name:esc(pexNameEl&&pexNameEl.value?pexNameEl.value:'Load '+n)
+                                +(_pxv?' — '+_pxv.toLocaleString()+' VA':''), reason:'Pool Additional Load'});
+      }
+    }
+  }
+  if(gc('mgd_blower')){ var _bv=gv('va_blower');
+    managedLines.push({name:'Pool Blower'+(_bv?' — '+_bv.toLocaleString()+' VA':''), reason:'Pool Equipment'}); }
 
   // ── Summary values ──
   var s1=tv('r1_tot'), s2=tv('r2_s2')+' '+tv('r2_note');
@@ -2411,26 +2538,26 @@ function buildReportHTML(){
   var poolLines=[];
   if(gc('has_pool')){
     // Spa heater
-    var _spaQty=gv('qty_spa');
+    var _spaQty=gc('mgd_spa')?0:gv('qty_spa');
     if(_spaQty>0){
       var _spaGas=gc('gas_spa');
       var _spaVA=_spaQty*(_spaGas?500:gv('va_spa'));
       poolLines.push({name:'Spa Heater'+(_spaGas?' (gas 500VA ctrl)':'')+(_spaQty>1?' ×'+_spaQty:''), tot:_spaVA.toLocaleString()});
     }
     // 3.5 ton heater
-    if(!(document.getElementById('va_ph35')&&document.getElementById('va_ph35').value==='managed')){
+    if(!gc('mgd_ph35')){
       var _q35=gv('qty_ph35'), _g35=gc('gas_ph35');
       var _v35=_q35*(_g35?500:gv('va_ph35'));
       if(_v35>0) poolLines.push({name:'Pool Heater 1'+(_g35?' (gas 500VA ctrl)':'')+(_q35>1?' ×'+_q35:''), tot:_v35.toLocaleString()});
     }
     // 5 ton heater
-    if(!(document.getElementById('va_ph5')&&document.getElementById('va_ph5').value==='managed')){
+    if(!gc('mgd_ph5')){
       var _q5=gv('qty_ph5'), _g5=gc('gas_ph5');
       var _v5=_q5*(_g5?500:gv('va_ph5'));
       if(_v5>0) poolLines.push({name:'Pool Heater 2'+(_g5?' (gas 500VA ctrl)':'')+(_q5>1?' ×'+_q5:''), tot:_v5.toLocaleString()});
     }
     // Blower
-    if(!(document.getElementById('va_blower')&&document.getElementById('va_blower').value==='managed')){
+    if(!gc('mgd_blower')){
       var _bv=gv('va_blower');
       if(_bv>0) poolLines.push({name:'Blower Motor', tot:_bv.toLocaleString()});
     }
@@ -2441,18 +2568,30 @@ function buildReportHTML(){
     if(typeof poolPumpCount!=='undefined'){
       for(var _n=1;_n<=poolPumpCount;_n++){
         if(!document.getElementById('ppump_'+_n)) continue;
-        var _pe=document.getElementById('ppva_'+_n);
-        if(_pe&&_pe.value==='managed') continue;
+        if(gc('mgd_pp'+_n)) continue;
         var _pv=gv('ppva_'+_n);
         if(_pv>0) poolLines.push({name:'Pool Pump '+_n+' ('+(gs('ppvolt_'+_n)||'240')+'V)', tot:_pv.toLocaleString()});
+      }
+    }
+    // Additional Loads sub-tab — these feed the pool feeder (and therefore Step 3)
+    // but were never listed on the report at all.
+    if(typeof poolExtraCount!=='undefined'){
+      for(var _n=1;_n<=poolExtraCount;_n++){
+        if(!document.getElementById('pex_'+_n)) continue;
+        if(gc('mgd_pex'+_n)) continue;
+        var _xv=gv('pexva_'+_n);
+        if(_xv>0){
+          var _xn=document.getElementById('pexname_'+_n);
+          poolLines.push({name:esc(_xn&&_xn.value?_xn.value:'Load '+_n)+' ('+(gs('pexvolt_'+_n)||'240')+'V)',
+                          tot:_xv.toLocaleString()});
+        }
       }
     }
     // Dynamic non-continuous loads
     if(typeof poolNcCount!=='undefined'){
       for(var _n=1;_n<=poolNcCount;_n++){
         if(!document.getElementById('pnc_'+_n)) continue;
-        var _ne=document.getElementById('pncva_'+_n);
-        if(_ne&&_ne.value==='managed') continue;
+        if(gc('mgd_pnc'+_n)) continue;
         var _nv=gv('pncva_'+_n);
         if(_nv>0){
           var _nmEl=document.getElementById('pncname_'+_n);
