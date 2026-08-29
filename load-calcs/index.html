@@ -519,14 +519,14 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
     <div class="card-head">
       <span class="step-tag">STEP 2</span>
       <div class="card-title">A/C Condensers &amp; Fixed Electric Space Heating</div>
-      <div class="card-sub">Art. 220.82(C) — Blower always @ 100% · Heat element × 65% (1–3 elec. heat units) or 40% (4 or more) · vs CU/HP + Blower @ 100%</div>
+      <div class="card-sub">Art. 220.82(C) — larger of: A/C @ 100% vs heat @ 65% (1–3 elec. heat units) or 40% (4 or more). Blower @ 100% both sides.</div>
     </div>
     <div class="card-body" style="padding:8px 14px;">
       <div id="ahu_rows"></div>
       <div class="chips">
-        <div class="chip"><div class="cl">Total Heating VA</div><div class="cv" id="r2_heat">—</div><div class="cu">VA</div></div>
-        <div class="chip"><div class="cl">Total Cooling VA</div><div class="cv" id="r2_cool">—</div><div class="cu">VA</div></div>
-        <div class="chip"><div class="cl">Demand Factor</div><div class="cv" id="r2_hf">65%</div><div class="cu" id="r2_hfnote">applied to heat</div></div>
+        <div class="chip"><div class="cl">Heat Connected</div><div class="cv" id="r2_heat">—</div><div class="cu">VA nameplate</div></div>
+        <div class="chip am"><div class="cl">Heat @ <span id="r2_hf">65%</span></div><div class="cv" id="r2_heatdem">—</div><div class="cu" id="r2_hfnote">—</div></div>
+        <div class="chip am"><div class="cl">A/C @ 100%</div><div class="cv" id="r2_cool">—</div><div class="cu">VA</div></div>
         <div class="chip hl"><div class="cl">Step 2 Load</div><div class="cv" id="r2_s2">—</div><div class="cu" id="r2_note">—</div></div>
       </div>
     </div>
@@ -895,6 +895,10 @@ var SH_OPTS=[
   [1200, 0,     1200, 'GAS + 1,200 blwr'],
   [1800, 500,   1800, '0.5 kW + 1,800 blwr']
 ];
+
+// Step 2 comparison detail, populated by calc(), consumed by buildReportHTML().
+var AOG_STEP2={element:0,blower:0,connected:0,units:0,hf:0.65,heatCandidate:0,
+               cu:0,coolCandidate:0,applied:0,coolGoverns:true};
 
 // Resolve an SH (supplemental heat) dropdown value into its parts.
 // IMPORTANT: SH_OPTS[k][0] is only the option value / lookup key — it is NOT
@@ -1404,10 +1408,24 @@ function calc(){
   sv('r2_heat',totHeat);sv('r2_cool',totCool);
   sv('r2_hf',(hf*100).toFixed(0)+'%');
   var hfNote=document.getElementById('r2_hfnote');
-  if(hfNote) hfNote.textContent=nHeatUnits+' elec. heat unit'+(nHeatUnits===1?'':'s')
-    +' → '+(nHeatUnits>=4?'40% (220.82(C)(5))':'65% (220.82(C)(4))');
+  if(hfNote) hfNote.textContent='VA · '+nHeatUnits+' unit'+(nHeatUnits===1?'':'s')
+    +' → 220.82(C)('+(nHeatUnits>=4?'5':'4')+')';
+  sv('r2_heatdem',Math.round(heatDem));
   sv('r2_s2',Math.round(s2));
-  document.getElementById('r2_note').textContent=totCool>=heatDem?'A/C + Blower @ 100%':'Heat×'+Math.round(hf*100)+'% + Blower @ 100%';
+  var coolGoverns=totCool>=heatDem;
+  document.getElementById('r2_note').textContent=coolGoverns
+    ? 'A/C governs'
+    : 'Heat governs';
+  // Stash the Step 2 comparison so the printed report can show BOTH candidates.
+  // The per-AHU "Heat" column is nameplate; the number that actually competes
+  // with cooling is the derated one. Showing only the nameplate made it look
+  // like the tool picked the smaller of the two.
+  AOG_STEP2={
+    element:totHeatElement, blower:totBlower, connected:totHeat,
+    units:nHeatUnits, hf:hf, heatCandidate:heatDem,
+    cu:totCU, coolCandidate:totCool,
+    applied:s2, coolGoverns:coolGoverns
+  };
 
   // ── Pool panel total VA (from pool tab) ──
   // Spa: qty × 11,000 VA (fixed), or 500 VA control if gas
@@ -2188,6 +2206,29 @@ function buildReportHTML(){
     return '<tr><td>'+r.name+'</td><td class="r">CU: '+r.cu.toLocaleString()+' VA</td><td class="r">Heat: '+r.sh.toLocaleString()+' VA</td></tr>';
   }).join('');
 
+  // ── Step 2: show BOTH candidates, not just the winner ──
+  // The per-AHU Heat column above is NAMEPLATE. Cooling is taken at 100%
+  // (220.82(C)(1)) while heat is derated, so the number that actually competes
+  // is the derated one. Printing only the nameplate made it look like the tool
+  // picked the smaller of the two. Show the arithmetic for both sides.
+  var S2 = (typeof AOG_STEP2 !== 'undefined') ? AOG_STEP2 : null;
+  var step2Rows = '';
+  if(S2 && S2.connected===0 && S2.cu===0){
+    // No HVAC entered — printing two "0 VA" candidate rows is just noise.
+    step2Rows = '<tr class="tot"><td>Step 2 Applied</td><td class="r" colspan="2">0 VA</td></tr>';
+  } else if(S2){
+    // One line: the two numbers that actually compete, and which won.
+    step2Rows =
+      '<tr class="tot"><td style="white-space:nowrap;">Step 2 Applied</td>'
+      +'<td class="r" colspan="2" style="white-space:normal;">'
+      +Math.round(S2.applied).toLocaleString()+' VA<br>'
+      +'<span style="font-weight:400;color:#666;">A/C @ 100%: '+Math.round(S2.coolCandidate).toLocaleString()
+      +' &middot; heat @ '+Math.round(S2.hf*100)+'%: '+Math.round(S2.heatCandidate).toLocaleString()
+      +'</span></td></tr>';
+  } else {
+    step2Rows = '<tr class="tot"><td>Step 2 Applied</td><td class="r" colspan="2">'+tv('r2_s2')+' VA</td></tr>';
+  }
+
   var html = `
 <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2pt solid #D97706;padding-bottom:6pt;margin-bottom:10pt;">
   <div>
@@ -2211,8 +2252,8 @@ function buildReportHTML(){
     <tr class="tot"><td>Step 1 Total</td><td class="r">${s1} VA</td></tr></table>
 
     <div class="sh">Step 2 — HVAC (added @ 100% after demand factor)</div>
-    <table class="dt"><tr><th>Unit</th><th class="r">CU/HP</th><th class="r">Heat</th></tr>${hvacRows||'<tr><td colspan="3" style="color:#888">No HVAC entered</td></tr>'}
-    <tr class="tot"><td>Step 2 Applied</td><td class="r" colspan="2">${tv('r2_s2')} VA — ${tv('r2_note')}</td></tr></table>
+    <table class="dt"><tr><th>Unit</th><th class="r">CU/HP</th><th class="r">Heat (nameplate)</th></tr>${hvacRows||'<tr><td colspan="3" style="color:#888">No HVAC entered</td></tr>'}
+    ${step2Rows}</table>
 
     <div class="sh">Step 3 — Fixed Appliances</div>
     <table class="dt">${applRows||'<tr><td>None</td><td></td></tr>'}
