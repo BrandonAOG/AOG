@@ -79,9 +79,15 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .jf input:focus{outline:none;border-color:var(--blue);}
 
 /* ── TABS ── */
-.tabs-bar{background:var(--surface);border-bottom:2px solid var(--border);display:flex;justify-content:flex-start;justify-content:safe center;overflow-x:auto;scroll-behavior:smooth;position:sticky;top:44px;z-index:190;scrollbar-width:none;}
+.tabs-bar{background:var(--surface);border-bottom:2px solid var(--border);display:flex;justify-content:flex-start;overflow-x:auto;scroll-behavior:smooth;position:sticky;top:44px;z-index:190;scrollbar-width:none;}
 .tabs-bar::-webkit-scrollbar{display:none;}
 .tab{padding:10px 13px;font-size:9px;font-weight:700;color:var(--text2);border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap;transition:all .15s;margin-bottom:-2px;user-select:none;flex-shrink:0;font-family:'Orbitron',monospace;letter-spacing:1px;text-transform:uppercase;}
+/* Center the tabs when they fit; auto margins collapse to 0 the moment the bar
+   overflows, so nothing is pushed off the left edge and Summary stays reachable.
+   Same trick as .action-bar above — works back to old iOS Safari, unlike
+   `justify-content:safe center`, which needs Safari 16+. */
+.tabs-bar > .tab:first-child{margin-left:auto;}
+.tabs-bar > .tab:last-child{margin-right:auto;}
 .tab:hover{color:var(--text);}
 .tab.active{color:var(--blue);border-bottom-color:var(--blue);}
 
