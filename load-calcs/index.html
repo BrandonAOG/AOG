@@ -531,6 +531,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
         <div class="chip am"><div class="cl">A/C @ 100%</div><div class="cv" id="r2_cool">—</div><div class="cu">VA</div></div>
         <div class="chip hl"><div class="cl">Step 2 Load</div><div class="cv" id="r2_s2">—</div><div class="cu" id="r2_note">—</div></div>
       </div>
+      <div class="hnote" id="r2_blowerwarn" style="display:none;margin-top:10px;"></div>
     </div>
   </div>
 </div>
@@ -686,7 +687,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 2</span> HVAC</h3>
-        <p>Select CU/HP tonnage and supplemental heat for each AHU. The NEC uses the <em>larger</em> of: (a) heat element × its demand factor + blower @ 100%, vs (b) CU/HP load + blower @ 100%. The blower is never derated — always counts at 100%. Gas furnace = select "GAS + blower" so only the blower VA counts.</p>
+        <p>Select CU/HP tonnage and supplemental heat for each AHU. The NEC uses the <em>larger</em> of: (a) heat element × its demand factor + blower @ 100%, vs (b) CU/HP load + blower @ 100%. The blower is never derated — always counts at 100%. Gas furnace, hydronic coil, or an air handler with no heat strips = pick a "Blower only / gas heat" row, so only the blower VA counts and the unit is not counted as electric space heating.</p>
         <p>The heat demand factor follows <strong>NEC 220.82(C)(4) and (C)(5)</strong>: <strong>65%</strong> for <em>fewer than four</em> separately controlled electric space heating units, <strong>40%</strong> for <em>four or more</em>. At exactly four units the 40% factor applies. Only AHUs with an actual electric heat element count toward that total — an AHU set to "GAS + blower," or one with a condenser and no heat strips, is not a heating unit. The Step 2 "Demand Factor" chip shows the live unit count and which subsection is being applied.</p>
         <div class="hnote">Heads up: builds before Aug 2026 used a <code>&gt; 4 units</code> threshold, which applied 65% at exactly four units and oversized the result. Re-run any saved four-unit job on this version.</div>
       </div>
@@ -786,16 +787,6 @@ function getFeederWire(a,isAl){
   // 310.16 — conductor sized for minimum service/OCPD rating
   return wireSize(svcA,isAl?AL75:CU75);
 }
-// Get the table label for display on the summary card only
-function feederTableLabel(){
-  var tbl=gs('feeder_table');
-  if(tbl==='310_12'){
-    var svcA=minSvc(parseFloat(document.getElementById('s_amps').textContent)||0);
-    if(svcA>=100&&svcA<=400) return '(NEC 310.12)';
-    return '(NEC 310.16 — outside 310.12 range)';
-  }
-  return '(NEC 310.16)';
-}
 
 // EGC per NEC Table 250.122 (exact from EGC Sizing sheet)
 // [max OCPD amps, copper, aluminum]
@@ -882,6 +873,20 @@ var CU_OPTS=[[0,'— None —'],['managed','Managed — 0 VA'],[1840,'1 ton (1,8
 var SH_OPTS=[
   [0,    0,     0,    '— None (0 VA) —'],
   ['managed', 0, 0, 'Managed — 0 VA'],
+  /* Heat-free rows: gas furnace, hydronic coil, or an air handler with no heat
+     strips. Electrically identical — zero heat element, blower @ 100%.
+     1,200 keeps its original value (was 'GAS + 1,200 blwr') and 1,800 keeps the
+     value of the retired '0.5 kW + 1,800 blwr' row, so saved jobs still restore.
+     The 0.5 kW element on that old row was phantom load: it made the air handler
+     count as a separately controlled electric heating unit and could tip the
+     house from the 65% to the 40% demand factor. */
+  [800,  0,     800,  'Blower only / gas heat — 800 VA'],
+  [1200, 0,     1200, 'Blower only / gas heat — 1,200 VA'],
+  [1600, 0,     1600, 'Blower only / gas heat — 1,600 VA'],
+  [1800, 0,     1800, 'Blower only / gas heat — 1,800 VA'],
+  [2400, 0,     2400, 'Blower only / gas heat — 2,400 VA'],
+  [3600, 0,     3600, 'Blower only / gas heat — 3,600 VA'],
+  /* Strip-heat kits, small to large */
   [5800, 5000,  800,  '5 kW + 800 blwr = 5,800'],
   [8300, 7500,  800,  '7.5 kW + 800 blwr = 8,300'],
   [8800, 8000,  800,  '8 kW + 800 blwr = 8,800'],
@@ -893,9 +898,7 @@ var SH_OPTS=[
   [23400,21000, 2400, '21 kW + 2,400 blwr = 23,400'],
   [25400,23000, 2400, '23 kW + 2,400 blwr = 25,400'],
   [28600,25000, 3600, '25 kW + 3,600 blwr = 28,600'],
-  [32600,29000, 3600, '29 kW + 3,600 blwr = 32,600'],
-  [1200, 0,     1200, 'GAS + 1,200 blwr'],
-  [1800, 500,   1800, '0.5 kW + 1,800 blwr']
+  [32600,29000, 3600, '29 kW + 3,600 blwr = 32,600']
 ];
 
 // Step 2 comparison detail, populated by calc(), consumed by buildReportHTML().
@@ -1291,8 +1294,7 @@ function showPoolTab(name){
   });
 }
 
-// ── Additional pool loads ──
-var poolExtraCount=0;
+// ── Additional pool loads ── (poolExtraCount declared once, up with the other pool counters)
 function addPoolExtra(){
   var n=++poolExtraCount;
   var tbody=document.getElementById('pool_extra_loads');
@@ -1383,8 +1385,12 @@ function calc(){
   // Blower is always @ 100%, never derated.
   // Cooling: CU/HP load + blower @ 100%
   // Step 2 = MAX(heatDemand, coolDemand)
-  // If either CU or SH on an AHU is Managed, the entire AHU is excluded from demand
-  var totCU=0, totHeatElement=0, totBlower=0, nHeatUnits=0;
+  // If either CU or SH on an AHU is Managed, the ENTIRE AHU drops out — CU,
+  // heat and blower together. This is INTENTIONAL, not a shortcut: the shed
+  // module goes on the air handler, so shedding it kills the thermostat, which
+  // kills the call for cooling, which stops the condenser too. No air handler =
+  // no thermostat = no A/C. Do not "fix" this to zero only one half.
+  var totCU=0, totHeatElement=0, totBlower=0, nHeatUnits=0, noBlower=[];
   for(var i=1;i<=MAX_AHU;i++){
     var cuEl_=document.getElementById('cu'+i);
     var shEl_=document.getElementById('sh'+i);
@@ -1398,6 +1404,15 @@ function calc(){
     // Count as a separately controlled electric heating unit only if it has
     // an actual heat element (gas + blower rows carry heatEl = 0).
     if(heatEl>0) nHeatUnits++;
+    // A condenser with no blower VA means heat is set to "None" — but every
+    // air handler has a blower and it runs whenever the A/C runs. Flag it
+    // rather than inventing a blower size we weren't told.
+    // EXCEPT mini splits: there is no separate air handler, the indoor head's
+    // fan is already inside the unit's nameplate. Matched on the option label
+    // so new mini split models are covered automatically.
+    var cuOpt_=cuEl_.options[cuEl_.selectedIndex];
+    var isMini_=cuOpt_ ? /mini\s*split/i.test(cuOpt_.textContent||'') : false;
+    if(cuVal>0 && blowerEl===0 && !isMini_) noBlower.push(i);
     totHeatElement+=heatEl;
     totBlower+=blowerEl;
   }
@@ -1409,6 +1424,16 @@ function calc(){
   var s2=Math.max(heatDem,totCool);
   sv('r2_heat',totHeat);sv('r2_cool',totCool);
   sv('r2_hf',(hf*100).toFixed(0)+'%');
+  var bw=document.getElementById('r2_blowerwarn');
+  if(bw){
+    if(noBlower.length){
+      bw.style.display='block';
+      bw.innerHTML='⚠️ <strong>AHU '+noBlower.join(', ')+'</strong> ha'+(noBlower.length>1?'ve':'s')
+        +' a condenser but <strong>no blower VA counted</strong> — heat is set to "None". '
+        +'Every air handler has a blower and it runs whenever the A/C runs. Pick a '
+        +'"Blower only / gas heat" row matching the unit so the blower is included.';
+    } else { bw.style.display='none'; }
+  }
   var hfNote=document.getElementById('r2_hfnote');
   if(hfNote) hfNote.textContent='VA · '+nHeatUnits+' unit'+(nHeatUnits===1?'':'s')
     +' → 220.82(C)('+(nHeatUnits>=4?'5':'4')+')';
@@ -1667,8 +1692,9 @@ function calc(){
   sv('s_dem',Math.round(svcDem));
 
   // ── Header live readout (always visible on every tab) ──
-  var hf=document.getElementById('h_fuel'), hg=document.getElementById('h_gen'), hd=document.getElementById('h_dem');
-  if(hf) hf.textContent = fuel==='propane' ? 'LP' : 'NG';
+  // (renamed from hf — collided with the heat demand factor above)
+  var hFuel=document.getElementById('h_fuel'), hg=document.getElementById('h_gen'), hd=document.getElementById('h_dem');
+  if(hFuel) hFuel.textContent = fuel==='propane' ? 'LP' : 'NG';
   if(hg) hg.textContent = gen;
   if(hd) hd.innerHTML = fmt(Math.round(svcDem))+'<span class="hs-u">VA</span>';
   sv('s_amps',amps.toFixed(1));
@@ -1981,6 +2007,14 @@ function iv(id){
   var e=document.getElementById(id);
   return e ? (e.value||'').trim() : '';
 }
+// Escape user-typed text before it goes into the report's innerHTML.
+// A customer named "Smith & Sons" or an appliance renamed "A/C <attic>"
+// otherwise corrupts or silently truncates the printed report.
+function esc(v){
+  return String(v==null?'':v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 function buildReportHTML(){
   try{
@@ -2006,7 +2040,7 @@ function buildReportHTML(){
     var nameEl = tr.querySelector('input[type=text]');
     var totEl  = tr.querySelector('.tot-cell');
     if(!nameEl || !totEl) return;
-    var name = nameEl.value||'';
+    var name = esc(nameEl.value||'');
     // Check if VA select is managed
     var selEl = tr.querySelector('select');
     if(selEl && selEl.value==='managed'){
@@ -2108,7 +2142,7 @@ function buildReportHTML(){
       var pncEl=document.getElementById('pncva_'+n);
       if(pncEl&&pncEl.value==='managed'){
         var pncNameEl=document.getElementById('pncname_'+n);
-        managedLines.push({name:(pncNameEl?pncNameEl.value||'NC Load '+n:'NC Load '+n), reason:'Pool Non-Continuous'});
+        managedLines.push({name:esc(pncNameEl?pncNameEl.value||'NC Load '+n:'NC Load '+n), reason:'Pool Non-Continuous'});
       }
     }
   }
@@ -2182,7 +2216,7 @@ function buildReportHTML(){
         var _nv=gv('pncva_'+_n);
         if(_nv>0){
           var _nmEl=document.getElementById('pncname_'+_n);
-          poolLines.push({name:(_nmEl&&_nmEl.value?_nmEl.value:'Non-continuous Load '+_n), tot:_nv.toLocaleString()});
+          poolLines.push({name:esc(_nmEl&&_nmEl.value?_nmEl.value:'Non-continuous Load '+_n), tot:_nv.toLocaleString()});
         }
       }
     }
@@ -2238,8 +2272,8 @@ function buildReportHTML(){
     <div style="font-size:8pt;color:#555;letter-spacing:1px;margin-top:2pt;">RESIDENTIAL LOAD CALCULATION — NEC 2020 ART. 220.82 OPTIONAL METHOD</div>
   </div>
   <div style="text-align:right;font-size:8pt;color:#333;">
-    <div style="font-weight:700;">${co||'Always On Generators'}</div>
-    <div>${addr}</div><div>${city}</div><div>${phone}</div>
+    <div style="font-weight:700;">${esc(co)||'Always On Generators'}</div>
+    <div>${esc(addr)}</div><div>${esc(city)}</div><div>${esc(phone)}</div>
   </div>
 </div>
 
@@ -2248,9 +2282,9 @@ function buildReportHTML(){
   <!-- Left: load inputs -->
   <div>
     <div class="sh">Step 1 — Lighting &amp; Circuits</div>
-    <table class="dt"><tr><td>General Lighting (${sqftVal||'—'} sq ft × 3VA/ft²)</td><td class="r">${tv('r1_gl')} VA</td></tr>
-    <tr><td>Small Appliance Circuits ×${iv('smapp')||0} (1,500 VA ea.)</td><td class="r">${tv('r1_sa')} VA</td></tr>
-    <tr><td>Laundry Circuits ×${iv('laundry')||0} (1,500 VA ea.)</td><td class="r">${tv('r1_lc')} VA</td></tr>
+    <table class="dt"><tr><td>General Lighting (${esc(sqftVal)||'—'} sq ft × 3VA/ft²)</td><td class="r">${tv('r1_gl')} VA</td></tr>
+    <tr><td>Small Appliance Circuits ×${esc(iv('smapp'))||0} (1,500 VA ea.)</td><td class="r">${tv('r1_sa')} VA</td></tr>
+    <tr><td>Laundry Circuits ×${esc(iv('laundry'))||0} (1,500 VA ea.)</td><td class="r">${tv('r1_lc')} VA</td></tr>
     <tr class="tot"><td>Step 1 Total</td><td class="r">${s1} VA</td></tr></table>
 
     <div class="sh">Step 2 — HVAC (added @ 100% after demand factor)</div>
@@ -2341,70 +2375,6 @@ function reportWrapStyles(){
     +'}';
 }
 
-function printReport(){
-  try{
-  var html = buildReportHTML();
-  if(html===null) return;
-
-  // Detect installed-PWA / standalone mode. window.open() is unreliable there
-  // (the blank _blank page can get stuck if the print dialog is cancelled),
-  // so always use the inline print path inside the current page.
-  var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
-                     || window.navigator.standalone === true
-                     || document.referrer.indexOf('android-app://') === 0;
-
-  function inlinePrint(){
-    var div = document.getElementById('print-report');
-    div.innerHTML = html;
-    document.body.classList.add('printing-report');
-    var cleaned = false;
-    var cleanup = function(){
-      if(cleaned) return;
-      cleaned = true;
-      document.body.classList.remove('printing-report');
-      div.innerHTML = '';
-      window.removeEventListener('afterprint', cleanup);
-    };
-    // Clean up whether the user prints OR cancels/ignores the dialog
-    window.addEventListener('afterprint', cleanup);
-    setTimeout(cleanup, 3000); // safety net so the page can never get stuck
-    window.print();
-  }
-
-  if(isStandalone){
-    inlinePrint();
-    return;
-  }
-
-  // Browser tab: open a separate window for the report
-  var printWin = window.open('', '_blank', 'width=900,height=700');
-  if(!printWin){
-    // Popup blocked — fall back to inline print
-    inlinePrint();
-    return;
-  }
-  // Embed afterprint listener + auto-print inside the new window itself
-  printWin.document.write(
-    '<!DOCTYPE html><html><head>'
-    +'<meta charset="UTF-8">'
-    +'<meta name="viewport" content="width=device-width,initial-scale=1">'
-    +'<title>AOG Load Calculation Report</title>'
-    +'<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Share+Tech+Mono&display=swap" rel="stylesheet">'
-    +'<style>'
-    +reportWrapStyles()
-    +'</style>'
-    +'<script>'
-    +'window.onafterprint=function(){window.close();};'
-    +'window.addEventListener(\'afterprint\',function(){window.close();});'
-    +'window.onload=function(){setTimeout(function(){window.focus();window.print();},400);};'
-    +'<\/script>'
-    +'</head><body>'
-    +html
-    +'</body></html>'
-  );
-  printWin.document.close();
-  } catch(e){ console.error('printReport error:', e); alert('Report error: '+e.message); }
-}
 
 // Load html2canvas on demand (cached after first use)
 function loadHtml2Canvas(){
