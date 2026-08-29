@@ -10930,6 +10930,7 @@ const STREET_DIR=new Set(['N','S','E','W','NE','NW','SE','SW']);
 const STREET_PLACE=new Set(['CAPE','CORAL','FORT','MYERS','NAPLES','BONITA','SPRINGS','ESTERO','SANIBEL',
   'LEE','COLLIER','CHARLOTTE','COUNTY','FLORIDA','FL','UNITED','STATES','USA','BEACH','PORT',
   'CITY','OF','TOWN','VILLAGE','THE']);
+const STREET_SUFDIR=new Set([...STREET_SUF, ...STREET_DIR]);
 const STREET_STOP=new Set([...STREET_SUF, ...STREET_DIR, ...STREET_PLACE]);
 const _ORDINAL=/^\d+(ST|ND|RD|TH)$/;
 /* ⚠️ IN A NUMBERED GRID THE SUFFIX AND DIRECTION *ARE* THE STREET NAME.
@@ -10972,24 +10973,49 @@ function _ordinalStreet(toks){
 function streetSegment(s){
   const str=String(s==null?'':s);
   if(str.indexOf(',')<0) return str;
-  const parts=str.split(',').map(x=>x.trim()).filter(Boolean);
-  if(!parts.length) return str;
+  /* Keep positions — do NOT drop empty parts before picking the first. A leading comma
+     (", Naples, FL") would otherwise promote the CITY into the street slot, and since the segment
+     path deliberately does not strip place words, "Naples" came back as the street name. */
+  const parts=str.split(',').map(x=>x.trim());
+  if(!parts[0]) return str;          // no street part at all — let the word-list path handle it
   let seg=parts[0];
-  if(!/[A-Za-z]/.test(seg) && parts[1]) seg = seg+' '+parts[1];
+  if(!/[A-Za-z]/.test(seg)){         // "652, Bougainvillea Road, …" — OSM files the number alone
+    const next=parts.slice(1).find(Boolean);
+    if(next) seg = seg+' '+next;
+  }
   return seg;
 }
-function _streetCoreFrom(str){
+/* dropPlaces: strip city words (NAPLES, CAPE, CORAL, ESTERO, BEACH…). That list exists for ONE
+   job — pulling a trailing city off an un-delimited query like "9541 Caymas Ter Naples FL". Applied
+   to an isolated street segment it is destructive, because SW Florida names its biggest roads after
+   its towns. Measured against the previous build:
+
+       100 Estero Blvd, Fort Myers Beach   ->  core EMPTY   (ESTERO stripped as a town)
+       100 Beach Rd, Sanibel               ->  core EMPTY
+       3000 Cape Coral Pkwy, Cape Coral    ->  core EMPTY
+       25000 Bonita Beach Rd, Bonita Sprs  ->  core EMPTY
+       9000 Naples Blvd, Naples            ->  core EMPTY
+
+   An empty core means no street token for the WHERE and no street to match on — so the resolver
+   gave up and the search fell to the interpolating geocoder. On 100 Estero Blvd, a tower with a
+   parcel per unit, that meant no unit picker at all. */
+function _streetCoreFrom(str, dropPlaces){
   const toks=streetTokens(str);
   if(_ordinalStreet(toks))
-    return toks.filter(t=>!/^\d+$/.test(t) && !STREET_PLACE.has(t));   // ordinal + suffix + direction
-  return toks.filter(t=>!STREET_STOP.has(t) && !/^\d+$/.test(t));
+    return toks.filter(t=>!/^\d+$/.test(t) && !(dropPlaces && STREET_PLACE.has(t)));
+  const stop = dropPlaces ? STREET_STOP : STREET_SUFDIR;
+  return toks.filter(t=>!stop.has(t) && !/^\d+$/.test(t));
 }
 function streetCore(s){
   const whole=String(s==null?'':s);
   const seg=streetSegment(whole);
-  const core=_streetCoreFrom(seg);
-  if(core.length || seg===whole) return core;
-  return _streetCoreFrom(whole);          // narrowing left nothing — better the old behaviour than none
+  if(seg!==whole){
+    // We isolated a real street segment — everything in it is street, city words included.
+    const core=_streetCoreFrom(seg,false);
+    if(core.length) return core;
+  }
+  // No comma to cut on (or the cut left nothing usable) — fall back to the word list.
+  return _streetCoreFrom(whole,true);
 }
 /* Does a parcel's address sit on the same street the user searched? Requires the distinctive
    street-name token(s) to overlap. Lenient when we can't parse either side (returns true). */
@@ -16461,7 +16487,7 @@ function _nbrSetAddrBox(txt){
 
 function _nbrClickCtx(txt, attrs){
   const raw=String(txt||'').trim();
-  const ctx={ raw, hn:houseNum(raw), toks:new Set(streetTokens(raw)), unit:searchUnit(raw) };
+  const ctx=makeSearchCtx(raw);
   try{
     const folio = attrs ? pick(attrs,'FOLIO','Folio','folio','PARCEL_ID','PARCELID','STRAP','PARCELNO') : null;
     if(folio) ctx.folio=folio;
@@ -20862,7 +20888,7 @@ function _pcPick(i){
     lbl = parts.map(s=>s.trim()).filter(Boolean).join(', ');
   }
   try{ if(lbl){ addrEl.value=lbl; STORE.set('fl_addr',lbl); addToHistory(lbl); } }catch(e){}
-  const ctx = { raw:lbl, hn:houseNum(lbl), toks:new Set(streetTokens(lbl)), unit:searchUnit(lbl) };
+  const ctx = makeSearchCtx(lbl);
   // PIN BY FOLIO. Condo units all sit inside (or share) one polygon, so a coordinate lookup on the
   // picked unit lands point-in-polygon on the master/common-element parcel and reports the
   // ASSOCIATION as owner instead of the unit owner. We already know the exact folio from the picker
@@ -20963,12 +20989,147 @@ function folioMatchBanner(pr, askedFor){
          `Matched (${esc(pr.src)}): <b>${esc(pr.label)}</b>${fol} — matched by folio in the county's own records.</div>`;
 }
 
+/* ---- Shared plumbing for the two search entry points -----------------------------------------
+   doSearch() (the FIND button) and chooseSuggestion() (clicking an autocomplete row) do the same
+   job by the same route: build a match context, ask the county resolvers, jump to a typed unit if
+   there is one, then render a banner. They were written as two copies, and every fix so far has
+   landed on one copy and not the other — the `cty is not defined` crash, the phantom-address
+   filter, the folio banner tier. These four helpers are the parts that were genuinely identical or
+   that only diverged by accident. Where the two paths SHOULD differ (which text they match on,
+   what they write into the search box) they still do, at the call site. */
+
+/* The match context every resolver and runLookup expects. Four hand-rolled copies of this literal
+   existed; they never drifted, but they were four places to forget. */
+function makeSearchCtx(raw){
+  const s=String(raw==null?'':raw);
+  return { raw:s, hn:houseNum(s), toks:new Set(streetTokens(s)), unit:searchUnit(s) };
+}
+
+/* Hints handed to runLookup after an authoritative resolve. The two copies HAD drifted: the click
+   path passed the resolver's owner + unit as a fallback for counties whose parcel key is shared
+   across units (Charlotte's ACCOUNT), and the FIND path did not — so the same address gave a
+   thinner card depending on which way you searched it. Both get it now. */
+function resolverCtx(searchCtx, pr, county){
+  const extra={};
+  if(pr && pr.folio){ extra.folioHint=pr.folio; extra.countyHint=county; }
+  else if(county){ extra.countyHint=county; }
+  if(pr && pr.owner && searchCtx && searchCtx.unit){ extra.fileOwner=pr.owner; extra.fileUnit=searchCtx.unit; }
+  return Object.keys(extra).length ? Object.assign({}, searchCtx, extra) : searchCtx;
+}
+
+/* FOLIO IDENTITY. Folio strings were compared by stripping to digits, which is fine for Collier
+   (14010360001) but WRONG for any county whose key carries letters. Lee's STRAP encodes the condo
+   unit in one: 134523C2370002A0 (unit 2A) and 134523C2370002B0 (unit 2B) both reduce to
+   13452323700020 — identical. So a typed-unit jump could match the wrong unit's candidate and land
+   on a neighbour's parcel. Compare the full alphanumeric key; fall back to digits only when one
+   side is purely numeric (a caller that passed the digits of a lettered folio). */
+function folioKey(v){ return String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function sameFolio(a,b){
+  const A=folioKey(a), B=folioKey(b);
+  if(!A || !B) return false;
+  if(A===B) return true;
+  const da=String(a==null?'':a).replace(/\D/g,''), db=String(b==null?'':b).replace(/\D/g,'');
+  if(!da || da!==db) return false;
+  return /^[0-9]+$/.test(A) || /^[0-9]+$/.test(B);   // one side is digits-only — accept the match
+}
+
+/* TYPED-UNIT JUMP. When a bare street address resolves to a whole condo stack but the user named a
+   unit, the compact file can map that unit to its folio — so jump straight to it instead of dumping
+   the tower list. This block was duplicated verbatim; the copy is where `cty is not defined` came
+   from. Returns true if it handled the search. `before` lets each caller do its own bookkeeping
+   (history vs. writing the search box) at the same moment. */
+async function tryTypedUnitJump(county, searchCtx, pr, before){
+  if(!(searchCtx && searchCtx.unit && searchCtx.hn)) return false;
+  const ff = await fileUnitToFolio(county, searchCtx.hn, searchCtx.raw, searchCtx.unit).catch(()=>null);
+  if(!ff) return false;
+  const ctx = Object.assign({}, searchCtx, { folioHint:ff, countyHint:county });
+  let lat=pr.candidates[0].lat, lng=pr.candidates[0].lng;
+  const hit=pr.candidates.find(c=>sameFolio(c.folio, ff));
+  if(hit && isFinite(hit.lat) && isFinite(hit.lng)){ lat=hit.lat; lng=hit.lng; }
+  try{ if(before) before(); }catch(e){}
+  results.innerHTML=setStatus('busy','Pinpointing unit '+esc(searchCtx.unit)+'…');
+  if(isFinite(lat)&&isFinite(lng)) map.setView([lat,lng],18);
+  await runLookup(lat, lng, ctx);
+  return true;
+}
+
+/* ---- Ask EVERY county resolver, then rank ----------------------------------------------------
+   doSearch() fires all four resolvers concurrently and ranks the hits by distance from a rough
+   geocode. chooseSuggestion() instead did countyNameAt(suggestion point) and then queried THAT ONE
+   county — so when the county lookup came back empty, it queried no parcel layer at all and fell
+   straight to the interpolating geocoder.
+
+   Measured 2026-08-29 on "100 Estero Blvd, Fort Myers Beach": with the county resolved, the Lee
+   layer is queried once and the unit picker appears. With the county lookup returning nothing, the
+   Lee layer is queried ZERO times and the search lands on 100 Blackbeard Way — a different street.
+   Estero Blvd runs the length of a barrier island, so an interpolated point sits on or past the
+   shoreline exactly where a county-boundary hit-test is least reliable.
+
+   Both paths share the fan-out now. The detected county is a PREFERENCE for ranking, never a gate. */
+async function resolveAllCounties(searchCtx){
+  if(!searchCtx || !searchCtx.hn) return [];
+  return Promise.all(Object.keys(COUNTY_PARCEL_RESOLVERS).map(cty =>
+    resolveCountyParcel(cty, searchCtx).then(r=>({cty,r})).catch(()=>({cty,r:null}))));
+}
+/* Rank resolver hits: nearest the rough point first, the preferred county promoted if it hit.
+   farAll = two or more counties matched and NONE is near — genuinely ambiguous, so the caller
+   should ask rather than guess. */
+function rankCountyHits(settled, rough, preferCounty){
+  const hits=(settled||[]).filter(x=>x.r && (x.r.multi || (isFinite(x.r.lat)&&isFinite(x.r.lng))));
+  const FAR2 = 0.25*0.25;                       // ~25 km in degrees, squared
+  let ordered=hits, farAll=false;
+  if(rough && isFinite(rough.lat) && isFinite(rough.lng)){
+    const d2 = h => { const r=h.r; if(!isFinite(r.lat)||!isFinite(r.lng)) return Infinity;
+      const dx=r.lng-rough.lng, dy=r.lat-rough.lat; return dx*dx+dy*dy; };
+    ordered = hits.slice().sort((a,b)=>d2(a)-d2(b));
+    const near = ordered.filter(h=>d2(h)<=FAR2);
+    if(!near.length && ordered.length>1) farAll=true;
+    else if(near.length) ordered=near;
+  }
+  if(preferCounty){
+    const i=ordered.findIndex(h=>norm(h.cty)===norm(preferCounty));
+    if(i>0) ordered.unshift(ordered.splice(i,1)[0]);
+  }
+  return {ordered:ordered, farAll:farAll};
+}
+
+/* The GEOCODER-fallback banner (no authoritative county layer, or the layer had no such address).
+   The click path had learned to check whether the rooftop snap actually moved to a DIFFERENT
+   address before raising a red flag — a snap that lands on the same address in different
+   punctuation is not news. The FIND path never learned it and warned unconditionally, which is the
+   same "red on every search" problem as the folio banner, one layer down. Shared now. */
+/* Compare the two addresses the way the rest of the tool does — house number plus SUFFIX-FOLDED
+   street tokens, taken from the street segment. The old version compared raw uppercased text, so
+   "Tamiami Trl" vs "Tamiami Trail" read as a different address and raised the red flag over an
+   abbreviation. streetTokens already folds TRAIL->TRL, ROAD->RD, COURT->CT and the rest. */
+function _snapKey(s){
+  const str=String(s==null?'':s);
+  return (houseNum(str)||'') + '|' + streetTokens(streetSegment(str)).join(' ');
+}
+function snapDiffered(searchedLabel, snapMatched){
+  const A=_snapKey(searchedLabel), B=_snapKey(snapMatched);
+  if(A==='|' || B==='|') return false;        // nothing parseable on one side — not news
+  return A!==B;
+}
+function geocoderMatchBanner(searchedLabel, snapMatched, srcLabel){
+  if(snapMatched && snapDiffered(searchedLabel, snapMatched)){
+    return `<div class="note matchconf noprint" style="padding:2px 2px 4px">Heads up — you searched `+
+      `<b style="color:var(--ink)">${esc(searchedLabel)}</b> · snapped to `+
+      `<b style="color:var(--ink)">${esc(snapMatched)}</b>. The nearest parcel resolved to a different `+
+      `address; confirm the marker is on the right lot before quoting.</div>`;
+  }
+  const shown = snapMatched || searchedLabel;
+  const src = srcLabel ? ` <span class="muted">(${esc(srcLabel)})</span>` : '';
+  return `<div class="note noprint" style="padding:2px 2px 4px">Matched `+
+         `<b style="color:var(--ink)">${esc(shown)}</b>${src} — parcel resolved below.</div>`;
+}
+
 async function doSearch(){
   const q=document.getElementById('addr').value.trim();
   if(!q) return;
   const mySeq=newSearch();                       // cancel any search still loading
   const stale=()=> mySeq!==searchSeq;            // true if a NEWER search has started
-  const searchCtx = { raw:q, hn:houseNum(q), toks:new Set(streetTokens(q)), unit:searchUnit(q) };
+  const searchCtx = makeSearchCtx(q);
   // Held across both paths: the ranked geocode is started early (below) and REUSED by the fallback
   // instead of issuing a second identical set of geocoder requests.
   let rankedP=null;
@@ -20990,53 +21151,29 @@ async function doSearch(){
     // The rough point is used ONLY to break ties and to identify the county, never to place a pin.
     rankedP = geocodeBest(q).catch(()=>null);
     const roughP  = geocodeFirst(2500).catch(()=>null);
-    const allCounties = Object.keys(COUNTY_PARCEL_RESOLVERS);
-    const resolverP = allCounties.map(cty =>
-      resolveCountyParcel(cty, searchCtx).then(r=>({cty,r})).catch(()=>({cty,r:null})));
+    const resolverP = resolveAllCounties(searchCtx);
     const rough = await roughP;
     if(stale()) return;
-    const settled = await Promise.all(resolverP);
+    const settled = await resolverP;
     if(stale()) return;
     // TIEBREAK: more than one county can hold a strict house-number + street match for the same
     // query ("481 8th Ave S" exists in plenty of towns). The old loop silently took whichever came
     // first in object order. Now we pick the hit NEAREST the rough geocode; if the rough point is
     // missing or every hit is far from it (>~25 km), we don't guess — we show the candidate picker.
-    const hits = settled.filter(x=>x.r && (x.r.multi || (isFinite(x.r.lat)&&isFinite(x.r.lng))));
-    const FAR2 = 0.25*0.25;                       // ~25 km in degrees, squared
-    let ordered = hits;
-    if(rough && isFinite(rough.lat) && isFinite(rough.lng)){
-      const d2 = h => { const r=h.r; if(!isFinite(r.lat)||!isFinite(r.lng)) return Infinity;
-        const dx=r.lng-rough.lng, dy=r.lat-rough.lat; return dx*dx+dy*dy; };
-      ordered = hits.slice().sort((a,b)=>d2(a)-d2(b));
-      const near = ordered.filter(h=>d2(h)<=FAR2);
-      // Two or more counties matched and NONE is near the geocode → genuinely ambiguous, so ask.
-      if(!near.length && ordered.length>1){
-        const merged=[];
-        for(const h of ordered){ if(h.r.multi && h.r.candidates) merged.push(...h.r.candidates);
-          else merged.push({label:h.r.label, lat:h.r.lat, lng:h.r.lng, folio:h.r.folio, county:h.cty, src:h.r.src}); }
-        if(merged.length){ renderParcelCandidates(merged, q); return; }
-      }
-      if(near.length) ordered = near;
+    const {ordered, farAll} = rankCountyHits(settled, rough, null);
+    // Two or more counties matched and NONE is near the geocode → genuinely ambiguous, so ask.
+    if(farAll){
+      const merged=[];
+      for(const h of ordered){ if(h.r.multi && h.r.candidates) merged.push(...h.r.candidates);
+        else merged.push({label:h.r.label, lat:h.r.lat, lng:h.r.lng, folio:h.r.folio, county:h.cty, src:h.r.src}); }
+      if(merged.length){ renderParcelCandidates(merged, q); return; }
     }
     for(const {cty, r:pr} of ordered){
       if(pr && pr.multi && pr.candidates && pr.candidates.length){
         // TYPED-UNIT JUMP: before dumping all lots, if the user typed a unit, the compact file can map
         // it to that unit's folio (self-addressed Naples/Marco towers the live layer can't split). Pull
         // the exact parcel live by that folio and jump straight to it instead of the ambiguous list.
-        if(searchCtx && searchCtx.unit && searchCtx.hn){
-          const _ff = await fileUnitToFolio(cty, searchCtx.hn, searchCtx.raw, searchCtx.unit).catch(()=>null);
-          if(_ff){
-            const _ctxF = Object.assign({}, searchCtx, { folioHint:_ff, countyHint:cty });
-            let _jlat=pr.candidates[0].lat, _jlng=pr.candidates[0].lng;
-            const _hit=pr.candidates.find(c=>String(c.folio||'').replace(/\D/g,'')===String(_ff).replace(/\D/g,''));
-            if(_hit && isFinite(_hit.lat) && isFinite(_hit.lng)){ _jlat=_hit.lat; _jlng=_hit.lng; }
-            addToHistory(searchCtx.raw || q);
-            results.innerHTML=setStatus('busy','Pinpointing unit '+esc(searchCtx.unit)+'…');
-            if(isFinite(_jlat)&&isFinite(_jlng)) map.setView([_jlat,_jlng],18);
-            await runLookup(_jlat, _jlng, _ctxF);
-            return;
-          }
-        }
+        if(await tryTypedUnitJump(cty, searchCtx, pr, ()=>addToHistory(searchCtx.raw || q))) return;
         // Several lots share this number+street — show them rather than guess one.
         renderParcelCandidates(pr.candidates, q);   // clickable rows — click runs the lookup on that lot
         return;
@@ -21049,8 +21186,7 @@ async function doSearch(){
         // lot the coordinate alone can sit on the boundary and make the point-in-polygon parcel query
         // resolve to the NEIGHBOUR (e.g. 1209 Forest's address point lands on 1201 9th Ave N). The
         // folio lets runLookup fetch the EXACT parcel that was matched instead of re-guessing by point.
-        const _ctx = Object.assign({}, searchCtx, { folioHint: pr.folio||null, countyHint: cty });
-        await runLookup(pr.lat, pr.lng, _ctx);
+        await runLookup(pr.lat, pr.lng, resolverCtx(searchCtx, pr, cty));
         if(stale()) return;
         const fol = pr.folio ? ` · Folio ${esc(pr.folio)}` : '';
         /* Authoritative folio match — the strongest result the tool can produce. Say what it
@@ -21103,8 +21239,12 @@ async function doSearch(){
   map.setView([sLat,sLng], 18);
   await runLookup(sLat,sLng, searchCtx);
   if(stale()) return;
-  const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(snapSrc)}): <b style="color:var(--ink)">${esc(snapLabel)}</b> — parcel resolved below; confirm the marker is on the right lot.</div>`;
-  results.insertAdjacentHTML('afterbegin',conf);
+  /* Was an unconditional warning tier. The click path already checked whether the rooftop snap
+     landed on a genuinely DIFFERENT address before raising a red flag; FIND warned every time,
+     including when the snap matched exactly and only the punctuation differed. Shared now, so the
+     red flag means the same thing on both paths: we moved you to another address. */
+  results.insertAdjacentHTML('afterbegin',
+    geocoderMatchBanner(q, (snapLabel!==g.label ? snapLabel : ''), snapSrc));
 }
 document.getElementById('go').onclick=doSearch;
 
@@ -21281,34 +21421,34 @@ async function chooseSuggestion(it){
   // show the full picked address (cleaned of "County/United States" cruft), never the partial
   // text the user had typed so far. searchCtx below still anchors on the typed basis.
   const fullAddr = cleanAddress(it.label) || basis;
-  const searchCtx = { raw:basis, hn:houseNum(basis), toks:new Set(streetTokens(basis)), unit:searchUnit(basis) };
+  const searchCtx = makeSearchCtx(basis);
   // AUTHORITATIVE COUNTY-PARCEL FIRST: if the suggestion sits in a county whose parcel layer carries
   // correct site addresses (e.g. Collier), resolve the EXACT lot there by street+number and ignore
   // the interpolated OSM coordinate entirely — same deterministic path as the FIND button. This is
   // what stops the click landing on the neighbour.
   results.innerHTML=setStatus('busy','Locating address (county parcel records)…');
-  let county = (it.lat!=null && it.lng!=null) ? await countyNameAt(it.lat,it.lng).catch(()=>null) : null;
+  /* Ask EVERY resolver county, exactly as the FIND button does, and run the county hit-test
+     alongside rather than in front of it. The old order made countyNameAt() a GATE: one empty
+     answer and no parcel layer was queried at all. On "100 Estero Blvd, Fort Myers Beach" that
+     meant zero Lee queries and a landing on 100 Blackbeard Way. The detected county now only
+     PREFERS its own hit when ranking, and a failed hit-test costs nothing. Also faster: the two
+     round trips overlap instead of running back to back. */
+  const _countyP = (it.lat!=null && it.lng!=null) ? countyNameAt(it.lat,it.lng).catch(()=>null)
+                                                  : Promise.resolve(null);
+  const _resolverP = resolveAllCounties(searchCtx);
+  const county = await _countyP;
   if(stale()) return;
-  if(searchCtx.hn && county && COUNTY_PARCEL_RESOLVERS[norm(county)]){
-    const pr=await resolveCountyParcel(county, searchCtx).catch(()=>null);
-    if(stale()) return;
+  const _settled = await _resolverP;
+  if(stale()) return;
+  const _near = (isFinite(it.lat)&&isFinite(it.lng)) ? {lat:it.lat,lng:it.lng} : null;
+  const _best = rankCountyHits(_settled, _near, county).ordered[0] || null;
+  if(_best){
+    const pr=_best.r, cty=_best.cty;
     if(pr && pr.multi && pr.candidates && pr.candidates.length){
       // TYPED-UNIT JUMP (see the twin block above): map a typed unit to its folio via the file and
       // jump straight to that unit live, instead of showing the whole ambiguous tower list.
-      if(searchCtx && searchCtx.unit && searchCtx.hn){
-        const _ff = await fileUnitToFolio(county, searchCtx.hn, searchCtx.raw, searchCtx.unit).catch(()=>null);
-        if(_ff){
-          const _ctxF = Object.assign({}, searchCtx, { folioHint:_ff, countyHint:county });
-          let _jlat=pr.candidates[0].lat, _jlng=pr.candidates[0].lng;
-          const _hit=pr.candidates.find(c=>String(c.folio||'').replace(/\D/g,'')===String(_ff).replace(/\D/g,''));
-          if(_hit && isFinite(_hit.lat) && isFinite(_hit.lng)){ _jlat=_hit.lat; _jlng=_hit.lng; }
-          addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr);
-          results.innerHTML=setStatus('busy','Pinpointing unit '+esc(searchCtx.unit)+'…');
-          if(isFinite(_jlat)&&isFinite(_jlng)) map.setView([_jlat,_jlng],18);
-          await runLookup(_jlat, _jlng, _ctxF);
-          return;
-        }
-      }
+      if(await tryTypedUnitJump(cty, searchCtx, pr,
+           ()=>{ addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr); })) return;
       addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr);
       renderParcelCandidates(pr.candidates, basis);   // clickable rows — click runs the lookup on that lot
       return;
@@ -21322,19 +21462,10 @@ async function chooseSuggestion(it){
       // as folioHint so runLookup re-fetches the EXACT unit parcel by its unique id — for Sarasota the
       // ID field is unit-unique (unlike ACCOUNT), so this yields the right ID, owner, sqft and appraiser
       // link on the card. Also carry the resolver's owner/unit as a fallback for any shared-key county.
-      let _ctxR = searchCtx;
-      const _extra = {};
-      /* `county` — NOT `cty`. This block was copied from doSearch(), where it lives inside
-         `for(const {cty, r:pr} of ordered)` and cty is the loop's county. There is no such
-         variable here, so picking a suggestion whose resolver returned a folio threw
-         "ReferenceError: cty is not defined" and killed the whole click-a-suggestion path
-         mid-flight — the spinner just sat there. Latent until now: it only fires when
-         pr.folio is set, which for Naples only started happening once the numbered-street
-         matching was fixed and the resolver could finally settle on one folio. */
-      if(pr.folio){ _extra.folioHint=pr.folio; _extra.countyHint=county; }
-      if(pr.owner && searchCtx && searchCtx.unit){ _extra.fileOwner=pr.owner; _extra.fileUnit=searchCtx.unit; }
-      if(Object.keys(_extra).length) _ctxR = Object.assign({}, searchCtx, _extra);
-      await runLookup(pr.lat, pr.lng, _ctxR);
+      /* This block once read `cty` — copied from doSearch(), where cty is a loop variable that
+         does not exist here — and threw "ReferenceError: cty is not defined", killing the whole
+         click-a-suggestion path mid-flight. Sharing resolverCtx() is what stops that recurring. */
+      await runLookup(pr.lat, pr.lng, resolverCtx(searchCtx, pr, cty));
       if(stale()) return;
       /* Same banner the FIND button uses. This used to be a hard-coded warning tier, so every
          click-a-suggestion search — including a folio-exact one — came back red asking you to
@@ -21343,7 +21474,7 @@ async function chooseSuggestion(it){
       results.insertAdjacentHTML('afterbegin', folioMatchBanner(pr, fullAddr||basis));
       return;
     }
-    // county covered but address not found in its parcel layer → fall through to the OSM coordinate.
+    // no resolver county held this address → fall through to the OSM coordinate.
   }
   // FALLBACK (non-resolver counties): use the suggestion's own coordinate; runLookup resolves the parcel.
   addrEl.value=fullAddr; STORE.set('fl_addr',fullAddr); addToHistory(it.label);
@@ -21354,7 +21485,7 @@ async function chooseSuggestion(it){
   // re-query the statewide parcel roll around it and snap to the parcel whose SITE ADDRESS actually
   // matches the typed house number + street. If found, drive runLookup from the corrected point so
   // the polygon, marker and details all land on the right house.
-  let qLat=it.lat, qLng=it.lng, snapNote='';
+  let qLat=it.lat, qLng=it.lng;
   // Some suggestion sources return a label with no usable coordinate. Rather than silently doing
   // nothing (which looks like the click "didn't search"), geocode the picked address first.
   if(!isFinite(qLat) || !isFinite(qLng)){
@@ -21363,21 +21494,13 @@ async function chooseSuggestion(it){
     if(g && isFinite(g.lat) && isFinite(g.lng)){ qLat=g.lat; qLng=g.lng; }
     else { results.innerHTML=setStatus('err',"Couldn't place that address — try adding the city or ZIP, then press FIND."); return; }
   }
-  let snapDiffers=false;
+  let _snapMatched='';
   if(searchCtx.hn){
     try{
       const snap=await snapToParcelByAddress(basis, it.lat, it.lng);
       if(snap && isFinite(snap.lat) && isFinite(snap.lng)){
         qLat=snap.lat; qLng=snap.lng;
-        if(snap.matched){
-          // Only raise the red flag if the snap landed on a DIFFERENT address than searched (e.g.
-          // 5250 → 5242). When it's the same address (just case/format/punctuation), the alarming red
-          // "confirm the marker" note is pure noise — downgrade it to a quiet confirmation.
-          const _core=s=>String(s||'').toUpperCase().replace(/,/g,' ').replace(/\b(FLORIDA|FL|USA|UNITED STATES)\b/g,' ').replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
-          const A=_core(it.label), B=_core(snap.matched);
-          snapDiffers = !!A && !!B && A!==B && !A.startsWith(B) && !B.startsWith(A);
-          if(snapDiffers) snapNote=` · snapped to <b style="color:var(--ink)">${esc(snap.matched)}</b>`;
-        }
+        if(snap.matched) _snapMatched=snap.matched;   // geocoderMatchBanner decides if that's news
       }
     }catch(e){}
   }
@@ -21385,10 +21508,7 @@ async function chooseSuggestion(it){
   map.setView([qLat,qLng], 18);
   await runLookup(qLat,qLng, searchCtx);
   if(stale()) return;
-  const conf = snapDiffers
-    ? `<div class="note matchconf noprint" style="padding:2px 2px 4px">Heads up — you searched <b style="color:var(--ink)">${esc(it.label)}</b>${snapNote}. The nearest parcel resolved to a different address; confirm the marker is on the right lot before quoting.</div>`
-    : `<div class="note noprint" style="padding:2px 2px 4px">Matched <b style="color:var(--ink)">${esc(it.label)}</b> — parcel resolved below.</div>`;
-  results.insertAdjacentHTML('afterbegin',conf);
+  results.insertAdjacentHTML('afterbegin', geocoderMatchBanner(it.label, _snapMatched, ''));
 }
 
 let sugAbort=null;
