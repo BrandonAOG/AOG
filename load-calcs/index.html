@@ -303,12 +303,14 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   padding: 4px 8px;
   padding-top: max(4px, env(safe-area-inset-top, 4px));
   display: flex; justify-content: flex-start; gap: 4px; flex-wrap: nowrap; align-items: center;
-  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none
-  
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   box-shadow: 0 4px 18px rgba(0,0,0,0.4);
   border-bottom: 2px solid #D97706;
   box-sizing: border-box;
 }
+/* WebKit/Blink still shows a scrollbar without this — scrollbar-width is
+   Firefox-only. Same intent as the line above. */
+.action-bar::-webkit-scrollbar { display: none; }
 /* Center the buttons when they fit; auto-margins collapse safely when the
    bar overflows and scrolls, so nothing gets clipped off the left edge. */
 .action-bar > :first-child { margin-left: auto; }
