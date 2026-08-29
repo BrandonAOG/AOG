@@ -519,14 +519,14 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
     <div class="card-head">
       <span class="step-tag">STEP 2</span>
       <div class="card-title">A/C Condensers &amp; Fixed Electric Space Heating</div>
-      <div class="card-sub">Art. 220.82(C) — Blower always @ 100% · Heat element × 65% (≤4 units) or 40% (&gt;4 units) · vs CU/HP + Blower @ 100%</div>
+      <div class="card-sub">Art. 220.82(C) — Blower always @ 100% · Heat element × 65% (1–3 elec. heat units) or 40% (4 or more) · vs CU/HP + Blower @ 100%</div>
     </div>
     <div class="card-body" style="padding:8px 14px;">
       <div id="ahu_rows"></div>
       <div class="chips">
         <div class="chip"><div class="cl">Total Heating VA</div><div class="cv" id="r2_heat">—</div><div class="cu">VA</div></div>
         <div class="chip"><div class="cl">Total Cooling VA</div><div class="cv" id="r2_cool">—</div><div class="cu">VA</div></div>
-        <div class="chip"><div class="cl">Demand Factor</div><div class="cv" id="r2_hf">65%</div><div class="cu">applied to heat</div></div>
+        <div class="chip"><div class="cl">Demand Factor</div><div class="cv" id="r2_hf">65%</div><div class="cu" id="r2_hfnote">applied to heat</div></div>
         <div class="chip hl"><div class="cl">Step 2 Load</div><div class="cv" id="r2_s2">—</div><div class="cu" id="r2_note">—</div></div>
       </div>
     </div>
@@ -684,7 +684,9 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 2</span> HVAC</h3>
-        <p>Select CU/HP tonnage and supplemental heat for each AHU. The NEC uses the <em>larger</em> of: (a) heat element × 65% (≤4 units) or ×40% (&gt;4 units) + blower @ 100%, vs (b) CU/HP load + blower @ 100%. The blower is never derated — always counts at 100%. Gas furnace = select "GAS + blower" so only the blower VA counts.</p>
+        <p>Select CU/HP tonnage and supplemental heat for each AHU. The NEC uses the <em>larger</em> of: (a) heat element × its demand factor + blower @ 100%, vs (b) CU/HP load + blower @ 100%. The blower is never derated — always counts at 100%. Gas furnace = select "GAS + blower" so only the blower VA counts.</p>
+        <p>The heat demand factor follows <strong>NEC 220.82(C)(4) and (C)(5)</strong>: <strong>65%</strong> for <em>fewer than four</em> separately controlled electric space heating units, <strong>40%</strong> for <em>four or more</em>. At exactly four units the 40% factor applies. Only AHUs with an actual electric heat element count toward that total — an AHU set to "GAS + blower," or one with a condenser and no heat strips, is not a heating unit. The Step 2 "Demand Factor" chip shows the live unit count and which subsection is being applied.</p>
+        <div class="hnote">Heads up: builds before Aug 2026 used a <code>&gt; 4 units</code> threshold, which applied 65% at exactly four units and oversized the result. Re-run any saved four-unit job on this version.</div>
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 3</span> Fixed Appliances</h3>
@@ -893,6 +895,21 @@ var SH_OPTS=[
   [1200, 0,     1200, 'GAS + 1,200 blwr'],
   [1800, 500,   1800, '0.5 kW + 1,800 blwr']
 ];
+
+// Resolve an SH (supplemental heat) dropdown value into its parts.
+// IMPORTANT: SH_OPTS[k][0] is only the option value / lookup key — it is NOT
+// reliably element + blower. The '0.5 kW + 1,800 blwr' row carries 1800 while
+// its real total is 500 + 1,800 = 2,300. So never display a raw select value
+// or SH_OPTS[k][0] as a heat load — always take .total from here. Both calc()
+// and buildReportHTML() go through this so the screen and the PDF can't drift.
+function shParts(shVal){
+  for(var k=0;k<SH_OPTS.length;k++){
+    if(SH_OPTS[k][0]===shVal){
+      return {element:SH_OPTS[k][1], blower:SH_OPTS[k][2], total:SH_OPTS[k][1]+SH_OPTS[k][2]};
+    }
+  }
+  return {element:0, blower:0, total:0};
+}
 
 // HP motor options for appliances (single-phase, selectable voltage)
 var MOTOR_OPTS=[
@@ -1353,11 +1370,15 @@ function calc(){
 
   // ── Step 2 ──
   // Step 2: Separate blower VA from heat element — blower is always 100%, never derated
-  // NEC 220.82(C): heat element × factor (65% for ≤4 units, 40% for >4) + blower @ 100%
+  // NEC 220.82(C)(4)/(5): heat element × 65% if FEWER THAN FOUR separately
+  //   controlled electric space heating units, × 40% if FOUR OR MORE.
+  //   The threshold counts electric HEATING units only — an AHU with a
+  //   condenser but no heat strips (or a gas furnace) is not a heating unit.
+  // Blower is always @ 100%, never derated.
   // Cooling: CU/HP load + blower @ 100%
   // Step 2 = MAX(heatDemand, coolDemand)
   // If either CU or SH on an AHU is Managed, the entire AHU is excluded from demand
-  var totCU=0, totHeatElement=0, totBlower=0, nUnits=0;
+  var totCU=0, totHeatElement=0, totBlower=0, nHeatUnits=0;
   for(var i=1;i<=MAX_AHU;i++){
     var cuEl_=document.getElementById('cu'+i);
     var shEl_=document.getElementById('sh'+i);
@@ -1365,23 +1386,26 @@ function calc(){
     if(cuEl_.value==='managed'||shEl_.value==='managed') continue;
     var cuVal=gv('cu'+i);
     var shTotal=gv('sh'+i);
-    if(cuVal>0||shTotal>0) nUnits++;
     totCU+=cuVal;
-    var heatEl=0, blowerEl=0;
-    for(var k=0;k<SH_OPTS.length;k++){
-      if(SH_OPTS[k][0]===shTotal){ heatEl=SH_OPTS[k][1]; blowerEl=SH_OPTS[k][2]; break; }
-    }
+    var _shp=shParts(shTotal);
+    var heatEl=_shp.element, blowerEl=_shp.blower;
+    // Count as a separately controlled electric heating unit only if it has
+    // an actual heat element (gas + blower rows carry heatEl = 0).
+    if(heatEl>0) nHeatUnits++;
     totHeatElement+=heatEl;
     totBlower+=blowerEl;
   }
   var totHeat=totHeatElement+totBlower;  // total heat VA (for display)
   var totCool=totCU+totBlower;            // cooling = CU + blower @ 100%
-  var hf=nUnits>4?0.40:0.65;
+  var hf=nHeatUnits>=4?0.40:0.65;  // NEC 220.82(C)(5): four or more → 40%
   // Heat demand: heat element × factor + blower @ 100%
   var heatDem=totHeatElement*hf+totBlower;
   var s2=Math.max(heatDem,totCool);
   sv('r2_heat',totHeat);sv('r2_cool',totCool);
   sv('r2_hf',(hf*100).toFixed(0)+'%');
+  var hfNote=document.getElementById('r2_hfnote');
+  if(hfNote) hfNote.textContent=nHeatUnits+' elec. heat unit'+(nHeatUnits===1?'':'s')
+    +' → '+(nHeatUnits>=4?'40% (220.82(C)(5))':'65% (220.82(C)(4))');
   sv('r2_s2',Math.round(s2));
   document.getElementById('r2_note').textContent=totCool>=heatDem?'A/C + Blower @ 100%':'Heat×'+Math.round(hf*100)+'% + Blower @ 100%';
 
@@ -2046,7 +2070,9 @@ function buildReportHTML(){
       managedLines.push({name:'AHU '+i, reason:'HVAC'+(cuManaged?' CU':'')+(shManaged?' Heat':'')});
       continue;
     }
-    var cuv=parseInt(cus.value)||0, shv=parseInt(shs.value)||0;
+    // Heat VA = element + blower resolved from SH_OPTS, NOT the raw option
+    // value — those disagree on at least one row (see shParts).
+    var cuv=parseInt(cus.value)||0, shv=shParts(parseFloat(shs.value)||0).total;
     if(cuv||shv) hvacLines.push({name:'AHU '+i, cu:cuv, sh:shv});
   }
 
