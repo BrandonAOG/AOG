@@ -1270,8 +1270,44 @@ function makeVAcell(id, a, customId){
     }
   }
   sel+='</select>';
-  sel+='<input type="number" id="'+customId+'" value="'+a.va+'" min="0" oninput="calc()" style="margin-top:2px;border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-family:\'JetBrains Mono\',monospace;font-size:10px;text-align:right;width:100%;">';
+  sel+='<input type="number" id="'+customId+'" value="'+a.va+'" min="0" oninput="vaTyped(\''+id+'\')" onchange="vaSettle(\''+id+'\',\''+customId+'\')" style="margin-top:2px;border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-family:\'JetBrains Mono\',monospace;font-size:10px;text-align:right;width:100%;">';
   return sel;
+}
+
+// calc() reads the manual VA box, never the dropdown — the dropdown only fills
+// the box. So typing a VA by hand left the label showing the previously picked
+// size while a different number was actually in use. Snap it to custom.
+// Unconditional on purpose: oninput fires per keystroke, so "snap to a matching
+// option" would make the dropdown jump mid-typing (6 -> 60 -> 600 -> 6000).
+function vaTyped(selId){
+  var s=document.getElementById(selId);
+  if(s && s.value!=='custom'){
+    for(var i=0;i<s.options.length;i++){
+      if(s.options[i].value==='custom'){ s.value='custom'; break; }
+    }
+  }
+  calc();
+}
+
+// Fires when the field is committed (blur or Enter), not per keystroke. If the
+// finished number is one of the listed sizes, show that label instead of
+// "custom" — typing 4500 by hand should read the same as picking 4,500 from the
+// list. Kept off oninput on purpose: typing 6000 passes through 6, 60 and 600,
+// and 600 is a real option on the Freezer row, so the label would jump around
+// mid-entry. Between keystrokes vaTyped() holds it on custom, which is honest.
+function vaSettle(selId, custId){
+  var s=document.getElementById(selId), b=document.getElementById(custId);
+  if(s && b){
+    var v=parseFloat(b.value);
+    if(!isNaN(v)){
+      for(var i=0;i<s.options.length;i++){
+        var ov=s.options[i].value;
+        if(ov==='custom'||ov==='managed') continue;
+        if(parseFloat(ov)===v){ s.value=ov; break; }
+      }
+    }
+  }
+  calc();
 }
 
 function vaSelChange(selId, custId){
@@ -1378,7 +1414,7 @@ function addDryer(isGas, va, qty){
     +'<option value="7200"'+(va===7200?' selected':'')+'>7,200 VA</option>'
     +'<option value="custom">— type custom —</option>'
     +'</select>'
-    +'<input type="number" id="va_dry'+n+'" value="'+(va||5000)+'" min="0" oninput="calc()" style="font-family:\'JetBrains Mono\',monospace;text-align:right;">'
+    +'<input type="number" id="va_dry'+n+'" value="'+(va||5000)+'" min="0" oninput="vaTyped(\'sel_dry'+n+'\')" onchange="vaSettle(\'sel_dry'+n+'\',\'va_dry'+n+'\')" style="font-family:\'JetBrains Mono\',monospace;text-align:right;">'
     +'</div></div>';
   d.appendChild(div);
   calc();
@@ -1425,7 +1461,7 @@ function addCookItem(type, isGas, va, qty){
     +'<div class="field">'
     +'<label>Wattage</label>'
     +'<select id="sel_'+cid+'" onchange="cookSelChange(\''+cid+'\')" style="margin-bottom:3px;">'+opts+'</select>'
-    +'<input type="number" id="va_'+cid+'" value="'+(va!==undefined && va!==null && va!==false ? va : 0)+'" min="0" oninput="calc()" style="font-family:\'JetBrains Mono\',monospace;text-align:right;">'
+    +'<input type="number" id="va_'+cid+'" value="'+(va!==undefined && va!==null && va!==false ? va : 0)+'" min="0" oninput="vaTyped(\'sel_'+cid+'\')" onchange="vaSettle(\'sel_'+cid+'\',\'va_'+cid+'\')" style="font-family:\'JetBrains Mono\',monospace;text-align:right;">'
     +'</div></div>';
   container.appendChild(div);
   calc();
