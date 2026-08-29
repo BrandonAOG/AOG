@@ -752,6 +752,22 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
         <div class="hnote">Feeder sets reduce the per-conductor ampacity required — e.g., 2 sets of conductors each carry half the load.</div>
       </div>
       <div class="help-sec">
+        <h3>Managed Loads &amp; Load Management</h3>
+        <p>Ticking <strong>Managed</strong> on any load removes it from the generator demand while leaving it
+        on the panel. The basis is <strong>NEC 702.4(B)(2)(b)</strong>: where automatic transfer equipment is used
+        together with a load management system, the standby source needs capacity for the
+        <em>maximum load the management system will connect</em> — not the entire connected load.
+        (702.4(B)(2)(a) is the alternative: size for the full transferred load. 702.4(B)(1) covers manual
+        transfer, where the user manages the load.)</p>
+        <p>Every managed load is listed by name and VA on the printed report under
+        <em>Managed Loads — Excluded per NEC 702.4(B)(2)(b)</em>, so the exclusions are documented rather
+        than invisible. Managing a load does <strong>not</strong> change any conductor sizing: the pool
+        sub-feeder, for example, still carries its load on utility power and is sized accordingly.</p>
+        <div class="hnote">Load management only justifies the smaller generator if a management system is
+        actually installed and configured to shed those loads. If nothing sheds them, they belong in the
+        demand.</div>
+      </div>
+      <div class="help-sec">
         <h3>Generator</h3>
         <p>The minimum generator kW equals the service demand VA ÷ 1,000. LP output and NG output differ per model — select the correct fuel source on the Summary tab.</p>
       </div>
@@ -1866,6 +1882,9 @@ function calc(){
   var baseDem=baseLoads<=10000?baseLoads:10000+(baseLoads-10000)*0.40;
   var svcDem=baseDem+s2;  // HVAC added at 100% after demand factor
   var allLoads=s1+s2+appDem+s4+s5; // total connected for display
+  // The printed report needs the actual 220.82 sequence, not the connected total:
+  // base loads (1+3+4+5) -> 10k/40% demand -> + HVAC @ 100% -> service demand.
+  window.AOG_DEMAND={baseLoads:baseLoads, baseDem:baseDem, hvac:s2, svcDem:svcDem};
   var amps=svcDem/240;
   // ── Neutral per NEC 220.61 ──
   // Neutral carries UNBALANCED (120V) loads only:
@@ -2644,6 +2663,10 @@ function buildReportHTML(){
     step2Rows = '<tr class="tot"><td>Step 2 Applied</td><td class="r" colspan="2">'+tv('r2_s2')+' VA</td></tr>';
   }
 
+  var D = (window.AOG_DEMAND||{baseLoads:0,baseDem:0,hvac:0,svcDem:0});
+  D = {baseLoads:Math.round(D.baseLoads), baseDem:Math.round(D.baseDem),
+       hvac:Math.round(D.hvac), svcDem:Math.round(D.svcDem)};
+
   var html = `
 <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2pt solid #D97706;padding-bottom:6pt;margin-bottom:10pt;">
   <div>
@@ -2683,16 +2706,16 @@ function buildReportHTML(){
   <div>
     <div class="sh">Service Demand — NEC 220.82</div>
     <table class="dt">
-      <tr><td>Base loads (Steps 1+3+4+5)</td><td class="r">${tv('br_tot')} VA</td></tr>
-      <tr><td>Demand (first 10k@100%, rest@40%)</td><td class="r">—</td></tr>
-      <tr><td>+ HVAC @ 100%</td><td class="r">+ ${tv('r2_s2')} VA</td></tr>
+      <tr><td>Base loads (Steps 1+3+4+5)</td><td class="r">${D.baseLoads.toLocaleString()} VA</td></tr>
+      <tr><td>Demand (first 10k@100%, rest@40%)</td><td class="r">${D.baseDem.toLocaleString()} VA</td></tr>
+      <tr><td>+ HVAC @ 100% (220.82(C))</td><td class="r">+ ${D.hvac.toLocaleString()} VA</td></tr>
       <tr class="tot"><td>Service Demand</td><td class="r">${svcDem} VA</td></tr>
       <tr><td>Demand @ 240V, 1φ</td><td class="r">${rAmps} A</td></tr>
       <tr><td>Minimum Service Size</td><td class="r">${rMinSvc} A</td></tr>
       <tr><td>Neutral Demand (NEC 220.61)</td><td class="r">${neutral} A</td></tr>
     </table>
 
-    <div class="sh">Conductor Sizing — NEC 310.16 (75°C) · ${mat}</div>
+    <div class="sh">Conductor Sizing — ${mat}</div>
     <table class="dt">
       <tr><td>Ungrounded (Hot) Feeder</td><td class="r">${feeder}</td></tr>
       <tr><td>Grounded (Neutral) Wire</td><td class="r">${nwire}</td></tr>
@@ -2717,7 +2740,15 @@ function buildReportHTML(){
   </div>
 </div>
 
-${managedLines.length>0?'<div style="margin-top:10pt;border:1.5pt solid #D97706;border-radius:4pt;padding:7pt 10pt;"><div style="font-family:Orbitron,monospace;font-size:7.5pt;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#D97706;border-bottom:1pt solid #D97706;padding-bottom:3pt;margin-bottom:5pt;">Managed Loads — Excluded from Generator Demand</div><table style="width:100%;border-collapse:collapse;font-size:8.5pt;"><tr style="background:#fff8ed;"><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Load Name</th><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Category</th><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Note</th></tr>'+managedLines.map(function(m){return '<tr><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;">'+m.name+'</td><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;color:#777;">'+m.reason+'</td><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;color:#aaa;font-size:7.5pt;">Load on panel, excluded from generator demand</td></tr>';}).join('')+'</table></div>':''}
+${managedLines.length>0?'<div style="margin-top:10pt;border:1.5pt solid #D97706;border-radius:4pt;padding:7pt 10pt;"><div style="font-family:Orbitron,monospace;font-size:7.5pt;font-weight:700;letter-spacing:1.5px;color:#D97706;border-bottom:1pt solid #D97706;padding-bottom:3pt;margin-bottom:5pt;">MANAGED LOADS — Excluded per NEC 702.4(B)(2)(b)</div><table style="width:100%;border-collapse:collapse;font-size:8.5pt;"><tr style="background:#fff8ed;"><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Load Name</th><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Category</th><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Note</th></tr>'+managedLines.map(function(m){return '<tr><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;">'+m.name+'</td><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;color:#777;">'+m.reason+'</td><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;color:#aaa;font-size:7.5pt;">On panel; shed by load management</td></tr>';}).join('')
++'</table>'
++'<div style="font-size:7pt;color:#777;line-height:1.4;padding-top:5pt;">'
++'<strong>NEC 702.4(B)(2)(b)</strong> — where automatic transfer equipment is used and a load '
++'management system is employed, the standby source must have capacity for the <em>maximum load '
++'that will be connected by the load management system</em>, not the full connected load. The loads '
++'above remain on the panel and are served by the utility; they are shed by the management system '
++'and are therefore excluded from the generator demand calculated on this sheet.'
++'</div></div>':''}
 <div style="border-top:1pt solid #ccc;padding-top:5pt;font-size:7pt;color:#888;display:flex;justify-content:space-between;">
   <span>Generated by Always On Generators Load Calc · NEC 2020 · Art. 220.82 Optional Method</span>
   <span>${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</span>
