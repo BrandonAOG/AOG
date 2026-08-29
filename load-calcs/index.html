@@ -79,7 +79,7 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .jf input:focus{outline:none;border-color:var(--blue);}
 
 /* ── TABS ── */
-.tabs-bar{background:var(--surface);border-bottom:2px solid var(--border);display:flex;justify-content:center;overflow-x:auto;position:sticky;top:44px;z-index:190;scrollbar-width:none;}
+.tabs-bar{background:var(--surface);border-bottom:2px solid var(--border);display:flex;justify-content:flex-start;justify-content:safe center;overflow-x:auto;scroll-behavior:smooth;position:sticky;top:44px;z-index:190;scrollbar-width:none;}
 .tabs-bar::-webkit-scrollbar{display:none;}
 .tab{padding:10px 13px;font-size:9px;font-weight:700;color:var(--text2);border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap;transition:all .15s;margin-bottom:-2px;user-select:none;flex-shrink:0;font-family:'Orbitron',monospace;letter-spacing:1px;text-transform:uppercase;}
 .tab:hover{color:var(--text);}
@@ -158,6 +158,13 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .br-total td{font-weight:700;border-top:2px solid var(--border);padding-top:10px;}
 .br-demand td{color:var(--blue);font-weight:700;}
 .br-note{font-size:11px;color:var(--text3);}
+/* Phones: the Step 2 annotation used to live in the nowrap value cell, which
+   forced that column to 349px, crushed the labels to 79px and pushed the table
+   65px past the card (which clips). Note now sits under the label instead. */
+@media(max-width:560px){
+  .br-table td{padding:7px 3px;font-size:12.5px;}
+  .br-table .bl{line-height:1.35;}
+}
 
 /* ── AHU TABLE ── */
 .ahu-row{display:grid;grid-template-columns:58px minmax(0,1fr) minmax(0,1fr) 104px;gap:6px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center;}
@@ -487,7 +494,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
     <div class="card-body" style="padding:10px 14px;">
       <table class="br-table">
         <tr><td class="bl">Step 1 — Gen. Lighting, Sm. Appl. &amp; Laundry</td><td class="bv" id="br1">—</td></tr>
-        <tr><td class="bl">Step 2 — A/C or Heat (largest)</td><td class="bv" id="br2">—</td></tr>
+        <tr><td class="bl">Step 2 — A/C or Heat (largest)<br><span class="br-note">added @ 100% after demand factor</span></td><td class="bv" id="br2">—</td></tr>
         <tr><td class="bl">Step 3 — Fixed Appliances (raw VA)</td><td class="bv" id="br3">—</td></tr>
         <tr><td class="bl">Step 4 — Dryer Demand</td><td class="bv" id="br4">—</td></tr>
         <tr><td class="bl">Step 5 — Cooking (raw VA)</td><td class="bv" id="br5">—</td></tr>
@@ -2037,7 +2044,7 @@ function calc(){
   sv('s_nwire',neutralWire);
   sv('s_egc',egc);
   sv('br1',fmt(s1)+' VA');
-  sv('br2',fmt(Math.round(s2))+' VA  ← added @ 100% after demand factor');
+  sv('br2',fmt(Math.round(s2))+' VA');
   sv('br3',fmt(Math.round(appDem))+' VA');sv('br4',fmt(s4)+' VA');
   sv('br5',fmt(Math.round(s5))+' VA');
   sv('br_tot',fmt(Math.round(allLoads))+' VA');sv('br_dem',fmt(Math.round(svcDem))+' VA');
@@ -2113,6 +2120,9 @@ document.querySelectorAll('.tab').forEach(function(t){
     t.classList.add('active');
     var panel=document.getElementById('tab-'+t.dataset.tab);
     if(panel) panel.classList.add('active');
+    // Keep the tab you just tapped fully on screen on a phone.
+    t.scrollIntoView({block:'nearest',inline:'nearest'});
+    window.scrollTo(0,0);
   });
 });
 
