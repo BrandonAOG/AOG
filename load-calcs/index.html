@@ -241,7 +241,13 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
 .pool-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:8px;}
 .pool-row:last-child{border-bottom:none;}
 .pool-lbl{font-size:13px;color:var(--text2);flex:1;}
-.pool-inp{width:160px;flex-shrink:0;}
+.pool-inp{width:340px;min-width:150px;flex-shrink:0;}
+/* Phones: pool rows stack so the heater dropdown isn't crushed to "Heat pump —" */
+@media(max-width:560px){
+  .pool-row{flex-wrap:wrap;}
+  .pool-lbl{flex:1 1 100%;margin-bottom:4px;}
+  .pool-inp{width:100%;}
+}
 .pool-inp select,.pool-inp input{border:1px solid var(--border);border-radius:var(--rs);padding:6px 8px;font-family:'Inter',sans-serif;font-size:12px;width:100%;background:#fff;}
 
 /* ── CALC STEPS SHOW ── */
@@ -382,6 +388,8 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   <div class="jf"><label>City / State / Zip</label><input type="text" id="j_city" value=""></div>
   <div class="jf"><label>Phone</label><input type="text" id="j_phone" value=""></div>
 </div>
+
+<div class="hnote" id="aog-restore-warn" style="display:none;margin:10px 12px 0;"></div>
 
 <div class="tabs-bar">
   <div class="tab active"  data-tab="summary">📊 Summary</div>
@@ -568,6 +576,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
           <tbody id="appl_rows"></tbody>
         </table>
       </div>
+      <div class="hnote" id="r3_zerowarn" style="display:none;margin:10px 14px 0;"></div>
       <div style="display:flex;justify-content:flex-end;gap:16px;padding:10px 14px;background:var(--surface2);border-top:1px solid var(--border);flex-wrap:wrap;">
         <span style="font-size:12px;color:var(--text3);">Connected Total: <strong id="r3_tot">—</strong> VA</span>
         <span style="font-size:12px;color:var(--blue);">Total = <strong id="r3_dem">—</strong> VA</span>
@@ -637,6 +646,11 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
 
     <!-- Sub-panel: Pool Loads -->
     <div id="ppanel-loads" class="card-body">
+      <div class="hnote" style="margin:0 0 10px;font-size:11px;">
+        <strong>Pool heaters</strong> are picked by BTU / nameplate, not horsepower. Match the
+        unit's nameplate where you can — RLA&nbsp;×&nbsp;240V gives the VA. Tick <strong>GAS</strong> for a
+        gas heater (counts 500&nbsp;VA of controls only).
+      </div>
       <div id="pool_rows"></div>
       <div style="padding:10px 0 4px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-add btn-sm" onclick="addPoolPump()">+ Add Pool Pump</button>
@@ -703,7 +717,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 3</span> Fixed Appliances</h3>
-        <p>All permanently installed appliances. Rename, set qty, enter VA by selecting from the list or typing a custom value. Set voltage (120V or 240V) — this affects the neutral calculation. Gas checkbox removes the load. No separate demand factor (Optional Method). The Pool Equipment Panel row here represents the feeder VA going to the pool sub-panel.</p>
+        <p><strong>EV chargers:</strong> NEC 2020 <strong>220.57</strong> calculates EVSE at <strong>7,200 VA or the nameplate rating, whichever is larger</strong> — so a 16 A or 24 A charger still counts as 7,200 VA. The calculator enforces that floor automatically and marks the row "220.57 min" when it applies. The 125% continuous-load factor in 625.41 sizes the branch circuit, not this load calc, so it is not applied here.</p><p>All permanently installed appliances. Rename, set qty, enter VA by selecting from the list or typing a custom value. Set voltage (120V or 240V) — this affects the neutral calculation. Gas checkbox removes the load. No separate demand factor (Optional Method). The Pool Equipment Panel row here represents the feeder VA going to the pool sub-panel.</p>
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 4</span> Dryers</h3>
@@ -930,6 +944,31 @@ function shParts(shVal){
   return {element:0, blower:0, total:0};
 }
 
+// Pool heaters are rated by BTU / nameplate, NOT horsepower. Selecting them from
+// the NEC 430.248 motor table was the root of the 10,125 mismatch — no HP value
+// equals a pool heat pump's draw, so the select silently fell to "None".
+// Bands below come from the pool-heater reference table; 6,440 and 10,125 are the
+// values this tool has always used and are kept so saved jobs still restore.
+var POOL_HEATER_OPTS=[
+  [4800,  'Heat pump ~50–70k BTU — 4,800 VA'],
+  [6440,  'Heat pump — 6,440 VA'],
+  [9600,  'Heat pump ~100–140k BTU — 9,600 VA'],
+  [10125, 'Heat pump — 10,125 VA'],
+  [11000, 'Electric resistance 11 kW — 11,000 VA'],
+  [18000, 'Electric resistance 18 kW — 18,000 VA'],
+  [24000, 'Electric resistance 24 kW — 24,000 VA']
+];
+function buildPoolHeaterSel(id, defVA){
+  var s='<select id="'+id+'" onchange="calc()" style="border:1px solid var(--border);'
+       +'border-radius:var(--rs);padding:5px 6px;font-size:11px;background:#fff;width:100%;">';
+  s+='<option value="0">— None —</option><option value="managed">Managed — 0 VA</option>';
+  for(var i=0;i<POOL_HEATER_OPTS.length;i++){
+    var v=POOL_HEATER_OPTS[i][0];
+    s+='<option value="'+v+'"'+(v===defVA?' selected':'')+'>'+POOL_HEATER_OPTS[i][1]+'</option>';
+  }
+  return s+'</select>';
+}
+
 // HP motor options for appliances (single-phase, selectable voltage)
 var MOTOR_OPTS=[
   {label:'— custom VA —', hp:'custom'},
@@ -941,22 +980,50 @@ var MOTOR_OPTS=[
 
 var APPLS=[
   {id:'wh',   name:'Water Heater',       qty:1, va:4500,  volt:'240', canGas:true,  isMotor:false, vaOpts:[4500,3500,6000,9000,18000,28000,0], gasVA:100},
-  {id:'ref',  name:'Refrigerator',       qty:1, va:1500,  volt:'120', canGas:false, isMotor:false, vaOpts:[1500,1400,1600,1700,1800]},
-  {id:'frz',  name:'Freezer',            qty:1, va:600,   volt:'120', canGas:false, isMotor:false, vaOpts:[600,700,800,900,1000]},
+  /* Refrigeration defaults are NAMEPLATE figures (what NEC 220.82(B)(3) asks for),
+     not circuit ratings. The old values sat at ~12.5 A each, which is 15/20 A
+     circuit territory — the giveaway was the Freezer at 5 A sitting next to a
+     Refrigerator at 12.5 A. Higher values are retained in every list so older
+     saved jobs still restore and big/old units can still be selected. */
+  {id:'ref',  name:'Refrigerator',       qty:1, va:780,   volt:'120', canGas:false, isMotor:false, vaOpts:[700,780,900,1100,1400,1500,1800]},
+  {id:'frz',  name:'Freezer',            qty:1, va:600,   volt:'120', canGas:false, isMotor:false, vaOpts:[240,360,480,600,700,800,900,1000]},
   {id:'dw',   name:'Dishwasher',         qty:1, va:1030,  volt:'120', canGas:false, isMotor:false, vaOpts:[1030,1100,1200,1300,1400]},
   {id:'disp', name:'Disposal',           qty:1, va:828,   volt:'120', canGas:false, isMotor:true,  vaOpts:[]},
   {id:'rh',   name:'Range Hood',         qty:1, va:540,   volt:'120', canGas:false, isMotor:false, vaOpts:[540,400,700,1200]},
   {id:'mw',   name:'Microwave',          qty:1, va:1400,  volt:'120', canGas:false, isMotor:false, vaOpts:[1400,1000,1100,1200,1300,1500,1700]},
-  {id:'ice',  name:'Ice Maker',          qty:0, va:1440,  volt:'120', canGas:false, isMotor:false, vaOpts:[1440,1600,1800,900]},
+  {id:'ice',  name:'Ice Maker',          qty:0, va:600,   volt:'120', canGas:false, isMotor:false, vaOpts:[350,500,600,900,1440,1600,1800]},
   {id:'mini', name:'Mini Fridge',        qty:0, va:340,   volt:'120', canGas:false, isMotor:false, vaOpts:[340,170,230,288]},
   {id:'comp', name:'Compactor',          qty:0, va:850,   volt:'120', canGas:false, isMotor:false, vaOpts:[850,400,780]},
-  {id:'car',  name:'Car Charger (L2)',   qty:0, va:7200,  volt:'240', canGas:false, isMotor:false, vaOpts:[7200,7500,10000]},
-  {id:'wine', name:'Wine Cooler',        qty:0, va:1500,  volt:'120', canGas:false, isMotor:false, vaOpts:[1500,1800,2400]},
-  {id:'jac',  name:'Jacuzzi Tub',        qty:0, va:0,     volt:'240', canGas:false, isMotor:false, vaOpts:[0,2880,4800,7200]},
+  /* NEC 2020 220.57 — EVSE is calculated at 7,200 VA or the nameplate rating,
+     WHICHEVER IS LARGER. So a 16 A or 24 A charger still counts as 7,200. The
+     evseFloor flag enforces that in calc() even if a custom VA is typed below it.
+     Values are amps x 240V; the 125% in 625.41 is a branch-circuit rule and does
+     NOT apply to this load calc. */
+  {id:'car',  name:'EV Charger (EVSE)',   qty:0, va:7200,  volt:'240', canGas:false, isMotor:false,
+     evseFloor:7200,
+     vaOpts:[  3840,  5760,  7200,  7680,  9600, 11520, 12000, 14400, 19200],
+     vaLabels:['16 A (3.8 kW) — counts as 7,200',
+               '24 A (5.8 kW) — counts as 7,200',
+               '30 A (7.2 kW) — 7,200 VA',
+               '32 A (7.7 kW) — 7,680 VA',
+               '40 A (9.6 kW) — 9,600 VA',
+               '48 A (11.5 kW) — 11,520 VA',
+               '50 A (12 kW) — 12,000 VA',
+               '60 A (14.4 kW) — 14,400 VA',
+               '80 A (19.2 kW) — 19,200 VA']},
+  /* Florida-specific additions. VA figures below are typical residential values,
+     NOT manufacturer data — confirm against a nameplate on the first few jobs.
+     Golf cart chargers vary most (48V vs 72V, lead-acid vs lithium fast charger). */
+  {id:'golf', name:'Golf Cart Charger',   qty:0, va:1440,  volt:'120', canGas:false, isMotor:false, vaOpts:[960,1440,1800,2400]},
+  {id:'wine', name:'Wine Cooler',        qty:0, va:230,   volt:'120', canGas:false, isMotor:false, vaOpts:[170,230,350,500,1500,1800,2400]},
+  {id:'jac',  name:'Jacuzzi Tub',        qty:0, va:2880,  volt:'240', canGas:false, isMotor:false, vaOpts:[0,2880,4800,7200]},
   {id:'shut', name:'Shutters (120V)',    qty:1, va:828,   volt:'120', canGas:false, isMotor:false, vaOpts:[828]},
-  {id:'well', name:'Well Pump',          qty:0, va:0,     volt:'240', canGas:false, isMotor:true,  vaOpts:[]},
-  {id:'fpump',name:'Fountain Pump',      qty:0, va:0,     volt:'120', canGas:false, isMotor:true,  vaOpts:[]},
-  {id:'elev', name:'Elevator',          qty:0, va:0,     volt:'240', canGas:false, isMotor:true,  vaOpts:[]},
+  {id:'soft', name:'Water Softener / Filter',qty:0, va:150,  volt:'120', canGas:false, isMotor:false, vaOpts:[100,150,300,500]},
+  {id:'sept', name:'Septic / Sewage Pump', qty:0, va:1127, volt:'120', canGas:false, isMotor:true,  vaOpts:[]},   /* 1/2 HP */
+  {id:'irr',  name:'Irrigation / Booster Pump',qty:0, va:1840, volt:'240', canGas:false, isMotor:true, vaOpts:[]},   /* 1 HP */
+  {id:'well', name:'Well Pump',          qty:0, va:2300,  volt:'240', canGas:false, isMotor:true,  vaOpts:[]},   /* 1.5 HP */
+  {id:'fpump',name:'Fountain Pump',      qty:0, va:1127,  volt:'120', canGas:false, isMotor:true,  vaOpts:[]},   /* 1/2 HP */
+  {id:'elev', name:'Elevator',          qty:0, va:6440,  volt:'240', canGas:false, isMotor:true,  vaOpts:[]},   /* 5 HP */
   // Pool Equip Panel row is generated automatically from Pool tab — not in APPLS array
 ];
 
@@ -1012,8 +1079,9 @@ function makeVAcell(id, a, customId){
     sel+='<option value="custom">— type custom VA —</option>';
     sel+='<option value="managed">Managed — 0 VA</option>';
     for(var j=0;j<a.vaOpts.length;j++){
-      var s=a.vaOpts[j]===a.va?' selected':'';
-      var lbl=a.vaOpts[j]===0?'None — 0 VA':a.vaOpts[j].toLocaleString()+' VA';
+      var s=(a.vaOpts[j]===a.va&&a.vaOpts.indexOf(a.va)===j)?' selected':'';
+      var lbl=(a.vaLabels&&a.vaLabels[j])?a.vaLabels[j]
+              :(a.vaOpts[j]===0?'None — 0 VA':a.vaOpts[j].toLocaleString()+' VA');
       sel+='<option value="'+a.vaOpts[j]+'"'+s+'>'+lbl+'</option>';
     }
   }
@@ -1177,8 +1245,7 @@ function buildPool(){
     '<div class="pool-row" id="pool_spa_row">'
     +'<span class="pool-lbl">Spa Heater'
     +' <select id="pvolt_spa" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
-    +'<option value="240" selected>240V</option><option value="120">120V</option>'
-    +'</select>'
+    +'<option value="240" selected>240V</option></select>'
     +' <label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;margin-left:6px;">'
     +'<input type="checkbox" id="gas_spa" onchange="calc()" style="accent-color:var(--amber);width:13px;height:13px;"> GAS (500VA)</label>'
     +'</span>'
@@ -1187,13 +1254,12 @@ function buildPool(){
     +'<option value="0" selected>0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>'
     +'</select>'
     +'<span style="font-size:11px;color:var(--text3);">×</span>'
-    +'<input type="number" id="va_spa" value="11000" readonly style="width:90px;border:1px solid var(--border);border-radius:var(--rs);padding:5px 7px;font-family:JetBrains Mono,monospace;font-size:12px;text-align:right;background:var(--surface2);color:var(--text3);cursor:not-allowed;">'
-    +'<span style="font-size:10px;color:var(--text3);">VA (fixed)</span>'
+    +buildPoolHeaterSel('va_spa', 11000)
     +'</div>'
     +'</div>'
     // ── Pool Heater 3.5 ton ──
     +'<div class="pool-row">'
-    +'<span class="pool-lbl">Pool Heater 3.5 ton HP'
+    +'<span class="pool-lbl">Pool Heater 1'
     +' <select id="pvolt_ph35" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option></select>'
     +' <label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;margin-left:6px;">'
@@ -1204,11 +1270,11 @@ function buildPool(){
     +'<option value="0">0</option><option value="1" selected>1</option><option value="2">2</option>'
     +'</select>'
     +'<span style="font-size:11px;color:var(--text3);">×</span>'
-    +buildMotorSel("va_ph35", 6440, "240")
+    +buildPoolHeaterSel("va_ph35", 6440)
     +'</div></div>'
     // ── Pool Heater 5 ton ──
     +'<div class="pool-row">'
-    +'<span class="pool-lbl">Pool Heater 5 ton HP'
+    +'<span class="pool-lbl">Pool Heater 2'
     +' <select id="pvolt_ph5" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option></select>'
     +' <label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;margin-left:6px;">'
@@ -1219,7 +1285,7 @@ function buildPool(){
     +'<option value="0" selected>0</option><option value="1">1</option><option value="2">2</option>'
     +'</select>'
     +'<span style="font-size:11px;color:var(--text3);">×</span>'
-    +buildMotorSel("va_ph5", 10125, "240")
+    +buildPoolHeaterSel("va_ph5", 10125)
     +'</div></div>'
     // ── Pool Lights ──
     +'<div class="pool-row">'
@@ -1370,11 +1436,22 @@ function updateMotorVolt(selId, newVolt){
 }
 
 function buildMotorSel(id, defVA, volt){
+  var v=parseInt(volt)||240;
+  // Does defVA actually appear in the NEC 430.248 motor table at this voltage?
+  // If not, the select silently falls through to "— None —" (value 0) and the
+  // load counts as ZERO with nothing on screen saying so. That is exactly what
+  // happened to the large pool heat pump (10,125 is not an HP table value), so
+  // add it as an explicit nameplate entry instead of losing it.
+  var onTable=false;
+  for(var t=1;t<MOTOR_OPTS.length;t++){ if(Math.round(hpVA(MOTOR_OPTS[t].hp,v))===defVA) onTable=true; }
   var s='<select id="'+id+'" onchange="calc()" style="border:1px solid var(--border);border-radius:var(--rs);padding:5px 6px;font-size:11px;background:#fff;width:100%;">';
   s+='<option value="0">— None —</option><option value="managed">Managed — 0 VA</option>';
+  if(defVA>0 && !onTable){
+    s+='<option value="'+defVA+'" selected>'+defVA.toLocaleString()+' VA nameplate ('+(defVA/v).toFixed(1)+' A)</option>';
+  }
   for(var i=1;i<MOTOR_OPTS.length;i++){
     var mo=MOTOR_OPTS[i];
-    var va=hpVA(mo.hp, parseInt(volt)||240);
+    var va=hpVA(mo.hp, v);
     var rounded=Math.round(va);
     var sel=rounded===defVA?' selected':'';
     s+='<option value="'+rounded+'"'+sel+'>'+mo.label+' — '+rounded+' VA</option>';
@@ -1506,7 +1583,7 @@ function calc(){
   // Spa: qty × 11,000 VA (fixed), or 500 VA control if gas
   var spaQty_=gv('qty_spa');
   var gasSpa_=gc('gas_spa');
-  var spaVA_=spaQty_*(gasSpa_?500:11000);
+  var spaVA_=spaQty_*(gasSpa_?500:gv('va_spa'));   // was hardcoded 11000; now follows the dropdown
   // Heaters: full HP VA, or 500 VA control if gas
   var gasPh35_=gc('gas_ph35'), gasPh5_=gc('gas_ph5');
   var h35VA_=gv('qty_ph35')*(gasPh35_?500:gv('va_ph35'));
@@ -1575,19 +1652,32 @@ function calc(){
   if(tc_pool) tc_pool.textContent=fmt(Math.round(poolFdrVA));
 
   // ── Step 3 ──
-  var totApp=poolFdrVA, totNeut120=0;  // pool panel already included
+  var totApp=poolFdrVA, totNeut120=0, zeroVA=[];  // zeroVA: qty set but VA is 0  // pool panel already included
   for(var i=0;i<APPLS.length;i++){
     var a=APPLS[i];
     var isGas=a.canGas&&gc('gas_'+a.id);
     var va=isGas?0:gv('va_'+a.id);
     var qty=gv('qty_'+a.id);
+    // NEC 220.57: EVSE at 7,200 VA or nameplate, whichever is larger.
+    var evseFloored=false;
+    if(a.evseFloor && !isGas && qty>0 && va>0 && va<a.evseFloor){ va=a.evseFloor; evseFloored=true; }
     var volt=parseInt(gs('volt_'+a.id))||240;
     var gasVA=isGas?(a.gasVA||0):0;  // ignition/control load when gas
     var rowTot=isGas?(qty*gasVA):(qty*va);
+    // A quantity with no VA contributes nothing and looks perfectly normal on
+    // screen. "Managed" and "GAS" are deliberate zeros; anything else is a miss.
+    if(qty>0 && !isGas && va===0 && gs('sel_'+a.id)!=='managed'){
+      zeroVA.push(document.getElementById('name_'+a.id)?document.getElementById('name_'+a.id).value:a.name);
+    }
     totApp+=rowTot;
     if(volt===120&&!isGas) totNeut120+=rowTot;
     var tc=document.getElementById('tot_'+a.id);
-    if(tc) tc.textContent=isGas?(gasVA>0?'GAS +'+gasVA+'VA':'GAS'):fmt(rowTot);
+    if(tc){
+      if(isGas) tc.textContent=(gasVA>0?'GAS +'+gasVA+'VA':'GAS');
+      else if(evseFloored) tc.innerHTML=fmt(rowTot)
+        +'<br><span style="font-size:9px;font-weight:400;color:var(--amber);white-space:nowrap;">220.57 min</span>';
+      else tc.textContent=fmt(rowTot);
+    }
   }
   // Extra appliance loads
   for(var n=1;n<=extraApplCount;n++){
@@ -1597,10 +1687,22 @@ function calc(){
     var xQty=gv('xqty_'+n);
     var xVolt=parseInt(gs('xvolt_'+n))||240;
     var xTot=xGas?0:xQty*xVa;
+    if(xQty>0 && !xGas && xVa===0){
+      zeroVA.push(document.getElementById('xname_'+n)?document.getElementById('xname_'+n).value:('Extra Load '+n));
+    }
     totApp+=xTot;
     if(xVolt===120&&!xGas) totNeut120+=xTot;
     var xtc=document.getElementById('xtot_'+n);
     if(xtc) xtc.textContent=xGas?'GAS':fmt(xTot);
+  }
+  var zw=document.getElementById('r3_zerowarn');
+  if(zw){
+    if(zeroVA.length){
+      zw.style.display='block';
+      zw.innerHTML='⚠️ <strong>'+zeroVA.join(', ')+'</strong> ha'+(zeroVA.length>1?'ve':'s')
+        +' a quantity but <strong>0 VA</strong> — counting as nothing. Pick a size in the VA column '
+        +'(or type one). Use <em>Managed</em> if the load is intentionally excluded.';
+    } else { zw.style.display='none'; }
   }
   var appDem=totApp;  // Optional Method: NO separate demand factor — included in 10k/40% pool
   sv('r3_tot',totApp);sv('r3_dem',Math.round(appDem));
@@ -1933,6 +2035,17 @@ function aogScheduleSave(){
   },400);
 }
 
+var _aogRestoreIssues=[];
+// Friendly name for a field id, for the restore warning.
+function aogFieldLabel(id){
+  var m=id.match(/^(?:sel|va|qty|volt)_(.+)$/);
+  if(m){ var nm=document.getElementById('name_'+m[1]); if(nm&&nm.value) return nm.value; }
+  if(/^(cu|sh|hp)\d+$/.test(id)) return 'AHU '+id.replace(/\D/g,'');
+  var map={va_spa:'Spa Heater', va_ph35:'Pool Heater 1', va_ph5:'Pool Heater 2',
+           va_blower:'Pool Blower', qty_spa:'Spa Heater', qty_ph35:'Pool Heater 1',
+           qty_ph5:'Pool Heater 2', qty_plight:'Pool Light'};
+  return map[id]||id;
+}
 function aogSetEl(id, rec){
   var el=document.getElementById(id);
   if(!el) return;
@@ -1940,7 +2053,16 @@ function aogSetEl(id, rec){
   if('v' in rec){
     if(el.tagName==='SELECT'){
       var has=Array.prototype.some.call(el.options,function(o){return o.value===rec.v;});
-      if(!has){ var o=document.createElement('option'); o.value=rec.v; o.textContent=rec.v; el.appendChild(o); }
+      if(!has){
+        // The saved value no longer exists — a dropdown changed since this job
+        // was saved. The old behaviour fabricated an option with the raw value
+        // as its label, which then matched nothing in the lookup tables and
+        // silently counted the load as ZERO. Keep the current default and say
+        // so instead of quietly losing the load.
+        _aogRestoreIssues.push({id:id, saved:rec.v,
+          kept:(el.options[el.selectedIndex]?el.options[el.selectedIndex].textContent:'(default)')});
+        return;
+      }
     }
     el.value=rec.v;
   }
@@ -1981,13 +2103,34 @@ function aogRestore(){
   try{ data=JSON.parse(raw); }catch(e){ return false; }
   if(!data||!data.fields) return false;
   _aogRestoring=true;
+  _aogRestoreIssues=[];
   try{
     aogClearDyn();
     aogRebuildRows(data.rows);
     Object.keys(data.fields).forEach(function(id){ aogSetEl(id,data.fields[id]); });
   }catch(e){ console.warn('AOG restore error',e); }
   _aogRestoring=false;
+  aogShowRestoreIssues();
   return true;
+}
+
+function aogShowRestoreIssues(){
+  var box=document.getElementById('aog-restore-warn');
+  if(!box) return;
+  if(!_aogRestoreIssues.length){ box.style.display='none'; return; }
+  var seen={}, lines=[];
+  _aogRestoreIssues.forEach(function(x){
+    var lbl=aogFieldLabel(x.id);
+    if(seen[lbl]) return;
+    seen[lbl]=1;
+    lines.push('<li><strong>'+lbl+'</strong> — saved as "'+x.saved+'", now set to <em>'+x.kept+'</em></li>');
+  });
+  box.style.display='block';
+  box.innerHTML='⚠️ <strong>Some saved selections no longer exist</strong> (this job was saved before the '
+    +'options changed). They were left at the current default — <strong>check these before you quote:</strong>'
+    +'<ul style="margin:6px 0 0 18px;padding:0;">'+lines.join('')+'</ul>'
+    +'<button onclick="this.parentNode.style.display=\'none\'" style="margin-top:8px;padding:4px 10px;'
+    +'font-size:11px;font-weight:600;border:1px solid #f0a500;background:#fff;border-radius:4px;cursor:pointer;">Got it</button>';
 }
 
 function aogNewJobConfirm() {
@@ -2195,9 +2338,9 @@ function buildReportHTML(){
     }
   }
   var ph35El=document.getElementById('va_ph35');
-  if(ph35El&&ph35El.value==='managed') managedLines.push({name:'Pool Heater 3.5 Ton HP', reason:'Pool Equipment'});
+  if(ph35El&&ph35El.value==='managed') managedLines.push({name:'Pool Heater 1', reason:'Pool Equipment'});
   var ph5El=document.getElementById('va_ph5');
-  if(ph5El&&ph5El.value==='managed') managedLines.push({name:'Pool Heater 5 Ton HP', reason:'Pool Equipment'});
+  if(ph5El&&ph5El.value==='managed') managedLines.push({name:'Pool Heater 2', reason:'Pool Equipment'});
   var blowerEl=document.getElementById('va_blower');
   if(blowerEl&&blowerEl.value==='managed') managedLines.push({name:'Pool Blower', reason:'Pool Equipment'});
 
@@ -2222,20 +2365,20 @@ function buildReportHTML(){
     var _spaQty=gv('qty_spa');
     if(_spaQty>0){
       var _spaGas=gc('gas_spa');
-      var _spaVA=_spaQty*(_spaGas?500:11000);
+      var _spaVA=_spaQty*(_spaGas?500:gv('va_spa'));
       poolLines.push({name:'Spa Heater'+(_spaGas?' (gas 500VA ctrl)':'')+(_spaQty>1?' ×'+_spaQty:''), tot:_spaVA.toLocaleString()});
     }
     // 3.5 ton heater
     if(!(document.getElementById('va_ph35')&&document.getElementById('va_ph35').value==='managed')){
       var _q35=gv('qty_ph35'), _g35=gc('gas_ph35');
       var _v35=_q35*(_g35?500:gv('va_ph35'));
-      if(_v35>0) poolLines.push({name:'Pool Heater 3.5 Ton HP'+(_g35?' (gas 500VA ctrl)':'')+(_q35>1?' ×'+_q35:''), tot:_v35.toLocaleString()});
+      if(_v35>0) poolLines.push({name:'Pool Heater 1'+(_g35?' (gas 500VA ctrl)':'')+(_q35>1?' ×'+_q35:''), tot:_v35.toLocaleString()});
     }
     // 5 ton heater
     if(!(document.getElementById('va_ph5')&&document.getElementById('va_ph5').value==='managed')){
       var _q5=gv('qty_ph5'), _g5=gc('gas_ph5');
       var _v5=_q5*(_g5?500:gv('va_ph5'));
-      if(_v5>0) poolLines.push({name:'Pool Heater 5 Ton HP'+(_g5?' (gas 500VA ctrl)':'')+(_q5>1?' ×'+_q5:''), tot:_v5.toLocaleString()});
+      if(_v5>0) poolLines.push({name:'Pool Heater 2'+(_g5?' (gas 500VA ctrl)':'')+(_q5>1?' ×'+_q5:''), tot:_v5.toLocaleString()});
     }
     // Blower
     if(!(document.getElementById('va_blower')&&document.getElementById('va_blower').value==='managed')){
