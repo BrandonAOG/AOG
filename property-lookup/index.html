@@ -10808,6 +10808,36 @@ function geocodeFirst(msCap){
   return Promise.race([ race, new Promise(res=>setTimeout(()=>res(null), msCap||2500)) ]).catch(()=>null);
 }
 
+/* ---- Is this Esri candidate a real, specific address? ----------------------------------------
+   Esri's geocoder answers EVERYTHING. Ask it for a house number that does not exist and it will
+   happily hand back the street, the neighbourhood, or the town, with a high score and a label that
+   still reads "112 1st Ave, Marco Island, Florida, 34145" — a house number Collier's own address
+   layer has never heard of. Addr_type is the field that tells them apart:
+
+     PointAddress / Subaddress   a real, mapped rooftop                        → keep
+     StreetAddress               INTERPOLATED along the block — a guessed
+                                 number that may not be a real house           → keep only on a
+                                                                                 strong score, tagged
+                                                                                 "~approx"
+     StreetName / StreetInt /
+     Locality / Postal / POI     not a specific house at all                   → drop; these are the
+                                                                                 phantom addresses
+
+   This lived inline in geocodeAll() and NOWHERE ELSE, so the FIND button filtered phantoms while
+   the autocomplete dropdown — a separate fetch in fetchSuggestions() — offered every candidate Esri
+   returned, flat-labelled "Esri". That is why a nonexistent address kept appearing as you typed
+   even after the search path learned to reject it. One function now, both callers. */
+const _ESRI_TIER = { POINTADDRESS:2, SUBADDRESS:2, STREETADDRESS:1 };
+function esriAddrTier(c){
+  const loc=c&&c.location; if(!loc||loc.y==null||loc.x==null) return null;
+  const at=String((c.attributes&&c.attributes.Addr_type)||'').toUpperCase();
+  const tier=_ESRI_TIER[at]; if(!tier) return null;          // not a specific address → skip
+  const sc=(typeof c.score==='number')?c.score:100;
+  if(tier===1 && sc<85) return null;                         // interpolated needs a strong score
+  if(tier===2 && sc<55) return null;                         // real rooftop: the long-standing bar
+  return { tier:tier, lat:+loc.y, lng:+loc.x, approx:tier===1,
+           src: tier===1 ? 'Esri ~approx' : 'Esri' };
+}
 async function geocodeAll(q){
   let qq = /\b(fl|florida)\b/i.test(q) ? q : q+', Florida';
   /* NOTE: the US Census geocoder used to be first in this list. It is reachable but sends no
@@ -10851,24 +10881,11 @@ async function geocodeAll(q){
   }
   if(eRes.status==='fulfilled'){
     const cands=(eRes.value&&eRes.value.candidates)||[];
-    // Filter by Esri's Addr_type so the dropdown stops offering addresses that don't exist:
-    //   PointAddress / Subaddress = a real, mapped rooftop → keep.
-    //   StreetAddress = INTERPOLATED along the block (a guessed house number that may not be a real
-    //     house) → keep only on a strong score, tagged "~approx" so it reads as a guess; the rooftop
-    //     snap corrects it on select.
-    //   StreetName / StreetInt / Locality / Postal / POI = not a specific house → drop (these are the
-    //     main source of phantom addresses in the list).
-    const TIER = { POINTADDRESS:2, SUBADDRESS:2, STREETADDRESS:1 };
     for(const c of cands){
-      const loc=c.location; if(!loc||loc.y==null||loc.x==null) continue;
-      const at=String((c.attributes&&c.attributes.Addr_type)||'').toUpperCase();
-      const tier=TIER[at]; if(!tier) continue;                 // not a specific address → skip
-      const sc=(typeof c.score==='number')?c.score:100;
-      if(tier===1 && sc<85) continue;                          // interpolated needs a strong score
-      if(tier===2 && sc<55) continue;                          // real rooftop: keep the old lower bar
+      const k=esriAddrTier(c); if(!k) continue;
       const lbl=c.address||qq;
       if(out.some(o=>o.label===lbl)) continue;
-      out.push({lat:+loc.y,lng:+loc.x,label:lbl,src: tier===1?'Esri ~approx':'Esri'});
+      out.push({lat:k.lat,lng:k.lng,label:lbl,src:k.src});
     }
   }
   return out;
@@ -10929,11 +10946,50 @@ function _ordinalStreet(toks){
   const core=toks.filter(t=>!STREET_STOP.has(t) && !/^\d+$/.test(t));
   return core.length>0 && core.every(t=>_ORDINAL.test(t));
 }
-function streetCore(s){
-  const toks=streetTokens(s);
+/* ---- THE STREET IS THE PART BEFORE THE FIRST COMMA -------------------------------------------
+   Street tokens were taken from the WHOLE query, with a hardcoded list of place words
+   (STREET_PLACE) as the only defence against the city leaking in. That list covers the towns it
+   was written for and nothing else, so measured 2026-08-28:
+
+       112 Sand Hill St, Marco Island   ->  distinctive token "ISLAND"
+       112 Cyrus St, Marco Island       ->  distinctive token "ISLAND"
+       112 Main St, Immokalee           ->  distinctive token "IMMOKALEE"
+       5126 Coronado Pkwy, Cape Coral   ->  "CORONADO"   (only because CAPE and CORAL are listed)
+
+   The resolver then queries  SITEADDR LIKE '%ISLAND%', finds nothing, and drops to the
+   interpolating geocoder — the drift this tool exists to avoid. The statewide roll is worse: it
+   ANDs EVERY core token into the WHERE, so one leaked city word guarantees zero rows and kills the
+   last-resort lookup for rural addresses outright.
+
+   Extending the word list is whack-a-mole across 67 counties and hundreds of towns. The structure
+   already carries the answer: in "112 Sand Hill St, Marco Island, FL 34145" everything after the
+   first comma is city/state/ZIP by definition. Take the street from the first segment.
+
+   Two guards. A segment that is only digits ("652, Bougainvillea Road, Ridgeview Lakes, …" — OSM
+   puts the house number in its own field) pulls in the next segment. And if narrowing leaves no
+   usable token at all, we fall back to the whole string rather than hand callers an empty core,
+   which would make them give up entirely. Comma-less input therefore behaves exactly as before. */
+function streetSegment(s){
+  const str=String(s==null?'':s);
+  if(str.indexOf(',')<0) return str;
+  const parts=str.split(',').map(x=>x.trim()).filter(Boolean);
+  if(!parts.length) return str;
+  let seg=parts[0];
+  if(!/[A-Za-z]/.test(seg) && parts[1]) seg = seg+' '+parts[1];
+  return seg;
+}
+function _streetCoreFrom(str){
+  const toks=streetTokens(str);
   if(_ordinalStreet(toks))
     return toks.filter(t=>!/^\d+$/.test(t) && !STREET_PLACE.has(t));   // ordinal + suffix + direction
   return toks.filter(t=>!STREET_STOP.has(t) && !/^\d+$/.test(t));
+}
+function streetCore(s){
+  const whole=String(s==null?'':s);
+  const seg=streetSegment(whole);
+  const core=_streetCoreFrom(seg);
+  if(core.length || seg===whole) return core;
+  return _streetCoreFrom(whole);          // narrowing left nothing — better the old behaviour than none
 }
 /* Does a parcel's address sit on the same street the user searched? Requires the distinctive
    street-name token(s) to overlap. Lenient when we can't parse either side (returns true). */
@@ -15481,7 +15537,9 @@ async function snapToParcelByAddress(q, lat, lng){
 async function resolveAddressStatewide(ctx){
   if(!ctx || !ctx.hn) return null;
   const hn=String(ctx.hn).trim();
-  const wantToks=new Set(streetTokens(ctx.raw||''));        // {INDIAN, HILLS, DR, ...}
+  // Segment, not the whole query: "North Fort Myers" folds to a bare N, which would then be
+  // demanded of every candidate address as if the user had typed a directional.
+  const wantToks=new Set(streetTokens(streetSegment(ctx.raw||'')));   // {INDIAN, HILLS, DR, ...}
   const wantCore=streetCore(ctx.raw||'');                   // distinctive name only: [INDIAN, HILLS]
   const wantCoreSet=new Set(wantCore);
   // City token, if the user typed one (helps disambiguate a common house# + street statewide).
@@ -17851,7 +17909,7 @@ async function runLookup(lat,lng,searchCtx){
     // (street-aware) to features[0], so the card, the drawn polygon and the label all agree.
     if(liveRes.features && liveRes.features.length>1 && searchCtx && searchCtx.hn){
       const _wantHN=String(searchCtx.hn);
-      const _wantToks=new Set(streetTokens(searchCtx.raw||''));
+      const _wantToks=new Set(streetTokens(streetSegment(searchCtx.raw||'')));
       const _scoreFeat=(f)=>{
         const a=f.attributes||{};
         const addr=a.SiteStreetAddress||a.SITEADDR||a.PHY_ADDR1||a.SITUS||a.FULLADDR||a.situs_1||'';
@@ -20289,6 +20347,15 @@ async function resolveCountyParcel(countyName, searchCtx){
   const cfg = countyName ? COUNTY_PARCEL_RESOLVERS[norm(countyName)] : null;
   if(!cfg || !searchCtx || !searchCtx.hn) return null;
   const hn = String(searchCtx.hn).replace(/'/g,"''");
+  /* MOST DISTINCTIVE STREET TOKEN — hoisted, because BOTH server queries below need it.
+     A bare "<hn> %" LIKE matches that house number on every street in the county (Collier has
+     "112 " on hundreds), and both queries cap the result server-side. Narrowing the WHERE to the
+     street is what keeps the answer inside the cap. See the long note at the parcel query below
+     for why the ORDINAL is preferred over longest-token-wins on numbered grids. */
+  const _coreToks = streetCore(searchCtx.raw||'').filter(t=>t && t.length>=3);
+  const _ord = _coreToks.filter(t=>_ORDINAL.test(t))[0] || null;
+  const _distinct = _ord || _coreToks.slice().sort((a,b)=>b.length-a.length)[0] || null;
+  const _distinctSQL = _distinct ? String(_distinct).replace(/'/g,"''") : null;
   // ADDRESS-POINT PRE-STEP (additive, safe): if this county has an authoritative address-point layer
   // carrying a folio (Collier's FLN), resolve the typed address there to get the folio, then pull the
   // REAL parcel from the trusted parcel layer BY that folio. This catches recently re-addressed lots
@@ -20297,20 +20364,33 @@ async function resolveCountyParcel(countyName, searchCtx){
   // we simply fall through to the existing address-on-parcel-layer logic below (nothing removed).
   if(cfg.addrPointUrl && cfg.apFolioField){
     try{
-      const apWhere = `${cfg.apAddrField} LIKE '${hn} %' OR ${cfg.apAddrField} = '${hn}'`;
+      /* NARROW BY STREET. This used to be a bare "<hn> %" over the whole county, capped at 400
+         rows with no ORDER BY — so the server returned an ARBITRARY 400 of the hundreds of Collier
+         points starting with "112 ", and the client filtered to 1ST AVE afterwards. Which matching
+         points survived the cap therefore changed run to run: the same search for
+         "112 1st Ave, Marco Island" showed the ambiguity picker once and then, on the retry,
+         silently resolved to 112 1st Ave N in NAPLES because that run's 400 happened to contain
+         exactly one 1st-Ave point. Same fix the parcel query below already carries. */
+      let apWhere = `${cfg.apAddrField} LIKE '${hn} %' OR ${cfg.apAddrField} = '${hn}'`;
+      if(_distinctSQL) apWhere = `(${apWhere}) AND ${cfg.apAddrField} LIKE '%${_distinctSQL}%'`;
       const apOut = [cfg.apAddrField,cfg.apFolioField,cfg.apCityField,cfg.apUnitField,cfg.apUnitTypeField,
                      'STATUS','POINTTYPE'].filter(Boolean);
+      const AP_CAP = 400;
       const apParams = `where=${encodeURIComponent(apWhere)}`+
         `&outFields=${encodeURIComponent(apOut.join(','))}`+
-        `&returnGeometry=false&resultRecordCount=400&f=json`;
+        `&returnGeometry=false&resultRecordCount=${AP_CAP}&f=json`;
       const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),9000);
       const r=await fetch(cfg.addrPointUrl+'?'+apParams,{signal:ctrl.signal}); clearTimeout(t);
       if(r.ok){
         const j=await r.json();
         if(!j.error && j.features && j.features.length){
+          /* Did the server truncate? If so, "we found exactly one folio" is not evidence that only
+             one exists — it's evidence that only one survived an arbitrary cut. ArcGIS reports this
+             as exceededTransferLimit; a full page is the same signal on services that omit it. */
+          const apTruncated = (j.exceededTransferLimit===true) || (j.features.length>=AP_CAP);
           const wantCoreAP = new Set(streetCore(searchCtx.raw||''));
           const DIRSUFAP = new Set([...Object.values(DIRMAP), ...Object.values(SUFMAP)]);
-          const wantDSAP = streetTokens(searchCtx.raw||'').filter(x=>DIRSUFAP.has(x));
+          const wantDSAP = streetTokens(streetSegment(searchCtx.raw||'')).filter(x=>DIRSUFAP.has(x));
           // Collect address points that exactly match house# + typed street tokens, dedup by folio.
           // Also remember each folio's STATUS + POINTTYPE (from the point) for a panel badge later.
           const folioHits=new Map();
@@ -20341,7 +20421,7 @@ async function resolveCountyParcel(countyName, searchCtx){
           }
           // Only act when the address points agree on a SINGLE folio — otherwise it's ambiguous
           // (multi-unit / mis-file) and we defer to the parcel-layer logic below.
-          if(folioHits.size>1 && !wantUnitAP){
+          if(folioHits.size>1 && !wantUnitAP && wantCoreAP.size){   // no street named → not a real choice
             // BARE-ADDRESS UNIT STACK: the typed address resolved to several folios that differ only
             // by unit — i.e. a condo/tower. Previously this fell through to the parcel layer, where a
             // building address like "2040" often doesn't exist as a parcel at all (Collier files every
@@ -20353,6 +20433,12 @@ async function resolveCountyParcel(countyName, searchCtx){
               return { multi:true, candidates:stack, src:titleCase(countyName)+' County parcel' };
             }
             // couldn't resolve geometry for them — fall through to the parcel-layer logic below.
+          }
+          /* A lone folio out of a TRUNCATED result set is not a unique match — the other candidates
+             may simply have been cut off. Fall through to the parcel layer, which does its own
+             independent query and can still resolve (or legitimately return several). */
+          if(folioHits.size===1 && apTruncated && !wantUnitAP){
+            throw 0;   // caught below → parcel-layer resolution
           }
           if(folioHits.size===1){
             const folio=[...folioHits.values()][0];
@@ -20396,17 +20482,15 @@ async function resolveCountyParcel(countyName, searchCtx){
   // hundreds of streets), and the row cap then truncates the result — so a condo unit past the cap
   // (e.g. 100 Estero Blvd 634) silently vanishes and the search falls to an ambiguous list. Add the
   // most distinctive street token to the WHERE so we fetch THIS building's units, not 100 random lots.
-  const _coreToks = streetCore(searchCtx.raw||'').filter(t=>t && t.length>=3);
   /* Prefer the ORDINAL when the street is numbered — on a grid the number IS the identity, and
      "longest token wins" is a poor proxy for selectivity there ("1ST" loses to any 4-letter word
      that leaks in, and the WHERE then filters on the wrong thing and returns nothing). Falls back
-     to longest-wins for named streets, which is what it was always for. */
-  const _ord = _coreToks.filter(t=>_ORDINAL.test(t))[0] || null;
-  const _distinct = _ord || _coreToks.slice().sort((a,b)=>b.length-a.length)[0] || null;
+     to longest-wins for named streets, which is what it was always for.
+     _coreToks/_ord/_distinct are computed once at the top of this function — the address-point
+     pre-step needs the same token for the same reason. */
   let where = `${cfg.addrField} LIKE '${hn} %' OR ${cfg.addrField} = '${hn}'`;
-  if(_distinct){
-    const _d = String(_distinct).replace(/'/g,"''");
-    where = `(${cfg.addrField} LIKE '${hn} %' OR ${cfg.addrField} = '${hn}') AND ${cfg.addrField} LIKE '%${_d}%'`;
+  if(_distinctSQL){
+    where = `(${cfg.addrField} LIKE '${hn} %' OR ${cfg.addrField} = '${hn}') AND ${cfg.addrField} LIKE '%${_distinctSQL}%'`;
   }
   const params = `where=${encodeURIComponent(where)}`+
     `&outFields=${encodeURIComponent([cfg.addrField,cfg.cityField,cfg.zipField,cfg.folioField,cfg.ownerField,cfg.parcelUnitField].filter(Boolean).join(','))}`+
@@ -20426,7 +20510,7 @@ async function resolveCountyParcel(countyName, searchCtx){
   // Direction + suffix tokens the user actually typed (AVE/ST/S/N/...). When present, the parcel's
   // address must contain them too — so "8th Ave S" can never match "8th St N".
   const DIRSUF = new Set([...Object.values(DIRMAP), ...Object.values(SUFMAP)]);
-  const wantDS = streetTokens(searchCtx.raw||'').filter(t=>DIRSUF.has(t));
+  const wantDS = streetTokens(streetSegment(searchCtx.raw||'')).filter(t=>DIRSUF.has(t));
   const _nuU = v => String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
   const wantUnit = searchCtx.unit ? _nuU(searchCtx.unit) : null;
   const matches=[];
@@ -20471,6 +20555,13 @@ async function resolveCountyParcel(countyName, searchCtx){
     return { lat:m.lat, lng:m.lng, label:m.label, folio:m.folio, owner:m.owner,
              src:titleCase(countyName)+' County parcel', multi:false };
   }
+  /* NO STREET, NO PICKER. Everything below assumes the candidates share a number AND a street. If
+     the query never named a street, `matches` is just "every lot in the county with this house
+     number" — 30 rows on unrelated streets, presented as if they were alternatives. That is noise,
+     not ambiguity: there is nothing in it for the user to choose between. Fall through and let the
+     geocoder handle a street-less query. (A single match is still returned above — a lone lot with
+     that number is a real answer.) */
+  if(!wantCore.size) return null;
   // Several lots share this number+street (e.g. a multi-unit address). Don't guess.
   // CONDO ENRICHMENT: on a condo every unit folio carries the SAME SiteStreetAddress, so the raw
   // candidate rows come out as N identical lines distinguishable only by folio — useless to pick
@@ -20793,6 +20884,85 @@ document.addEventListener('keydown', e=>{
   if(row && row.dataset.pc!=null){ e.preventDefault(); _pcPick(Number(row.dataset.pc)); }
 });
 
+/* ---- PLACE CHECK: did we land in the town/ZIP that was actually typed? ------------------------
+   The resolver matches on house number + street tokens COUNTY-WIDE, and it has to — the county is
+   the unit of authority. But Collier alone holds Naples, Marco Island, Immokalee, Golden Gate and
+   Everglades City, and numbered grids repeat across them, so "112 1st Ave, Marco Island, 34145"
+   can match "112 1st Ave N, City of Naples, 34102": same county, same street name, different town.
+   The typed city and ZIP were parsed for the search box and then never compared to the answer.
+
+   This ONLY downgrades the match banner from "✓ authoritative" to "confirm this". It never rejects
+   a parcel, because the commonest disagreement is legitimate: a Naples MAILING address on an
+   unincorporated Collier lot, where the county's own city field says something else entirely. */
+function _placeKey(s){
+  return String(s==null?'':s).toUpperCase().replace(/[^A-Z]/g,'').replace(/^(?:CITY|TOWN|VILLAGE)OF/,'');
+}
+const _PLACE_VAGUE=/^(UNINCORPORATED|UNINC|UNKNOWN|NONE|NA|NULL)$/;
+const _PLACE_STATE=/^(FL|FLA|FLORIDA|US|USA|UNITEDSTATES)$/;
+/* Pull {city, zip} out of a comma-formatted address. Used on BOTH the typed query and the
+   resolved label, which share the "street, city, [state,] zip" shape. */
+function typedPlace(raw){
+  const parts=String(raw==null?'':raw).split(',').map(s=>s.trim()).filter(Boolean);
+  let zip='', city='';
+  for(let i=1;i<parts.length;i++){                  // parts[0] is the street — never a city
+    const p=parts[i];
+    /* TRAILING ZIP FIRST. This test has to run before the state test, not after: "FL 34145" keys
+       to "FL", so a state-first order matched it, `continue`d, and threw the ZIP away — which is
+       why "…, Marco Island, FL 34145" reported no ZIP at all and the 34145→34102 half of the
+       disagreement never fired. Handles the bare "34145" part and the jammed "Naples FL 34102". */
+    const zi=p.match(/\b(\d{5})(?:-\d{4})?\s*$/);
+    if(zi){
+      zip=zi[1];
+      const rest=p.slice(0,zi.index).replace(/\b(FL|FLA|FLORIDA)\b\s*$/i,'').trim();
+      if(rest && !city && !_PLACE_STATE.test(_placeKey(rest))) city=rest;
+      continue;
+    }
+    if(_PLACE_STATE.test(_placeKey(p))) continue;   // "Florida" / "FL" / "United States"
+    if(!city) city=p;
+  }
+  return {city:city, zip:zip};
+}
+/* Returns {city?:{typed,got}, zip?:{typed,got}} when the answer contradicts the query, else null. */
+function placeDisagreement(typedRaw, resolvedLabel){
+  const t=typedPlace(typedRaw), r=typedPlace(resolvedLabel);
+  const out={};
+  const tc=_placeKey(t.city), rc=_placeKey(r.city);
+  // Substring either way keeps "Naples" ≈ "City of Naples" ≈ "North Naples" out of the warning.
+  if(tc && rc && !_PLACE_VAGUE.test(tc) && !_PLACE_VAGUE.test(rc)
+     && tc!==rc && tc.indexOf(rc)<0 && rc.indexOf(tc)<0){
+    out.city={typed:t.city, got:r.city};
+  }
+  if(t.zip && r.zip && t.zip!==r.zip) out.zip={typed:t.zip, got:r.zip};
+  return (out.city||out.zip)?out:null;
+}
+
+/* ---- The folio-match banner, in ONE place -----------------------------------------------------
+   An authoritative folio match is the strongest result this tool produces. Say what it matched and
+   stop there — demanding "confirm the marker" on a certain answer is what made every Cape Coral
+   search look like a problem, and a warning that fires on every search is a warning nobody reads.
+
+   The one thing that genuinely deserves a second look is a parcel in a different town or ZIP than
+   the one the user asked for: the match is still folio-exact, but "exact" and "the place you meant"
+   are different claims.
+
+   This lived inline in doSearch(). chooseSuggestion() — the click-a-suggestion path — had its own
+   copy that was ALWAYS the warning tier, so picking a suggestion showed a red "confirm the marker"
+   banner even on a perfect match. Both callers now share this. */
+function folioMatchBanner(pr, askedFor){
+  const fol = pr.folio ? ` · Folio ${esc(pr.folio)}` : '';
+  const dis = placeDisagreement(askedFor||'', pr.label||'');
+  if(dis){
+    const bits=[];
+    if(dis.city) bits.push(`you asked for <b style="color:var(--ink)">${esc(dis.city.typed)}</b>, this parcel is in <b style="color:var(--ink)">${esc(dis.city.got)}</b>`);
+    if(dis.zip)  bits.push(`you asked for ZIP <b style="color:var(--ink)">${esc(dis.zip.typed)}</b>, this parcel is <b style="color:var(--ink)">${esc(dis.zip.got)}</b>`);
+    return `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(pr.src)}): `+
+           `<b style="color:var(--ink)">${esc(pr.label)}</b>${fol} — but ${bits.join('; ')}. `+
+           `Same county, same street name, different place — confirm this is the lot you meant.</div>`;
+  }
+  return `<div class="note matchok noprint" style="padding:2px 2px 4px"><span class="okmark">✓</span>`+
+         `Matched (${esc(pr.src)}): <b>${esc(pr.label)}</b>${fol} — matched by folio in the county's own records.</div>`;
+}
+
 async function doSearch(){
   const q=document.getElementById('addr').value.trim();
   if(!q) return;
@@ -20885,9 +21055,11 @@ async function doSearch(){
         const fol = pr.folio ? ` · Folio ${esc(pr.folio)}` : '';
         /* Authoritative folio match — the strongest result the tool can produce. Say what it
            matched and stop there; demanding "confirm the marker" here is what made every single
-           Cape Coral search look like a problem. The uncertain variants below keep that wording. */
-        const conf = `<div class="note matchok noprint" style="padding:2px 2px 4px"><span class="okmark">✓</span>Matched (${esc(pr.src)}): <b>${esc(pr.label)}</b>${fol} — matched by folio in the county's own records.</div>`;
-        results.insertAdjacentHTML('afterbegin',conf);
+           Cape Coral search look like a problem. The uncertain variants below keep that wording.
+           EXCEPT when the parcel sits in a different town or ZIP than the one that was typed: the
+           match is still folio-exact, but "exact" and "the place you meant" are not the same claim,
+           and rendering a cross-town jump with the same ✓ is how it slips past unnoticed. */
+        results.insertAdjacentHTML('afterbegin', folioMatchBanner(pr, q));
         return;
       }
       // county is covered but the address wasn't found in its parcel layer → fall through to geocoder.
@@ -21062,11 +21234,13 @@ async function fetchSuggestions(q, signal){
     const cands=(eR.value&&eR.value.candidates)||[];
     for(const c of cands){
       if(out.length>=6) break;
-      const loc=c.location; if(!loc||loc.y==null||loc.x==null) continue;
-      if(typeof c.score==='number' && c.score<55) continue;
+      /* Same gate the FIND button uses. Without it this dropdown offered any candidate scoring 55+,
+         including StreetName/Locality fallbacks — which is how "112 1st Ave, Marco Island, 34145"
+         kept being suggested for an address that does not exist. */
+      const k=esriAddrTier(c); if(!k) continue;
       const lbl=c.address||qq;
       if(out.some(o=>o.label===lbl)) continue;
-      out.push({lat:+loc.y,lng:+loc.x,label:lbl,src:'Esri'});
+      out.push({lat:k.lat,lng:k.lng,label:lbl,src:k.src});
     }
   }
   if(out.length<5){
@@ -21094,7 +21268,15 @@ async function chooseSuggestion(it){
   // Anchor on what the user TYPED (house #, street, unit) — not the verbose suggestion label, which
   // is comma-mangled ("…, Ridgeview Lakes, Naples, Collier County, Florida, 34102, United States")
   // and whose OSM coordinate is interpolated (lands on the wrong house). Prefer the typed text.
-  const basis = houseNum(typed) ? typed : cleanAddress(it.label);
+  /* …but only when the typed text actually NAMES A STREET. Typing "201 sw 32" and then clicking
+     "201 SW 32nd Ter, Cape Coral, Florida, 33914" matched on the FRAGMENT, not on the row that was
+     clicked: streetCore("201 sw 32") is empty — SW is a direction, 32 a bare number — so the
+     resolver had no street token, fell back to a bare "201 %" query across the whole county, and
+     offered 30 unrelated lots (201 SW 29th St, 201 SW 3rd Ave, 201 SW 8th St…). Clicking a specific
+     address is a stronger statement of intent than a half-typed string; when the fragment carries
+     no street, the clicked label wins. */
+  const _typedNamesStreet = !!houseNum(typed) && streetCore(typed).length>0;
+  const basis = _typedNamesStreet ? typed : (cleanAddress(it.label) || typed);
   // What we DISPLAY in the search box is different from what we MATCH on: the box should always
   // show the full picked address (cleaned of "County/United States" cruft), never the partial
   // text the user had typed so far. searchCtx below still anchors on the typed basis.
@@ -21154,9 +21336,11 @@ async function chooseSuggestion(it){
       if(Object.keys(_extra).length) _ctxR = Object.assign({}, searchCtx, _extra);
       await runLookup(pr.lat, pr.lng, _ctxR);
       if(stale()) return;
-      const fol = pr.folio ? ` · Folio ${esc(pr.folio)}` : '';
-      const conf = `<div class="note matchconf noprint" style="padding:2px 2px 4px">Matched (${esc(pr.src)}): <b style="color:var(--ink)">${esc(pr.label)}</b>${fol} — authoritative county parcel; confirm the marker is on the right lot.</div>`;
-      results.insertAdjacentHTML('afterbegin',conf);
+      /* Same banner the FIND button uses. This used to be a hard-coded warning tier, so every
+         click-a-suggestion search — including a folio-exact one — came back red asking you to
+         confirm the marker. The place check decides the tier now; `fullAddr` is the address the
+         user actually accepted by clicking, so that is what the parcel is measured against. */
+      results.insertAdjacentHTML('afterbegin', folioMatchBanner(pr, fullAddr||basis));
       return;
     }
     // county covered but address not found in its parcel layer → fall through to the OSM coordinate.
