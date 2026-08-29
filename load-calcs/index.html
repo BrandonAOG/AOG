@@ -717,7 +717,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 3</span> Fixed Appliances</h3>
-        <p><strong>EV chargers:</strong> NEC 2020 <strong>220.57</strong> calculates EVSE at <strong>7,200 VA or the nameplate rating, whichever is larger</strong> — so a 16 A or 24 A charger still counts as 7,200 VA. The calculator enforces that floor automatically and marks the row "220.57 min" when it applies. The 125% continuous-load factor in 625.41 sizes the branch circuit, not this load calc, so it is not applied here.</p><p>All permanently installed appliances. Rename, set qty, enter VA by selecting from the list or typing a custom value. Set voltage (120V or 240V) — this affects the neutral calculation. Gas checkbox removes the load. No separate demand factor (Optional Method). The Pool Equipment Panel row here represents the feeder VA going to the pool sub-panel.</p>
+        <p><strong>EV chargers:</strong> counted at <strong>nameplate</strong>, per 220.82(B)(3). The 7,200&nbsp;VA minimum in <strong>220.57</strong> is part of the <em>standard</em> method (Art. 220 Part III) — this calculator runs the <em>optional</em> method (Part IV), which is an alternative to Part III, not an addition to it. 220.82 imports only 220.61, by name, for the neutral. The 125% continuous-load factor in 625.41 sizes the branch circuit and does not belong in this calculation either.</p><p>All permanently installed appliances. Rename, set qty, enter VA by selecting from the list or typing a custom value. Set voltage (120V or 240V) — this affects the neutral calculation. Gas checkbox removes the load. No separate demand factor (Optional Method). The Pool Equipment Panel row here represents the feeder VA going to the pool sub-panel.</p>
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 4</span> Dryers</h3>
@@ -882,7 +882,13 @@ function hpVA(hp,v){
 }
 
 // ── Helpers ──
-function gv(id){var e=document.getElementById(id);if(!e)return 0;if(e.value==='managed')return 0;var v=parseFloat(e.value);return isNaN(v)?0:v;}
+// Nothing in this calculator can legitimately be negative — VA, quantities,
+// floor area and kW are all non-negative. min="0" on an input only disables the
+// spinner arrows, it never stopped typing, so a stray minus silently SHRANK the
+// service demand. Clamp at the single point every value is read.
+function gv(id){var e=document.getElementById(id);if(!e)return 0;if(e.value==='managed')return 0;var v=parseFloat(e.value);return (isNaN(v)||v<0)?0:v;}
+// Whole-unit count: you cannot install 2.5 refrigerators.
+function gq(id){return Math.floor(gv(id));}
 function gc(id){var e=document.getElementById(id);return e&&e.checked;}
 function gs(id){var e=document.getElementById(id);return e?e.value:'';}
 function sv(id,v){var e=document.getElementById(id);if(!e)return;e.textContent=(typeof v==='number')?fmt(v):v;}
@@ -979,31 +985,57 @@ var MOTOR_OPTS=[
 ];
 
 var APPLS=[
-  {id:'wh',   name:'Water Heater',       qty:1, va:4500,  volt:'240', canGas:true,  isMotor:false, vaOpts:[4500,3500,6000,9000,18000,28000,0], gasVA:100},
+  /* TANK heaters have two elements but they are INTERLOCKED — upper and lower
+     never energise together — so the load is ONE element, not the sum. 4,500 W
+     is the standard element; 5,500 W is the common upgrade.
+     TANKLESS whole-house units are a different animal: 27 kW is 112 A at 240V,
+     36 kW is 150 A. Those are usually load-managed on a generator job.
+     28,000 is kept only so older saved jobs still restore (it looks like a
+     rounding of the 28.8 kW Tempra-class unit). */
+  {id:'wh',   name:'Water Heater',       qty:1, va:4500,  volt:'240', canGas:true,  isMotor:false, gasVA:100,
+     vaOpts:[   0,   1440,   2500,   3000,   3500,   4500,   5500,   6000,   9000,
+             11000,  13000,  14400,  18000,  24000,  27000,  28000,  28800,  36000],
+     vaLabels:['None — 0 VA',
+               '1,440 VA — point-of-use 120V',
+               '2,500 VA — tank, 2.5 kW element',
+               '3,000 VA — tank, 3 kW element',
+               '3,500 VA — tank, 3.5 kW element',
+               '4,500 VA — tank, standard element',
+               '5,500 VA — tank, upgrade element',
+               '6,000 VA — tank, 6 kW element',
+               '9,000 VA — tankless 9 kW',
+               '11,000 VA — tankless 11 kW',
+               '13,000 VA — tankless 13 kW',
+               '14,400 VA — tankless 14.4 kW',
+               '18,000 VA — tankless 18 kW',
+               '24,000 VA — tankless 24 kW',
+               '27,000 VA — tankless 27 kW',
+               '28,000 VA — tankless (legacy value)',
+               '28,800 VA — tankless 28.8 kW',
+               '36,000 VA — tankless 36 kW']},
   /* Refrigeration defaults are NAMEPLATE figures (what NEC 220.82(B)(3) asks for),
      not circuit ratings. The old values sat at ~12.5 A each, which is 15/20 A
      circuit territory — the giveaway was the Freezer at 5 A sitting next to a
      Refrigerator at 12.5 A. Higher values are retained in every list so older
      saved jobs still restore and big/old units can still be selected. */
-  {id:'ref',  name:'Refrigerator',       qty:1, va:780,   volt:'120', canGas:false, isMotor:false, vaOpts:[700,780,900,1100,1400,1500,1800]},
+  {id:'ref',  name:'Refrigerator',       qty:1, va:780,   volt:'120', canGas:false, isMotor:false, vaOpts:[700,780,900,1100,1400,1500,1600,1700,1800]},
   {id:'frz',  name:'Freezer',            qty:1, va:600,   volt:'120', canGas:false, isMotor:false, vaOpts:[240,360,480,600,700,800,900,1000]},
-  {id:'dw',   name:'Dishwasher',         qty:1, va:1030,  volt:'120', canGas:false, isMotor:false, vaOpts:[1030,1100,1200,1300,1400]},
+  {id:'dw',   name:'Dishwasher',         qty:1, va:1030,  volt:'120', canGas:false, isMotor:false, vaOpts:[720,840,960,1030,1100,1200,1300,1400,1500]},
   {id:'disp', name:'Disposal',           qty:1, va:828,   volt:'120', canGas:false, isMotor:true,  vaOpts:[]},
   {id:'rh',   name:'Range Hood',         qty:1, va:540,   volt:'120', canGas:false, isMotor:false, vaOpts:[540,400,700,1200]},
-  {id:'mw',   name:'Microwave',          qty:1, va:1400,  volt:'120', canGas:false, isMotor:false, vaOpts:[1400,1000,1100,1200,1300,1500,1700]},
+  {id:'mw',   name:'Microwave',          qty:1, va:1400,  volt:'120', canGas:false, isMotor:false, vaOpts:[600,720,840,1000,1100,1200,1300,1400,1500,1700]},
   {id:'ice',  name:'Ice Maker',          qty:0, va:600,   volt:'120', canGas:false, isMotor:false, vaOpts:[350,500,600,900,1440,1600,1800]},
-  {id:'mini', name:'Mini Fridge',        qty:0, va:340,   volt:'120', canGas:false, isMotor:false, vaOpts:[340,170,230,288]},
-  {id:'comp', name:'Compactor',          qty:0, va:850,   volt:'120', canGas:false, isMotor:false, vaOpts:[850,400,780]},
-  /* NEC 2020 220.57 — EVSE is calculated at 7,200 VA or the nameplate rating,
-     WHICHEVER IS LARGER. So a 16 A or 24 A charger still counts as 7,200. The
-     evseFloor flag enforces that in calc() even if a custom VA is typed below it.
-     Values are amps x 240V; the 125% in 625.41 is a branch-circuit rule and does
-     NOT apply to this load calc. */
-  {id:'car',  name:'EV Charger (EVSE)',   qty:0, va:7200,  volt:'240', canGas:false, isMotor:false,
-     evseFloor:7200,
+  {id:'mini', name:'Mini Fridge',        qty:0, va:340,   volt:'120', canGas:false, isMotor:false, vaOpts:[80,120,170,230,288,340,420]},
+  {id:'comp', name:'Compactor',          qty:0, va:850,   volt:'120', canGas:false, isMotor:false, vaOpts:[400,600,780,850,1127,1440]},
+  /* EVSE counts at NAMEPLATE here. 220.82(B)(3) says nameplate, and the 7,200 VA
+     minimum in 220.57 belongs to Part III (the standard method) — Part IV is an
+     alternative to Part III, not an addition to it. 220.82 imports only 220.61,
+     by name, for the neutral. The 125% in 625.41 is a branch-circuit rule and
+     does not belong here either. Values are amps x 240V. */
+  {id:'car',  name:'EV Charger (EVSE)',   qty:0, va:11520, volt:'240', canGas:false, isMotor:false,   /* 48 A — the common install */
      vaOpts:[  3840,  5760,  7200,  7680,  9600, 11520, 12000, 14400, 19200],
-     vaLabels:['16 A (3.8 kW) — counts as 7,200',
-               '24 A (5.8 kW) — counts as 7,200',
+     vaLabels:['16 A (3.8 kW) — 3,840 VA',
+               '24 A (5.8 kW) — 5,760 VA',
                '30 A (7.2 kW) — 7,200 VA',
                '32 A (7.7 kW) — 7,680 VA',
                '40 A (9.6 kW) — 9,600 VA',
@@ -1016,8 +1048,14 @@ var APPLS=[
      Golf cart chargers vary most (48V vs 72V, lead-acid vs lithium fast charger). */
   {id:'golf', name:'Golf Cart Charger',   qty:0, va:1440,  volt:'120', canGas:false, isMotor:false, vaOpts:[960,1440,1800,2400]},
   {id:'wine', name:'Wine Cooler',        qty:0, va:230,   volt:'120', canGas:false, isMotor:false, vaOpts:[170,230,350,500,1500,1800,2400]},
-  {id:'jac',  name:'Jacuzzi Tub',        qty:0, va:2880,  volt:'240', canGas:false, isMotor:false, vaOpts:[0,2880,4800,7200]},
-  {id:'shut', name:'Shutters (120V)',    qty:1, va:828,   volt:'120', canGas:false, isMotor:false, vaOpts:[828]},
+  /* Indoor whirlpool / jetted bathtub. NEC 680.71 puts a hydromassage tub on a
+     GFCI-protected individual branch circuit, and the overwhelming majority are
+     120V on a dedicated 20 A circuit: pump alone runs ~8-12 A, with an inline
+     heater ~15-20 A. The old row started at 2,880 VA / 240V, which is a large
+     dual-pump unit — bigger than most tubs actually installed. Larger 240V
+     values are retained for those, and for saved jobs. */
+  {id:'jac',  name:'Jacuzzi Tub',        qty:0, va:1440,  volt:'120', canGas:false, isMotor:false, vaOpts:[0,960,1200,1440,1800,2400,2880,3600,4800,7200]},
+  {id:'shut', name:'Shutters (120V)',    qty:1, va:828,   volt:'120', canGas:false, isMotor:false, vaOpts:[300,480,600,828,1127,1440]},
   {id:'soft', name:'Water Softener / Filter',qty:0, va:150,  volt:'120', canGas:false, isMotor:false, vaOpts:[100,150,300,500]},
   {id:'sept', name:'Septic / Sewage Pump', qty:0, va:1127, volt:'120', canGas:false, isMotor:true,  vaOpts:[]},   /* 1/2 HP */
   {id:'irr',  name:'Irrigation / Booster Pump',qty:0, va:1840, volt:'240', canGas:false, isMotor:true, vaOpts:[]},   /* 1 HP */
@@ -1467,7 +1505,7 @@ function calc(){
   var wireTbl=isAl?AL75:CU75;
 
   // ── Step 1 ──
-  var sqft=gv('sqft'),gl=sqft*3,sa=gv('smapp')*1500,lc=gv('laundry')*1500,s1=gl+sa+lc;
+  var sqft=gv('sqft'),gl=sqft*3,sa=gq('smapp')*1500,lc=gq('laundry')*1500,s1=gl+sa+lc;
   sv('r1_gl',gl);sv('r1_sa',sa);sv('r1_lc',lc);sv('r1_tot',s1);
 
   // ── Step 2 ──
@@ -1657,10 +1695,7 @@ function calc(){
     var a=APPLS[i];
     var isGas=a.canGas&&gc('gas_'+a.id);
     var va=isGas?0:gv('va_'+a.id);
-    var qty=gv('qty_'+a.id);
-    // NEC 220.57: EVSE at 7,200 VA or nameplate, whichever is larger.
-    var evseFloored=false;
-    if(a.evseFloor && !isGas && qty>0 && va>0 && va<a.evseFloor){ va=a.evseFloor; evseFloored=true; }
+    var qty=gq('qty_'+a.id);
     var volt=parseInt(gs('volt_'+a.id))||240;
     var gasVA=isGas?(a.gasVA||0):0;  // ignition/control load when gas
     var rowTot=isGas?(qty*gasVA):(qty*va);
@@ -1674,8 +1709,6 @@ function calc(){
     var tc=document.getElementById('tot_'+a.id);
     if(tc){
       if(isGas) tc.textContent=(gasVA>0?'GAS +'+gasVA+'VA':'GAS');
-      else if(evseFloored) tc.innerHTML=fmt(rowTot)
-        +'<br><span style="font-size:9px;font-weight:400;color:var(--amber);white-space:nowrap;">220.57 min</span>';
       else tc.textContent=fmt(rowTot);
     }
   }
@@ -1684,16 +1717,19 @@ function calc(){
     if(!document.getElementById('xrow_'+n)) continue;
     var xGas=gc('xgas_'+n);
     var xVa=xGas?0:gv('xva_'+n);
-    var xQty=gv('xqty_'+n);
+    var xQty=gq('xqty_'+n);
     var xVolt=parseInt(gs('xvolt_'+n))||240;
-    var xTot=xGas?0:xQty*xVa;
+    // Gas on an extra load carries 100 VA of ignition/controls per unit, the
+    // same as the built-in gas water heater. Zero was inconsistent with every
+    // other gas row in the tool (dryer 250 VA, cooktop 150, oven/range 500).
+    var xTot=xGas?(xQty*100):(xQty*xVa);
     if(xQty>0 && !xGas && xVa===0){
       zeroVA.push(document.getElementById('xname_'+n)?document.getElementById('xname_'+n).value:('Extra Load '+n));
     }
     totApp+=xTot;
     if(xVolt===120&&!xGas) totNeut120+=xTot;
     var xtc=document.getElementById('xtot_'+n);
-    if(xtc) xtc.textContent=xGas?'GAS':fmt(xTot);
+    if(xtc) xtc.textContent=xGas?'GAS +100VA':fmt(xTot);
   }
   var zw=document.getElementById('r3_zerowarn');
   if(zw){
@@ -1714,9 +1750,9 @@ function calc(){
     if(gc('mgd_dry'+n)){
       // Managed: zero out (load is managed, excluded from calc)
     } else if(gc('gas_dry'+n)){
-      s4+=gv('qty_dry'+n)*250;  // gas dryer: 250 VA ignition/control
+      s4+=gq('qty_dry'+n)*250;  // gas dryer: 250 VA ignition/control
     } else {
-      s4+=gv('qty_dry'+n)*gv('va_dry'+n);
+      s4+=gq('qty_dry'+n)*gv('va_dry'+n);
     }
   }
   sv('r4_tot',s4);
@@ -1766,9 +1802,9 @@ function calc(){
     if(gc('mgd_dry'+n)){
       // Managed: excluded from neutral too
     } else if(gc('gas_dry'+n)){
-      neutralDryerVA+=gv('qty_dry'+n)*250;
+      neutralDryerVA+=gq('qty_dry'+n)*250;
     } else {
-      neutralDryerVA+=gv('qty_dry'+n)*gv('va_dry'+n)*0.70;
+      neutralDryerVA+=gq('qty_dry'+n)*gv('va_dry'+n)*0.70;
     }
   }
   // Cooking: NEC 220.61(B)(2) explicitly permits 70% of cooking demand for neutral sizing
@@ -2149,6 +2185,19 @@ function aogClearSaved(){
 }
 
 // Show blank instead of 0 in the typeable VA boxes (skips the field being edited)
+// Leave a field and any impossible value is corrected on screen, so the box
+// agrees with what the calculation used.
+function aogNormalizeNumbers(){
+  document.querySelectorAll('input[type=number]').forEach(function(el){
+    if(el===document.activeElement || el.readOnly) return;
+    if(el.value==='') return;
+    var v=parseFloat(el.value);
+    if(isNaN(v)){ el.value=''; return; }
+    if(v<0) v=0;
+    if(/^(qty_|xqty_)/.test(el.id) || el.id==='smapp' || el.id==='laundry') v=Math.floor(v);
+    if(String(v)!==el.value) el.value=String(v);
+  });
+}
 function aogBlankZeros(){
   document.querySelectorAll('input[type=number][id^="va_"],input[type=number][id^="xva_"],input[type=number][id^="pexva_"]').forEach(function(el){
     if(el===document.activeElement) return;
@@ -2179,7 +2228,7 @@ window.addEventListener('load',function(){
   aogRestore();
   document.addEventListener('input', aogScheduleSave, true);
   document.addEventListener('change', aogScheduleSave, true);
-  document.addEventListener('focusout', aogBlankZeros, true);
+  document.addEventListener('focusout', function(){ aogNormalizeNumbers(); aogBlankZeros(); calc(); }, true);
 
   calc();
   aogBlankZeros();
