@@ -192,6 +192,7 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 
 /* ── APPLIANCE TABLE ── */
 .appl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+
 .appl-tbl{width:100%;border-collapse:collapse;min-width:500px;}
 /* The VA dropdown was taking ~460px of a 918px table. Cap it; the Appliance
    name column absorbs the freed width, which is where long custom names go. */
@@ -329,6 +330,8 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   @page{size:8.5in 11in;margin:0;}
 }
 
+
+
 /* ===== ACTION BAR (matches breaker.html) ===== */
 .action-bar {
   position: fixed !important;
@@ -369,6 +372,103 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
 @media print {
   .action-bar { display: none !important; }
 }
+
+/* Desktop never shows the collapse strip — declared before the media
+   query so the phone rule below wins. */
+.jb-toggle{display:none;}
+/* ══════════ PHONE LAYOUT (≤560px) ══════════
+   Step 3 is a 7-column table with min-width:500px. On a 390px phone that means
+   a sideways swipe to reach Volt / Total VA, and the Appliance name column
+   collapses far enough to truncate "EV Charger (EVSE)" and "Septic / Sewage".
+   Below, each <tr> becomes a card: name + running total on one line, the VA
+   picker full width, then the flags/qty/volt/remove strip. Column order in the
+   markup is unchanged, so nothing in calc() or the autosave has to know. */
+@media(max-width:560px){
+  .appl-wrap{overflow-x:visible;}
+  .appl-tbl{display:block;width:100%;min-width:0;}
+  .appl-tbl thead{display:none;}
+  .appl-tbl tbody,.appl-tbl tr,.appl-tbl td{display:block;}
+  .appl-tbl tr{
+    display:grid;
+    grid-template-columns:1fr 56px 56px 32px;
+    grid-template-areas:
+      "name  name name  total"
+      "va    va   va    va"
+      "flags qty  volt  del";
+    gap:6px 6px;align-items:center;
+    padding:9px 12px;border-bottom:1px solid var(--border);
+  }
+  .appl-tbl tr:hover td{background:none;}
+  .appl-tbl td{padding:0;border-bottom:none;}
+  .appl-tbl td:nth-child(1){grid-area:name;}
+  .appl-tbl td:nth-child(2){grid-area:flags;}
+  .appl-tbl td:nth-child(3){grid-area:qty;}
+  .appl-tbl td:nth-child(4){grid-area:va;}
+  .appl-tbl td:nth-child(5){grid-area:volt;}
+  .appl-tbl td:nth-child(6){grid-area:total;}
+  .appl-tbl td:nth-child(7){grid-area:del;}
+  /* Name and VA get the whole width back — this is what un-truncates the labels. */
+  /* The name is a text input so techs can rename a load, but drawn as a full
+     bordered box it read as a big empty field rather than the row's title.
+     Draw it as the heading it is; the box appears only when tapped. */
+  .appl-tbl td:nth-child(1) input{
+    min-width:0!important;width:100%;
+    font-size:13.5px!important;font-weight:700;color:var(--text);
+    border:1px solid transparent;background:transparent;
+    padding:2px 0!important;border-radius:4px;
+  }
+  .appl-tbl td:nth-child(1) input:focus{
+    border-color:var(--blue);background:#fff;padding:4px 7px!important;
+  }
+  /* VA picker and the manual-VA box share one line. The dropdown only needs
+     ~215px for its longest label ("4,500 VA — tank, standard element"), so the
+     rest goes to the manual box and the card loses a row. */
+  .appl-tbl td:nth-child(4){display:flex!important;gap:6px;align-items:center;}
+  .appl-tbl td:nth-child(4) select{flex:1 1 auto;min-width:0;max-width:none;width:auto;font-size:12.5px;}
+  /* Only the manual box that follows a select is pinned; the Add Load rows have
+     a lone VA input in this cell and must stay full width. */
+  .appl-tbl td:nth-child(4) select ~ input{
+    flex:0 0 78px!important;width:78px!important;
+    margin-top:0!important;font-size:11px!important;padding:6px 6px!important;
+  }
+  .appl-tbl td:nth-child(4) > input:only-child{flex:1 1 auto;width:100%!important;max-width:none;}
+  .appl-tbl td:nth-child(3) input{width:100%!important;}
+  .appl-tbl .tot-cell{font-size:13px;color:var(--blue);}
+  .appl-tbl .gas-cell label{justify-content:flex-start;}
+  /* Gas and Managed stack vertically on desktop because the column is 76px
+     wide. On the phone card the flags cell gets ~200px, so put them on one
+     line. !important because the flex-direction is an inline style on the
+     generated div (both the built-in rows and the Add Load rows). */
+  .appl-tbl td:nth-child(2) > div{
+    flex-direction:row!important;gap:14px!important;
+    align-items:center!important;flex-wrap:wrap;
+  }
+  /* The Add Load button and its colspan cell are not part of the card grid. */
+  .appl-tbl #addload_row{display:block;padding:0;}
+  .appl-tbl #addload_row td{display:block;grid-area:auto;}
+
+  /* Action bar: buttons were flex:1 with overflow:hidden, so on a phone they
+     rendered as "SAVE IM(" and "NEW JO". Let the row wrap instead of shrink. */
+  .action-bar{flex-wrap:wrap;row-gap:4px;justify-content:center;}
+  .action-bar .ab-btn{flex:0 0 auto;overflow:visible;}
+  .action-bar > :first-child{margin-left:0;}
+  .action-bar > :last-child{margin-right:0;}
+
+  /* Card rhythm: 14px gaps between every card added up to a lot of dead
+     scroll over an 8-tab form. */
+  .card{margin-bottom:10px;}
+  .main{padding:10px 10px;}
+
+  /* Job banner collapses once the job is identified — see aogJobToggle(). */
+  .job-banner{padding:10px 12px;gap:7px;}
+  .job-banner.jb-collapsed{display:none;}
+  .jb-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    background:var(--surface);border-bottom:1px solid var(--border);
+    padding:7px 12px;font-size:11px;font-weight:700;letter-spacing:.5px;
+    text-transform:uppercase;color:var(--text3);cursor:pointer;user-select:none;}
+  .jb-toggle .jb-who{text-transform:none;letter-spacing:0;font-weight:600;
+    color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+}
 </style>
 <script src="../update-banner.js"></script>
 </head>
@@ -402,7 +502,8 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   </div>
 </div>
 
-<div class="job-banner">
+<div class="jb-toggle" id="jb_toggle" onclick="aogJobToggle()"><span id="jb_caret">▾ Job Info</span><span class="jb-who" id="jb_who"></span></div>
+<div class="job-banner" id="job_banner">
   <div class="jf"><label>Customer</label><input type="text" id="j_co" value=""></div>
   <div class="jf"><label>Address</label><input type="text" id="j_addr" value=""></div>
   <div class="jf"><label>City / State / Zip</label><input type="text" id="j_city" value=""></div>
@@ -2987,6 +3088,35 @@ function adjustTopPadding() {
     tabsBar.style.top = h + 'px';
   }
 }
+// ── Job banner collapse (phones only) ──
+// The four job fields are filled once and then ride along on all eight tabs,
+// costing 125px of a 844px screen every time. Collapse once a customer name
+// exists; a blank name means it is a fresh job, so leave it open.
+function aogJobToggle(force){
+  var b=document.getElementById('job_banner'), c=document.getElementById('jb_caret');
+  if(!b) return;
+  var collapse=(typeof force==='boolean')?force:!b.classList.contains('jb-collapsed');
+  b.classList.toggle('jb-collapsed', collapse);
+  if(c) c.textContent=(collapse?'\u25b8':'\u25be')+' Job Info';
+  aogJobWho();
+}
+function aogJobWho(){
+  var w=document.getElementById('jb_who'); if(!w) return;
+  var n=(document.getElementById('j_co')||{}).value||'';
+  var a=(document.getElementById('j_addr')||{}).value||'';
+  w.textContent=document.getElementById('job_banner').classList.contains('jb-collapsed')
+    ? (n||a||'No customer entered') : '';
+}
+function aogJobAutoCollapse(){
+  var n=(document.getElementById('j_co')||{}).value||'';
+  aogJobToggle(!!n.trim());
+}
+window.addEventListener('load', aogJobAutoCollapse);
+document.addEventListener('DOMContentLoaded', function(){
+  ['j_co','j_addr'].forEach(function(id){
+    var e=document.getElementById(id); if(e) e.addEventListener('input', aogJobWho);
+  });
+});
 window.addEventListener('resize', adjustTopPadding);
 window.addEventListener('load', adjustTopPadding);
 document.addEventListener('DOMContentLoaded', adjustTopPadding);
