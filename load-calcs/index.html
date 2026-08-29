@@ -728,7 +728,6 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
         <h3><span class="hbadge">Step 2</span> HVAC</h3>
         <p>Select CU/HP tonnage and supplemental heat for each AHU. The NEC uses the <em>larger</em> of: (a) heat element × its demand factor + blower @ 100%, vs (b) CU/HP load + blower @ 100%. The blower is never derated — always counts at 100%. Gas furnace, hydronic coil, or an air handler with no heat strips = pick a "Blower only / gas heat" row, so only the blower VA counts and the unit is not counted as electric space heating.</p>
         <p>The heat demand factor follows <strong>NEC 220.82(C)(4) and (C)(5)</strong>: <strong>65%</strong> for <em>fewer than four</em> separately controlled electric space heating units, <strong>40%</strong> for <em>four or more</em>. At exactly four units the 40% factor applies. Only AHUs with an actual electric heat element count toward that total — an AHU set to "GAS + blower," or one with a condenser and no heat strips, is not a heating unit. The Step 2 "Demand Factor" chip shows the live unit count and which subsection is being applied.</p>
-        <div class="hnote">Heads up: builds before Aug 2026 used a <code>&gt; 4 units</code> threshold, which applied 65% at exactly four units and oversized the result. Re-run any saved four-unit job on this version.</div>
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 3</span> Fixed Appliances</h3>
