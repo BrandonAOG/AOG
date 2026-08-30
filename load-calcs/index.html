@@ -199,7 +199,11 @@ body{font-variant-numeric:tabular-nums;font-family:'Exo 2','Inter',sans-serif;ba
 }
 
 /* ── AHU TABLE ── */
-.ahu-row{display:grid;grid-template-columns:58px minmax(0,1fr) minmax(0,1fr) 104px;gap:6px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center;}
+.ahu-row{display:grid;grid-template-columns:58px minmax(0,1fr) minmax(0,1fr) 84px 104px;gap:6px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center;}
+/* The blower readout gets its own track. Without one it was a fifth child of a
+   four-column grid, so the Heat Pump / Managed flags wrapped to a second row.
+   Its 84px comes out of the two select tracks, which is why they narrow. */
+.ahu-blw{font-size:10px;color:var(--text3);white-space:nowrap;text-align:center;}
 .ahu-row:last-child{border-bottom:none;}
 .ahu-lbl{font-weight:700;font-size:12px;color:var(--blue);}
 .ahu-row select{border:1px solid var(--border);border-radius:var(--rs);padding:7px 8px;font-family:'Inter',sans-serif;font-size:12px;width:100%;max-width:300px;background:#fff;}
@@ -210,10 +214,11 @@ body{font-variant-numeric:tabular-nums;font-family:'Exo 2','Inter',sans-serif;ba
    box span both rows. */
 @media(max-width:560px){
   .ahu-row{grid-template-columns:48px minmax(0,1fr) 104px;gap:5px 6px;}
-  .ahu-lbl{grid-column:1;grid-row:1/3;align-self:center;}
+  .ahu-lbl{grid-column:1;grid-row:1/4;align-self:center;}
   .ahu-row select:nth-of-type(1){grid-column:2;grid-row:1;}
   .ahu-row select:nth-of-type(2){grid-column:2;grid-row:2;}
-  .ahu-row .ahu-flags{grid-column:3;grid-row:1/3;align-self:center;}
+  .ahu-row .ahu-blw{grid-column:2;grid-row:3;text-align:left;}
+  .ahu-row .ahu-flags{grid-column:3;grid-row:1/4;align-self:center;}
 }
 
 /* ── APPLIANCE TABLE ── */
@@ -929,7 +934,8 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       </div>
       <div class="help-sec">
         <h3><span class="hbadge">Step 2</span> HVAC</h3>
-        <p>Select CU/HP tonnage and supplemental heat for each AHU. The NEC uses the <em>larger</em> of: (a) heat element × its demand factor + blower @ 100%, vs (b) CU/HP load + blower @ 100%. The blower is never derated — always counts at 100%. Gas furnace, hydronic coil, or an air handler with no heat strips = pick a "Blower only / gas heat" row, so only the blower VA counts and the unit is not counted as electric space heating.</p>
+        <p>Select CU/HP tonnage and strip heat for each AHU. The NEC uses the <em>larger</em> of: (a) heat element × its demand factor + blower @ 100%, vs (b) CU/HP load + blower @ 100%. The blower is never derated — always counts at 100%.</p>
+        <p>The <strong>blower is derived from the tonnage</strong>, not chosen separately: it belongs to the air handler, and a 5-ton unit moves more air than a 2-ton one no matter what heater kit is in it. PSC figures run 450 VA at 1 ton to 1,050 VA at 5 ton, and the row shows the value it used. Mini splits contribute none — the indoor head's fan is already inside that unit's nameplate. Gas furnace, hydronic coil, or an air handler with no strips = leave heat on "None / gas heat"; the blower still counts, and the unit is not counted as electric space heating.</p>
         <p>The heat demand factor follows <strong>NEC 220.82(C)(4) and (C)(5)</strong>: <strong>65%</strong> for <em>fewer than four</em> separately controlled electric space heating units, <strong>40%</strong> for <em>four or more</em>. At exactly four units the 40% factor applies. Only AHUs with an actual electric heat element count toward that total — an AHU set to "GAS + blower," or one with a condenser and no heat strips, is not a heating unit. The Step 2 "Demand Factor" chip shows the live unit count and which subsection is being applied.</p>
       </div>
       <div class="help-sec">
@@ -1224,39 +1230,73 @@ function sv(id,v){var e=document.getElementById(id);if(!e)return;e.textContent=(
 function fmt(n,dec){if(dec)return n.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});return Math.round(n).toLocaleString('en-US');}
 
 // ══ STATIC DATA ══
-var CU_OPTS=[[0,'— None —'],[1840,'1 ton (1,840)'],[2200,'1.5 ton (2,200)'],[2850,'2 ton (2,850)'],
-  [3600,'2.5 ton (3,600)'],[4275,'3 ton (4,275)'],[5000,'3.5 ton (5,000)'],[5700,'4 ton (5,700)'],
-  [7130,'5 ton (7,130)'],[1295,'Mini Split DP20'],[1887,'Mini Split DP25'],[2047,'Mini Split DP30']];
-// SH_OPTS: [total_VA, heat_element_VA, blower_VA, label]
-// Blower is always at 100%; only heat_element gets the demand factor
+/* Condensing-unit running load. Basis: compressor RLA (mid of the typical band
+   for that tonnage) plus the outdoor fan motor, at 240 V nominal.
+     ton   RLA        fan        total A     VA
+     1     5-6 A      ~1.0 A     6-7 A       1,600
+     1.5   8-9 A      ~1.0 A     9-10 A      2,350
+     2    11-12 A     ~1.0 A    12-13 A      3,100
+     2.5  13-14 A     ~1.5 A    14-15 A      3,700
+     3    16-17 A     ~1.5 A    17-18 A      4,300
+     3.5  18-19 A     ~1.5 A    19-21 A      4,900
+     4    20-21 A     ~1.5 A    21-23 A      5,400
+     5    24-26 A     ~1.5 A    25-28 A      6,600
+   The fan is included because 220.82(C)(3) takes the nameplate rating of the
+   EQUIPMENT, and the outdoor fan runs whenever the compressor does. It is a
+   small term — 240 to 480 VA — so where a nameplate is available, use it.
+   These remain typical figures, not nameplate data. */
+var CU_OPTS=[[0,'— None —'],[1600,'1 ton (1,600)'],[2350,'1.5 ton (2,350)'],[3100,'2 ton (3,100)'],
+  [3700,'2.5 ton (3,700)'],[4300,'3 ton (4,300)'],[4900,'3.5 ton (4,900)'],[5400,'4 ton (5,400)'],
+  [6600,'5 ton (6,600)'],
+  /* Mini splits — running VA by nominal capacity. No separate air handler, so
+     blowerForCU() returns 0 for these: the indoor head's fan is already inside
+     the unit's own nameplate rating. Retires the old DP20/DP25/DP30 labels,
+     which named a model series rather than a size. */
+  /* BTU is abbreviated because the closed select shows only ~146px on a 390px
+     phone — "Mini Split 2.5 ton \u00B7 30,000 BTU (3,550)" measures 205px and
+     truncates. "30k" is how the trade says it anyway; the select's tooltip
+     spells it out, and the VA lands in the Step 2 breakdown. */
+  [775, 'Mini Split \u00BE ton \u00B7 9k'],
+  [1200,'Mini Split 1 ton \u00B7 12k'],
+  [2050,'Mini Split 1.5 ton \u00B7 18k'],
+  [2800,'Mini Split 2 ton \u00B7 24k'],
+  [3550,'Mini Split 2.5 ton \u00B7 30k'],
+  [4350,'Mini Split 3 ton \u00B7 36k']];
+/* PSC blower running VA, keyed to SYSTEM SIZE — the blower belongs to the air
+   handler, not to the heater kit, so it is derived from the CU/HP tonnage
+   already picked on that AHU row rather than baked into the heat dropdown.
+   That also makes it impossible to pair a 5-ton condenser with a 2-ton blower,
+   which the old combined dropdown allowed.
+     1 ton 450 · 1.5 ton 550 · 2 ton 600 · 2.5 ton 700
+     3 ton 750 · 3.5 ton 800 · 4 ton 900 · 5 ton 1,050
+   PSC only. ECM blowers run roughly half these figures; if the fleet ever moves
+   to ECM this is the one table to change. Mini splits return 0 — the indoor
+   head's fan is already inside the unit's own nameplate. */
+var BLOWER_PSC={1600:450, 2350:550, 3100:600, 3700:700,
+                4300:750, 4900:800, 5400:900, 6600:1050};
+function blowerForCU(cuVal, isMini){
+  if(isMini) return 0;
+  return BLOWER_PSC[cuVal] || 0;
+}
+
+/* SH_OPTS: [element_VA, label] — strip heat only. The blower is no longer part
+   of this value; see BLOWER_PSC above. Element VA is kW x 1000 at 240 V nominal,
+   which is definitional, not an estimate. */
 var SH_OPTS=[
-  [0,    0,     0,    '— None (0 VA) —'],
-  /* Heat-free rows: gas furnace, hydronic coil, or an air handler with no heat
-     strips. Electrically identical — zero heat element, blower @ 100%.
-     1,200 keeps its original value (was 'GAS + 1,200 blwr') and 1,800 keeps the
-     value of the retired '0.5 kW + 1,800 blwr' row, so saved jobs still restore.
-     The 0.5 kW element on that old row was phantom load: it made the air handler
-     count as a separately controlled electric heating unit and could tip the
-     house from the 65% to the 40% demand factor. */
-  [800,  0,     800,  'Blower only / gas heat — 800 VA'],
-  [1200, 0,     1200, 'Blower only / gas heat — 1,200 VA'],
-  [1600, 0,     1600, 'Blower only / gas heat — 1,600 VA'],
-  [1800, 0,     1800, 'Blower only / gas heat — 1,800 VA'],
-  [2400, 0,     2400, 'Blower only / gas heat — 2,400 VA'],
-  [3600, 0,     3600, 'Blower only / gas heat — 3,600 VA'],
-  /* Strip-heat kits, small to large */
-  [5800, 5000,  800,  '5 kW + 800 blwr = 5,800'],
-  [8300, 7500,  800,  '7.5 kW + 800 blwr = 8,300'],
-  [8800, 8000,  800,  '8 kW + 800 blwr = 8,800'],
-  [10800,9600,  1200, '9.6 kW + 1,200 blwr = 10,800'],
-  [11600,10000, 1600, '10 kW + 1,600 blwr = 11,600'],
-  [14100,12500, 1600, '12.5 kW + 1,600 blwr = 14,100'],
-  [16600,15000, 1600, '15 kW + 1,600 blwr = 16,600'],
-  [20400,18000, 2400, '18 kW + 2,400 blwr = 20,400'],
-  [23400,21000, 2400, '21 kW + 2,400 blwr = 23,400'],
-  [25400,23000, 2400, '23 kW + 2,400 blwr = 25,400'],
-  [28600,25000, 3600, '25 kW + 3,600 blwr = 28,600'],
-  [32600,29000, 3600, '29 kW + 3,600 blwr = 32,600']
+  [0,     '— None / gas heat —'],
+  [5000,  '5 kW strips'],
+  [7500,  '7.5 kW strips'],
+  [8000,  '8 kW strips'],
+  [9600,  '9.6 kW strips'],
+  [10000, '10 kW strips'],
+  [12500, '12.5 kW strips'],
+  [15000, '15 kW strips'],
+  [18000, '18 kW strips'],
+  [20000, '20 kW strips'],
+  [21000, '21 kW strips'],
+  [23000, '23 kW strips'],
+  [25000, '25 kW strips'],
+  [29000, '29 kW strips']
 ];
 
 // Step 2 comparison detail, populated by calc(), consumed by buildReportHTML().
@@ -1271,11 +1311,9 @@ var AOG_STEP2={element:0,blower:0,connected:0,units:0,hf:0.65,heatCandidate:0,
 // and buildReportHTML() go through this so the screen and the PDF can't drift.
 function shParts(shVal){
   for(var k=0;k<SH_OPTS.length;k++){
-    if(SH_OPTS[k][0]===shVal){
-      return {element:SH_OPTS[k][1], blower:SH_OPTS[k][2], total:SH_OPTS[k][1]+SH_OPTS[k][2]};
-    }
+    if(SH_OPTS[k][0]===shVal) return {element:SH_OPTS[k][0]};
   }
-  return {element:0, blower:0, total:0};
+  return {element:0};
 }
 
 // Pool heaters are rated by BTU / nameplate, NOT horsepower. Selecting them from
@@ -1535,16 +1573,18 @@ function buildAHU(){
   for(var i=0;i<MAX_AHU;i++){
     var cu='',sh='';
     for(var j=0;j<CU_OPTS.length;j++){
-      var s=(i===0&&CU_OPTS[j][0]===4275)||(i!==0&&CU_OPTS[j][0]===0)?' selected':'';
+      var s=(i===0&&CU_OPTS[j][0]===4300)||(i!==0&&CU_OPTS[j][0]===0)?' selected':'';
       cu+='<option value="'+CU_OPTS[j][0]+'"'+s+'>'+CU_OPTS[j][1]+'</option>';
     }
     for(var j=0;j<SH_OPTS.length;j++){
-      var s=(i===0&&SH_OPTS[j][0]===8800)||(i!==0&&SH_OPTS[j][0]===0)?' selected':'';
-      sh+='<option value="'+SH_OPTS[j][0]+'"'+s+'>'+SH_OPTS[j][3]+'</option>';
+      var s=(i===0&&SH_OPTS[j][0]===8000)||(i!==0&&SH_OPTS[j][0]===0)?' selected':'';
+      sh+='<option value="'+SH_OPTS[j][0]+'"'+s+'>'+SH_OPTS[j][1]+'</option>';
     }
     h+='<div class="ahu-row"><span class="ahu-lbl">AHU '+(i+1)+'</span>'
-      +'<select id="cu'+(i+1)+'" onchange="calc()" style="background:#EEF2FF">'+cu+'</select>'
+      +'<select id="cu'+(i+1)+'" onchange="calc()" style="background:#EEF2FF" '
+      +'title="Conventional condensers are listed by tons with their running VA in brackets. Mini splits are listed by tons and nominal capacity — 30k means 30,000 BTU/hr — and carry no separate blower, because the indoor head\'s fan is inside that unit\'s own nameplate.">'+cu+'</select>'
       +'<select id="sh'+(i+1)+'" onchange="calc()" style="background:#FDF4FF">'+sh+'</select>'
+      +'<span id="blw'+(i+1)+'" class="ahu-blw" title="PSC blower VA, derived from the CU/HP size on this row (NEC 220.82(C) counts it at 100%, never derated)."></span>'
       +'<div class="ahu-flags">'
       +'<label title="Tick if this is a HEAT PUMP (the outdoor unit heats the house). '
       +'NEC 220.82(C)(3) adds the compressor to 65% of the strip heat, because both run together. '
@@ -2120,7 +2160,10 @@ function calc(){
     var shTotal=gv('sh'+i);
     totCU+=cuVal;
     var _shp=shParts(shTotal);
-    var heatEl=_shp.element, blowerEl=_shp.blower;
+    var heatEl=_shp.element;
+    // Blower comes from the tonnage picked on this row, not from the heat
+    // dropdown — see BLOWER_PSC. Set below, once we know whether it is a mini.
+    var blowerEl=0;
     // Count as a separately controlled electric heating unit only if it has
     // an actual heat element (gas + blower rows carry heatEl = 0).
     var isHP_=gc('hp'+i);
@@ -2143,7 +2186,15 @@ function calc(){
     // so new mini split models are covered automatically.
     var cuOpt_=cuEl_.options[cuEl_.selectedIndex];
     var isMini_=cuOpt_ ? /mini\s*split/i.test(cuOpt_.textContent||'') : false;
-    if(cuVal>0 && blowerEl===0 && !isMini_) noBlower.push(i);
+    blowerEl=blowerForCU(cuVal, isMini_);
+    var blwEl_=document.getElementById('blw'+i);
+    if(blwEl_) blwEl_.textContent = blowerEl>0 ? ('blower '+blowerEl.toLocaleString()+' VA')
+                                  : (isMini_ ? 'fan in nameplate' : '');
+    // The old "condenser but no blower VA" warning is gone: with the blower
+    // derived from tonnage it cannot happen. The gap that remains is the
+    // reverse — heat strips on a row with no tonnage picked, so there is
+    // nothing to size the blower from.
+    if(heatEl>0 && cuVal===0) noBlower.push(i);
     totBlower+=blowerEl;
   }
   var totHeat=totHeatElement+hpCompressor+hpSupplement+totBlower;  // total heat VA (for display)
@@ -2169,9 +2220,9 @@ function calc(){
     }
     if(noBlower.length){
       notes.push('⚠️ <strong>AHU '+noBlower.join(', ')+'</strong> ha'+(noBlower.length>1?'ve':'s')
-        +' a condenser but <strong>no blower VA counted</strong> — heat is set to "None". '
-        +'Every air handler has a blower and it runs whenever the A/C runs. Pick a '
-        +'"Blower only / gas heat" row matching the unit so the blower is included.');
+        +' heat strips but <strong>no CU/HP size picked</strong>, so no blower VA is counted. '
+        +'The blower is sized from the system tonnage — pick the CU/HP size on that row, '
+        +'even where the condenser itself is on another line.');
     }
     if(notes.length){
       bw.style.display='block';
@@ -3313,15 +3364,26 @@ function buildReportHTML(){
     var shs=document.getElementById('sh'+i);
     if(!cus||!shs) continue;
     if(document.getElementById('mgd_ahu'+i) && document.getElementById('mgd_ahu'+i).checked){
-      var _cuv=parseInt(cus.value)||0, _shp=shParts(parseFloat(shs.value)||0);
+      var _cuv=parseInt(cus.value)||0;
+      var _mini=/mini\s*split/i.test((cus.options[cus.selectedIndex]||{}).textContent||'');
+      var _tot=(shParts(parseFloat(shs.value)||0).element)+blowerForCU(_cuv,_mini);
       managedLines.push({name:'AHU '+i+(_cuv?' — CU '+_cuv.toLocaleString()+' VA':'')
-        +(_shp.total?' / Heat '+_shp.total.toLocaleString()+' VA':''), reason:'HVAC'});
+        +(_tot?' / Heat '+_tot.toLocaleString()+' VA':''), reason:'HVAC'});
       continue;
     }
-    // Heat VA = element + blower resolved from SH_OPTS, NOT the raw option
-    // value — those disagree on at least one row (see shParts).
-    var cuv=parseInt(cus.value)||0, shv=shParts(parseFloat(shs.value)||0).total;
-    if(cuv||shv) hvacLines.push({name:'AHU '+i, cu:cuv, sh:shv});
+    // Heat VA on the report is nameplate: strip element plus the blower the
+    // tonnage implies. shParts carries only the element now — the blower lives
+    // on the CU/HP size (see BLOWER_PSC).
+    var cuv=parseInt(cus.value)||0;
+    var cuTxt=((cus.options[cus.selectedIndex]||{}).textContent||'').trim();
+    var mini_=/mini\s*split/i.test(cuTxt);
+    var shv=(shParts(parseFloat(shs.value)||0).element)+blowerForCU(cuv,mini_);
+    // Name the row by the equipment, not the slot: "5 ton" reads better on a
+    // report than "AHU 1", and the VA is already in the column beside it, so
+    // the bracketed figure comes off the label. Falls back to the slot number
+    // when no CU/HP is picked, since "— None —" names nothing.
+    var rowName=(cuv>0) ? cuTxt.replace(/\s*\([\d,]+\)\s*$/,'') : ('AHU '+i);
+    if(cuv||shv) hvacLines.push({name:rowName, cu:cuv, sh:shv});
   }
 
   // ── Pool Equipment — managed loads ──
