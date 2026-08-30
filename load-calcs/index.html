@@ -933,7 +933,10 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       </div>
       <div class="help-sec">
         <h3>Neutral Demand</h3>
-        <p>Per NEC 220.61: First 200A at 100%, above 200A at 70%. This is the maximum unbalanced load between the two hot legs and neutral.</p>
+        <p><strong>NEC 220.61(A)</strong> defines the neutral load as the maximum unbalance — the maximum net calculated load between the neutral and <em>any one</em> ungrounded conductor. A load wired between two ungrounded conductors never appears on the neutral, so 240V loads (HVAC, water heater, electric dryer, cooking, pool feeder) contribute nothing. Only 120V loads count: Step 1 lighting, small-appliance and laundry circuits, plus any Step 3 appliance set to 120V, and the 120V control load of a gas dryer.</p>
+        <p>The 70% allowance in <strong>220.61(B)(1)</strong> for ranges, ovens, cooktops and dryers is <em>not</em> used here. It is permitted only "where the maximum unbalanced load has been determined in accordance with Table 220.55 for ranges and Table 220.54 for dryers" — Part III tables. This calculator runs the Part IV optional method, where those loads go in at nameplate per 220.82(B)(3)b and c, so the condition is not met.</p>
+        <p>The reduction in <strong>220.61(B)(2)</strong> <em>is</em> applied: first 200 A at 100%, the portion above 200 A at 70%. That one is conditioned on the system type — a 3-wire single-phase ac service qualifies — not on the Part III tables.</p>
+        <p><strong>220.61(C)(1)</strong> prohibits any reduction where the circuit is 2 ungrounded conductors and the neutral of a 4-wire, 3-phase wye system. This calculator assumes a 120/240V single-phase service; a dwelling fed from two legs of a 208Y/120 wye is not yet supported.</p>
       </div>
     </div>
   </div>
@@ -2131,14 +2134,28 @@ function calc(){
   window.AOG_DEMAND={baseLoads:baseLoads, baseDem:baseDem, hvac:s2, svcDem:svcDem};
   var amps=svcDem/240;
   // ── Neutral per NEC 220.61 ──
-  // Neutral carries UNBALANCED (120V) loads only:
+  // 220.61(A): the neutral load is the maximum unbalance — "the maximum net
+  // calculated load between the neutral conductor and any one ungrounded
+  // conductor." A load connected between TWO ungrounded conductors contributes
+  // nothing to that measurement, so every 240V load is off the neutral.
+  //
+  // The 70% in 220.61(B)(1) is NOT available here. It is permitted for ranges,
+  // wall ovens, counter-mounted cooking units and dryers "where the maximum
+  // unbalanced load has been determined in accordance with Table 220.55 for
+  // ranges and Table 220.54 for dryers." Those are Part III tables. This is a
+  // Part IV (220.82) calculation — cooking and dryers go in at nameplate under
+  // 220.82(B)(3)b and c and never touch 220.55 or 220.54, so the condition
+  // attached to that allowance is not met. Same reason 220.57 and 220.54 do not
+  // apply to the ungrounded conductors.
+  //
+  // What lands on the neutral:
   //   Step 1: all 120V (lighting + sm appl + laundry) @ 100%
   //   Step 3: 120V appliances only (tracked in totNeut120) @ 100%
-  //   Step 4: electric dryer @ 70% per NEC 220.61(B)(2)
-  //           gas dryer control = 120V @ 100%
-  //   Step 5: cooking ranges are 240V — heating elements DO NOT flow through neutral
-  //           Only negligible 120V clock/timer loads; excluded per NEC 220.61(B)(2) interpretation
-  //   240V loads (HVAC, water heater, pool) = DO NOT flow through neutral
+  //   Step 4: electric dryer is a 240V element -> 0. Gas dryer control is 120V -> 100%
+  //   Step 5: cooking is 240V -> 0
+  //   HVAC, water heater, pool feeder: 240V -> 0
+  // 220.61(B)(2) IS still available below: it is conditioned on system type
+  // ("3-wire dc or single-phase ac"), not on the Part III tables.
   var neutralDryerVA=0;
   for(var n=1;n<=dryerCount;n++){
     if(!document.getElementById('dryer_'+n)) continue;
@@ -2147,11 +2164,11 @@ function calc(){
     } else if(gc('gas_dry'+n)){
       neutralDryerVA+=gq('qty_dry'+n)*250;
     } else {
-      neutralDryerVA+=gq('qty_dry'+n)*gv('va_dry'+n)*0.70;
+      // Electric dryer: 240V element, between two ungrounded conductors -> 220.61(A) gives 0.
     }
   }
-  // Cooking: NEC 220.61(B)(2) explicitly permits 70% of cooking demand for neutral sizing
-  var neutralCookVA=s5*0.70;
+  // Cooking: 240V, between two ungrounded conductors -> 220.61(A) gives 0.
+  var neutralCookVA=0;
   var neutralVA=s1+totNeut120+neutralDryerVA+neutralCookVA;
   // NEC 220.61(A): neutral shall not exceed demand amps of ungrounded conductors
   // Apply 200A threshold: first 200A @ 100%, above 200A @ 70%
@@ -2303,7 +2320,7 @@ function calc(){
     +'<div class="calc-line" style="background:var(--blue-lt);padding:6px;border-radius:4px;"><span><strong>Service demand (NEC 220.82)</strong></span><span class="cv"><strong>'+fmt(Math.round(svcDem))+' VA</strong></span></div>'
     +'<div class="calc-line"><span>÷ 240V = demand amps</span><span class="cv">'+amps.toFixed(2)+' A</span></div>'
     +'<div class="calc-line"><span>Min. service size (NEC 230.42)</span><span class="cv">'+svcSize+' A</span></div>'
-    +'<div class="calc-line"><span>Neutral (NEC 220.61) — s1+120V appls+dryer×70%+cooking×70%</span><span class="cv">'+neutral_amps.toFixed(2)+' A</span></div>'
+    +'<div class="calc-line"><span>Neutral (NEC 220.61(A)) — Step 1 + 120V appliances only</span><span class="cv">'+neutral_amps.toFixed(2)+' A</span></div>'
     +'<div class="calc-line"><span>Feeder ('+sets+' set'+(sets>1?'s':'')+', '+amps_per.toFixed(1)+'A/set)</span><span class="cv">'+feederWire+'</span></div>'
     +'<div class="calc-line"><span>Neutral wire (NEC 310.16 75°C)</span><span class="cv">'+neutralWire+'</span></div>'
     +'<div class="calc-line"><span>EGC (NEC 250.122, OCPD='+svcSize+'A)</span><span class="cv">'+egc+'</span></div>'
