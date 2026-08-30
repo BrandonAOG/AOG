@@ -116,6 +116,32 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .field input,.field select,.field textarea{border:1px solid var(--border);border-radius:var(--rs);padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);background:#fff;width:100%;min-width:0;max-width:100%;transition:border .15s;}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--blue);}
 .field input[type=number]{font-family:'JetBrains Mono',monospace;font-weight:500;text-align:right;}
+/* Configuration card only. .field select is width:100%, so on a wide screen a
+   two-option list like Copper/Aluminum was stretching to a ~320px grid column.
+   Let each one size to its own longest option instead; max-width keeps it inside
+   the column on a phone. Scoped to this card so Step 1/4/5 fields are untouched. */
+.cfg-grid{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-start;}
+/* Spread the five across the card once they all fit on one line. Guarded by the
+   same 900px where the row stops wrapping — with space-between applied to a
+   wrapped layout the last line's two or three fields get flung to the edges. */
+@media(min-width:900px){.cfg-grid{justify-content:space-between;}}
+.cfg-grid .field{align-items:flex-start;flex:0 0 auto;min-width:0;}
+.cfg-grid .field select{width:auto;max-width:100%;}
+/* The helper note under Feeder Table and the paralleling warning under Feeder
+   Sets sit inside their fields, so an unbounded one would stretch the row. */
+.cfg-grid .field > div{max-width:240px;}
+/* The paralleling warning is a direct child of the row, not of a field, so a
+   long warning drops to its own full-width line instead of widening Feeder
+   Sets and pushing it off the row. */
+.cfg-grid > #parallel_warn{flex:1 0 100%;max-width:none;margin-top:0;}
+/* Step 1: the fields were on 1fr/1fr/1fr while the chip row below uses
+   auto-fill minmax(140px,1fr), so the two rows never lined up. Give the fields
+   the chips' own track definition and gap and they share the same columns at
+   every width. 140px minimum also clears the widest label ("SMALL APPL.
+   CIRCUITS" measures 127px), so no box is narrower than the text above it. */
+.s1-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;}
+.s1-grid .field{align-items:stretch;}
+.s1-grid .field input{width:100%;max-width:100%;}
 .hint{font-size:10px;color:var(--text3);}
 
 /* Custom number with text fallback */
@@ -260,6 +286,27 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
 
 /* ── POOL ── */
 .pool-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:8px;}
+/* Every control used to sit inline after the load name, so a longer name pushed
+   the voltage box, Gas and Managed to a different x on every row and nothing
+   lined up. Both halves are now fixed-track grids: the name column absorbs the
+   slack, everything else holds its column. Empty <span> placeholders keep the
+   columns intact on rows that have no Gas, no qty or no remove button. */
+.pool-lbl{display:grid;grid-template-columns:minmax(90px,1fr) 74px 104px 92px;align-items:center;gap:8px;}
+.pool-inp{display:grid;grid-template-columns:58px 10px minmax(0,1fr) 28px;align-items:center;gap:6px;}
+.pool-head{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:6px 0 5px;border-bottom:2px solid var(--border);}
+.pool-head .pool-lbl,.pool-head .pool-inp{font-size:9px;font-weight:700;letter-spacing:.5px;
+  text-transform:uppercase;color:var(--text3);}
+.pool-head .pool-inp span{text-align:left;}
+/* Phones: the seven columns do not fit in 366px, so fall back to the wrapping
+   behaviour this section already had, drop the header strip, and collapse the
+   placeholder spans that only exist to hold desktop columns open. */
+@media(max-width:560px){
+  .pool-head{display:none;}
+  .pool-lbl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
+  .pool-inp{display:flex;align-items:center;gap:6px;}
+  .pool-lbl > span:empty,.pool-inp > span:empty{display:none;}
+}
 .pool-row:last-child{border-bottom:none;}
 .pool-lbl{font-size:13px;color:var(--text2);flex:1;}
 .pool-inp{width:340px;min-width:150px;flex-shrink:0;}
@@ -546,7 +593,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   <div class="card">
     <div class="card-head"><div class="card-title">⚙️ Configuration</div></div>
     <div class="card-body">
-      <div class="fg fg-3">
+      <div class="fg fg-3 cfg-grid">
         <div class="field"><label>Generator Brand</label>
           <select id="brand" onchange="calc()">
             <option value="generac" selected>Generac</option>
@@ -588,10 +635,10 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
             <option value="9">9 Sets</option>
             <option value="10">10 Sets</option>
           </select>
+        </div>
           <div id="parallel_warn" style="display:none;margin-top:6px;background:#fff3cd;border:1px solid #f0a500;border-left:4px solid #f0a500;border-radius:4px;padding:7px 10px;font-size:11px;color:#7a4f00;line-height:1.5;">
             ⚠️ <strong>NEC 310.10(H):</strong> Conductors smaller than 1/0 AWG cannot be paralleled. Increase sets or select a larger single conductor.
           </div>
-        </div>
       </div>
     </div>
   </div>
@@ -630,7 +677,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       <div class="card-sub">Art. 220.82(B)(1)(2)(3) — 3 VA/sq ft + 1,500 VA per required circuit</div>
     </div>
     <div class="card-body">
-      <div class="fg fg-3">
+      <div class="fg fg-3 s1-grid">
         <div class="field"><label>Floor Area (sq ft)</label>
           <input type="number" id="sqft" value="3000" min="0" oninput="calc()">
           <span class="hint">3 VA × sq ft</span>
@@ -1494,9 +1541,13 @@ function buildPool(){
   var container = document.getElementById('pool_rows');
   if(!container) return;
   container.innerHTML =
+    '<div class="pool-head">'
+    +'<span class="pool-lbl"><span>Load</span><span>Volt</span><span>Gas</span><span>Managed</span></span>'
+    +'<div class="pool-inp"><span>Qty</span><span></span><span>Nameplate VA</span><span></span></div>'
+    +'</div>'
     // ── Spa Heater (qty × read-only 11,000 VA) ──
-    '<div class="pool-row" id="pool_spa_row">'
-    +'<span class="pool-lbl">Spa Heater'
+    +'<div class="pool-row" id="pool_spa_row">'
+    +'<span class="pool-lbl"><span>Spa Heater</span>'
     +' <select id="pvolt_spa" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option></select>'
     +' <label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;margin-left:6px;">'
@@ -1504,17 +1555,18 @@ function buildPool(){
     +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
     +'<input type="checkbox" id="mgd_spa" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
-    +'<div class="pool-inp" style="display:flex;align-items:center;gap:6px;">'
+    +'<div class="pool-inp">'
     +'<select id="qty_spa" onchange="calc()" style="width:55px;border:1px solid var(--border);border-radius:var(--rs);padding:5px 4px;font-size:12px;background:#fff;">'
     +'<option value="0" selected>0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>'
     +'</select>'
-    +'<span style="font-size:11px;color:var(--text3);">×</span>'
+    +'<span></span>'
     +buildPoolHeaterSel('va_spa', 11000)
+    +'<span></span>'
     +'</div>'
     +'</div>'
     // ── Pool Heater 3.5 ton ──
     +'<div class="pool-row">'
-    +'<span class="pool-lbl">Pool Heater 1'
+    +'<span class="pool-lbl"><span>Pool Heater 1</span>'
     +' <select id="pvolt_ph35" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option></select>'
     +' <label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;margin-left:6px;">'
@@ -1522,16 +1574,16 @@ function buildPool(){
     +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
     +'<input type="checkbox" id="mgd_ph35" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
-    +'<div class="pool-inp" style="display:flex;align-items:center;gap:6px;">'
+    +'<div class="pool-inp">'
     +'<select id="qty_ph35" onchange="calc()" style="width:55px;border:1px solid var(--border);border-radius:var(--rs);padding:5px 4px;font-size:12px;background:#fff;">'
     +'<option value="0">0</option><option value="1" selected>1</option><option value="2">2</option>'
     +'</select>'
-    +'<span style="font-size:11px;color:var(--text3);">×</span>'
+    +'<span></span>'
     +buildPoolHeaterSel("va_ph35", 6440)
-    +'</div></div>'
+    +'<span></span></div></div>'
     // ── Pool Heater 5 ton ──
     +'<div class="pool-row">'
-    +'<span class="pool-lbl">Pool Heater 2'
+    +'<span class="pool-lbl"><span>Pool Heater 2</span>'
     +' <select id="pvolt_ph5" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option></select>'
     +' <label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;margin-left:6px;">'
@@ -1539,35 +1591,38 @@ function buildPool(){
     +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
     +'<input type="checkbox" id="mgd_ph5" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
-    +'<div class="pool-inp" style="display:flex;align-items:center;gap:6px;">'
+    +'<div class="pool-inp">'
     +'<select id="qty_ph5" onchange="calc()" style="width:55px;border:1px solid var(--border);border-radius:var(--rs);padding:5px 4px;font-size:12px;background:#fff;">'
     +'<option value="0" selected>0</option><option value="1">1</option><option value="2">2</option>'
     +'</select>'
-    +'<span style="font-size:11px;color:var(--text3);">×</span>'
+    +'<span></span>'
     +buildPoolHeaterSel("va_ph5", 10125)
-    +'</div></div>'
+    +'<span></span></div></div>'
     // ── Pool Lights ──
     +'<div class="pool-row">'
-    +'<span class="pool-lbl">Pool Light (300 VA ea.)'
+    +'<span class="pool-lbl"><span>Pool Light (300 VA ea.)</span>'
     +' <select id="pvolt_plight" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="120" selected>120V</option><option value="240">240V</option>'
     +'</select>'
+    +'<span></span><span></span>'
     +'</span>'
     +'<div class="pool-inp">'
     +'<select id="qty_plight" onchange="calc()" style="width:60px;border:1px solid var(--border);border-radius:var(--rs);padding:5px 4px;font-size:12px;background:#fff;">'
     +'<option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>'
     +'</select>'
+    +'<span></span><span></span><span></span>'
     +'</div></div>'
     // ── Blower ──
     +'<div class="pool-row">'
-    +'<span class="pool-lbl">Blower Motor'
+    +'<span class="pool-lbl"><span>Blower Motor</span>'
     +' <select id="pvolt_blower" onchange="calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option><option value="120">120V</option>'
     +'</select>'
+    +'<span></span>'
     +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
     +'<input type="checkbox" id="mgd_blower" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
-    +'<div class="pool-inp">'+buildMotorSel("va_blower",1587,"240")+'</div></div>'
+    +'<div class="pool-inp"><span></span><span></span>'+buildMotorSel("va_blower",1587,"240")+'<span></span></div></div>'
     // ── Dynamic sections ──
     +'<div id="pool_pumps_section"></div>'
     +'<div id="pool_nc_section"></div>';
@@ -1581,14 +1636,15 @@ function addPoolPump(){
   div.className='pool-row';
   div.id='ppump_'+n;
   div.innerHTML='<span class="pool-lbl">'
-    +'Pool Pump '+n+' (continuous)'
+    +'<span>Pool Pump '+n+' (continuous)</span>'
     +' <select id="ppvolt_'+n+'" onchange="updateMotorVolt(\'ppva_\'+'+n+',this.value);calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option><option value="120">120V</option>'
     +'</select>'
+    +'<span></span>'
     +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
     +'<input type="checkbox" id="mgd_pp'+n+'" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
-    +'<div class="pool-inp" style="display:flex;align-items:center;gap:6px;">'
+    +'<div class="pool-inp"><span></span><span></span>'
     +buildMotorSel('ppva_'+n,0,'240')
     +'<button class="btn btn-remove" onclick="removePoolPump('+n+')" style="padding:3px 8px;font-size:11px;">✕</button>'
     +'</div>';
@@ -1604,14 +1660,15 @@ function addPoolNC(){
   div.className='pool-row';
   div.id='pnc_'+n;
   div.innerHTML='<span class="pool-lbl">'
-    +'<input type="text" id="pncname_'+n+'" value="Non-continuous Load '+n+'" style="font-size:12px;border:1px solid var(--border);border-radius:4px;padding:4px 7px;width:160px;">'
+    +'<input type="text" id="pncname_'+n+'" value="Non-continuous Load '+n+'" style="font-size:12px;border:1px solid var(--border);border-radius:4px;padding:4px 7px;width:100%;min-width:0;">'
     +' <select id="pncvolt_'+n+'" onchange="updateMotorVolt(\'pncva_\'+'+n+',this.value);calc()" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-left:4px;">'
     +'<option value="240" selected>240V</option><option value="120">120V</option>'
     +'</select>'
+    +'<span></span>'
     +' <label title="Load-managed — shed by the management module, excluded from generator demand. The size stays selected." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;margin-left:6px;">'
     +'<input type="checkbox" id="mgd_pnc'+n+'" onchange="calc()" style="accent-color:var(--blue);width:13px;height:13px;"> Managed</label>'
     +'</span>'
-    +'<div class="pool-inp" style="display:flex;align-items:center;gap:6px;">'
+    +'<div class="pool-inp"><span></span><span></span>'
     +buildMotorSel('pncva_'+n,0,'240')
     +'<button class="btn btn-remove" onclick="removePoolNC('+n+')" style="padding:3px 8px;font-size:11px;">✕</button>'
     +'</div>';
