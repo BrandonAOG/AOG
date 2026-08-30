@@ -1252,6 +1252,44 @@ var APPLS=[
   {id:'well', name:'Well Pump',          qty:0, va:2300,  volt:'240', canGas:false, isMotor:true,  vaOpts:[]},   /* 1.5 HP */
   {id:'fpump',name:'Fountain Pump',      qty:0, va:1127,  volt:'120', canGas:false, isMotor:true,  vaOpts:[]},   /* 1/2 HP */
   {id:'elev', name:'Elevator',          qty:0, va:6440,  volt:'240', canGas:false, isMotor:true,  vaOpts:[]},   /* 5 HP */
+  /* ── Added Aug 2026. Same caveat as the block above: these VA figures are
+     typical residential values, NOT manufacturer data. Confirm against a
+     nameplate on the first few jobs and correct the defaults here.
+     All ship at qty 0 so they cost nothing until a tech turns one on.
+     Garage door openers, gate operators and attic fans are deliberately NOT
+     flagged isMotor. Those are sold by "HP" as a marketing number — a 1/2 HP
+     opener's nameplate is about 5.5 A, while NEC 430.248 puts a real 1/2 HP
+     120V motor at 9.8 A. Running them through the motor table would nearly
+     double the load. 220.82(B)(3) asks for nameplate, so the lists below are
+     amp-based. The boat lift IS a real motor and keeps the HP list. */
+  {id:'gdo',  name:'Garage Door Opener', qty:0, va:720,   volt:'120', canGas:false, isMotor:false,
+     vaOpts:[0, 480, 600, 720, 840, 960, 1200],
+     vaLabels:['None — 0 VA','4 A — 480 VA','5 A — 600 VA','6 A — 720 VA',
+               '7 A — 840 VA','8 A — 960 VA','10 A — 1,200 VA']},
+  {id:'dehum',name:'Whole-House Dehumidifier', qty:0, va:960, volt:'120', canGas:false, isMotor:false,
+     vaOpts:[0, 600, 720, 840, 960, 1100, 1400, 1800],
+     vaLabels:['None — 0 VA','600 VA — 5 A, ~70 pint','720 VA — 6 A','840 VA — 7 A, ~90 pint',
+               '960 VA — 8 A, ~100 pint','1,100 VA — 9 A','1,400 VA — large ducted','1,800 VA — 240V unit']},
+  {id:'lift', name:'Boat Lift',          qty:0, va:1840,  volt:'240', canGas:false, isMotor:true,  vaOpts:[]},   /* 1 HP */
+  {id:'htub', name:'Hot Tub / Spa (self-contained)', qty:0, va:9600, volt:'240', canGas:false, isMotor:false,
+     vaOpts:[0, 4800, 7200, 9600, 11520, 12000],
+     vaLabels:['None — 0 VA','20 A — 4,800 VA','30 A — 7,200 VA','40 A — 9,600 VA',
+               '48 A — 11,520 VA','50 A — 12,000 VA']},
+  {id:'gate', name:'Driveway Gate Operator', qty:0, va:600, volt:'120', canGas:false, isMotor:false,
+     vaOpts:[0, 480, 600, 720, 960, 1200],
+     vaLabels:['None — 0 VA','4 A — 480 VA','5 A — 600 VA','6 A — 720 VA','8 A — 960 VA','10 A — 1,200 VA']},
+  {id:'cvac', name:'Central Vacuum',     qty:0, va:1440,  volt:'120', canGas:false, isMotor:false,
+     vaOpts:[0, 960, 1200, 1440, 1680, 1920],
+     vaLabels:['None — 0 VA','8 A — 960 VA','10 A — 1,200 VA','12 A — 1,440 VA',
+               '14 A — 1,680 VA','16 A — 1,920 VA']},
+  {id:'afan', name:'Attic Exhaust Fan',  qty:0, va:400,   volt:'120', canGas:false, isMotor:false,
+     vaOpts:[0, 240, 300, 400, 500, 720],
+     vaLabels:['None — 0 VA','2 A — 240 VA','2.5 A — 300 VA','3.3 A — 400 VA',
+               '4.2 A — 500 VA','6 A — 720 VA']},
+  {id:'land', name:'Landscape Lighting Transformer', qty:0, va:600, volt:'120', canGas:false, isMotor:false,
+     vaOpts:[0, 300, 600, 900, 1200],
+     vaLabels:['None — 0 VA','300 VA transformer','600 VA transformer',
+               '900 VA transformer','1,200 VA transformer']},
   // Pool Equip Panel row is generated automatically from Pool tab — not in APPLS array
 ];
 
@@ -2528,8 +2566,18 @@ function aogNormalizeNumbers(){
     if(String(v)!==el.value) el.value=String(v);
   });
 }
+// A zero sitting in a field is something a tech has to select and delete before
+// typing. Blank it and show it as a grey placeholder instead, so the box is
+// ready to type into. gv() already reads '' as 0, so nothing downstream changes.
+// Qty fields are included here; Step 1's sqft/circuits are not, because those
+// carry real defaults (3,000 sq ft, 2 small-appliance, 1 laundry) that a blank
+// box would hide. Never touches the field being typed in.
+var AOG_ZEROABLE='input[type=number][id^="va_"],input[type=number][id^="xva_"],'
+  +'input[type=number][id^="pexva_"],input[type=number][id^="qty_"],'
+  +'input[type=number][id^="xqty_"]';
 function aogBlankZeros(){
-  document.querySelectorAll('input[type=number][id^="va_"],input[type=number][id^="xva_"],input[type=number][id^="pexva_"]').forEach(function(el){
+  document.querySelectorAll(AOG_ZEROABLE).forEach(function(el){
+    if(!el.getAttribute('placeholder')) el.setAttribute('placeholder','0');
     if(el===document.activeElement) return;
     if(el.value!=='' && parseFloat(el.value)===0) el.value='';
   });
