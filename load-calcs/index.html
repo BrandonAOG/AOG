@@ -13,7 +13,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>Always On Generators — Load Calculation NEC 2020</title>
 <script src="../sounds.js" defer></script>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Exo+2:wght@300;400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="../manifest.json">
 <meta name="theme-color" content="#FBBF24">
 <meta name="mobile-web-app-capable" content="yes">
@@ -41,7 +41,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;}
 /* AOG brand fonts */
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
-body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;}
+body{font-variant-numeric:tabular-nums;font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;}
 
 /* ── TOP BAR ── */
 .topbar{background:#1C2333;color:#fff;padding:0 16px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.3);margin-top:44px;}
@@ -51,9 +51,9 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 /* ── HEADER LIVE STATS (visible on every tab) ── */
 .hdr-stats{margin:0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;}
 .hs{background:rgba(217,119,6,.10);border:1px solid rgba(217,119,6,.35);border-radius:6px;padding:4px 9px;min-width:74px;text-align:center;}
-.hs-l{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.5);line-height:1.3;}
-.hs-v{font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:#FBBF24;line-height:1.2;white-space:nowrap;}
-.hs-u{font-family:'Share Tech Mono',monospace;font-size:8px;color:rgba(255,255,255,.45);margin-left:3px;font-weight:400;}
+.hs-l{font-family:'Inter',Arial,Helvetica,sans-serif;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.5);line-height:1.3;}
+.hs-v{font-family:'Inter',Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;color:#FBBF24;line-height:1.2;white-space:nowrap;}
+.hs-u{font-family:'Inter',Arial,Helvetica,sans-serif;font-size:8px;color:rgba(255,255,255,.45);margin-left:3px;font-weight:400;}
 @media(max-width:640px){
   .topbar{flex-wrap:wrap;}
   .hdr-stats{margin-left:0;width:100%;justify-content:space-between;gap:5px;padding-top:2px;}
@@ -115,7 +115,7 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .field label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);}
 .field input,.field select,.field textarea{border:1px solid var(--border);border-radius:var(--rs);padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);background:#fff;width:100%;min-width:0;max-width:100%;transition:border .15s;}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--blue);}
-.field input[type=number]{font-family:'JetBrains Mono',monospace;font-weight:500;text-align:right;}
+.field input[type=number]{font-family:'Inter',Arial,Helvetica,sans-serif;font-weight:500;text-align:right;}
 /* Configuration card only. .field select is width:100%, so on a wide screen a
    two-option list like Copper/Aluminum was stretching to a ~320px grid column.
    Let each one size to its own longest option instead; max-width keeps it inside
@@ -159,7 +159,7 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px;}
 .chip{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:10px 12px;}
 .chip .cl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);}
-.chip .cv{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--text);line-height:1.2;margin-top:1px;word-break:break-all;}
+.chip .cv{font-family:'Inter',Arial,Helvetica,sans-serif;font-size:17px;font-weight:700;color:var(--text);line-height:1.2;margin-top:1px;word-break:break-all;}
 .chip .cu{font-size:10px;color:var(--text3);}
 .chip.hl{background:var(--blue-lt);border-color:#c7d4f9;}
 .chip.hl .cv{color:var(--blue);}
@@ -176,7 +176,7 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 @media(min-width:700px){.sum-chips{grid-template-columns:repeat(4,1fr);}}
 .sc{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:7px;padding:10px 12px;overflow:hidden;min-width:0;}
 .sc .sl{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;opacity:.65;}
-.sc .sv{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;margin-top:2px;line-height:1.1;word-break:break-all;}
+.sc .sv{font-family:'Inter',Arial,Helvetica,sans-serif;font-size:19px;font-weight:700;margin-top:2px;line-height:1.1;word-break:break-all;}
 .sc .su{font-size:10px;opacity:.55;margin-top:1px;}
 .sc.big{background:rgba(245,184,0,.12);border-color:rgba(245,184,0,.35);}
 .sc.big .sv{color:var(--yellow);font-size:22px;}
@@ -185,7 +185,7 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .br-table{width:100%;border-collapse:collapse;margin-top:6px;}
 .br-table td{padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;}
 .br-table tr:last-child td{border-bottom:none;}
-.br-table .bv{font-family:'JetBrains Mono',monospace;font-weight:600;text-align:right;white-space:nowrap;}
+.br-table .bv{font-family:'Inter',Arial,Helvetica,sans-serif;font-weight:600;text-align:right;white-space:nowrap;}
 .br-table .bl{color:var(--text2);}
 .br-total td{font-weight:700;border-top:2px solid var(--border);padding-top:10px;}
 .br-demand td{color:var(--blue);font-weight:700;}
@@ -228,9 +228,9 @@ body{font-family:'Exo 2','Inter',sans-serif;background:var(--bg);color:var(--tex
 .appl-tbl td{padding:5px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 .appl-tbl tr:hover td{background:var(--surface2);}
 .appl-tbl input,.appl-tbl select{border:1px solid var(--border);border-radius:4px;padding:5px 7px;font-family:'Inter',sans-serif;font-size:12px;width:100%;background:#fff;}
-.appl-tbl input[type=number]{font-family:'JetBrains Mono',monospace;text-align:right;}
+.appl-tbl input[type=number]{font-family:'Inter',Arial,Helvetica,sans-serif;text-align:right;}
 .appl-tbl input:focus,.appl-tbl select:focus{outline:none;border-color:var(--blue);}
-.appl-tbl .tot-cell{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;text-align:right;white-space:nowrap;}
+.appl-tbl .tot-cell{font-family:'Inter',Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;text-align:right;white-space:nowrap;}
 .appl-tbl .gas-cell label{display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;justify-content:center;}
 .appl-tbl .gas-cell input{width:13px;height:13px;accent-color:var(--amber);}
 .appl-tbl .volt-cell select{font-size:10px;}
@@ -323,7 +323,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
 .calc-show h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:8px;}
 .calc-line{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);}
 .calc-line:last-child{border-bottom:none;font-weight:700;color:var(--text);}
-.calc-line .cv{font-family:'JetBrains Mono',monospace;font-weight:500;}
+.calc-line .cv{font-family:'Inter',Arial,Helvetica,sans-serif;font-weight:500;}
 
 /* ── HELP ── */
 .help-sec{margin-bottom:20px;}
@@ -345,7 +345,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
 /* ── INLINE EDITABLE VA ── */
 .va-combo{display:flex;gap:4px;align-items:center;}
 .va-combo select{flex:1;}
-.va-combo input{width:90px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:right;border:1px solid var(--border);border-radius:var(--rs);padding:5px 7px;background:#fff;}
+.va-combo input{width:90px;font-family:'Inter',Arial,Helvetica,sans-serif;font-size:12px;text-align:right;border:1px solid var(--border);border-radius:var(--rs);padding:5px 7px;background:#fff;}
 
 /* ── SCREEN PRINT (full app) ── */
 @media print{
@@ -360,7 +360,8 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   body.printing-report > *:not(#print-report){display:none!important;}
   #print-report{
     display:block!important;
-    font-family:'Share Tech Mono',monospace;
+    font-family:Arial,Helvetica,sans-serif;
+    font-variant-numeric:tabular-nums;
     font-size:9.5pt;
     color:#000;
     background:#fff;
@@ -527,7 +528,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   <button class="ab-btn" id="ab-capture" onclick="captureReport()">⤓ SAVE IMG</button>
   <a class="ab-btn" onclick="window.print()" style="cursor:pointer;">⎙ FULL</a>
   <a class="ab-btn" onclick="aogNewJobConfirm()" style="cursor:pointer;">↺ NEW JOB</a>
-  <span id="aog-save-status" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:rgba(255,255,255,0.45);letter-spacing:.5px;align-self:center;white-space:nowrap;padding:0 4px;"></span>
+  <span id="aog-save-status" style="font-family:'Inter',Arial,Helvetica,sans-serif;font-size:9px;color:rgba(255,255,255,0.45);letter-spacing:.5px;align-self:center;white-space:nowrap;padding:0 4px;"></span>
 </div>
 
 <div class="topbar" style="padding:10px 16px;display:flex;align-items:center;gap:10px;background:#1C2333;border-bottom:1px solid rgba(217,119,6,0.2);">
@@ -539,7 +540,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   <div style="width:1px;height:32px;background:rgba(217,119,6,0.3);margin:0 4px;"></div>
   <div>
     <div style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:#fff;letter-spacing:2px;line-height:1.1;">LOAD CALC</div>
-    <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:1px;">NEC 2020 · Art. 220.82</div>
+    <div style="font-family:'Inter',Arial,Helvetica,sans-serif;font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:1px;">NEC 2020 · Art. 220.82</div>
   </div>
 
   <div class="hdr-stats">
@@ -587,6 +588,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       <div id="parallel_note" style="display:none;grid-column:1/-1;background:#fff3cd;border:1px solid #f0a500;border-left:4px solid #D97706;border-radius:4px;padding:8px 12px;font-size:11px;color:#7a4f00;line-height:1.5;"></div>
       <div class="sc"><div class="sl">Neutral Wire</div><div class="sv" id="s_nwire">—</div><div class="su">Conductor</div></div>
       <div class="sc"><div class="sl">EGC</div><div class="sv" id="s_egc">—</div><div class="su">NEC 250.122</div></div>
+      <div class="sc"><div class="sl">GEC</div><div class="sv" id="s_gec">—</div><div class="su" id="s_gec_note">NEC 250.66</div></div>
     </div>
   </div>
 
@@ -639,6 +641,41 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
           <div id="parallel_warn" style="display:none;margin-top:6px;background:#fff3cd;border:1px solid #f0a500;border-left:4px solid #f0a500;border-radius:4px;padding:7px 10px;font-size:11px;color:#7a4f00;line-height:1.5;">
             ⚠️ <strong>NEC 310.10(H):</strong> Conductors smaller than 1/0 AWG cannot be paralleled. Increase sets or select a larger single conductor.
           </div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:10px;">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px;">Grounding Electrodes Present — NEC 250.52</div>
+        <div id="electrode_row" style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;">
+          <label class="chk-row" style="margin-bottom:0;" title="250.52(A)(3) concrete-encased electrode (Ufer). 250.66(B): that run need not be larger than 4 AWG copper."><input type="checkbox" id="el_ufer" checked onchange="calc()"> <span>Concrete-encased (Ufer)</span></label>
+          <label class="chk-row" style="margin-bottom:0;" title="250.52(A)(5)/(A)(7) rod, pipe or plate. 250.66(A): that run need not be larger than 6 AWG copper / 4 AWG aluminum."><input type="checkbox" id="el_rod" checked onchange="calc()"> <span>Ground rod / pipe / plate</span></label>
+          <label class="chk-row" style="margin-bottom:0;" title="250.52(A)(4) ground ring. 250.66(C): that run need not be larger than the ring conductor itself."><input type="checkbox" id="el_ring" onchange="calc()"> <span>Ground ring</span></label>
+          <span id="ringsize_wrap" style="display:none;align-items:center;gap:5px;font-size:11px;color:var(--text3);">ring conductor
+            <select id="el_ringsize" onchange="calc()" style="width:auto;border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:11px;background:#fff;">
+              <option value="2 AWG" selected>2 AWG</option><option value="1/0 AWG">1/0 AWG</option><option value="2/0 AWG">2/0 AWG</option><option value="4/0 AWG">4/0 AWG</option>
+            </select></span>
+          <label class="chk-row" style="margin-bottom:0;" title="250.52(A)(1) metal underground water pipe. No reduction in 250.66 — this run takes the full Table 250.66 size."><input type="checkbox" id="el_pipe" onchange="calc()"> <span>Metal water pipe</span></label>
+          <label class="chk-row" style="margin-bottom:0;" title="250.52(A)(2) metal building frame. No reduction in 250.66 — this run takes the full Table 250.66 size."><input type="checkbox" id="el_steel" onchange="calc()"> <span>Building steel</span></label>
+          <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);">GEC material
+            <select id="gec_mat" onchange="calc()" style="width:auto;border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:11px;background:#fff;">
+              <option value="cu" selected>Copper</option><option value="al">Aluminum</option>
+            </select></span>
+          <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);" title="NEC 250.64(F) — the GEC is sized for the largest grounding electrode conductor required among ALL the electrodes connected to it, including any reached through bonding jumpers. Bonding jumpers are sized on their own under 250.53(C) and 250.66(A)-(C).">arrangement
+            <select id="gec_arr" onchange="calc()" style="width:auto;border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:11px;background:#fff;">
+              <option value="f1" selected>(F)(1) one GEC + jumpers</option>
+              <option value="f2">(F)(2) individual GEC each</option>
+              <option value="f3">(F)(3) GEC to busbar</option>
+              <option value="loop">one conductor looped through</option>
+            </select></span>
+          <span id="gechub_wrap" style="display:none;align-items:center;gap:5px;font-size:11px;color:var(--text3);">GEC lands on
+            <select id="gec_hub" onchange="calc()" style="width:auto;border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:11px;background:#fff;">
+              <option value="ufer" selected>Concrete-encased (Ufer)</option>
+              <option value="rod">Ground rod / pipe / plate</option>
+              <option value="ring">Ground ring</option>
+              <option value="pipe">Metal water pipe</option>
+              <option value="steel">Building steel</option>
+            </select></span>
+        </div>
+        <div id="gec_alwarn" style="display:none;margin-top:8px;background:#fff3cd;border:1px solid #f0a500;border-left:4px solid #f0a500;border-radius:4px;padding:7px 10px;font-size:11px;color:#7a4f00;line-height:1.55;"></div>
+        <div id="gec_lines" style="font-size:11px;color:var(--text2);margin-top:8px;line-height:1.7;"></div>
       </div>
     </div>
   </div>
@@ -914,6 +951,12 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       <div class="help-sec">
         <h3>Conductor Sizing</h3>
         <p>Choose the feeder sizing table in Configuration. <strong>NEC 310.12</strong> applies to 1&amp;2 family dwelling services rated 100A–400A (uses the 83% loading column). <strong>NEC 310.16 (75°C)</strong> is the standard ampacity table used for all other feeders and branch circuits. The neutral is always sized from 310.16. Aluminum is code-compliant and common for service entrance conductors. The EGC is sized per <strong>NEC Table 250.122</strong> based on the OCPD rating of the circuit it protects.</p>
+        <p>The <strong>grounding electrode conductor</strong> is a different conductor and is sized differently — <strong>Table 250.66</strong>, from the largest ungrounded <em>service</em> conductor, not the OCPD. Where the service is run in parallel, Note 1 to the table applies: the input is the summed area of the corresponding conductors, so two sets of 1/0 (211,200 cmil) lands on the 4/0 row, not the 1/0 row.</p>
+        <p>Tick the electrodes actually present. Three of them permit a smaller conductor on their own run: <strong>250.66(A)</strong> caps a rod, pipe or plate run at 6 AWG copper (4 AWG aluminum), <strong>250.66(B)</strong> caps a concrete-encased electrode at 4 AWG copper, and <strong>250.66(C)</strong> caps a ground ring at the ring conductor itself. A metal water pipe or building steel gets no reduction — those runs take the full table size.</p>
+        <p>All three caps are written to cover the <strong>grounding electrode conductor <em>or bonding jumper</em></strong>, and <strong>250.53(C)</strong> sizes a jumper between electrodes by 250.66 as well — so a jumper whose sole connection is to the rods gets the 6 AWG allowance the same as a home run would. 250.53(C) sends jumpers to 250.64(A), (B) and (E) but <em>not</em> to (C), so a jumper need not be continuous with the GEC.</p>
+        <p>The GEC itself is different. <strong>250.64(F)</strong>: "The grounding electrode conductor shall be sized for the largest grounding electrode conductor required among all the electrodes <em>connected to it</em>." That reaches through the jumpers — an electrode tied to the GEC by a bonding jumper is still connected to it — so the GEC is a whole-system maximum, not a per-leg figure. There is <em>no</em> required order or hierarchy; 250.64(F)(1) says any convenient electrode. But the NFPA commentary is explicit that order changes the sizing: run the GEC to the ground rod first and then on to the water pipe, and that rod run is sized as if it went to the water pipe. So the economics run one way — land the GEC on the electrode that demands the largest conductor, and jumper out to the cheaper ones.</p>
+        <p>The <strong>arrangement</strong> picker follows 250.64(F): <strong>(F)(1)</strong> one GEC to a convenient electrode with the rest jumpered off it (pick which one and the legs re-size); <strong>(F)(2)</strong> an individual GEC run to each electrode, where only that electrode is connected to that run so its cap applies on its own merits; <strong>(F)(3)</strong> GEC to a busbar (¼ in. × 2 in. minimum, accessible, listed connectors or exothermic) with a jumper from each electrode; or one unspliced conductor looped through the lot, where <strong>250.64(C)</strong> forbids necking it down partway so every leg is the maximum. Watch <strong>250.70</strong> in all of them — one conductor per clamp unless the clamp is listed for more than one.</p>
+        <p><strong>250.24(C)(1)</strong> is also enforced: the grounded (neutral) service conductor is never smaller than the GEC required by Table 250.66. A neutral raised by that rule is marked with an asterisk.</p>
         <div class="hnote">Feeder sets reduce the per-conductor ampacity required — e.g., 2 sets of conductors each carry half the load.</div>
       </div>
       <div class="help-sec">
@@ -1012,6 +1055,90 @@ function getFeederWire(a,isAl){
   }
   // 310.16 — conductor sized for minimum service/OCPD rating
   return wireSize(svcA,isAl?AL75:CU75);
+}
+
+// ══════════ NEC 250.66 — GROUNDING ELECTRODE CONDUCTOR ══════════
+// Different conductor from the EGC below. The EGC (Table 250.122) rides with
+// the circuit and is sized off the OCPD; the GEC runs to the electrode and is
+// sized off the largest ungrounded SERVICE-ENTRANCE conductor.
+//
+// Note 1 to Table 250.66: with multiple sets of service conductors, the input
+// to the table is "the largest sum of the areas of the corresponding conductors
+// of each set" — so two 1/0 sets is 211,200 cmil, landing on the "over 3/0
+// through 350" row rather than the 1/0 row.
+// Circular mils below are NEC Chapter 9, Table 8, verified size by size. The
+// kcmil rows print "—" in that column of Table 8 because a kcmil size IS its
+// area in thousands of circular mils.
+var CMIL={'14 AWG':4110,'12 AWG':6530,'10 AWG':10380,'8 AWG':16510,'6 AWG':26240,
+  '4 AWG':41740,'3 AWG':52620,'2 AWG':66360,'1 AWG':83690,'1/0 AWG':105600,
+  '2/0 AWG':133100,'3/0 AWG':167800,'4/0 AWG':211600,'250 kcmil':250000,
+  '300 kcmil':300000,'350 kcmil':350000,'400 kcmil':400000,'500 kcmil':500000,
+  '600 kcmil':600000,'700 kcmil':700000,'750 kcmil':750000,'800 kcmil':800000,
+  '900 kcmil':900000,'1000 kcmil':1000000,'1250 kcmil':1250000,'1500 kcmil':1500000,
+  '1750 kcmil':1750000,'2000 kcmil':2000000,
+  '250 MCM':250000,'300 MCM':300000,'350 MCM':350000,'400 MCM':400000,'500 MCM':500000,
+  '600 MCM':600000,'750 MCM':750000};
+function cmil(size){ return CMIL[size]||0; }
+// Ascending order, smallest conductor first — used to compare two sizes.
+var SIZE_ORDER=['14 AWG','12 AWG','10 AWG','8 AWG','6 AWG','4 AWG','3 AWG','2 AWG',
+  '1 AWG','1/0 AWG','2/0 AWG','3/0 AWG','4/0 AWG','250 kcmil','300 kcmil','350 kcmil',
+  '400 kcmil','500 kcmil','600 kcmil','700 kcmil','750 kcmil','800 kcmil','900 kcmil',
+  '1000 kcmil','1250 kcmil','1500 kcmil','1750 kcmil','2000 kcmil'];
+function sizeRank(sz){
+  var t=String(sz).replace(' MCM',' kcmil');
+  var i=SIZE_ORDER.indexOf(t);
+  return i<0?999:i;
+}
+function smallerOf(a,b){ return sizeRank(a)<=sizeRank(b)?a:b; }
+// Table 250.66 — thresholds are on the equivalent area of the largest
+// ungrounded service conductor, in circular mils.
+//   [max cmil for this row, copper GEC, aluminum GEC]
+var T250_66_CU=[
+  [66360,   '8 AWG',  '6 AWG'  ],   // 2 AWG or smaller
+  [105600,  '6 AWG',  '4 AWG'  ],   // 1 or 1/0
+  [167800,  '4 AWG',  '2 AWG'  ],   // 2/0 or 3/0
+  [350000,  '2 AWG',  '1/0 AWG'],   // over 3/0 through 350
+  [600000,  '1/0 AWG','3/0 AWG'],   // over 350 through 600
+  [1100000, '2/0 AWG','4/0 AWG'],   // over 600 through 1100
+  [Infinity,'3/0 AWG','250 kcmil']  // over 1100
+];
+var T250_66_AL=[
+  [105600,  '8 AWG',  '6 AWG'  ],   // 1/0 or smaller
+  [167800,  '6 AWG',  '4 AWG'  ],   // 2/0 or 3/0
+  [250000,  '4 AWG',  '2 AWG'  ],   // 4/0 or 250
+  [500000,  '2 AWG',  '1/0 AWG'],   // over 250 through 500
+  [900000,  '1/0 AWG','3/0 AWG'],   // over 500 through 900
+  [1750000, '2/0 AWG','4/0 AWG'],   // over 900 through 1750
+  [Infinity,'3/0 AWG','250 kcmil']  // over 1750
+];
+// Base GEC from Table 250.66, before any 250.66(A)-(C) reduction.
+// svcSize = one service conductor; sets = how many in parallel; isAl = service
+// conductor material, which also decides which column of the table applies.
+function gecBase(svcSize, sets, isAl){
+  var area=cmil(svcSize)*(sets||1);
+  var tbl=isAl?T250_66_AL:T250_66_CU;
+  for(var i=0;i<tbl.length;i++) if(area<=tbl[i][0]) return {cu:tbl[i][1], al:tbl[i][2], area:area};
+  return {cu:'3/0 AWG', al:'250 kcmil', area:area};
+}
+// 250.66(A)/(B)/(C): the reduction applies only where that run "does not extend
+// on to other types of electrodes that require a larger size conductor," so it
+// is per electrode, not one number for the whole job. Metal water pipe and
+// building steel get no reduction — they take the full table size.
+//
+// Note the asymmetry between (A) and (B). (A) states BOTH materials — "6 AWG
+// copper wire or 4 AWG aluminum wire." (B) states one — "4 AWG copper wire" —
+// and gives no aluminum equivalent, so there is no aluminum reduction to claim
+// for a concrete-encased electrode; that run takes the full table size.
+// An aluminum GEC to a Ufer is a real case, not an impossible one: 250.64(A)(1)
+// bars bare or covered aluminum WITHOUT an extruded polymeric covering from
+// direct contact with concrete, which leaves insulated aluminum and aluminum
+// with an extruded polymeric covering permitted.
+function gecForElectrode(kind, base, isAlGec, ringSize){
+  var full=isAlGec?base.al:base.cu;
+  if(kind==='rod')   return smallerOf(full, isAlGec?'4 AWG':'6 AWG');   // 250.66(A) — both materials stated
+  if(kind==='ufer')  return isAlGec?full:smallerOf(full,'4 AWG');       // 250.66(B) — copper only
+  if(kind==='ring')  return smallerOf(full, ringSize||'2 AWG');         // 250.66(C)
+  return full;                                                          // pipe, steel
 }
 
 // EGC per NEC Table 250.122 (exact from EGC Sizing sheet)
@@ -1458,7 +1585,7 @@ function makeVAcell(id, a, customId){
     }
   }
   sel+='</select>';
-  sel+='<input type="number" id="'+customId+'" value="'+a.va+'" min="0" oninput="vaTyped(\''+id+'\')" onchange="vaSettle(\''+id+'\',\''+customId+'\')" style="margin-top:2px;border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-family:\'JetBrains Mono\',monospace;font-size:10px;text-align:right;width:100%;">';
+  sel+='<input type="number" id="'+customId+'" value="'+a.va+'" min="0" oninput="vaTyped(\''+id+'\')" onchange="vaSettle(\''+id+'\',\''+customId+'\')" style="margin-top:2px;border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-family:\'Inter\',Arial,Helvetica,sans-serif;font-size:10px;text-align:right;width:100%;">';
   return sel;
 }
 
@@ -1562,7 +1689,7 @@ function addExtraAppl(){
     +"<label title='Load-managed — excluded from generator demand.' style='display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;white-space:nowrap;'><input type='checkbox' id='xmgd_"+n+"' onchange='calc()' style='accent-color:var(--blue);width:13px;height:13px;flex:0 0 auto;'>Managed</label>"
     +"</div></td>"
     +"<td><input type='number' id='xqty_"+n+"' value='1' min='0' oninput='calc()' style='text-align:center;width:45px;'></td>"
-    +"<td><input type='number' id='xva_"+n+"' value='0' min='0' oninput='calc()' style='width:100%;border:1px solid var(--border);border-radius:4px;padding:5px 7px;font-family:JetBrains Mono,monospace;font-size:12px;text-align:right;'></td>"
+    +"<td><input type='number' id='xva_"+n+"' value='0' min='0' oninput='calc()' style='width:100%;border:1px solid var(--border);border-radius:4px;padding:5px 7px;font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;text-align:right;'></td>"
     +"<td class='volt-cell'><select id='xvolt_"+n+"' onchange='calc()' style='font-size:10px;'><option value='120'>120V</option><option value='240' selected>240V</option></select></td>"
     +"<td class='tot-cell' id='xtot_"+n+"'>0</td>"
     +"<td><button class='btn btn-remove' onclick='removeExtraAppl("+n+")' style='padding:2px 6px;font-size:11px;'>✕</button></td>";
@@ -1602,7 +1729,7 @@ function addDryer(isGas, va, qty){
     +'<option value="7200"'+(va===7200?' selected':'')+'>7,200 VA</option>'
     +'<option value="custom">— type custom —</option>'
     +'</select>'
-    +'<input type="number" id="va_dry'+n+'" value="'+(va||5000)+'" min="0" oninput="vaTyped(\'sel_dry'+n+'\')" onchange="vaSettle(\'sel_dry'+n+'\',\'va_dry'+n+'\')" style="font-family:\'JetBrains Mono\',monospace;text-align:right;">'
+    +'<input type="number" id="va_dry'+n+'" value="'+(va||5000)+'" min="0" oninput="vaTyped(\'sel_dry'+n+'\')" onchange="vaSettle(\'sel_dry'+n+'\',\'va_dry'+n+'\')" style="font-family:\'Inter\',Arial,Helvetica,sans-serif;text-align:right;">'
     +'</div></div>';
   d.appendChild(div);
   calc();
@@ -1674,7 +1801,7 @@ function addCookItem(type, isGas, va, qty){
     +'<div class="field">'
     +'<label>Wattage</label>'
     +'<select id="sel_'+cid+'" onchange="cookSelChange(\''+cid+'\')" style="margin-bottom:3px;">'+opts+'</select>'
-    +'<input type="number" id="va_'+cid+'" value="'+(va!==undefined && va!==null && va!==false ? va : 0)+'" min="0" oninput="vaTyped(\'sel_'+cid+'\')" onchange="vaSettle(\'sel_'+cid+'\',\'va_'+cid+'\')" style="font-family:\'JetBrains Mono\',monospace;text-align:right;">'
+    +'<input type="number" id="va_'+cid+'" value="'+(va!==undefined && va!==null && va!==false ? va : 0)+'" min="0" oninput="vaTyped(\'sel_'+cid+'\')" onchange="vaSettle(\'sel_'+cid+'\',\'va_'+cid+'\')" style="font-family:\'Inter\',Arial,Helvetica,sans-serif;text-align:right;">'
     +'</div></div>';
   container.appendChild(div);
   calc();
@@ -1890,7 +2017,7 @@ function addPoolExtra(){
     +'<td style="padding:5px 6px;">'
     +'<input type="number" id="pexva_'+n+'" value="0" min="0" oninput="calc()" '
     +'style="border:1px solid var(--border);border-radius:4px;padding:5px 7px;'
-    +'font-family:JetBrains Mono,monospace;font-size:12px;text-align:right;width:100%;">'
+    +'font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;text-align:right;width:100%;">'
     +'</td>'
     +'<td style="padding:5px 6px;text-align:center;">'
     +'<label title="Load-managed — shed by the management module, excluded from generator demand." '
@@ -2383,6 +2510,185 @@ function calc(){
   var neutralWire=wireSize(neutSvcA,isAl?AL75:CU75);
   var egc=egcWire(svcSize,isAl);
 
+  // ── Grounding electrode conductor, NEC 250.66 ──
+  // Sized off the largest ungrounded SERVICE conductor (not the OCPD), with the
+  // Note 1 area summing for parallel sets. Each electrode present then gets its
+  // own permitted size under 250.66(A)-(C); the reduction applies only to a run
+  // that does not carry on to an electrode needing more, so it is listed per
+  // electrode rather than collapsed into one number.
+  var _gecBase=gecBase(feederWire, sets, isAl);
+  // material of the GEC itself — separate choice from the service conductor,
+  // which only picks which column of Table 250.66 the area is read against.
+  var _gecAl=(gs('gec_mat')==='al');
+  var _gecMatTxt=_gecAl?'aluminum':'copper';
+  var _gecCu=_gecAl?_gecBase.al:_gecBase.cu;
+  var ELECTRODES=[
+    ['el_ufer','ufer', 'Concrete-encased (Ufer)', '250.66(B)'],
+    ['el_rod', 'rod',  'Ground rod / pipe / plate','250.66(A)'],
+    ['el_ring','ring', 'Ground ring',             '250.66(C)'],
+    ['el_pipe','pipe', 'Metal water pipe',        'no reduction'],
+    ['el_steel','steel','Building steel',         'no reduction']
+  ];
+  var ringSz=gs('el_ringsize')||'2 AWG';
+  // ── NEC 250.64(F) — Installation to Electrode(s) ─────────────────────────
+  // The governing sentence: "The grounding electrode conductor shall be sized
+  // for the largest grounding electrode conductor required among all the
+  // electrodes CONNECTED TO IT." That reaches through bonding jumpers — an
+  // electrode joined to the GEC by a jumper is still connected to it. So the
+  // GEC is a whole-system maximum, NOT a per-leg figure, and running it to the
+  // small electrode first buys nothing (NFPA commentary to 250.66: run to the
+  // rod first and then on to the water pipe, and the rod run is sized as if it
+  // went to the water pipe). There is no required order or hierarchy — but
+  // there is an economic one: land the GEC on the electrode that demands the
+  // largest conductor, and jumper out to the cheaper ones.
+  //
+  // Bonding jumpers are sized separately: 250.53(C) sends them to 250.66,
+  // including the (A)-(C) caps and the "does not extend on to" test, and to
+  // 250.64(A),(B),(E) — deliberately NOT to (C), so a jumper need not be
+  // continuous with the GEC.
+  //   'f1'   250.64(F)(1) one GEC to any convenient electrode, others jumpered
+  //   'f2'   250.64(F)(2) an individual GEC run to each electrode
+  //   'f3'   250.64(F)(3) GEC to a busbar, jumpers from each electrode
+  //   'loop' one unspliced conductor threaded through the lot — 250.64(C)
+  //          forbids necking it down partway, so every leg is the maximum
+  var gecArr=gs('gec_arr')||'f1';
+  var gecShown=[], anyElectrode=false, _built=[];
+  ELECTRODES.forEach(function(e){
+    if(!gc(e[0])) return;
+    anyElectrode=true;
+    var sz=gecForElectrode(e[1], _gecBase, _gecAl, ringSz);
+    gecShown.push(sz);
+    // Only say "no reduction available" where a cap exists but does not bite;
+    // water pipe and building steel already read "no reduction".
+    // (B) gives a copper figure and no aluminum one, so in aluminum there is no
+    // cap to fail — say that, rather than implying a cap that did not bite.
+    var hasCap=(e[1]==='ufer'||e[1]==='rod'||e[1]==='ring') && !(e[1]==='ufer'&&_gecAl);
+    var note=e[3]+((e[1]==='ufer'&&_gecAl) ? ' — no aluminum figure stated, full table size'
+                   : (hasCap&&sz===_gecCu ? ' — cap does not reduce this size' : ''));
+    _built.push({key:e[1], name:e[2], cite:e[3], note:note, sz:sz, capped:(hasCap&&sz!==_gecCu)});
+  });
+  // Largest size any electrode in the system requires — this is the GEC under
+  // 250.64(F) whenever the electrodes are tied together downstream of it.
+  var gecMax=_gecCu;
+  if(gecShown.length){
+    gecMax=gecShown[0];
+    for(var _g=1;_g<gecShown.length;_g++) if(sizeRank(gecShown[_g])>sizeRank(gecMax)) gecMax=gecShown[_g];
+  }
+  // Hub picker — only meaningful for (F)(1), where one electrode takes the GEC
+  // and the rest are jumpered off it. Every electrode is a permanent option so
+  // that autosave/restore round-trips the choice: a select rebuilt inside calc()
+  // has no options yet when aogRestore() runs, so the saved value landed on
+  // nothing. Untick an electrode and its option is just hidden; if the saved hub
+  // is the one unticked, fall back to the first electrode still present.
+  var hubSel=document.getElementById('gec_hub'), hubWrap=document.getElementById('gechub_wrap');
+  if(hubSel){
+    var present={};
+    _built.forEach(function(b){ present[b.key]=1; });
+    for(var _o=0;_o<hubSel.options.length;_o++){
+      var op=hubSel.options[_o], on=!!present[op.value];
+      op.hidden=!on; op.disabled=!on;
+    }
+    if(!present[hubSel.value] && _built.length) hubSel.value=_built[0].key;
+  }
+  var hubKey=(hubSel&&hubSel.value)||(_built[0]&&_built[0].key)||'';
+  if(hubWrap) hubWrap.style.display=(gecArr==='f1'&&_built.length>1)?'inline-flex':'none';
+  var hubRow=_built.filter(function(b){ return b.key===hubKey; })[0]||_built[0];
+
+  var gecLines='', _gecRows=[];
+  var CAP70='<div style="color:var(--text3);margin-top:4px;">250.70 &mdash; one conductor per clamp unless the clamp is listed for more than one.</div>';
+  // On screen the label says what the conductor IS (GEC or bonding jumper) —
+  // that is the part a tech is working out. The printed report gets `rpt`
+  // instead: just the electrode it lands on. An inspector reading the sheet
+  // wants the size at each electrode, and our internal naming of the run only
+  // invites an argument about it.
+  function _row(label,size,note,rpt){
+    gecLines+='<div>&bull; '+label+' &mdash; <strong>'+size+'</strong> '+_gecMatTxt
+      +' <span style="color:var(--text3);">('+note+')</span></div>';
+    _gecRows.push({name:(rpt||label), cite:note, size:size+(_gecAl?' Al':' Cu')});
+  }
+  if(!_built.length){
+    /* handled by the no-electrode message below */
+  } else if(gecArr==='loop'){
+    // One wire through all of them: every leg is the same size, and any cap that
+    // would have applied to a single electrode is defeated by the run carrying on.
+    var lost=_built.filter(function(b){ return b.capped; }).map(function(b){ return b.name; });
+    _row('one conductor through '+_built.map(function(b){ return b.name; }).join(', '), gecMax,
+         '250.64(C) &mdash; no splice, so the whole length takes the largest size required',
+         _built.map(function(b){ return b.name; }).join(', '));
+    if(lost.length) gecLines+='<div style="color:var(--text3);margin-top:4px;">Splitting this into a GEC plus separate jumpers would let the run to '
+      +lost.join(' / ')+' drop &mdash; 250.53(C) sizes a jumper per 250.66 on its own.</div>';
+  } else if(gecArr==='f2'){
+    // Each electrode gets its own GEC, so only that electrode is "connected to
+    // it" and the 250.66(A)-(C) cap applies to that run on its own merits.
+    _built.forEach(function(b){ _row('GEC to '+b.name, b.sz, b.note, b.name); });
+    if(_built.length>1) gecLines+='<div style="color:var(--text3);margin-top:4px;">250.64(F)(2) &mdash; each run serves one electrode, so each is sized on its own.</div>'+CAP70;
+  } else if(gecArr==='f3'){
+    _row('GEC to busbar', gecMax, '250.64(F) &mdash; sized for the largest electrode connected to it', 'Busbar');
+    _built.forEach(function(b){ _row('bonding jumper to '+b.name, b.sz, '250.53(C) &middot; '+b.note, b.name); });
+    gecLines+='<div style="color:var(--text3);margin-top:4px;">250.64(F)(3) &mdash; busbar not less than ¼ in. × 2 in., securely fastened, accessible, listed connectors or exothermic. Aluminum busbar also follows 250.64(A).</div>';
+  } else {
+    // (F)(1) — GEC to one convenient electrode, everything else jumpered off it.
+    // With a single electrode there is nothing else connected to the GEC, so
+    // cite that electrode's own permission rather than the 250.64(F) maximum.
+    _row('GEC to '+hubRow.name, gecMax,
+         _built.length===1 ? hubRow.note
+         : '250.64(F) &mdash; sized for the largest electrode connected to it'
+           +(sizeRank(gecMax)>sizeRank(hubRow.sz)?', not the '+hubRow.sz+' this electrode alone would allow':''),
+         hubRow.name);
+    _built.forEach(function(b){
+      if(b.key===hubRow.key) return;
+      _row('bonding jumper to '+b.name, b.sz, '250.53(C) &middot; '+b.note, b.name);
+    });
+    if(_built.length>1){
+      // Only worth suggesting a swap where it actually buys something: the hub
+      // is an electrode whose own cap is smaller than the system maximum, so
+      // moving the GEC onto a larger-demand electrode lets this leg shrink.
+      if(sizeRank(hubRow.sz)<sizeRank(gecMax)){
+        var better=_built.filter(function(b){ return sizeRank(b.sz)>=sizeRank(gecMax); })[0];
+        if(better) gecLines+='<div style="color:var(--text3);margin-top:4px;">Landing the GEC on '
+          +better.name+' instead would leave the GEC the same size but let this leg drop to '+hubRow.sz
+          +'. No code order is required &mdash; 250.64(F)(1) says any convenient electrode.</div>';
+      }
+      gecLines+=CAP70;
+    }
+  }
+  var aw=document.getElementById('gec_alwarn');
+  if(aw){
+    if(_gecAl){
+      aw.style.display='';
+      aw.innerHTML='\u26a0\ufe0f <strong>NEC 250.64(A)</strong> \u2014 installing this GEC in aluminum:'
+        +'<br>&bull; <strong>(A)(1)</strong> bare or covered aluminum <em>without</em> an extruded polymeric covering may not be run where subject to corrosive conditions or in direct contact with concrete. Insulated, or covered with an extruded polymeric covering, is permitted.'
+        +'<br>&bull; <strong>(A)(3)</strong> outside a building or equipment enclosure it may not be terminated within 18 in. of the earth.'
+        +'<br>&bull; <strong>(A)(2)</strong> inside an outdoor enclosure listed for the environment, terminating within 18 in. of the enclosure bottom is permitted.'
+        +(gc('el_ufer')?'<br>&bull; <strong>250.66(B)</strong> states a copper figure only, so there is no 4 AWG reduction to claim on the concrete-encased run in aluminum \u2014 it takes the full table size.':'');
+    } else aw.style.display='none';
+  }
+  var rw=document.getElementById('ringsize_wrap');
+  if(rw) rw.style.display=gc('el_ring')?'inline-flex':'none';
+  var gl=document.getElementById('gec_lines');
+  if(gl){
+    gl.innerHTML = anyElectrode
+      ? '<div>Table 250.66 base, from '+(sets>1?sets+' sets of ':'')+feederWire+': <strong>'+_gecCu+'</strong> '+_gecMatTxt+'</div>'+gecLines
+      : '<div style="color:var(--red);">No electrode selected &mdash; 250.50 requires all electrodes present at the building to be bonded together.</div>';
+  }
+  // Headline GEC = the largest conductor the job needs. Under (F)(1)/(F)(3)
+  // that is the GEC itself; under (F)(2) it is the biggest of the individual
+  // runs, with the smaller ones listed underneath.
+  var gecHead=gecMax;
+  sv('s_gec',gecHead);
+  var gn=document.getElementById('s_gec_note');
+  var _arrTxt={f1:'250.64(F)(1)',f2:'250.64(F)(2) largest run',f3:'250.64(F)(3) to busbar',loop:'one looped run'};
+  if(gn) gn.textContent = anyElectrode
+    ? ('NEC 250.66 · base '+_gecCu+' · '+(_arrTxt[gecArr]||'250.64(F)'))
+    : 'NEC 250.66';
+
+  // ── NEC 250.24(C)(1) — the grounded (neutral) service conductor shall not be
+  // smaller than the GEC required by Table 250.66. Only a floor; it never
+  // shrinks a neutral that the load already made larger.
+  var _n24=false;
+  if(sizeRank(neutralWire)<sizeRank(_gecCu)){ neutralWire=_gecCu; _n24=true; }
+  window.AOG_GEC={base:_gecCu, head:gecHead, area:_gecBase.area, n24:_n24, lines:_gecRows};
+
   // ── Parallel conductor warning — NEC 310.10(H) min 1/0 AWG ──
   var PARALLEL_MIN_ORDER = ['14 AWG','12 AWG','10 AWG','8 AWG','6 AWG','4 AWG',
     '3 AWG','2 AWG','1 AWG'];  // sizes SMALLER than 1/0 — not permitted in parallel
@@ -2492,7 +2798,7 @@ function calc(){
   }
   var tblName=(gs('feeder_table')==='310_12'&&sets===1)?'NEC 310.12 (83%)':'NEC 310.16 (75°C)';
   document.getElementById('s_mat').textContent=(isAl?'Aluminum':'Copper')+' · '+tblName;
-  sv('s_nwire',neutralWire);
+  sv('s_nwire',neutralWire+(_n24?' *':''));
   sv('s_egc',egc);
   sv('br1',fmt(s1)+' VA');
   sv('br2',fmt(Math.round(s2))+' VA');
@@ -3232,6 +3538,9 @@ function buildReportHTML(){
       <tr><td>Ungrounded (Hot) Feeder</td><td class="r">${feeder}</td></tr>
       <tr><td>Grounded (Neutral) Wire</td><td class="r">${nwire}</td></tr>
       <tr><td>Equipment Grounding Cond. (NEC 250.122)</td><td class="r">${egc}</td></tr>
+      <tr><td>Grounding Electrode Cond. (Table 250.66)</td><td class="r">${(window.AOG_GEC||{}).base||'—'}</td></tr>
+      ${(function(){var L=(window.AOG_GEC||{}).lines||[];return L.map(function(l){
+        return '<tr><td style="padding-left:12pt;color:#555;">&bull; '+esc(l.name)+'</td><td class="r">'+esc(l.size)+'</td></tr>';}).join('');})()}
     </table>
 
     <div class="sh">Generator — ${fuel}</div>
@@ -3252,7 +3561,7 @@ function buildReportHTML(){
   </div>
 </div>
 
-${managedLines.length>0?'<div style="margin-top:10pt;border:1.5pt solid #D97706;border-radius:4pt;padding:7pt 10pt;"><div style="font-family:Orbitron,monospace;font-size:7.5pt;font-weight:700;letter-spacing:1.5px;color:#D97706;border-bottom:1pt solid #D97706;padding-bottom:3pt;margin-bottom:5pt;">MANAGED LOADS — Excluded per NEC 702.4(B)(2)(b)</div><table style="width:100%;border-collapse:collapse;font-size:8.5pt;"><tr style="background:#fff8ed;"><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Load Name</th><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Category</th><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Note</th></tr>'+managedLines.map(function(m){return '<tr><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;">'+m.name+'</td><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;color:#777;">'+m.reason+'</td><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;color:#aaa;font-size:7.5pt;">On panel; shed by load management</td></tr>';}).join('')
+${managedLines.length>0?'<div style="margin-top:10pt;border:1.5pt solid #D97706;border-radius:4pt;padding:7pt 10pt;"><div style="font-family:Inter,Arial,Helvetica,sans-serif;font-size:7.5pt;font-weight:700;letter-spacing:1.5px;color:#D97706;border-bottom:1pt solid #D97706;padding-bottom:3pt;margin-bottom:5pt;">MANAGED LOADS — Excluded per NEC 702.4(B)(2)(b)</div><table style="width:100%;border-collapse:collapse;font-size:8.5pt;"><tr style="background:#fff8ed;"><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Load Name</th><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Category</th><th style="text-align:left;padding:2pt 6pt;font-size:7.5pt;color:#555;">Note</th></tr>'+managedLines.map(function(m){return '<tr><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;">'+m.name+'</td><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;color:#777;">'+m.reason+'</td><td style="padding:2pt 6pt;border-bottom:0.5pt solid #f0e8d8;color:#aaa;font-size:7.5pt;">On panel; shed by load management</td></tr>';}).join('')
 +'</table>'
 +'</div>':''}
 <div style="border-top:1pt solid #ccc;padding-top:5pt;font-size:7pt;color:#888;display:flex;justify-content:space-between;">
@@ -3261,18 +3570,18 @@ ${managedLines.length>0?'<div style="margin-top:10pt;border:1.5pt solid #D97706;
 </div>
 
 <style>
-  .sh{font-family:Orbitron,monospace;font-size:7.5pt;font-weight:700;letter-spacing:1.5px;
+  .sh{font-family:'Inter',Arial,Helvetica,sans-serif;font-size:7.5pt;font-weight:700;letter-spacing:1.5px;
       text-transform:uppercase;color:#D97706;border-bottom:1pt solid #D97706;
-      padding:4pt 0 2pt;margin:8pt 0 3pt;}
+      padding:2.5pt 0 1.5pt;margin:5pt 0 2pt;}
   .dt{width:100%;border-collapse:collapse;font-size:8.5pt;}
-  .dt td,.dt th{padding:2pt 4pt;border-bottom:0.5pt solid #e8e8e8;vertical-align:top;}
+  .dt td,.dt th{padding:1.3pt 4pt;border-bottom:0.5pt solid #e8e8e8;vertical-align:top;line-height:1.25;}
   .dt th{font-size:7.5pt;font-weight:700;color:#555;text-transform:uppercase;}
-  .dt .r{text-align:right;font-family:'Share Tech Mono',monospace;white-space:nowrap;}
+  .dt .r{text-align:right;font-family:Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap;}
   .dt .tot td{font-weight:700;border-top:1pt solid #ccc;border-bottom:1pt solid #ccc;background:#fafafa;}
 </style>`;
 
   // Wrap in 2.5pt orange page border — fills 8.5×11 page inside .15in margins
-  return '<div style="border:2.5pt solid #D97706;padding:10pt 12pt;background:#fff;min-height:10.7in;box-sizing:border-box;">'+html+'</div>';
+  return '<div style="border:2.5pt solid #D97706;padding:10pt 12pt;background:#fff;min-height:10.5in;box-sizing:border-box;">'+html+'</div>';
   } catch(e){ console.error('buildReportHTML error:', e); alert('Report error: '+e.message); return null; }
 }
 
@@ -3280,7 +3589,7 @@ ${managedLines.length>0?'<div style="margin-top:10pt;border:1.5pt solid #D97706;
 function reportWrapStyles(){
   return '*{box-sizing:border-box;margin:0;padding:0;}'
     +'html,body{height:auto;overflow:hidden;}'
-    +'body{font-family:\'Share Tech Mono\',monospace;font-size:9.5pt;color:#000;background:#fff;'
+    +'body{font-family:Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums;font-size:9.5pt;color:#000;background:#fff;'
     +'  width:8.5in;margin:0 auto;padding:.15in;}'
     +'body > *:last-child,body > *:nth-last-child(2){margin-bottom:0!important;}'
     +'@media print{'
@@ -3319,7 +3628,7 @@ function captureReport(){
   // capture is laid out like the printed page regardless of phone screen size.
   var holder = document.createElement('div');
   holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:816px;background:#fff;'
-    + 'font-family:\'Share Tech Mono\',monospace;font-size:9.5pt;color:#000;'
+    + 'font-family:Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums;font-size:9.5pt;color:#000;'
     + 'padding:14.4px;box-sizing:border-box;z-index:-1;';
   holder.innerHTML = html;
   document.body.appendChild(holder);
@@ -3404,7 +3713,7 @@ function capturePDF(btn){
   // Same off-screen fixed-width (8.5in @ 96dpi = 816px) container as SAVE IMG
   var holder = document.createElement('div');
   holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:816px;background:#fff;'
-    + 'font-family:\'Share Tech Mono\',monospace;font-size:9.5pt;color:#000;'
+    + 'font-family:Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums;font-size:9.5pt;color:#000;'
     + 'padding:14.4px;box-sizing:border-box;z-index:-1;';
   holder.innerHTML = html;
   document.body.appendChild(holder);
@@ -3427,6 +3736,17 @@ function capturePDF(btn){
     // Height of one PDF page expressed in canvas pixels
     var pagePx = Math.floor(canvas.width * (pageH / pageW));
     var pages = Math.max(1, Math.ceil(canvas.height / pagePx));
+
+    // A report that runs a hair past the page used to emit a second sheet
+    // carrying nothing but the bottom border — one pixel of rounding was enough.
+    // If the whole thing is within a few percent of a page, shrink it to fit
+    // rather than hand a tech a blank second page.
+    if(pages === 2 && canvas.height <= pagePx * 1.08){
+      var drawW = pageW * (pagePx / canvas.height);
+      var imgAll = canvas.toDataURL('image/jpeg', 0.92);
+      pdf.addImage(imgAll, 'JPEG', (pageW - drawW) / 2, 0, drawW, pageH);
+      pages = 0;   // slice loop below is skipped
+    }
 
     for(var p = 0; p < pages; p++){
       var sliceH = Math.min(pagePx, canvas.height - p * pagePx);
