@@ -2967,6 +2967,12 @@ document.querySelectorAll('.tab').forEach(function(t){
 // ══ BROWSER AUTOSAVE (localStorage, per-device) ══
 var AOG_SAVE_KEY='aog_loadcalc_autosave_v1';
 var _aogRestoring=false, _aogSaveTimer=null;
+// Set once a New Job is committed. The save debounce is 400ms and New Job
+// reloads after 350ms, so a save armed just before the tap could fire AFTER the
+// key was removed and write the old job straight back — the reload would then
+// restore it and nothing would look reset. Nothing may re-arm a save once the
+// clear has run.
+var _aogSaveBlocked=false;
 
 function aogUpdateSaveStatus(txt){
   var el=document.getElementById('aog-save-status');
@@ -3010,7 +3016,7 @@ function aogSnapshot(){
 }
 
 function aogScheduleSave(){
-  if(_aogRestoring) return;
+  if(_aogRestoring || _aogSaveBlocked) return;
   if(_aogSaveTimer) clearTimeout(_aogSaveTimer);
   _aogSaveTimer=setTimeout(function(){
     try{ localStorage.setItem(AOG_SAVE_KEY, JSON.stringify(aogSnapshot())); aogUpdateSaveStatus(); }
@@ -3147,10 +3153,20 @@ function aogNewJobConfirm() {
   p.then(function (ok) {
     if (!ok) return;
     aogClearSaved();
-    setTimeout(function () { location.reload(); }, 350);
+    setTimeout(function () {
+      // Not location.reload(): a reload can come out of the back/forward cache,
+      // and some browsers (iOS Safari especially) restore typed form values
+      // across one — so the page returns looking like the old job even though
+      // storage was cleared. Navigating to a fresh URL sidesteps both. The
+      // query is stripped again on load so the address stays clean.
+      var base = location.href.split('?')[0].split('#')[0];
+      location.replace(base + '?nj=' + Date.now());
+    }, 350);
   });
 }
 function aogClearSaved(){
+  _aogSaveBlocked=true;
+  if(_aogSaveTimer){ clearTimeout(_aogSaveTimer); _aogSaveTimer=null; }
   try{ localStorage.removeItem(AOG_SAVE_KEY); }catch(e){}
 }
 
@@ -3187,6 +3203,10 @@ function aogBlankZeros(){
 
 // ══ INIT ══
 window.addEventListener('load',function(){
+  // Tidy the cache-busting marker New Job leaves behind.
+  if(/[?&]nj=/.test(location.search)){
+    try{ history.replaceState({}, '', location.href.split('?')[0]); }catch(e){}
+  }
   buildAHU();
   buildAppl();
   buildPool();
