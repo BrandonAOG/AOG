@@ -3528,6 +3528,11 @@ function buildReportHTML(){
   // ── Build HTML ──
   var H = function(tag,cls,content){ return '<'+tag+(cls?' class="'+cls+'"':'')+'>'+content+'</'+tag+'>'; };
 
+  // Whether this job actually carries managed loads — the same list the Managed
+  // Loads box prints, so the file name can never disagree with the page. Read by
+  // both export paths when they build the file name.
+  window.AOG_HAS_MANAGED = managedLines.length > 0;
+
   var applRows = applLines.map(function(r){
     return '<tr><td>'+r.name+'</td><td class="r">'+r.tot+' VA</td></tr>';
   }).join('');
@@ -3728,7 +3733,12 @@ function captureReport(){
     var co = (iv('j_co')||'AOG');
     var addr = (iv('j_addr')||'');
     var stamp = new Date().toISOString().slice(0,10);
-    var fileName = ('AOG_LoadCalc_' + co + (addr?('_'+addr):'') + '_' + stamp)
+    // A job with load management is a different quote — the shed module changes
+    // what the genset has to carry — so the file says so before anyone opens it.
+    // Both cases are tagged: an untagged file then reliably means an export from
+    // before this existed, rather than "probably no managed loads".
+    var mgdPfx = window.AOG_HAS_MANAGED ? 'Managed-' : 'Unmanaged-';
+    var fileName = mgdPfx + ('AOG_LoadCalc_' + co + (addr?('_'+addr):'') + '_' + stamp)
                      .replace(/[^a-z0-9_\-]+/gi,'_').replace(/_+/g,'_') + '.jpg';
 
     canvas.toBlob(function(blob){
@@ -3760,7 +3770,35 @@ function captureReport(){
   });
 }
 
+// Desktop Chrome and Edge can show a real Save As dialog, so a tech can file the
+// report straight into the job folder instead of fishing it out of Downloads.
+// Safari, Firefox and every phone fall back to the ordinary anchor download.
+// The picker needs transient user activation, and rendering a big report can eat
+// it, so a NotAllowedError falls back rather than failing — but a cancel
+// (AbortError) means cancel, and must NOT quietly save the file anyway.
 function downloadBlob(blob, fileName){
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(window.showSaveFilePicker && !isMobile){
+    var isPdf = /\.pdf$/i.test(fileName);
+    window.showSaveFilePicker({
+      suggestedName: fileName,
+      types: [ isPdf
+        ? { description:'PDF document', accept:{'application/pdf':['.pdf']} }
+        : { description:'JPEG image',   accept:{'image/jpeg':['.jpg','.jpeg']} } ]
+    }).then(function(handle){
+      return handle.createWritable().then(function(w){
+        return Promise.resolve(w.write(blob)).then(function(){ return w.close(); });
+      });
+    }).catch(function(err){
+      if(err && err.name === 'AbortError') return;   // tech closed the dialog
+      aogAnchorDownload(blob, fileName);
+    });
+    return;
+  }
+  aogAnchorDownload(blob, fileName);
+}
+
+function aogAnchorDownload(blob, fileName){
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url; a.download = fileName;
@@ -3847,7 +3885,8 @@ function capturePDF(btn){
     var co = (iv('j_co')||'AOG');
     var addr = (iv('j_addr')||'');
     var stamp = new Date().toISOString().slice(0,10);
-    var fileName = ('AOG_LoadCalc_' + co + (addr?('_'+addr):'') + '_' + stamp)
+    var mgdPfx = window.AOG_HAS_MANAGED ? 'Managed-' : 'Unmanaged-';
+    var fileName = mgdPfx + ('AOG_LoadCalc_' + co + (addr?('_'+addr):'') + '_' + stamp)
                      .replace(/[^a-z0-9_\-]+/gi,'_').replace(/_+/g,'_') + '.pdf';
 
     var blob = pdf.output('blob');
