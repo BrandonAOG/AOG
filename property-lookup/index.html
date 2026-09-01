@@ -11082,6 +11082,23 @@ const PARCEL_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile)
 /* Retry wrapper: ArcGIS Online services occasionally fail transiently (a 5xx/CORS blip comes back
    fast). One quick retry clears most of these. But a *timeout* means the server is just slow —
    retrying only makes the user wait the full timeout twice, so we bail out immediately on abort. */
+/* ⚡ STATEWIDE-ROLL CIRCUIT BREAKER (2026-09-01, from a live timing panel).
+   Measured on a Naples search: the FDOR statewide roll timed out on its primary attempt at 4004 ms,
+   and the re-anchor block below then tried it THREE MORE TIMES, sequentially, 4 s each. Four
+   consecutive 4-second timeouts — about 12 of the 14.3 s total — spent on a host that had already
+   said it wasn't answering, for SUPPLEMENTARY footnote fields on a parcel the live Collier feed had
+   returned authoritatively in 615 ms.
+   A host that just timed out will time out again. This records that and skips optional roll work for
+   a couple of minutes. The roll is still always attempted when it's the ONLY parcel source (an
+   unwired county), because there a slow answer beats no answer. */
+const ROLL_HEALTH={ fails:0, downUntil:0 };
+function rollLooksDown(){ return Date.now() < ROLL_HEALTH.downUntil; }
+function noteRollResult(ok){
+  if(ok){ ROLL_HEALTH.fails=0; ROLL_HEALTH.downUntil=0; return; }
+  ROLL_HEALTH.fails++;
+  // Two strikes, then stand down for two minutes. One timeout can be a cold point-in-polygon.
+  if(ROLL_HEALTH.fails>=2) ROLL_HEALTH.downUntil=Date.now()+120000;
+}
 async function arcQueryRetry(url, lat, lng, outFields, withGeom, timeoutMs, tries, abortRetry){
   let lastErr=null;
   const n=tries||2;
@@ -18261,7 +18278,40 @@ function renderParcelGeneric(a, d){
   else if(a.__saleDateOnly) h += fieldRow('Last sale', esc(String(a.__saleDateOnly)));
   if(a.__legal) h += fieldRow('Legal', '<span style="font-size:11px">'+esc(String(a.__legal))+'</span>');
   if(a.__zoning) h += fieldRow('Zoning (per parcel roll)', esc(String(a.__zoning)));
+  /* MISSING-FIELD DISCLOSURE. A card showing owner + folio + address and nothing else is not a
+     property with no building — it's a card whose roll splice failed. Name the absent fields and
+     the reason, so a thin card is legible instead of mysterious, and offer the retry. */
+  if(window.__rollMissing){
+    const absent=[];
+    // Living area comes from the local compact file in Collier, not the roll — so it is only
+    // genuinely missing here if the file didn't answer either.
+    if(!liv) absent.push('living area');
+    if(!yr)  absent.push('year built');
+    if(!jv)  absent.push('just &amp; land value');
+    if(!use) absent.push('existing use');
+    if(!sp && a.__saleP==null) absent.push('last sale');
+    if(!a.__legal) absent.push('legal description');
+    if(absent.length){
+      h += `<div class="note warnbox">Owner, folio, address and lot geometry above are live from the `
+        + `county and complete. Missing here: <b>${absent.join(', ')}</b> — those come only from the `
+        + `Florida Dept. of Revenue statewide roll, which didn't answer for this lookup. Nothing is `
+        + `wrong with the parcel.`
+        + ` <button type="button" class="wbtn" id="rollRetryBtn" style="margin-top:6px">↻ Retry the state roll</button></div>`;
+    }
+  }
   return h;
+}
+/* Retry just the roll and patch the card, rather than re-running the whole 14-second lookup for two
+   attributes. Clears the breaker first — the user asking IS the signal that it's worth another go. */
+function wireRollRetry(){
+  const b=document.getElementById('rollRetryBtn'); if(!b) return;
+  b.onclick=function(){
+    this.disabled=true; this.textContent='↻ Retrying…';
+    ROLL_HEALTH.fails=0; ROLL_HEALTH.downUntil=0;
+    if(lastLoc && typeof runLookup==='function'){
+      try{ runLookup(lastLoc.lat, lastLoc.lng, _lastLookupCtx||undefined); }catch(e){}
+    }
+  };
 }
 
 let runId=0;
@@ -18377,13 +18427,28 @@ async function _runLookupInner(lat,lng,searchCtx){
      holds a connection open for half a minute.
      So it now starts AFTER the county is known (pCounty is ~0.4s) and sizes its own budget:
      patient when it matters, one short attempt when it doesn't. */
-  const startParcelRoll = (wired) => _timed(
-    wired ? 'parcel (state roll · footnote)' : 'parcel (state roll)',
-    arcQueryRetry(EP.parcel, lat, lng, '*', true,
-      wired ? 4000 : PARCEL_TIMEOUT,     // shorter window when it's only a footnote
-      wired ? 1    : 3,                  // …and a single pass, not three
-      !wired)                            // abort-retry only matters for the patient path
-  ).catch(e=>({__err:e.message}));
+  /* ⚖️ THE IN-BETWEEN (2026-09-01). An earlier version of the breaker skipped the roll entirely
+     once it looked down — which made the lookup fast and the Collier card permanently THIN. Wrong
+     trade: the roll is the ONLY source for living area, year built, just/land value, existing use,
+     last sale and legal description, and those are the fields that make the card worth reading.
+     The distinction that matters is BLOCKING vs NON-BLOCKING, not optional vs required:
+       · The PRIMARY roll query is already raced against a 1200 ms grace and awaited in parallel, so
+         it cannot delay first paint. It always gets its one attempt. If the roll is merely slow it
+         still lands and the card is complete.
+       · The RE-ANCHOR probes are what were serial and blocking — 3 × 4 s on a dead host. Those stay
+         behind the breaker.
+     So a slow roll costs nothing and still fills the card; a dead roll costs one non-blocking
+     attempt and the card says which fields are missing and why. */
+  const startParcelRoll = (wired) => {
+    return _timed(
+      wired ? 'parcel (state roll · footnote)' : 'parcel (state roll)',
+      arcQueryRetry(EP.parcel, lat, lng, '*', true,
+        wired ? 4000 : PARCEL_TIMEOUT,     // shorter window when it's only a footnote
+        wired ? 1    : 3,                  // …and a single pass, not three
+        !wired)                            // abort-retry only matters for the patient path
+    ).then(v=>{ noteRollResult(!!(v && !v.__err && v.features)); return v; },
+           e=>{ noteRollResult(false); return {__err:e.message}; });
+  };
   const pFlood   = _timed('flood (FEMA)', arcQueryRetry(EP.flood, lat, lng, 'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, FLOOD_TIMEOUT)).catch(e=>({__err:e.message}));
   const pCity    = _timed('city boundary', arcQuery(EP.city,    lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
   const pCounty  = _timed('county boundary', arcQuery(EP.county,  lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
@@ -18799,26 +18864,45 @@ async function _runLookupInner(lat,lng,searchCtx){
       const _probes = _rollEmpty
         ? [_rollAnchor].concat(_rollProbePoints((liveRes&&liveRes.features&&liveRes.features[0])||{}, lat, lng))
         : [_rollAnchor];
+      /* ⚡ Build the probe list first, then fire them ALL AT ONCE.
+         This loop used to `await` inside `for`, so three probes against a slow host cost 3 × 4 s in
+         series — measured as three separate 4000 ms failures in the timing panel and about 12 s of a
+         14.3 s lookup. The probes are independent point queries; nothing about probe 2 depends on
+         probe 1's answer. Run concurrently, the whole batch costs one 4 s window instead of three,
+         and the panel reports it as the single wait it actually is. */
       const _tried=[];
       for(const _p of _probes){
         if(!_p || !isFinite(_p.lat) || !isFinite(_p.lng)) continue;
         if(_tried.some(t=>Math.abs(t.lat-_p.lat)<3.2e-5 && Math.abs(t.lng-_p.lng)<3.2e-5)) continue;
         if(_rollEmpty && Math.abs(_p.lat-lat)<3.2e-5 && Math.abs(_p.lng-lng)<3.2e-5) continue;  // already failed there
         _tried.push(_p);
-        const _reParcel = await _timed('parcel roll re-anchor',
-          arcQueryRetry(EP.parcel, _p.lat, _p.lng, '*', true, 4000, 1, false))
-            .catch(()=>null);
-        if(myId!==runId) return;
-        if(_reParcel && !_reParcel.__err && _reParcel.features && _reParcel.features[0]){
-          // Trust the re-anchored record only if its house number matches the authoritative address
-          // (guards against the roll itself being sparse at the centroid).
-          parcel = _reParcel;
-          break;
-        }
         if(_tried.length>=3) break;          // cap the extra round trips
+      }
+      /* And don't ask a host that already told us it's down. These are supplementary fields on a
+         parcel the live feed has already answered — never worth a known-dead 4 s wait. */
+      if(_tried.length && !rollLooksDown()){
+        const _reAll = await _timed(
+          'parcel roll re-anchor ('+_tried.length+' probe'+(_tried.length>1?'s':'')+', parallel)',
+          Promise.all(_tried.map(_p =>
+            arcQueryRetry(EP.parcel, _p.lat, _p.lng, '*', true, 4000, 1, false).catch(()=>null)))
+        ).catch(()=>[]);
+        if(myId!==runId) return;
+        const _ok=(_reAll||[]).some(r=>r && !r.__err && r.features && r.features[0]);
+        noteRollResult(_ok);
+        // Probes are ordered best-anchor-first, so the earliest success is the one to trust.
+        const _reParcel=(_reAll||[]).find(r=>r && !r.__err && r.features && r.features[0]);
+        if(_reParcel) parcel=_reParcel;
+      } else if(_tried.length){
+        _timings.push({label:'parcel roll re-anchor (skipped, host down)', ms:0});
       }
     }
   }
+  /* Did the statewide roll deliver? The live county feed carries owner / folio / address / geometry,
+     but living area, year built, values, use, last sale and legal come ONLY from the roll splice. So
+     when the roll fails, the card silently loses half its rows and looks broken rather than
+     degraded. Recorded here so the card can say so plainly. */
+  const _rollFailed = !(parcel && !parcel.__err && parcel.features && parcel.features[0]);
+  window.__rollMissing = (liveRes && _rollFailed) ? true : false;
   const liveHit = !!liveRes;
   const srcLabel = liveHit ? `live county feed` : `FL Dept. of Revenue<br>statewide roll`;
 
@@ -18873,6 +18957,39 @@ async function _runLookupInner(lat,lng,searchCtx){
     // `parcel`), so when the live layer lacks a field, splice the roll's value into the live
     // attributes object under the name the detector expects — the existing render + Excel export
     // then pick it up with no further changes. Only fills gaps; never overwrites a live value.
+    /* 🩹 FIX (2026-09-01): LIVING AREA WAS HOSTAGE TO THE STATEWIDE ROLL.
+       Confirmed against the live service: Collier's parcel layer publishes only 10 fields
+       (OBJECTID, ParcelId, Folio, OwnerLine1, SiteCity, SiteZipCode, SiteStreetAddress, Shape_*).
+       No living area, no year built, no values. For Collier the under-air figure comes from the
+       LOCAL compact file instead — which needs no network and no roll.
+       But the file lookup lived INSIDE the `if(parcel …)` roll-success guard below, so when the
+       FDOR roll timed out (four 4-second failures in the timing panel) the card ALSO lost the sqft
+       that was sitting on disk the whole time. The roll's failure was taking a local file down with
+       it. Hoisted out: living area is now resolved from the file first, independently, and the roll
+       splice below only ever fills what the file couldn't. */
+    const _liveAttrs = liveRes.features[0].attributes;
+    const _isNum = v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+    let _fileLiv=null;
+    if(!det.liv || norm(countyName)==='COLLIER'){
+      try{
+        const _fu = countyName ? ADDRPOINT_FILES[norm(countyName)] : null;
+        if(_fu && _fu.indexOf('REPLACE-ME')<0 && isFinite(lat) && isFinite(lng)){
+          const _eps=0.0008, _bb=L.latLngBounds([lat-_eps,lng-_eps],[lat+_eps,lng+_eps]);
+          // Short budget so a cold 4.6MB download can't hold the card; a re-render fills it after.
+          const _fr=await queryHostedFile(_fu,_bb,SQFT_FILE_BUDGET_MS);
+          if(_fr && _fr.length){
+            // Anchor to the SELECTED parcel polygon where we have one, else the searched point.
+            const _anchorFeat=(liveRes.features&&liveRes.features[0])
+              || (parcel&&parcel.features&&parcel.features[0]) || null;
+            const _bx=pickFilePointForParcel(_fr, _anchorFeat, lat, lng);
+            if(_bx && _bx.attributes && Number(_bx.attributes.TOT_LVG_AR)>0) _fileLiv=_bx.attributes.TOT_LVG_AR;
+          }
+        }
+        // Value that already arrived with the clicked/searched file label, when the bbox re-query missed.
+        if(!_isNum(_fileLiv) && searchCtx && _isNum(searchCtx.fileSqft)) _fileLiv=searchCtx.fileSqft;
+      }catch(e){}
+      if(_isNum(_fileLiv)){ _liveAttrs.TOT_LVG_AR=_fileLiv; det.liv='TOT_LVG_AR'; }
+    }
     if(parcel && !parcel.__err && parcel.features && parcel.features[0]){
       const _ra=parcel.features[0].attributes||{}, _la=liveRes.features[0].attributes;
       const _num=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
@@ -18882,30 +18999,14 @@ async function _runLookupInner(lat,lng,searchCtx){
       // enclosures excluded), so it OVERRIDES even when the roll already populated det.liv — otherwise
       // a roll value (e.g. 2,818) would win over the authoritative file value (3,047). For other
       // counties keep the gap-fill-only behaviour (only runs when nothing was detected yet).
-      if(!det.liv || norm(countyName)==='COLLIER'){
-        let _fileSqft=null, _rollLiv=pick(_ra,'TOT_LVG_AR','TOTLVGAR','HEATED_AREA','HEATEDAREA','LIVING_AREA','LIVINGAREA','BLDG_SQFT');
-        try{
-          const _fileUrl = countyName ? ADDRPOINT_FILES[norm(countyName)] : null;
-          if(_fileUrl && _fileUrl.indexOf('REPLACE-ME')<0 && isFinite(lat) && isFinite(lng)){
-            const _eps=0.0008, _bb=L.latLngBounds([lat-_eps,lng-_eps],[lat+_eps,lng+_eps]);
-            // ⚡ Short budget: don't hold the whole card behind a 4.6MB download on a cold session.
-            const _fr=await queryHostedFile(_fileUrl,_bb,SQFT_FILE_BUDGET_MS);
-            if(_fr && _fr.length){
-              // anchor to the selected parcel polygon, not the (possibly drifted) geocoded click
-              const _bx=pickFilePointForParcel(_fr, (parcel&&parcel.features&&parcel.features[0])||null, lat, lng);
-              if(_bx && _bx.attributes && Number(_bx.attributes.TOT_LVG_AR)>0) _fileSqft=_bx.attributes.TOT_LVG_AR;
-            }
-          }
-          // If the bbox re-query missed (drifted coord, parcel polygon absent, or the file point sat
-          // just outside the small box), fall back to the sqft that ALREADY arrived with the clicked/
-          // searched file label (searchCtx.fileSqft, captured in _nbrClickCtx). Same authoritative file
-          // figure — it just skips a re-lookup that can silently miss. THIS is why a search sometimes
-          // showed no sqft while clicking the same house showed it: the re-query missed and the
-          // already-in-hand value was being ignored.
-          if(!_num(_fileSqft) && searchCtx && _num(searchCtx.fileSqft)) _fileSqft=searchCtx.fileSqft;
-        }catch(e){}
-        // COLLIER: the file value is authoritative (appraiser's own under-air). Whenever we have it,
-        // use it outright — don't let the roll's min() heuristic or a prior det.liv keep 2,818.
+      /* The file pass above already ran and may have set det.liv. Reconcile the roll against it —
+         no second file query, and no dependence in either direction. */
+      {
+        const _fileSqft=_fileLiv;
+        const _rollLiv=pick(_ra,'TOT_LVG_AR','TOTLVGAR','HEATED_AREA','HEATEDAREA','LIVING_AREA','LIVINGAREA','BLDG_SQFT');
+        // COLLIER: the file value is authoritative (appraiser's own under-air, screen enclosures
+        // excluded). Whenever we have it, use it outright — don't let the roll's min() heuristic or
+        // a prior det.liv keep a lower/different figure.
         if(norm(countyName)==='COLLIER' && _num(_fileSqft)){
           _la.TOT_LVG_AR=_fileSqft; det.liv='TOT_LVG_AR';
         } else if(_num(_fileSqft) && _num(_rollLiv)){
@@ -21014,6 +21115,7 @@ async function _runLookupInner(lat,lng,searchCtx){
   const _sum = buildSummaryStrip(window.__exportData, window.__printMeta);
   results.innerHTML = setStatus('ok','Done — '+(new Date()).toLocaleTimeString())
     + _bc + _sum + '<div class="cardflow">' + html + '</div>';
+  wireRollRetry();          // the button only exists once the card above is in the DOM
   tabifyResults(results);
   /* ---- FDEM NEIGHBOUR AUTO-RUN (non-blocking) --------------------------------------------------
      Automatically check the single CLOSEST parcel through the statewide registry a moment after
