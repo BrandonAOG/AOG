@@ -18230,6 +18230,24 @@ function addrPointBadgeHTML(pid){
     return `<div class="note" style="padding-top:4px">${bits.join(' ')} <span class="muted" style="font-size:10px">— per Collier addressing</span></div>`;
   }catch(e){ return ''; }
 }
+/* F12 HELPER. `livWhy()` in the console prints where the living-area figure on the current card
+   came from and what every candidate source said, so a figure that looks wrong can be traced to a
+   source instead of guessed at. window.__livSource holds the same data as an object. */
+window.livWhy=function(){
+  const s=window.__livSource;
+  if(!s){ console.log('No living-area figure resolved on this lookup.'); return null; }
+  const fmt=v=>v==null?'—':Number(String(v).replace(/[^0-9.]/g,'')).toLocaleString('en-US')+' sq ft';
+  console.log(
+    'LIVING AREA · '+(s.county||'?')+'\n'+
+    '  shown        : '+fmt(s.value)+'\n'+
+    '  source       : '+(s.source||'?')+'\n'+
+    '  field        : '+(s.field||'—')+'\n'+
+    '  live feed    : '+(s.source==='live county feed'?fmt(s.value):'(not used — feed carries no living area)')+'\n'+
+    '  compact file : '+fmt(s.fileValue)+'\n'+
+    '  state roll   : '+fmt(s.rollValue)+(s.rollAnswered===false?'  (roll did not answer)':'')
+  );
+  return s;
+};
 function renderParcelGeneric(a, d){
   let h='';
   const owner = d.owner?pick(a,d.owner):null;
@@ -18259,6 +18277,17 @@ function renderParcelGeneric(a, d){
   if(own2) h += fieldRow('Owner 2', esc(own2));
   h += fieldRow('Parcel ID', pid?esc(pid):'<span class="muted">—</span>','big');
   if(liv){ h += fieldRow('Living area', liv+' sq ft','big');
+    /* Provenance under the figure. Cheap to render, and it turns "the sqft looks off" into a
+       one-glance answer about which source produced it. `livWhy()` in the console has the rest. */
+    try{ const _ls=window.__livSource;
+      if(_ls && _ls.source){
+        const _warn=/unreconciled/.test(_ls.source);
+        h += `<div class="note${_warn?' warnbox':''}" style="font-size:10.5px">Living area source: `
+          + `<b>${esc(_ls.source)}</b>`
+          + (_warn?'. The state roll didn\'t answer, so this figure could not be cross-checked against it — '
+                 +'it may be an under-roof or gross number rather than heated area.':'')
+          + `</div>`;
+      } }catch(e){}
     try{ if(window.__livOverride){ h += `<div class="note">Living area shown is the heated/living figure (${window.__livOverride.shown.toLocaleString('en-US')} sq ft). The other source listed ${window.__livOverride.other.toLocaleString('en-US')} sq ft &mdash; an adjusted/under-roof or multi-structure total.</div>`; window.__livOverride=null; } }catch(e){}
   }
   if(lotSf) h += fieldRow('Lot area', lotSf+' sq ft');
@@ -18988,39 +19017,49 @@ async function _runLookupInner(lat,lng,searchCtx){
         // Value that already arrived with the clicked/searched file label, when the bbox re-query missed.
         if(!_isNum(_fileLiv) && searchCtx && _isNum(searchCtx.fileSqft)) _fileLiv=searchCtx.fileSqft;
       }catch(e){}
-      if(_isNum(_fileLiv)){ _liveAttrs.TOT_LVG_AR=_fileLiv; det.liv='TOT_LVG_AR'; }
+      /* ⚠️ REGRESSION FIXED 2026-09-01 (Lee sqft came out wrong).
+         The hoist originally committed the file value RIGHT HERE — `_liveAttrs.TOT_LVG_AR=_fileLiv`
+         — for any county. That skipped the file-vs-roll reconciliation below, so in Lee the file's
+         figure won outright where the old code would have taken min(file, roll). Lee's file can
+         carry a gross/under-roof number, so the card showed a larger figure than the heated area.
+         The decision is made ONCE, here, with the same precedence the original had. The roll is read
+         if it answered and simply treated as absent if it didn't — which is what makes this
+         independent of the roll without changing any outcome the roll participates in. */
+      const _rollAttrsL = (parcel && !parcel.__err && parcel.features && parcel.features[0])
+        ? (parcel.features[0].attributes||{}) : null;
+      const _rollLivL = _rollAttrsL
+        ? pick(_rollAttrsL,'TOT_LVG_AR','TOTLVGAR','HEATED_AREA','HEATEDAREA','LIVING_AREA','LIVINGAREA','BLDG_SQFT')
+        : null;
+      let _livVal=null, _livSrc=null;
+      if(norm(countyName)==='COLLIER' && _isNum(_fileLiv)){
+        // Collier's file is the appraiser's own under-air figure — authoritative, no min().
+        _livVal=_fileLiv; _livSrc='compact file (appraiser under-air)';
+      } else if(_isNum(_fileLiv) && _isNum(_rollLivL)){
+        // Heated area is always <= an adjusted/under-roof figure and <= a multi-structure sum, so
+        // take the SMALLER. Corrects the file when IT carries the gross figure and the roll when IT
+        // sums secondary structures (the 4300 Brynwood case: roll 23,724 vs appraiser 11,862).
+        const _f=Number(_fileLiv), _r=Number(String(_rollLivL).replace(/[^0-9.]/g,''));
+        const _small=Math.min(_f,_r), _big=Math.max(_f,_r);
+        _livVal=_small; _livSrc='smaller of compact file & state roll';
+        if(_big-_small>1) window.__livOverride={shown:_small, other:_big};
+      } else if(_isNum(_fileLiv)){
+        _livVal=_fileLiv; _livSrc='compact file (roll unavailable — unreconciled)';
+      } else if(_isNum(_rollLivL)){
+        _livVal=_rollLivL; _livSrc='state roll';
+      }
+      if(_livVal!=null){ _liveAttrs.TOT_LVG_AR=_livVal; det.liv='TOT_LVG_AR'; }
+      try{ window.__livSource={ county:countyName||null, value:_livVal, source:_livSrc,
+        fileValue:_fileLiv, rollValue:_rollLivL, rollAnswered:!!_rollAttrsL, field:'TOT_LVG_AR' }; }catch(e){}
+    } else {
+      /* The live county feed carried living area on its own field — nothing else is consulted. */
+      try{ window.__livSource={ county:countyName||null, value:pick(_liveAttrs, det.liv),
+        source:'live county feed', field:det.liv, fileValue:null, rollValue:null, rollAnswered:null }; }catch(e){}
     }
     if(parcel && !parcel.__err && parcel.features && parcel.features[0]){
       const _ra=parcel.features[0].attributes||{}, _la=liveRes.features[0].attributes;
       const _num=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
-      // living area — prefer the county appraiser file (primary-structure figure) over the statewide
-      // roll, which can sum secondary structures (e.g. 4300 Brynwood: roll 23,724 vs appraiser 11,862).
-      // For COLLIER the file carries the appraiser's OWN under-air figure (INT_BUILDINGS, screen
-      // enclosures excluded), so it OVERRIDES even when the roll already populated det.liv — otherwise
-      // a roll value (e.g. 2,818) would win over the authoritative file value (3,047). For other
-      // counties keep the gap-fill-only behaviour (only runs when nothing was detected yet).
-      /* The file pass above already ran and may have set det.liv. Reconcile the roll against it —
-         no second file query, and no dependence in either direction. */
-      {
-        const _fileSqft=_fileLiv;
-        const _rollLiv=pick(_ra,'TOT_LVG_AR','TOTLVGAR','HEATED_AREA','HEATEDAREA','LIVING_AREA','LIVINGAREA','BLDG_SQFT');
-        // COLLIER: the file value is authoritative (appraiser's own under-air, screen enclosures
-        // excluded). Whenever we have it, use it outright — don't let the roll's min() heuristic or
-        // a prior det.liv keep a lower/different figure.
-        if(norm(countyName)==='COLLIER' && _num(_fileSqft)){
-          _la.TOT_LVG_AR=_fileSqft; det.liv='TOT_LVG_AR';
-        } else if(_num(_fileSqft) && _num(_rollLiv)){
-            // Both sources have a value. Heated/living area is always <= an adjusted/under-roof
-            // figure (e.g. Collier "Adj Area") and <= a multi-structure sum, so take the SMALLER:
-            // it corrects the file when IT carries the gross figure (this parcel) AND the roll when
-            // IT sums secondary structures (the Brynwood case).
-            const _f=Number(_fileSqft), _r=Number(String(_rollLiv).replace(/[^0-9.]/g,''));
-            const _small=Math.min(_f,_r), _big=Math.max(_f,_r);
-            _la.TOT_LVG_AR=_small; det.liv='TOT_LVG_AR';
-            if(_big-_small>1) window.__livOverride={shown:_small, other:_big};
-        } else if(_num(_fileSqft)){ _la.TOT_LVG_AR=_fileSqft; det.liv='TOT_LVG_AR';
-        } else if(_num(_rollLiv)){ _la.TOT_LVG_AR=_rollLiv; det.liv='TOT_LVG_AR'; }
-      }
+      /* Living area is decided in ONE place above, before this guard, so it survives a dead roll —
+         see the regression note there. Nothing to do here. */
       // year built (actual)
       if(!det.yr){ const _y=pick(_ra,'ACT_YR_BLT','YR_BLT','EFF_YR_BLT','ACTYRBLT');
         if(_num(_y)){ _la.ACT_YR_BLT=_y; det.yr='ACT_YR_BLT'; } }
