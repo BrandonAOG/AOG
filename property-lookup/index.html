@@ -18859,7 +18859,35 @@ async function _runLookupInner(lat,lng,searchCtx){
      So retry when the primary came back EMPTY as well — and when retrying, use points that are
      genuinely different from the one that already failed (see _rollProbePoints). */
   const _rollEmpty = !(parcel && !parcel.__err && parcel.features && parcel.features[0]);
-  if(_rollAnchor){
+  /* ⚡ ALREADY-CORRECT GUARD (2026-09-01, from a live trace on 5249 Nautilus Dr, Cape Coral).
+     The re-anchor exists for ONE reason: the roll record fetched at the geocoded point might be the
+     NEIGHBOUR's, because the geocoder drifted. Its trigger is `_dd > 1e-9` — about 3.5 m in squared
+     degrees — and on a folio-pinned search the marker is recentred to the parcel CENTROID, which is
+     essentially always further than 3.5 m from the address point. So it re-anchored on virtually
+     every search, including the ones where the primary roll had already returned the right parcel.
+     Measured cost: 1776 ms and three extra queries per lookup, against the same statewide host that
+     had timed out four times an hour earlier. The wasted time is the smaller problem — every
+     needless query is another chance to trip the roll's circuit breaker, and an open breaker costs
+     the NEXT search its year built, values, use, last sale and legal.
+     So: if the roll record we already hold carries the house number we searched for, it is not the
+     wrong parcel and no amount of re-anchoring can improve it. Skip. This cannot mask the bug the
+     re-anchor was written for, because that bug is by definition a house-number MISMATCH. */
+  let _rollAlreadyRight=false;
+  if(!_rollEmpty){
+    const _rollAddr=parcelAddrText(parcel.features[0].attributes||{});
+    const _rollHN=_rollAddr?houseNum(_rollAddr):null;
+    // Prefer the number the user typed; on a map click fall back to the authoritative live address.
+    let _wantHN = (searchCtx && searchCtx.hn) ? String(searchCtx.hn) : null;
+    if(!_wantHN && liveRes && liveRes.features && liveRes.features[0]){
+      const _liveAddr=parcelAddrText(liveRes.features[0].attributes||{});
+      if(_liveAddr) _wantHN=houseNum(_liveAddr);
+    }
+    if(_rollHN && _wantHN && String(_rollHN)===String(_wantHN)) _rollAlreadyRight=true;
+  }
+  if(_rollAlreadyRight){
+    _timings.push({label:'parcel roll re-anchor (skipped — roll already on the right parcel)', ms:0});
+  }
+  if(_rollAnchor && !_rollAlreadyRight){
     const _dd=(_rollAnchor.lat-lat)*(_rollAnchor.lat-lat)+(_rollAnchor.lng-lng)*(_rollAnchor.lng-lng);
     if(_dd > 1e-9 || _rollEmpty){   // moved a few metres, OR we got nothing and must try elsewhere
       /* Re-anchored roll fetch. Like the primary roll this only supplies SUPPLEMENTARY fields
