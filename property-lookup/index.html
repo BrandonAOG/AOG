@@ -18230,24 +18230,6 @@ function addrPointBadgeHTML(pid){
     return `<div class="note" style="padding-top:4px">${bits.join(' ')} <span class="muted" style="font-size:10px">— per Collier addressing</span></div>`;
   }catch(e){ return ''; }
 }
-/* F12 HELPER. `livWhy()` in the console prints where the living-area figure on the current card
-   came from and what every candidate source said, so a figure that looks wrong can be traced to a
-   source instead of guessed at. window.__livSource holds the same data as an object. */
-window.livWhy=function(){
-  const s=window.__livSource;
-  if(!s){ console.log('No living-area figure resolved on this lookup.'); return null; }
-  const fmt=v=>v==null?'—':Number(String(v).replace(/[^0-9.]/g,'')).toLocaleString('en-US')+' sq ft';
-  console.log(
-    'LIVING AREA · '+(s.county||'?')+'\n'+
-    '  shown        : '+fmt(s.value)+'\n'+
-    '  source       : '+(s.source||'?')+'\n'+
-    '  field        : '+(s.field||'—')+'\n'+
-    '  live feed    : '+(s.source==='live county feed'?fmt(s.value):'(not used — feed carries no living area)')+'\n'+
-    '  compact file : '+fmt(s.fileValue)+'\n'+
-    '  state roll   : '+fmt(s.rollValue)+(s.rollAnswered===false?'  (roll did not answer)':'')
-  );
-  return s;
-};
 function renderParcelGeneric(a, d){
   let h='';
   const owner = d.owner?pick(a,d.owner):null;
@@ -18278,7 +18260,7 @@ function renderParcelGeneric(a, d){
   h += fieldRow('Parcel ID', pid?esc(pid):'<span class="muted">—</span>','big');
   if(liv){ h += fieldRow('Living area', liv+' sq ft','big');
     /* Provenance under the figure. Cheap to render, and it turns "the sqft looks off" into a
-       one-glance answer about which source produced it. `livWhy()` in the console has the rest. */
+       one-glance answer about which source produced it. window.__livSource carries the same data. */
     try{ const _ls=window.__livSource;
       if(_ls && _ls.source){
         const _warn=/unreconciled/.test(_ls.source);
