@@ -8279,7 +8279,13 @@ const NHC_SVCROOT='https://mapservices.weather.noaa.gov/tropical/rest/services/'
 let _nhcCat=null;
 let nhcSub={ wind:{on:false,layer:null}, ww:{on:false,layer:null}, surge:{on:false,layer:null,tiles:null},
              arr:{on:false,layer:null}, odds:{on:false,layer:null}, past:{on:false,layer:null},
-             dist:{on:false,layer:null} };
+             dist:{on:false,layer:null},
+             /* Added 2026-09-01 — the products from NHC's graphics index this tool didn't already
+                draw. `rain` is a raster, so it carries tiles rather than a vector layer.
+                REMOVED after testing: Key Messages (NHC serves CurrentStorms.json without CORS
+                headers and the graphic's filename can't be reliably derived from the browser) and
+                the Experimental Cone. Both live on the NHC storm page if you need them. */
+             rain:{on:false,tiles:null}, ero:{on:false,layer:null}, torn:{on:false,layer:null} };
 let scrubPts=[], scrubMarker=null, scrubTimer=null, scrubIdx=0;
 let windGeoms=[], surgeGeoms=[], inunGeoms=[], _stormSubMoveH=null, _stormSubOutH=null;
 let pssGeoms=[];   // Peak Storm Surge Forecast heights ({poly, range:'4-6 ft', color, place, adv, rank, stamp})
@@ -8613,23 +8619,76 @@ async function toggleDistance(on){
 }
 
 /* ---- Coastal Watch / Warning bands ---- */
-function _wwColor(props){
-  const t=_normType(nhcPick(props,['TCWW','tcww','SEVERITY','severity','prod_type','TYPE','type','Label','label','SS'])||'');
-  if(/hurricane warning/.test(t)) return '#c8102e';
-  if(/hurricane watch/.test(t))   return '#ff69b4';
-  if(/(tropical storm|storm|trop strm).*warning|ts warning/.test(t)) return '#1f6feb';
-  if(/(tropical storm|storm|trop strm).*watch|ts watch/.test(t))     return '#f2c200';
-  return '#ff8a3c';
+/* ⚠️ NHC's TCWW field carries a CODE, not prose: "TWR", not "Tropical Storm Warning". Both
+   functions below only matched spelled-out wording, so every coded advisory fell through — the tip
+   printed the bare code "TWR" and the line drew in the fallback orange instead of the blue a
+   tropical-storm warning is supposed to be. Codes are resolved first now, then the prose forms are
+   still tried for services that spell it out, and VTEC-style phenomena codes (HU.W / TR.A) are
+   covered too since some NWS layers use those instead. */
+const WW_CODES={
+  HWR:'Hurricane Warning',        HWA:'Hurricane Watch',
+  TWR:'Tropical Storm Warning',   TWA:'Tropical Storm Watch',
+  SSW:'Storm Surge Warning',      SSA:'Storm Surge Watch',
+  'HU.W':'Hurricane Warning',     'HU.A':'Hurricane Watch',
+  'TR.W':'Tropical Storm Warning','TR.A':'Tropical Storm Watch',
+  'SS.W':'Storm Surge Warning',   'SS.A':'Storm Surge Watch'
+};
+const WW_HUES={
+  'Hurricane Warning':'#c8102e', 'Hurricane Watch':'#ff69b4',
+  'Tropical Storm Warning':'#1f6feb', 'Tropical Storm Watch':'#f2c200',
+  'Storm Surge Warning':'#b524f7', 'Storm Surge Watch':'#db7ff7'
+};
+/* One resolver, so the colour on the map and the name in the tip can never disagree. */
+function _wwKind(props){
+  const raw=nhcPick(props,['TCWW','tcww','SEVERITY','severity','prod_type','TYPE','type','Label','label','SS']);
+  const code=String(raw==null?'':raw).trim().toUpperCase();
+  if(WW_CODES[code]) return WW_CODES[code];
+  const t=_normType(raw||'');
+  if(/hurricane warning/.test(t)) return 'Hurricane Warning';
+  if(/hurricane watch/.test(t))   return 'Hurricane Watch';
+  if(/surge warning/.test(t))     return 'Storm Surge Warning';
+  if(/surge watch/.test(t))       return 'Storm Surge Watch';
+  if(/(tropical storm|storm|trop strm).*warning|ts warning/.test(t)) return 'Tropical Storm Warning';
+  if(/(tropical storm|storm|trop strm).*watch|ts watch/.test(t))     return 'Tropical Storm Watch';
+  /* Still unknown: show what NOAA published rather than inventing a category — but flag it as
+     unrecognised so a bare code like the old "TWR" reads as a gap, not as the alert's real name. */
+  const txt=String(raw==null?'':raw).trim().replace(/\s+/g,' ');
+  return txt ? ('Coastal alert (' + txt + ')') : 'Coastal watch / warning';
 }
+function _wwColor(props){ return WW_HUES[_wwKind(props)] || '#ff8a3c'; }
+// Same resolver the map colour uses, so the tip and the line can't disagree.
+function _wwLabel(props){ return _wwKind(props); }
+/* What each alert actually requires of you — the reason you'd hover it in the first place. */
+const WW_MEANS={
+  'Hurricane Warning':'Hurricane-force winds (74+ mph) expected here. Preparations should be complete.',
+  'Hurricane Watch':'Hurricane-force winds possible here. Be ready to act.',
+  'Tropical Storm Warning':'Tropical-storm-force winds (39+ mph) expected here within 36 hours.',
+  'Tropical Storm Watch':'Tropical-storm-force winds possible here within 48 hours.',
+  'Storm Surge Warning':'Life-threatening inundation from rising water is expected along this coast.',
+  'Storm Surge Watch':'Life-threatening inundation from rising water is possible along this coast.'
+};
+/* 🩹 The coastal watch/warning is drawn as POLYLINES — a stretch of coast, not an area. Stored with
+   its own `line` array so hover can answer by nearest segment; point-in-polygon can never hit it.
+   Same treatment the Peak Surge bands get. */
+let wwGeoms=[];
 async function toggleWW(on){
   if(nhcSub.ww.layer){ map.removeLayer(nhcSub.ww.layer); nhcSub.ww.layer=null; }
-  nhcSub.ww.on=on;
-  if(!on){ renderStormControls(); return; }
+  nhcSub.ww.on=on; wwGeoms=[];
+  if(!on){ _syncStormSubHover(); renderStormControls(); return; }
   const cat=await nhcCatalog();
   const gj=_fcSel(await _nhcGeo(cat.summary, cat.wwLayer));    // selected system only
-  if(!gj||!gj.features||!gj.features.length){ mapToast('No coastal watches/warnings issued for this storm right now.',2800); nhcSub.ww.on=false; renderStormControls(); return; }
+  if(!gj||!gj.features||!gj.features.length){ mapToast('No coastal watches/warnings issued for this storm right now.',2800); nhcSub.ww.on=false; _syncStormSubHover(); renderStormControls(); return; }
   nhcSub.ww.layer=L.geoJSON(gj,{renderer:canvasRenderer,interactive:false,
     style:f=>({color:_wwColor(f.properties),weight:5,opacity:.95})}).addTo(map);
+  /* Keep the geometry so the cursor can be answered. Previously these features were drawn and
+     thrown away, which is why hovering the line reported nothing. */
+  gj.features.forEach(f=>{
+    const label=_wwLabel(f.properties), color=_wwColor(f.properties);
+    _featLines(f).forEach(line=>{ if(line && line.length>1) wwGeoms.push({line,label,color}); });
+    // A few advisories publish these as thin polygons instead of lines — handle both.
+    _featPolys(f).forEach(poly=>wwGeoms.push({poly,label,color}));
+  });
+  _syncStormSubHover();
   renderStormControls();
 }
 
@@ -8807,6 +8866,545 @@ async function toggleSurge(on){
   _syncStormSubHover();
   renderStormControls();
 }
+
+/* ============================================================================================
+   ADDED PRODUCTS (2026-09-01) — the three map layers on NHC's graphics index that this tool didn't
+   already draw. Note that NONE of them is an NHC product: two are WPC, one is SPC. That's why they
+   sit in their own chip row rather than under "Storm layers".
+
+     RAINFALL POTENTIAL     → WPC storm-total QPF. Raster; shaded overlay + a debounced identify
+                              so the cursor reports inches at a point.
+     FLASH FLOODING POTENT. → WPC Excessive Rainfall Outlook (Marginal/Slight/Moderate/High).
+                              Vector polygons, hover-answerable.
+     U.S. TORNADO POTENTIAL → SPC Convective Outlook. Prefers the tornado-probability layer,
+                              falls back to the categorical risk layer.
+
+   Two more were built and then REMOVED as unworkable rather than left in half-broken:
+     KEY MESSAGES  — NHC serves CurrentStorms.json with no Access-Control-Allow-Origin header, so
+       the browser refuses it, and the graphic's filename can't be reliably derived from the bin
+       number the map services publish.
+     EXPERIMENTAL CONE — removed at the owner's call. If it's wanted back, it was a separate
+       /experimental/ service in the same tropical folder, discovered the same way as the rest.
+   Both are on the NHC storm page.
+
+   ENDPOINTS — all three verified live 2026-09-01 against a directory walk of the NOAA vector root:
+     qpf  precip/wpc_qpf              (MapServer)
+     ero  hazards/wpc_precip_hazards  (MapServer)   ← NOT published under "ero"/"excessive"
+     spc  outlooks/SPC_wx_outlks      (MapServer)
+   Nothing hardcodes a layer id: each service is probed with ?f=json and layers are matched BY NAME,
+   because NOAA renumbers them between seasons — the same complaint nhcCatalog() already carries. If
+   a service moves, wxpFindService() searches the directory for it by name; if that fails too, add
+   the real URL to that product's `cands`. A product that can't be resolved toasts which WXP key to
+   widen, and window.__wxpDebug holds the resolved service, how it was found, and the full layer
+   list for each product.
+
+   The ⚙ Diag chip that rendered all of that into the panel has been removed now the endpoints are
+   confirmed. window.__wxpDebug is unchanged and costs nothing — it's a desktop-console read.
+   ============================================================================================ */
+
+const WXP = {
+  qpf: { label:'Rainfall', cands:[
+      'https://mapservices.weather.noaa.gov/raster/rest/services/precip/wpc_qpf/MapServer',
+      'https://mapservices.weather.noaa.gov/vector/rest/services/precip/wpc_qpf/MapServer'
+    ],
+    /* Storm-total rainfall is what matters for an inland lot, so prefer the longest accumulation
+       window published (Day 1-3 / 72-hour total) and fall back to shorter ones. */
+    svcRe:/(wpc.*qpf|qpf|quantitative_precip)/i,
+    folderRe:/precip|qpf|wpc/i,
+    layerRe:[/day\s*1\s*-\s*3|72\s*h(ou)?r|3\s*day|total/i, /day\s*1\s*-\s*2|48\s*h(ou)?r/i, /qpf|precip/i] },
+  /* ⚠️ CORRECTED 2026-09-01 from a live directory walk of the NOAA vector root (34 services).
+     There is NO service published under "ero" or "excessive_rainfall" — my first two guesses were
+     both wrong, which is what produced the "didn't answer" toast. WPC's Excessive Rainfall Outlook
+     is carried inside its precipitation-hazards service instead. That URL is confirmed to EXIST in
+     the directory; whether the ERO layers are the ones inside it is inferred from the name, so
+     check the ⚙ Diag layer list once and tighten layerRe below if it picked the wrong one. */
+  ero: { label:'Flash flood', cands:[
+      'https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer'
+    ],
+    // Discovery fallback: match the SERVICE by name anywhere under the roots (see wxpFindService).
+    svcRe:/(wpc.*(ero|excessive|precip.*hazard)|excessive.*rain|precip_hazards|\bero\b)/i,
+    folderRe:/hazard|outlook|precip|wpc/i,
+    /* MUST stay specific. wpc_precip_hazards is a MULTI-HAZARD service — winter storm severity and
+       probabilistic winter precip live on the same host and possibly the same service. A loose
+       /day\s*1/ would happily match "Day 1 Winter Storm Severity Index" and shade it as flash-flood
+       risk. Excessive-rainfall wording is required, and `strict` below forbids an arbitrary
+       fallback layer. */
+    strict:true,
+    layerRe:[/day\s*1.*(excessive|ero)|(excessive|ero).*day\s*1/i,
+             /excessive\s*rain/i,
+             /\bero\b/i,
+             /day\s*1.*(rainfall|flash\s*flood)/i,
+             /(rainfall|flash\s*flood).*outlook/i] },
+  spc: { label:'Tornado', cands:[
+      'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer',
+      'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/spc_wx_outlks/MapServer'
+    ],
+    // ✅ CONFIRMED present in the live directory walk: outlooks/SPC_wx_outlks (MapServer).
+    svcRe:/(spc|convective|wx_outlk|storm_prediction)/i,
+    folderRe:/outlook|spc|convect|hazard/i,
+    /* Also strict. SPC_wx_outlks carries Day 1/2/3 categorical, tornado, hail AND wind layers plus
+       group layers — falling back to whichever came first would label a HAIL band as tornado risk. */
+    strict:true,
+    /* Tornado probability is the honest answer to "tornado potential". The categorical outlook
+       lumps tornado, hail and wind into one risk level, so it's only the fallback. */
+    layerRe:[/day\s*1.*torn/i, /torn.*prob/i, /day\s*1.*categorical/i, /categorical/i] }
+};
+let _wxpCache = {};            // key -> {svc, layers:[{id,name}]} | null (resolved once per session)
+
+/* ArcGIS server roots to search. mapservices.weather.noaa.gov splits vector and raster content
+   across two REST endpoints, and NOAA moves services between folders. */
+const WXP_ROOTS = [
+  'https://mapservices.weather.noaa.gov/vector/rest/services',
+  'https://mapservices.weather.noaa.gov/raster/rest/services'
+];
+const _agsDirCache = new Map();          // directory URL -> parsed listing (shared across products)
+async function _agsList(url){
+  if(_agsDirCache.has(url)) return _agsDirCache.get(url);
+  let j=null;
+  try{ j=await fetch(url+'?f=json').then(r=>r.ok?r.json():null); }catch(e){ j=null; }
+  _agsDirCache.set(url,j);
+  return j;
+}
+/* FIND A SERVICE BY NAME instead of guessing its path.
+   ⚠️ Why this exists: the first version only tried a hardcoded list of full service URLs. The
+   rainfall guess happened to be right; the excessive-rainfall and SPC guesses were not, so those
+   two chips toasted "didn't answer" even though the services are live somewhere on the same host.
+   Guessing harder is not a fix — NOAA reorganises these folders between seasons. So we now walk the
+   ArcGIS directory the same way nhcCatalog() walks the tropical folder: list the root, list each
+   folder, and match the service NAME against a regex. In an ArcGIS folder listing `s.name` already
+   carries the folder prefix ("outlooks/wpc_ero"), so the URL is root + '/' + s.name + '/' + s.type.
+   Folders whose name looks relevant are searched first so the common case costs 2-3 requests, not
+   twenty; the full sweep is the fallback. Directory listings are cached and shared, so three
+   products searching the same host don't re-list it. */
+async function wxpFindService(key){
+  const cfg=WXP[key]; if(!cfg || !cfg.svcRe) return null;
+  for(const root of WXP_ROOTS){
+    const j=await _agsList(root); if(!j) continue;
+    const tryList=list=>{
+      const hit=(list||[]).find(sv=>sv && sv.name && cfg.svcRe.test(sv.name));
+      return hit ? root+'/'+hit.name+'/'+hit.type : null;
+    };
+    // services sitting at the root
+    let url=tryList(j.services); if(url) return url;
+    // then folders, most-likely-looking first
+    const folders=(j.folders||[]).slice();
+    folders.sort((a,b)=>{
+      const A=cfg.folderRe&&cfg.folderRe.test(a)?0:1, B=cfg.folderRe&&cfg.folderRe.test(b)?0:1;
+      return A-B;
+    });
+    for(const f of folders){
+      const fj=await _agsList(root+'/'+f); if(!fj) continue;
+      url=tryList(fj.services); if(url) return url;
+    }
+  }
+  return null;
+}
+/* Try the known-good URLs first (fast, no directory walk), then fall back to discovery. */
+async function wxpResolve(key){
+  if(Object.prototype.hasOwnProperty.call(_wxpCache,key)) return _wxpCache[key];
+  const cfg=WXP[key]; let found=null;
+  if(cfg){
+    for(const svc of (cfg.cands||[])){
+      const layers=await _svcLayers(svc);
+      if(layers && layers.length){ found={svc, layers, via:'listed'}; break; }
+    }
+    if(!found){
+      const svc=await wxpFindService(key);
+      if(svc){
+        const layers=await _svcLayers(svc);
+        if(layers && layers.length) found={svc, layers, via:'discovered'};
+      }
+    }
+  }
+  _wxpCache[key]=found;
+  try{ window.__wxpDebug=Object.assign(window.__wxpDebug||{}, {[key]: found ? {svc:found.svc, via:found.via, layers:found.layers} : null}); }catch(e){}
+  return found;
+}
+/* Tell the user WHICH stage failed, because "didn't answer" covers three very different faults:
+   the service wasn't found at all, it was found but has no usable layer, or it answered with
+   nothing published right now. Only the first two need a code change. */
+function wxpFailToast(key, res){
+  const cfg=WXP[key]||{};
+  if(!res){
+    mapToast('Couldn’t find the '+(cfg.label||key)+' service on mapservices.weather.noaa.gov — '
+      +'tried the listed URLs and searched the directory. Run window.__wxpDebug in the console, '
+      +'then widen WXP.'+key+'.svcRe or add the real URL to WXP.'+key+'.cands.', 5200);
+  } else {
+    mapToast('Found '+(cfg.label||key)+' at '+res.svc.replace(/^https:\/\/[^/]+\//,'')
+      +' but no layer matched — widen WXP.'+key+'.layerRe. Layer names are in window.__wxpDebug.', 5200);
+  }
+}
+/* Pick the best layer for a product: first regex that matches wins, group layers skipped
+   (a group layer has no geometry and returns an error when queried). */
+function wxpPickLayer(res, key){
+  if(!res) return null;
+  const cfg=WXP[key]||{};
+  // Group layers have no geometry and error on query; a "…Group" / "…Outlook" parent is not a layer.
+  const usable = res.layers.filter(l=>l && l.name && !/\bgroup\b/i.test(l.name));
+  for(const re of (cfg.layerRe||[])){
+    const hit=usable.find(l=>re.test(l.name));
+    if(hit) return hit;
+  }
+  /* STRICT products refuse to guess. Drawing an arbitrary layer from a multi-hazard service and
+     labelling it "flash flooding" or "tornado" would be confidently wrong on screen, which is worse
+     than the chip declining and telling you to widen layerRe. */
+  if(cfg.strict) return null;
+  return usable[0]||null;
+}
+
+/* ---- LAYER BOOKKEEPING FOR THE ADDED PRODUCTS -------------------------------------------------
+   🩹 FIX (2026-09-01): "turn flash flood off and it still shows slightly."
+   Each toggle held exactly ONE layer handle (nhcSub.ero.layer) and had no run token. Two ways that
+   orphans a copy on the map:
+
+     1. refreshStormSub() fires on the cone's advisory poll and calls toggleEro(true) while a
+        previous toggleEro(true) is still awaiting the WPC fetch. Two feature groups get built and
+        added; only the second is stored in the handle. The first is on the map with nothing holding
+        a reference to it, so the chip can never remove it.
+     2. Turning the chip OFF mid-load: the off path clears the handle and returns, then the still
+        in-flight ON path finishes and calls grp.addTo(map) — adding the layer AFTER you switched it
+        off, with `on` already false.
+
+   Both leave a single set of bands at fillOpacity .28, which is exactly "still shows slightly".
+   Fixed with (a) a bag holding EVERY group a product has ever added, so nothing can be orphaned,
+   and (b) a per-product token, so a superseded run discards what it built instead of adding it. */
+const _wxpBag={ rain:[], ero:[], torn:[] };
+const _wxpTok={ rain:0, ero:0, torn:0 };
+function _wxpTrack(key, layer){ _wxpBag[key].push(layer); nhcSub[key].layer=layer; return layer; }
+/* Rain keeps its tile layer on `.tiles`, not `.layer`, so it gets its own dropper. Same bag. */
+function _wxpDropRain(){
+  (_wxpBag.rain||[]).forEach(l=>{ try{ if(map.hasLayer(l)) map.removeLayer(l); }catch(e){} });
+  _wxpBag.rain=[];
+  if(nhcSub.rain && nhcSub.rain.tiles){ try{ map.removeLayer(nhcSub.rain.tiles); }catch(e){} }
+  if(nhcSub.rain) nhcSub.rain.tiles=null;
+  _qpfTiles.clear();                       // the pixel cache belongs to the layer that's now gone
+}
+function _wxpDrop(key){
+  (_wxpBag[key]||[]).forEach(l=>{
+    try{ if(map.hasLayer(l)) map.removeLayer(l); }catch(e){}
+    try{ if(l.clearLayers) l.clearLayers(); }catch(e){}
+  });
+  _wxpBag[key]=[];
+  if(nhcSub[key]) nhcSub[key].layer=null;
+  /* The vector products share one L.Canvas renderer with the storm layers. Removing paths from a
+     shared canvas normally triggers Leaflet's own redraw, but a group removed while another run is
+     mid-draw can leave the last frame painted. Nudging the renderer guarantees the pixels go. */
+  try{ if(typeof canvasRenderer!=='undefined' && canvasRenderer._redraw) canvasRenderer._redraw(); }catch(e){}
+}
+
+/* ---- Rainfall potential (WPC QPF) — raster overlay + point identify ---- */
+let _qpfLayerName='', _qpfLayerId=null, _qpfIdInfo=null, _qpfIdTimer=null, _qpfIdKey='';
+/* Last few raw identify responses, for diagnosing a readout that looks wrong. Inspect with
+   `window.__qpfDebug` in the console — it holds the URL asked and the JSON that came back. */
+window.__qpfDebug=[];
+async function toggleRain(on){
+  const tok=++_wxpTok.rain;                // a tile layer can be orphaned the same way — see _wxpBag
+  _wxpDropRain();
+  nhcSub.rain.on=on; _qpfIdInfo=null; _qpfLocal=null; _qpfIdKey='';
+  if(!on){ _syncStormSubHover(); renderStormControls(); return; }
+  const res=await wxpResolve('qpf');
+  if(tok!==_wxpTok.rain) return;
+  const lyr=wxpPickLayer(res,'qpf');
+  if(!res || !lyr){
+    nhcSub.rain.on=false; wxpFailToast('qpf', res);
+    _syncStormSubHover(); renderStormControls(); return;
+  }
+  if(tok!==_wxpTok.rain) return;
+  _qpfLayerName=lyr.name; _qpfLayerId=lyr.id;
+  /* NOAA's own rendering, so the colours match the published Rainfall Potential graphic rather
+     than a palette invented here. 512px tiles for the same reason the flood layer uses them.
+     crossOrigin is REQUIRED: without it the browser taints any canvas the tile is drawn into and
+     getImageData() throws, which is what the instant local read below depends on. ArcGIS export
+     sends the CORS header, so this costs nothing. */
+  const url=res.svc+'/export?dpi=96&transparent=true&format=png32&bboxSR=3857&imageSR=3857'
+    +'&size=512,512&layers=show:'+lyr.id+'&f=image&bbox={bbox}';
+  _qpfTiles.clear();
+  nhcSub.rain.tiles=new ArcGISExportTiles(url,
+    { tileSize:512, opacity:.5, minZoom:4, maxZoom:23, maxNativeZoom:12, zIndex:244,
+      crossOrigin:'anonymous',
+      attribution:'Rainfall forecast &copy; NOAA/WPC' });
+  // Keep a handle on every tile image that's currently on screen, so a hover can read its pixels.
+  nhcSub.rain.tiles.on('tileload', e=>{
+    try{ _qpfTiles.set(e.coords.z+'/'+e.coords.x+'/'+e.coords.y, e.tile); }catch(err){}
+  });
+  nhcSub.rain.tiles.on('tileunload', e=>{
+    try{ _qpfTiles.delete(e.coords.z+'/'+e.coords.x+'/'+e.coords.y); }catch(err){}
+  });
+  _wxpBag.rain.push(nhcSub.rain.tiles);
+  nhcSub.rain.tiles.addTo(map);
+  qpfLoadLegend(res.svc, lyr.id);          // fire and forget; the instant read waits for it
+  _syncStormSubHover(); renderStormControls();
+}
+/* ============ INSTANT LOCAL READ =========================================================
+   The server identify is authoritative but costs a round trip to WPC, so the number always
+   arrived about a second behind the cursor. It can't be made instant — the raster only exists
+   on their server.
+   What CAN be instant is reading the colour of the tile pixel already painted under the cursor
+   and matching it to the service's own legend. That needs no network at all, so it lands on the
+   same frame as the hover. The exact figure then replaces it when identify answers.
+   The band label is marked ≈ while it's the local read, because it IS an approximation: it's the
+   legend bucket the pixel falls in, not a sampled value, and antialiased pixels on a band edge
+   can sit between two buckets. Anything further than a small distance from every legend swatch is
+   reported as nothing rather than guessed at. */
+let _qpfLegend=null;                 // [{label, r, g, b}] built from the service's /legend
+const _qpfTiles=new Map();           // "z/x/y" -> tile <img>, maintained by tileload/tileunload
+let _qpfLocal=null, _qpfCanvas=null;
+/* Average RGB of a legend swatch. Data URLs are same-origin by definition, so no CORS worry. */
+function _swatchRGB(src){
+  return new Promise(res=>{
+    const im=new Image();
+    im.onload=()=>{ try{
+      const c=document.createElement('canvas'); c.width=im.width||16; c.height=im.height||16;
+      const g=c.getContext('2d'); g.drawImage(im,0,0);
+      const d=g.getImageData(Math.floor(c.width/2), Math.floor(c.height/2), 1, 1).data;
+      res(d[3]<10?null:[d[0],d[1],d[2]]);
+    }catch(e){ res(null); } };
+    im.onerror=()=>res(null);
+    im.src=src;
+  });
+}
+async function qpfLoadLegend(svc, layerId){
+  _qpfLegend=null;
+  try{
+    const j=await fetch(svc+'/legend?f=json').then(r=>r.ok?r.json():null);
+    const layers=(j&&j.layers)||[];
+    const lyr=layers.find(l=>l.layerId===layerId) || layers[0];
+    const items=(lyr&&lyr.legend)||[];
+    const out=[];
+    for(const it of items){
+      if(!it.imageData) continue;
+      const rgb=await _swatchRGB('data:'+(it.contentType||'image/png')+';base64,'+it.imageData);
+      if(rgb) out.push({label:String(it.label||'').trim(), r:rgb[0], g:rgb[1], b:rgb[2]});
+    }
+    _qpfLegend = out.length?out:null;
+  }catch(e){ _qpfLegend=null; }
+  try{ window.__wxpDebug=Object.assign(window.__wxpDebug||{}, {qpfLegend:_qpfLegend}); }catch(e){}
+}
+/* Read the tile pixel under a lat/lng and turn it into a legend band. Returns null when we can't
+   answer honestly (tile not loaded yet, legend not built, colour too far from any swatch). */
+function qpfSampleAt(latlng){
+  const t=nhcSub.rain.tiles;
+  if(!t || !_qpfLegend || !_qpfLegend.length) return null;
+  const tz=(t._tileZoom!=null)?t._tileZoom:map.getZoom();
+  const ts=t.getTileSize().x;
+  let p; try{ p=map.project(latlng, tz); }catch(e){ return null; }
+  const tx=Math.floor(p.x/ts), ty=Math.floor(p.y/ts);
+  const img=_qpfTiles.get(tz+'/'+tx+'/'+ty);
+  if(!img || !img.complete || !img.naturalWidth) return null;
+  const offX=p.x-tx*ts, offY=p.y-ty*ts;
+  const sx=Math.min(img.naturalWidth-1,  Math.max(0, Math.floor(offX*(img.naturalWidth /ts))));
+  const sy=Math.min(img.naturalHeight-1, Math.max(0, Math.floor(offY*(img.naturalHeight/ts))));
+  let d;
+  try{
+    if(!_qpfCanvas){ _qpfCanvas=document.createElement('canvas'); _qpfCanvas.width=1; _qpfCanvas.height=1; }
+    const g=_qpfCanvas.getContext('2d', {willReadFrequently:true});
+    g.clearRect(0,0,1,1);
+    g.drawImage(img, sx, sy, 1, 1, 0, 0, 1, 1);
+    d=g.getImageData(0,0,1,1).data;
+  }catch(e){ return null; }              // tainted canvas (no CORS header) — fall back to identify
+  if(d[3]<8) return {val:'under 0.01"', dry:true, approx:true};   // transparent = outside any band
+  let best=null, bd=Infinity;
+  for(const L of _qpfLegend){
+    const dr=d[0]-L.r, dg=d[1]-L.g, db=d[2]-L.b, dd=dr*dr+dg*dg+db*db;
+    if(dd<bd){ bd=dd; best=L; }
+  }
+  // ~49 per channel. Beyond that it isn't this legend's colour (basemap bleed, label text, edge
+  // antialiasing) and reporting the nearest band anyway would be inventing a number.
+  if(!best || bd>2400) return null;
+  const lbl=best.label;
+  return { val: /["']|inch/i.test(lbl) ? lbl : lbl+'"', dry:false, approx:true, src:_qpfLayerName };
+}
+/* Which attribute key actually holds a rainfall amount, and which must never be mistaken for one.
+   ⚠️ The first version of this scanned EVERY attribute and took the first thing that looked like a
+   plausible number, which is how an OBJECTID or a row/column index gets reported to the user as
+   inches of rain. A wrong number here is worse than no number: someone decides whether to stage a
+   generator on it. So the key is now matched explicitly, and the ID-ish fields are excluded even if
+   they'd pass the numeric test. */
+const QPF_VAL_KEY  = /(pixel\s*value|servicepixelvalue|^value$|qpf|precip|rain|inch|amount|accum)/i;
+const QPF_SKIP_KEY = /(objectid|^oid|^fid|shape|_id$|^id$|count|^row|^col|band|zoom|resolution|extent|stretch)/i;
+/* Inches at the cursor. Debounced and cached the same way _surgeIdentify is, because a raster can
+   only be sampled server-side and one request per mousemove would hammer WPC. */
+function _qpfIdentify(latlng){
+  const res=_wxpCache.qpf; if(!res) return;
+  const b=map.getBounds(), sz=map.getSize();
+  /* ⚠️ THIS WAS THE BUG BEHIND "it shows a number but it never changes".
+     The request used `layers=all`, so ArcGIS answered from EVERY layer on the WPC service — the
+     6-hour, 12-hour, 24-hour, 48-hour and Day 1-3 QPF layers all at once — and the reader below
+     took the first numeric field out of the first result. Result ordering is stable, so it kept
+     reading the SAME layer on every hover, and that layer was not the one being drawn. The number
+     therefore had nothing to do with the colours under the cursor and barely moved.
+     `all:<id>` pins the identify to the exact layer the tile overlay is rendering. The ":id" form
+     also overrides scale-visibility, so a layer that isn't "visible" at the current zoom still
+     answers instead of silently returning nothing. */
+  const target = (_qpfLayerId!=null) ? ('all:'+_qpfLayerId) : 'all';
+  const u=res.svc+'/identify?geometry='+encodeURIComponent(latlng.lng+','+latlng.lat)
+    +'&geometryType=esriGeometryPoint&sr=4326&tolerance=2'
+    +'&mapExtent='+encodeURIComponent([b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(','))
+    +'&imageDisplay='+encodeURIComponent(sz.x+','+sz.y+',96')
+    +'&layers='+encodeURIComponent(target)+'&returnGeometry=false&f=json';
+  fetch(u).then(r=>r.ok?r.json():null).then(j=>{
+    try{ window.__qpfDebug.push({url:u, resp:j}); if(window.__qpfDebug.length>6) window.__qpfDebug.shift(); }catch(e){}
+    /* An ImageServer answers identify with a bare {value:"3.47"} instead of a results array. The
+       candidate list is MapServer-first, but if NOAA moves QPF to an ImageServer this keeps working
+       rather than silently reporting nothing. */
+    if(j && j.value!=null && !(j.results&&j.results.length)){
+      const v=String(j.value).trim();
+      if(!v || /^(nodata|no data|null|-9999(\.\d+)?)$/i.test(v)) _qpfIdInfo={val:'under 0.01"', dry:true, src:_qpfLayerName};
+      else if(/^-?\d+(\.\d+)?$/.test(v) && +v>=0 && +v<80){
+        const n=+v; _qpfIdInfo={val:(n<10?n.toFixed(2).replace(/0$/,''):String(Math.round(n*10)/10))+'"', dry:false, src:_qpfLayerName}; }
+      else _qpfIdInfo=null;
+      _renderStormFloat(); return;
+    }
+    const results=(j&&j.results)||[];
+    let val=null, sawAny=false, srcField=null, srcLayer=null;
+    results.forEach(r=>{
+      const a=r.attributes||{};
+      for(const k in a){
+        if(QPF_SKIP_KEY.test(k)) continue;
+        if(!QPF_VAL_KEY.test(k)) continue;
+        sawAny=true;
+        if(!srcField){ srcField=k; srcLayer=r.layerName||null; }
+        const v=String(a[k]).trim();
+        // "NoData" / "" is a real answer from WPC: it means no measurable rain in that pixel.
+        if(!v || /^(nodata|no data|null|-9999(\.\d+)?)$/i.test(v)) continue;
+        if(/^-?\d+(\.\d+)?$/.test(v)){
+          const n=+v;
+          if(n>=0 && n<80){ const num=n<10?n.toFixed(2).replace(/0$/,''):String(Math.round(n*10)/10);
+            if(val==null) val=num+'"'; }
+        } else if(/\d/.test(v) && v.length<24){
+          val=/["']|inch/i.test(v) ? v : v+'"';        // already-banded label, e.g. "1 - 2"
+        }
+      }
+    });
+    /* Distinguish "dry here" from "the lookup didn't work". Without this, hovering a dry county
+       looked identical to a broken layer and there was no way to tell which you were seeing. */
+    if(val) _qpfIdInfo={val, dry:false, src:srcLayer||_qpfLayerName, field:srcField};
+    else if(results.length || sawAny) _qpfIdInfo={val:'under 0.01"', dry:true, src:srcLayer||_qpfLayerName};
+    else _qpfIdInfo=null;
+    _renderStormFloat();
+  }).catch(()=>{ _qpfIdInfo=null; });
+}
+
+/* ---- Flash flooding potential (WPC Excessive Rainfall Outlook) ---- */
+/* WPC's four risk levels. Approximated from the published graphic — if you want an exact match,
+   the features usually carry NOAA's own `fill`/`stroke` hex, which _wxpFeatColor prefers. */
+const ERO_COLOR={ MRGL:'#3f9b4f', SLGT:'#ffd23f', MDT:'#ff7f11', HIGH:'#b524f7' };
+const ERO_RANK ={ MRGL:1, SLGT:2, MDT:3, HIGH:4 };
+function _eroKey(props){
+  const raw=String(nhcPick(props||{},['idp_subset','OUTLOOK','outlook','LABEL','label','Category',
+                                      'category','CAT','risk','DN','issue'])||'').toUpperCase();
+  if(/HIGH/.test(raw)) return 'HIGH';
+  if(/MDT|MODERATE/.test(raw)) return 'MDT';
+  if(/SLGT|SLIGHT/.test(raw)) return 'SLGT';
+  if(/MRGL|MARGINAL/.test(raw)) return 'MRGL';
+  return null;
+}
+const ERO_NAME={ MRGL:'Marginal', SLGT:'Slight', MDT:'Moderate', HIGH:'High' };
+/* Prefer a colour NOAA published on the feature over our approximation, same principle as
+   _pssColor: match the official graphic wherever the service tells us how. */
+function _wxpFeatColor(props, fallback){
+  const c=nhcPick(props||{},['fill','FILL','color','COLOR','Fill_Color']);
+  if(c && /^#?[0-9a-f]{6}$/i.test(String(c).trim())) return (String(c).trim()[0]==='#'?'':'#')+String(c).trim();
+  return fallback;
+}
+let eroGeoms=[], _eroLayerName='';
+async function toggleEro(on){
+  const tok=++_wxpTok.ero;                 // any run started before this one is now superseded
+  _wxpDrop('ero');
+  nhcSub.ero.on=on; eroGeoms=[];
+  if(!on){ _syncStormSubHover(); renderStormControls(); return; }
+  const res=await wxpResolve('ero');
+  if(tok!==_wxpTok.ero) return;            // turned off, or restarted, while we were waiting
+  const lyr=wxpPickLayer(res,'ero');
+  if(!res||!lyr){
+    nhcSub.ero.on=false; wxpFailToast('ero', res);
+    _syncStormSubHover(); renderStormControls(); return;
+  }
+  _eroLayerName=lyr.name;
+  const gj=await _wxpGeo(res.svc, lyr.id);
+  if(tok!==_wxpTok.ero) return;            // ditto after the second round trip
+  const rows=[];
+  ((gj&&gj.features)||[]).forEach(f=>{
+    const k=_eroKey(f.properties); if(!k) return;
+    rows.push({f, k, color:_wxpFeatColor(f.properties, ERO_COLOR[k]), rank:ERO_RANK[k]});
+  });
+  if(!rows.length){
+    nhcSub.ero.on=false;
+    mapToast('WPC has no excessive-rainfall risk area up right now.',2800);
+    _syncStormSubHover(); renderStormControls(); return;
+  }
+  const grp=L.featureGroup();
+  rows.sort((a,b)=>a.rank-b.rank);                 // lowest risk underneath
+  rows.forEach(({f,k,color,rank})=>{
+    L.geoJSON(f,{renderer:canvasRenderer,interactive:false,
+      style:{color:color,weight:1.5,opacity:.9,fillColor:color,fillOpacity:.28}}).addTo(grp);
+    _featPolys(f).forEach(poly=>eroGeoms.push({poly, k, color, rank}));
+  });
+  if(tok!==_wxpTok.ero){ try{ grp.clearLayers(); }catch(e){} return; }   // never add a stale group
+  _wxpTrack('ero', grp.addTo(map));
+  _syncStormSubHover(); renderStormControls();
+}
+
+/* ---- U.S. tornado potential (SPC convective outlook) ---- */
+let tornGeoms=[], _tornIsProb=false, _tornLayerName='';
+function _tornLabel(props){
+  const p=nhcPick(props||{},['percentage','PERCENTAGE','probability','PROB','LABEL','label',
+                             'idp_subset','Category','category','dn','DN']);
+  return p!=null && String(p).trim()!=='' ? String(p).trim() : null;
+}
+function _tornRank(lbl){ const m=String(lbl||'').match(/\d+(\.\d+)?/); return m?+m[0]:0; }
+async function toggleTornado(on){
+  const tok=++_wxpTok.torn;                // same orphan bug as toggleEro — see _wxpBag
+  _wxpDrop('torn');
+  nhcSub.torn.on=on; tornGeoms=[];
+  if(!on){ _syncStormSubHover(); renderStormControls(); return; }
+  const res=await wxpResolve('spc');
+  if(tok!==_wxpTok.torn) return;
+  const lyr=wxpPickLayer(res,'spc');
+  if(!res||!lyr){
+    nhcSub.torn.on=false; wxpFailToast('spc', res);
+    _syncStormSubHover(); renderStormControls(); return;
+  }
+  _tornLayerName=lyr.name;
+  _tornIsProb=/prob|torn/i.test(lyr.name) && !/categorical/i.test(lyr.name);
+  const gj=await _wxpGeo(res.svc, lyr.id);
+  if(tok!==_wxpTok.torn) return;
+  const rows=[];
+  ((gj&&gj.features)||[]).forEach(f=>{
+    const lbl=_tornLabel(f.properties); if(!lbl) return;
+    const rank=_tornRank(lbl);
+    // SPC ships its own fill colour on most of these layers; use it so the map matches spc.noaa.gov.
+    const color=_wxpFeatColor(f.properties, rank>=30?'#b524f7':rank>=15?'#ff2d2d':rank>=10?'#ff7f11':rank>=5?'#ffd23f':'#3f9b4f');
+    rows.push({f, lbl, rank, color});
+  });
+  if(!rows.length){
+    nhcSub.torn.on=false;
+    mapToast('SPC has no tornado risk area up right now.',2800);
+    _syncStormSubHover(); renderStormControls(); return;
+  }
+  const grp=L.featureGroup();
+  rows.sort((a,b)=>a.rank-b.rank);
+  rows.forEach(({f,lbl,rank,color})=>{
+    L.geoJSON(f,{renderer:canvasRenderer,interactive:false,
+      style:{color:color,weight:1.5,opacity:.9,fillColor:color,fillOpacity:.26}}).addTo(grp);
+    _featPolys(f).forEach(poly=>tornGeoms.push({poly, lbl, rank, color}));
+  });
+  if(tok!==_wxpTok.torn){ try{ grp.clearLayers(); }catch(e){} return; }
+  _wxpTrack('torn', grp.addTo(map));
+  _syncStormSubHover(); renderStormControls();
+}
+
+/* Plain GeoJSON fetch for the non-tropical services. Deliberately NOT _nhcGeo: that one runs
+   _geomTouchesAtl to drop Pacific storms, which would throw away every inland CONUS polygon
+   these three products are made of. */
+async function _wxpGeo(svc, id){
+  if(id==null) return null;
+  const u=svc+'/'+id+'/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326'
+        +'&geometryPrecision=4&f=geojson&_cb='+Math.floor(Date.now()/300000);
+  try{ return await fetch(u).then(r=>r.ok?r.json():null); }catch(e){ return null; }
+}
+
+
 
 /* ================= Arrival time · Wind odds · Where it's been =================
    Three products NOAA publishes on the SAME summary service the cone comes from.
@@ -9303,6 +9901,7 @@ function _stormFloatEl(){
   return el;
 }
 let _lastStormCp=null, _lastStormLL=null, _surgeIdInfo=null, _surgeIdTimer=null, _surgeIdKey='';
+let _stormSubTapH=null;   // touch-only tap handler — see the TOUCH note in _syncStormSubHover()
 /* ArcGIS identify at the cursor point — works whether the surge service serves coastal
    LINES, polygons, or a raster, so we can report Warning/Watch status and inundation depth
    regardless of geometry type. Debounced; result cached and merged into the tip. */
@@ -9344,6 +9943,33 @@ function _renderStormFloat(){
       const lbl=best===64?'Hurricane-force (64+ kt · 74+ mph)':best===50?'Damaging winds (50+ kt · 58+ mph)':'Tropical-storm-force (34+ kt · 39+ mph)';
       if(html) html+='<div class="ct-merge-div"></div>';
       html+=`<div class="ct-name" style="color:${_windColor(best)}">${best}-kt wind field</div><div class="ct-desc">${lbl}</div>`;
+    }
+  }
+  if(nhcSub.ww.on && wwGeoms.length){
+    /* Inside a polygon wins outright. Otherwise report the nearest coastal segment WITH its
+       distance, and stay quiet past ~25 mi so an inland point isn't handed a coastal alert as if it
+       applied there — the same rule the Peak Surge bands follow. */
+    let hit=null, near=null, nearM=Infinity;
+    for(const g of wwGeoms){
+      if(g.poly){ if(_pointInPoly(lng,lat,g.poly)){ hit=g; break; } }
+      else if(g.line){ const d=_distPtLineM(lng,lat,g.line); if(d<nearM){ nearM=d; near=g; } }
+    }
+    const g = hit || ((near && nearM<=40000) ? near : null);
+    if(g){
+      if(html) html+='<div class="ct-merge-div"></div>';
+      html+=`<div class="ct-name" style="color:${g.color}">${esc(g.label)}</div>`;
+      const means=WW_MEANS[g.label];
+      if(means) html+=`<div class="ct-desc">${esc(means)}</div>`;
+      /* Distance wording in two tiers. Within ~5 mi the cursor is effectively ON the alerted coast
+         and the old "covers that coastline, not this point" disclaimer at ~1 mi was just noise that
+         made a correct reading look doubtful. Past that, the caveat is the point. */
+      if(!hit){
+        const mi=Math.round(nearM/1609.34);
+        html += (nearM<=8000)
+          ? `<div class="ct-when">On this alerted stretch of coast · ~${mi} mi from the line.</div>`
+          : `<div class="ct-when">Nearest alerted stretch of coast · ~${mi} mi. `
+            + `The alert covers that coastline, not this point.</div>`;
+      }
     }
   }
   if(nhcSub.arr.on && arrGeoms.length){
@@ -9433,14 +10059,57 @@ function _renderStormFloat(){
       if(bits.length) html+=`<div class="ct-when">${esc(bits.join(' · '))}</div>`;
     }
   }
+  /* ---- Added products ---- */
+  /* Exact server figure wins; the instant local band stands in until it lands. The ≈ marker is
+     load-bearing — it tells you which of the two you're looking at. */
+  const _q = _qpfIdInfo || _qpfLocal;
+  if(nhcSub.rain.on && _q){
+    if(html) html+='<div class="ct-merge-div"></div>';
+    html+='<div class="ct-name" style="color:#4cc9f0">Rainfall potential</div>'
+      + `<div class="ct-row"><b>${_q.dry?'At this point':'Forecast total'}</b>`
+      + `<span>${_q.approx&&!_q.dry?'≈ ':''}${esc(_q.val)}</span></div>`
+      + (_q.dry
+          ? '<div class="ct-desc">No measurable rain forecast for this point in the window shown. Move onto the shaded area for an amount.</div>'
+          : '<div class="ct-desc">Rain, not surge — this is how much falls here, wherever the storm’s core ends up.</div>')
+      /* Name the source. If this ever disagrees with the shading you're pointing at, that mismatch
+         is the bug and it's now visible instead of silent. */
+      + `<div class="ct-when">WPC${_q.src?' · '+esc(_q.src):''}${_q.field?' · '+esc(_q.field):''}`
+      + `${_q.approx&&!_q.dry?' · ≈ legend band, exact figure loading':''}</div>`;
+  }
+  if(nhcSub.ero.on && eroGeoms.length){
+    let best=null; for(const g of eroGeoms){ if(_pointInPoly(lng,lat,g.poly) && (!best||g.rank>best.rank)) best=g; }
+    if(best){
+      if(html) html+='<div class="ct-merge-div"></div>';
+      html+=`<div class="ct-name" style="color:${best.color}">Flash flooding potential</div>`
+        + `<div class="ct-row"><b>WPC risk</b><span>${esc(ERO_NAME[best.k]||best.k)}</span></div>`
+        + '<div class="ct-desc">Chance that rainfall exceeds what the ground here can absorb. Independent of flood zone — it floods streets that carry no FEMA zone at all.</div>';
+    }
+  }
+  if(nhcSub.torn.on && tornGeoms.length){
+    // Highest risk wins where SPC nests its bands, same rule as the wind and surge layers.
+    let best=null; for(const g of tornGeoms){ if(_pointInPoly(lng,lat,g.poly) && (!best||g.rank>best.rank)) best=g; }
+    if(best){
+      if(html) html+='<div class="ct-merge-div"></div>';
+      html+=`<div class="ct-name" style="color:${best.color}">Tornado potential</div>`
+        + `<div class="ct-row"><b>SPC${_tornIsProb?' probability':' risk'}</b><span>${esc(best.lbl)}</span></div>`
+        + '<div class="ct-desc">'
+        + (_tornIsProb
+            ? 'Chance of a tornado within ~25 mi of this point. Landfalling hurricanes spin these up in the outer bands, well ahead of the eye.'
+            : 'SPC categorical outlook — covers tornado, hail and damaging wind together, so it is not a tornado-only number.')
+        + '</div>';
+    }
+  }
   if(!html){ el.classList.remove('show'); return; }
   el.innerHTML=html; el.classList.add('show'); if(_lastStormCp) placeFloat(el,_lastStormCp);
   // Combined card owns the cone info now — keep the standalone cone float hidden.
   const cf=document.getElementById('coneFloat'); if(cf) cf.classList.remove('show');
 }
 function _syncStormSubHover(){
-  const want = nhcSub.wind.on || nhcSub.surge.on || nhcSub.arr.on || nhcSub.odds.on || nhcSub.past.on
-            || nhcSub.dist.on;
+  /* ⚠️ nhcSub.ww.on was MISSING from this list. With only WATCH / WARN switched on, the mousemove
+     handler was never attached at all, so nothing could be reported no matter what the cursor was
+     over. Every toggle that has a readout must appear here. */
+  const want = nhcSub.wind.on || nhcSub.ww.on || nhcSub.surge.on || nhcSub.arr.on || nhcSub.odds.on
+            || nhcSub.past.on || nhcSub.dist.on || nhcSub.rain.on || nhcSub.ero.on || nhcSub.torn.on;
   if(want && !_stormSubMoveH){
     _stormFloatEl();
     _stormSubMoveH=function(e){
@@ -9450,13 +10119,42 @@ function _syncStormSubHover(){
         if(key!==_surgeIdKey){ _surgeIdKey=key; clearTimeout(_surgeIdTimer);
           _surgeIdTimer=setTimeout(()=>_surgeIdentify(e.latlng), 200); }
       }
+      /* Rainfall is a raster, so inches can only be sampled server-side. The surge debounce keys on
+         a 1/40° cell (~1.6 mi) which is fine for a coastal watch/warning that spans counties, but
+         far too coarse here: zoomed in, 1.6 mi is the whole screen, so the number froze while the
+         colours under the cursor changed. 1/400° (~250 m) is finer than a QPF pixel, so every real
+         band change re-queries and nothing is asked twice for the same pixel. */
+      if(nhcSub.rain.on){
+        // INSTANT: read the painted tile pixel every single move. No network, so this lands on the
+        // same frame as the cursor and the readout stops trailing a second behind.
+        _qpfLocal=qpfSampleAt(e.latlng);
+        const rk=Math.round(e.latlng.lng*400)+','+Math.round(e.latlng.lat*400);
+        if(rk!==_qpfIdKey){
+          _qpfIdKey=rk;
+          // Drop the old EXACT figure immediately. Holding a stale number over a different colour
+          // band is how a 1" reading gets believed over a 6" area. The local band shows meanwhile.
+          if(_qpfIdInfo){ _qpfIdInfo=null; }
+          clearTimeout(_qpfIdTimer);
+          _qpfIdTimer=setTimeout(()=>_qpfIdentify(e.latlng), 120);
+        }
+      }
       _renderStormFloat();
     };
     _stormSubOutH=function(){ const el=document.getElementById('stormFloat'); if(el) el.classList.remove('show'); };
     map.on('mousemove',_stormSubMoveH); map.on('mouseout',_stormSubOutH);
+    /* TOUCH: a phone has no hover, so on a touch device every one of these readouts — rainfall
+       inches, flash-flood risk, surge height, wind field, arrival time — was unreachable. Tap does
+       it instead. Bound only on touch so a desktop click still belongs entirely to the parcel
+       lookup; on touch the parcel lookup still runs as before, this just also fills the float. */
+    if(L.Browser.mobile && !_stormSubTapH){
+      _stormSubTapH=function(e){ _stormSubMoveH(e); };
+      map.on('click',_stormSubTapH);
+    }
   } else if(!want && _stormSubMoveH){
     map.off('mousemove',_stormSubMoveH); map.off('mouseout',_stormSubOutH);
+    if(_stormSubTapH){ map.off('click',_stormSubTapH); _stormSubTapH=null; }
     _stormSubMoveH=_stormSubOutH=null; _surgeIdInfo=null; _surgeIdKey='';
+    _qpfIdInfo=null; _qpfLocal=null; _qpfIdKey='';
     const el=document.getElementById('stormFloat'); if(el) el.classList.remove('show');
   }
 }
@@ -9465,11 +10163,19 @@ function refreshStormSub(){
   if(nhcSub.wind.on) toggleWind(true); if(nhcSub.ww.on) toggleWW(true); if(nhcSub.surge.on) toggleSurge(true);
   if(nhcSub.arr.on) toggleArrival(true); if(nhcSub.odds.on) toggleOdds(true); if(nhcSub.past.on) togglePast(true);
   if(nhcSub.dist.on) toggleDistance(true);
+  if(nhcSub.rain.on) toggleRain(true); if(nhcSub.ero.on) toggleEro(true);
+  if(nhcSub.torn.on) toggleTornado(true);
 }
 function clearStormSub(){
-  ['wind','ww','surge','arr','odds','past','dist'].forEach(k=>{ if(nhcSub[k].layer){ map.removeLayer(nhcSub[k].layer); nhcSub[k].layer=null; } nhcSub[k].on=false; });
+  ['wind','ww','surge','arr','odds','past','dist','ero','torn'].forEach(k=>{ if(nhcSub[k].layer){ map.removeLayer(nhcSub[k].layer); nhcSub[k].layer=null; } nhcSub[k].on=false; });
   if(nhcSub.surge.tiles){ map.removeLayer(nhcSub.surge.tiles); nhcSub.surge.tiles=null; }
-  windGeoms=[]; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; pssLines=[]; arrGeoms=[]; oddsGeoms=[]; pastGeoms=[]; distGeoms=[]; distCenters=[]; _syncStormSubHover();
+  /* Bump every token so any in-flight product run is superseded and won't re-add itself after this
+     clear, then empty the bags — otherwise "turn the cone off" leaves the same faint orphan. */
+  _wxpTok.rain++; _wxpTok.ero++; _wxpTok.torn++;
+  _wxpDropRain(); _wxpDrop('ero'); _wxpDrop('torn');
+  nhcSub.rain.on=false; _qpfIdInfo=null; _qpfLocal=null; _qpfIdKey='';
+  windGeoms=[]; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; pssLines=[]; arrGeoms=[]; oddsGeoms=[]; pastGeoms=[]; distGeoms=[]; distCenters=[];
+  eroGeoms=[]; tornGeoms=[]; wwGeoms=[]; _syncStormSubHover();
   if(scrubMarker){ map.removeLayer(scrubMarker); scrubMarker=null; }
   if(scrubTimer){ clearInterval(scrubTimer); scrubTimer=null; }
   scrubPts=[];
@@ -9520,6 +10226,9 @@ function wireStormControls(){
       else if(k==='odds') toggleOdds(!nhcSub.odds.on).then(done,done);
       else if(k==='past') togglePast(!nhcSub.past.on).then(done,done);
       else if(k==='dist') toggleDistance(!nhcSub.dist.on).then(done,done);
+      else if(k==='rain') toggleRain(!nhcSub.rain.on).then(done,done);
+      else if(k==='ero') toggleEro(!nhcSub.ero.on).then(done,done);
+      else if(k==='torn') toggleTornado(!nhcSub.torn.on).then(done,done);
     };
   });
   // Wind-odds threshold: 39 / 58 / 74 mph. Switching thresholds reloads that one layer.
@@ -9552,6 +10261,16 @@ function renderStormControls(){
     + chip('odds','Wind odds',nhcSub.odds.on)
     + chip('past',"Where it's been",nhcSub.past.on)
     + chip('dist','Distance',nhcSub.dist.on)
+    + '</div>'
+    /* Second row: the products added from NHC's graphics index. Kept on their own row with a
+       heading because these are NOT NHC tropical products — rainfall and flash flooding come from
+       WPC, tornado risk from SPC — and folding them into "Storm layers" would imply the hurricane
+       advisory is their source. */
+    + '<div class="wx-leglbl">Rain · flood · tornado</div>'
+    + '<div class="wx-chips">'
+    + chip('rain','Rainfall',nhcSub.rain.on)
+    + chip('ero','Flash flood',nhcSub.ero.on)
+    + chip('torn','Tornado',nhcSub.torn.on)
     + '</div>';
   // What the letters on the track mean — NHC's own symbols, so it needs saying once.
   h+='<div class="wx-leglbl">Track points</div>'
@@ -9612,6 +10331,30 @@ function renderStormControls(){
       + '<div class="wx-windleg"><span><i style="background:#ffd23f"></i>39+ mph</span>'
       + '<span><i style="background:#ff9500"></i>58+</span><span><i style="background:#ff2d2d"></i>74+</span></div>'
       + '<div class="wx-scrubrd">Winds already delivered · dashed line = past track. Tap a dot for that position.</div>';
+  }
+  if(nhcSub.rain.on){
+    h+='<div class="wx-leglbl">Rainfall potential · storm total</div>'
+      + '<div class="wx-scrubrd">Shaded in WPC’s own colours' + (_qpfLayerName?' ('+esc(_qpfLayerName)+')':'')
+      + '. Hover anywhere for the forecast inches at that point. This is the hazard that floods lots '
+      + 'nowhere near the coast, so it does not track the surge zones at all.</div>';
+  }
+  if(nhcSub.ero.on && eroGeoms.length){
+    h+='<div class="wx-leglbl">Flash flooding potential · WPC</div>'
+      + '<div class="wx-wwleg">'
+      + ['MRGL','SLGT','MDT','HIGH'].map(k=>`<span><i style="background:${ERO_COLOR[k]}"></i>${ERO_NAME[k]}</span>`).join('')
+      + '</div>'
+      + '<div class="wx-scrubrd">Where rainfall is likely to outrun what the ground can take. Read it '
+      + 'with the rainfall layer: one gives the amount, the other whether that amount floods.</div>'
+      + (_eroLayerName?'<div class="wx-scrubrd" style="color:var(--faint)">WPC · '+esc(_eroLayerName)+'</div>':'');
+  }
+  if(nhcSub.torn.on && tornGeoms.length){
+    h+='<div class="wx-leglbl">Tornado potential · SPC' + (_tornIsProb?' probability':' categorical') + '</div>'
+      + '<div class="wx-wwleg"><span><i style="background:#3f9b4f"></i>lowest</span>'
+      + '<span><i style="background:#ffd23f"></i></span><span><i style="background:#ff7f11"></i></span>'
+      + '<span><i style="background:#ff2d2d"></i></span><span><i style="background:#b524f7"></i>highest</span></div>'
+      + '<div class="wx-scrubrd">' + (_tornLayerName?esc(_tornLayerName)+'. ':'')
+      + 'Hover for the value at a point. Colours come from SPC’s own fields where the service '
+      + 'publishes them.</div>';
   }
   if(nhcSub.dist.on){
     h+='<div class="wx-leglbl">Distance to the storm</div>'
