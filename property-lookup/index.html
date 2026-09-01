@@ -1629,7 +1629,9 @@ async function autoLoadTerritories(){
     const r=await fetch(UTIL_GEOJSON_FILE, {cache:'force-cache'});
     if(!r.ok) return false;
     loadTerritoryGeoJSON(await r.text());
-    if(typeof lastLoc!=='undefined' && lastLoc && typeof runLookup==='function'){ try{ runLookup(lastLoc.lat,lastLoc.lng); }catch(e){} }
+    // ⚡ Coalesced + context-preserving (see rerunLastLookup). Was: an immediate bare runLookup()
+    // that superseded the user's in-flight search and dropped its folio/unit match.
+    try{ rerunLastLookup(); }catch(e){}
     return true;
   }catch(e){ return false; }
 }
@@ -1716,7 +1718,9 @@ async function autoLoadGas(){
     loadGasGeoJSON(await r.text());
     // If a lookup already ran before this big file finished arriving (common on mobile,
     // where the fetch is slower), re-run it so the Gas card fills in with real data.
-    if(typeof lastLoc!=='undefined' && lastLoc && typeof runLookup==='function'){ try{ runLookup(lastLoc.lat,lastLoc.lng); }catch(e){} }
+    // ⚡ Routed through rerunLastLookup() so it waits for any in-flight lookup, fires ONCE even when
+    // the electric file lands at the same moment, and replays the original searchCtx.
+    try{ rerunLastLookup(); }catch(e){}
     return true;
   }
   catch(e){ return false; }
@@ -1739,6 +1743,31 @@ const STORE = {
 };
 let lastLoc=null;
 function saveLoc(lat,lng){ lastLoc={lat,lng}; STORE.set('fl_loc', JSON.stringify({lat,lng,z:(typeof map!=='undefined'&&map.getZoom)?map.getZoom():18})); }
+
+/* ⚡ PERF / CORRECTNESS (2026-09-01) — the "it takes three searches" bug.
+   autoLoadGas(), autoLoadTerritories() and the big county address-point files each used to call
+   runLookup(lastLoc.lat, lastLoc.lng) the moment their download finished. Three separate problems:
+     1. Two or three of them land within a second of each other, so ONE user search turned into
+        three full lookups, each superseding the last (`if(myId!==runId) return`). Every abandoned
+        run left the panel stranded at "● LOADING", because the complete HTML is only written at the
+        very end of runLookup.
+     2. They called runLookup with NO searchCtx. So the re-run threw away the folio, the unit and
+        the matched address, and re-resolved the parcel from a bare coordinate — which on a condo
+        lands on the master/common-element polygon and shows the association as owner. That is why
+        the card came back THINNER after searching, not fuller.
+     3. Nothing coalesced them, so a slow connection could restart the lookup repeatedly.
+   This scheduler fixes all three: at most one pending re-run, it waits for any in-flight lookup to
+   finish instead of killing it, and it replays the ORIGINAL searchCtx. */
+let _lastLookupCtx=null, _lookupActive=0, _rerunTimer=null;
+function rerunLastLookup(){
+  if(!lastLoc || typeof runLookup!=='function') return;
+  if(_rerunTimer) return;                      // one pending re-run is enough — coalesce the rest
+  _rerunTimer=setInterval(()=>{
+    if(_lookupActive>0) return;                // let the in-flight lookup finish; don't supersede it
+    clearInterval(_rerunTimer); _rerunTimer=null;
+    try{ runLookup(lastLoc.lat, lastLoc.lng, _lastLookupCtx || undefined); }catch(e){}
+  }, 400);
+}
 
 /* Pre-wired LIVE county parcel feeds (queryable polygon layers w/ owner; refresh cadence set by each county).
    Each county may list MULTIPLE candidate endpoints — the tool tries them in order at runtime
@@ -8254,6 +8283,10 @@ let nhcSub={ wind:{on:false,layer:null}, ww:{on:false,layer:null}, surge:{on:fal
 let scrubPts=[], scrubMarker=null, scrubTimer=null, scrubIdx=0;
 let windGeoms=[], surgeGeoms=[], inunGeoms=[], _stormSubMoveH=null, _stormSubOutH=null;
 let pssGeoms=[];   // Peak Storm Surge Forecast heights ({poly, range:'4-6 ft', color, place, adv, rank, stamp})
+/* The Peak Storm Surge bands themselves are POLYLINES (a stretch of coast, not an area), so they
+   need their own store — point-in-polygon can never answer them. Same shape as pssGeoms but with
+   `line` instead of `poly`. See the fix note in toggleSurge(). */
+let pssLines=[];
 /* Hover state for the three added products:
    arrGeoms  — arrival-time contour LINES ({line:[[lng,lat],…], time:'Thu 8 pm', kind:'likely'|'early'})
    oddsGeoms — probability POLYGONS for the selected threshold ({poly, band:'60-70%', pct:70})
@@ -8665,8 +8698,8 @@ async function toggleSurge(on){
   if(nhcSub.surge.layer){ map.removeLayer(nhcSub.surge.layer); nhcSub.surge.layer=null; }
   if(nhcSub.surge.tiles){ map.removeLayer(nhcSub.surge.tiles); nhcSub.surge.tiles=null; }
   nhcSub.surge.on=on;
-  if(!on){ surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
-  const cat=await nhcCatalog(); const grp=L.featureGroup(); let any=false; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[];
+  if(!on){ surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; pssLines=[]; _syncStormSubHover(); renderStormControls(); return; }
+  const cat=await nhcCatalog(); const grp=L.featureGroup(); let any=false; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; pssLines=[];
   if(cat.surgeWW){
     for(const l of (cat.swwIdx||[])){
       const gj=await _nhcGeo(cat.surgeWW, l.id);
@@ -8679,19 +8712,63 @@ async function toggleSurge(on){
   }
   /* Peak Storm Surge Forecast — drawn as filled height bands in NOAA's own colours, deliberately
      unlike the thick watch/warning lines above so the two can never be read as the same thing. */
+  /* 🩹 FIX (2026-09-01) — the map showed two disconnected blue blobs where NHC draws a continuous
+     coastal band. This loop used to skip every layer whose name didn't match /polygon/i, with the
+     comment "the Points/Lines layers are label anchors". That is backwards for NHC_PeakStormSurge:
+
+       · the POLYLINE layer IS the product. Each feature is a stretch of coast carrying its forecast
+         peak height — the "1-3 ft" band running from High Island to the Vermilion/Cameron Parish
+         Line is one polyline feature.
+       · the POLYGON layer holds only the bays and lakes ENCLOSED by a segment (Sabine Lake,
+         Calcasieu Lake). On their own they look like two random blobs offshore.
+       · the POINT layer holds the labelled segment endpoints.
+
+     So the old filter discarded the forecast and kept the leftovers. All three render now, and the
+     geometry type is read off the FEATURE rather than the layer name, because NOAA renames and
+     renumbers these layers between services and between seasons. */
   if(cat.surgePeak){
+    const _pssRows=[];
     for(const l of (cat.pssIdx||[])){
-      if(!/polygon/i.test(l.name)) continue;      // the Points/Lines layers are label anchors
+      // The bare parent is a group layer and isn't queryable; its children carry the geometry.
+      if(/^\s*peak\s+storm\s+surge\s*$/i.test(l.name)) continue;
       const gj=await _nhcGeo(cat.surgePeak, l.id);
-      const rows=((gj&&gj.features)||[]).map(f=>({f, i:_pssInfo(f.properties)})).filter(r=>r.i.range);
-      if(!rows.length) continue;
+      ((gj&&gj.features)||[]).forEach(f=>{
+        const i=_pssInfo(f.properties);
+        if(!i.range) return;                      // no height on it → not a forecast band
+        const gt=String((f.geometry&&f.geometry.type)||'');
+        const kind=/Polygon/i.test(gt) ? 'poly'
+                 : /LineString/i.test(gt) ? 'line'
+                 : /Point/i.test(gt) ? 'pt' : null;
+        if(!kind) return;
+        _pssRows.push({f,i,kind});
+      });
+    }
+    if(_pssRows.length){
       any=true;
-      rows.sort((a,b)=>a.i.rank-b.i.rank);        // shallowest underneath, deepest on top
-      rows.forEach(({f,i})=>{
-        L.geoJSON(f,{renderer:canvasRenderer,interactive:false,
-          style:{color:i.color,weight:1,opacity:.85,fillColor:i.color,fillOpacity:.42}}).addTo(grp);
-        _featPolys(f).forEach(poly=>pssGeoms.push({poly, range:i.range, color:i.color,
-          place:i.place, adv:i.adv, rank:i.rank, stamp:i.stamp}));
+      // Shallowest underneath, deepest on top. Within one depth: fills, then the band, then labels.
+      const _ord={poly:0,line:1,pt:2};
+      _pssRows.sort((a,b)=> (a.i.rank-b.i.rank) || (_ord[a.kind]-_ord[b.kind]));
+      _pssRows.forEach(({f,i,kind})=>{
+        if(kind==='poly'){
+          L.geoJSON(f,{renderer:canvasRenderer,interactive:false,
+            style:{color:i.color,weight:1,opacity:.85,fillColor:i.color,fillOpacity:.42}}).addTo(grp);
+          _featPolys(f).forEach(poly=>pssGeoms.push({poly, range:i.range, color:i.color,
+            place:i.place, adv:i.adv, rank:i.rank, stamp:i.stamp}));
+        } else if(kind==='line'){
+          // The band itself: heavy stroke, no fill. This is what makes the map read like NHC's own
+          // published Peak Storm Surge graphic instead of a scatter of water bodies.
+          L.geoJSON(f,{renderer:canvasRenderer,interactive:false,
+            style:{color:i.color,weight:6,opacity:.95,fill:false,lineCap:'round',lineJoin:'round'}}).addTo(grp);
+          _featLines(f).forEach(line=>{ if(line && line.length>1) pssLines.push({line, range:i.range,
+            color:i.color, place:i.place, adv:i.adv, rank:i.rank, stamp:i.stamp}); });
+        } else {
+          // Segment endpoint. Ringed dot drawn last so it sits on top of the band, same as NHC.
+          _featPoints(f).forEach(pt=>{
+            if(!isFinite(pt[0]) || !isFinite(pt[1])) return;
+            L.circleMarker([pt[1],pt[0]],{renderer:canvasRenderer,interactive:false,radius:4,
+              color:'#0b0f14',weight:1.5,opacity:.9,fillColor:i.color,fillOpacity:1}).addTo(grp);
+          });
+        }
       });
     }
   }
@@ -8725,7 +8802,7 @@ async function toggleSurge(on){
     tl.addTo(map); nhcSub.surge.tiles=tl; any=true;
   }
   if(!any){ mapToast('No storm-surge watch/warning, peak-surge forecast or inundation issued right now.',2800);
-    nhcSub.surge.on=false; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; _syncStormSubHover(); renderStormControls(); return; }
+    nhcSub.surge.on=false; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; pssLines=[]; _syncStormSubHover(); renderStormControls(); return; }
   if(grp.getLayers().length) nhcSub.surge.layer=grp.addTo(map);
   _syncStormSubHover();
   renderStormControls();
@@ -8789,6 +8866,15 @@ function _featLines(f){
   if(g.type==='LineString') out.push(g.coordinates);
   else if(g.type==='MultiLineString') g.coordinates.forEach(l=>out.push(l));
   else if(g.type==='Polygon') g.coordinates.forEach(r=>out.push(r));
+  return out;
+}
+/* [lng,lat] pairs out of a Point / MultiPoint feature. Used for the Peak Storm Surge segment
+   endpoints ("High Island", "Vermilion/Cameron Parish Line") that NHC draws as labelled dots. */
+function _featPoints(f){
+  const g=f&&f.geometry, out=[];
+  if(!g) return out;
+  if(g.type==='Point' && Array.isArray(g.coordinates)) out.push(g.coordinates);
+  else if(g.type==='MultiPoint') g.coordinates.forEach(p=>{ if(Array.isArray(p)) out.push(p); });
   return out;
 }
 /* Point→segment distance in meters. Equirectangular (longitude scaled by cos(lat)) — accurate to
@@ -9319,15 +9405,28 @@ function _renderStormFloat(){
     if(lines.length){ if(html) html+='<div class="ct-merge-div"></div>';
       html+='<div class="ct-name" style="color:#b524f7">Storm surge</div>'+lines.map(t=>`<div class="ct-desc">${t}</div>`).join(''); }
   }
-  if(nhcSub.surge.on && pssGeoms.length){
+  if(nhcSub.surge.on && (pssGeoms.length || pssLines.length)){
     // Deepest band wins where NOAA stacks them, same rule as the inundation depths.
     let best=null; for(const p of pssGeoms){ if(_pointInPoly(lng,lat,p.poly) && (!best||p.rank>best.rank)) best=p; }
+    /* The band is a POLYLINE — a stretch of coast, not an area — so point-in-polygon can never hit
+       it. Without this, hovering anywhere along the coast reported nothing and only the two enclosed
+       lakes answered. Report the NEAREST band with its distance instead, the same honest treatment
+       the arrival-time contours get, and stay quiet past ~25 mi so an inland spot isn't handed a
+       coastal surge height as if it applied there. */
+    let nearM=null;
+    if(!best && pssLines.length){
+      let nb=null;
+      for(const p of pssLines){ const d=_distPtLineM(lng,lat,p.line); if(nb==null || d<nb.m) nb={m:d,p:p}; }
+      if(nb && nb.m<=40000){ best=nb.p; nearM=nb.m; }
+    }
     if(best){
       if(html) html+='<div class="ct-merge-div"></div>';
       html+=`<div class="ct-name" style="color:${best.color}">Peak storm surge forecast</div>`
         + `<div class="ct-row"><b>${best.place?esc(best.place):'This stretch of coast'}</b>`
         + `<span>${esc(best.range)}</span></div>`
         + '<div class="ct-desc">Forecast peak water height above ground — a height, not a watch or warning.</div>';
+      if(nearM!=null) html+=`<div class="ct-desc">Nearest NHC surge band · ~${Math.round(nearM/1609.34)} mi. `
+        + `The forecast applies to that stretch of coast, not to this point.</div>`;
       const bits=[]; if(best.adv) bits.push('Advisory '+best.adv);
       if(best.stamp){ const h=(Date.now()-best.stamp)/3600000;
         bits.push(h>=48?Math.round(h/24)+' days old':Math.round(h)+' h old'); }
@@ -9370,7 +9469,7 @@ function refreshStormSub(){
 function clearStormSub(){
   ['wind','ww','surge','arr','odds','past','dist'].forEach(k=>{ if(nhcSub[k].layer){ map.removeLayer(nhcSub[k].layer); nhcSub[k].layer=null; } nhcSub[k].on=false; });
   if(nhcSub.surge.tiles){ map.removeLayer(nhcSub.surge.tiles); nhcSub.surge.tiles=null; }
-  windGeoms=[]; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; arrGeoms=[]; oddsGeoms=[]; pastGeoms=[]; distGeoms=[]; distCenters=[]; _syncStormSubHover();
+  windGeoms=[]; surgeGeoms=[]; inunGeoms=[]; pssGeoms=[]; pssLines=[]; arrGeoms=[]; oddsGeoms=[]; pastGeoms=[]; distGeoms=[]; distCenters=[]; _syncStormSubHover();
   if(scrubMarker){ map.removeLayer(scrubMarker); scrubMarker=null; }
   if(scrubTimer){ clearInterval(scrubTimer); scrubTimer=null; }
   scrubPts=[];
@@ -9531,7 +9630,7 @@ function renderStormControls(){
   if(nhcSub.surge.on) h+='<div class="wx-leglbl">Storm surge</div>'
       +'<div class="wx-wwleg"><span><i style="background:#b524f7"></i>Surge Warn</span>'
       +'<span><i style="background:#db7ff7"></i>Surge Watch</span></div>';
-  if(nhcSub.surge.on && pssGeoms.length) h+='<div class="wx-leglbl">Peak surge forecast · feet above ground</div>'
+  if(nhcSub.surge.on && (pssGeoms.length || pssLines.length)) h+='<div class="wx-leglbl">Peak surge forecast · feet above ground</div>'
       +'<div class="wx-wwleg"><span><i style="background:#1f9be0"></i>1–3 ft</span>'
       +'<span><i style="background:#ffd23f"></i>3–6</span><span><i style="background:#ff7f11"></i>6–9</span>'
       +'<span><i style="background:#d11149"></i>9+</span></div>'
@@ -15190,6 +15289,10 @@ const ADDRPOINT_FILES = {
   // appraiser cd.txt on account number via build_county.py.
   CHARLOTTE: _addrFile("charlotte_compact_v3.json.gz")
 };
+/* How long a BLOCKING render may wait for a compact county file. Generous enough that a warm cache
+   (the normal case — restore() kicks the download off at startup) always wins the race, short enough
+   that a cold session paints immediately and fills the sqft in on the follow-up render. */
+const SQFT_FILE_BUDGET_MS = 1200;
 // Cache the parsed file per URL so it's fetched + indexed only once per session.
 const _fileCache = new Map();
 // SPEED: instead of decoding every point into a feature object up front (slow for 300k–700k
@@ -15221,6 +15324,9 @@ async function fetchMaybeGzip(url){
   // not gzip (or no DecompressionStream): parse normally
   try{ return await r.json(); }catch(e){ return null; }
 }
+/* Which URLs have a fully parsed index sitting in memory right now. queryHostedFile() uses this to
+   tell "ready, read it" apart from "still downloading" — see the budget note there. */
+const _fileReady = new Set();
 async function loadHostedFileIndex(url){
   if(_fileCache.has(url)) return _fileCache.get(url);
   const p = fetchMaybeGzip(url).then(j=>{
@@ -15260,6 +15366,11 @@ async function loadHostedFileIndex(url){
     return { grid, streets };
   }).catch(()=>null);
   _fileCache.set(url, p);
+  /* ⚡ When the index finally lands, schedule ONE coalesced re-render of the current lookup so the
+     fields that only this file can supply (Collier living area, per-unit condo data) fill in on
+     their own. This replaces the old behaviour where the user had to hit FIND two or three more
+     times until the ~4.6MB download happened to be finished. */
+  p.then(v=>{ if(v && v.grid){ _fileReady.add(url); try{ rerunLastLookup(); }catch(e){} } });
   return p;
 }
 // Find a condo unit's FOLIO from the compact file by (house number + street + unit). Used when the
@@ -15296,8 +15407,25 @@ async function fileUnitToFolio(county, hn, streetRaw, unit){
 }
 // Return Esri-shaped features inside the given Leaflet bounds, building address strings
 // only for the points actually in view.
-async function queryHostedFile(url, b){
-  const idx=await loadHostedFileIndex(url);
+/* budgetMs: how long this caller is willing to WAIT for the compact file to finish downloading.
+   ⚡ PERF (2026-09-01). Collier's file is ~4.6MB and the Parcel & Owner card awaited it
+   unconditionally, so on a cold session the first search was held hostage by the download —
+   competing for the same same-origin connections as Lee's file, fl_gas_territories.geojson and
+   fl_electric_territories.geojson. Callers that block a render now pass a short budget and accept
+   null; loadHostedFileIndex() schedules a re-render for them when the file arrives. Callers with no
+   budget (map labels, which paint asynchronously anyway) keep the original wait-forever behaviour. */
+async function queryHostedFile(url, b, budgetMs){
+  let idx;
+  if(budgetMs==null || _fileReady.has(url)){
+    idx = await loadHostedFileIndex(url);
+  } else {
+    const PENDING='__pending__';
+    idx = await Promise.race([
+      loadHostedFileIndex(url),
+      new Promise(r=>setTimeout(()=>r(PENDING), budgetMs))
+    ]);
+    if(idx===PENDING) return null;   // still downloading — render without it, re-render when it lands
+  }
   if(!idx || !idx.grid) return null;   // null => load failed (lets caller fall back to live feed)
   const W=b.getWest(),E=b.getEast(),S=b.getSouth(),N=b.getNorth();
   const cx0=Math.floor(W/_GRID), cx1=Math.floor(E/_GRID);
@@ -17433,7 +17561,17 @@ function renderLookupTiming(timings){
     const ch=btn.querySelector('.wchev'); if(ch) ch.textContent=opening?'▾':'▸';
   });
 }
+/* Thin wrapper around the real lookup. Keeps the name every call site already uses while giving
+   rerunLastLookup() two things it needs: whether a lookup is currently running (so a background
+   file landing can't supersede a search mid-flight) and the searchCtx the lookup was started with
+   (so a replay keeps the folio / unit / matched address instead of re-guessing from a coordinate). */
 async function runLookup(lat,lng,searchCtx){
+  _lookupActive++;
+  _lastLookupCtx = searchCtx || null;
+  try{ return await _runLookupInner(lat,lng,searchCtx); }
+  finally{ _lookupActive = Math.max(0, _lookupActive-1); }
+}
+async function _runLookupInner(lat,lng,searchCtx){
   const myId=++runId;
   // ── LOOKUP TIMING (debug) ─────────────────────────────────────────────────────────────────────
   // Each source is timed individually (they run in parallel, so these are latencies, not additive).
@@ -17567,18 +17705,35 @@ async function runLookup(lat,lng,searchCtx){
     ? _timedTail((async()=>{
         const reg=COUNTY_LIVE[norm(countyName)]; const cands=reg.urls||(reg.url?[reg.url]:[]);
         let res=null, meta=null, err=null;
-        // Resolve the authoritative NG911 point ONCE for this address (county-level, not per-candidate).
-        let ngHit=null;
-        if(searchCtx && searchCtx.hn){
-          ngHit = await resolveAddressNG911(countyName, searchCtx, lat, lng).catch(()=>null);
-        }
-        // FORWARD ADDRESS-POINT ANCHOR (lean-feed counties, e.g. Collier): query the address-point
-        // layer directly by house number — independent of the geocoder. If found, this point is the
-        // authoritative location: drive the parcel point-in-polygon from HERE, not from the (often
-        // off-by-one or off-parcel) geocoded pin. Fixes both wrong-house and "no parcel at point".
-        let fwdHit=null;
-        if(searchCtx && searchCtx.hn && ADDRPOINT_FEEDS[norm(countyName)]){
-          fwdHit = await forwardAddrPoint(countyName, searchCtx, lat, lng).catch(()=>null);
+        /* ⚡ PERF (2026-09-01). Two things were wrong here.
+           (1) resolveAddressNG911() and forwardAddrPoint() hit the SAME county address-point layer
+               and were awaited one AFTER the other, each capped at ENRICH_TIMEOUT — 6s desktop,
+               11s MOBILE. Up to 22s of strictly serial waiting for two independent queries. They
+               don't depend on each other, so they run together now.
+           (2) When the search already resolved authoritatively to a folio (folioHint, which is the
+               normal path for a Collier address search), the FOLIO PIN further down replaces
+               liveRes outright and re-anchors the marker to the parcel centroid — every ngHit /
+               fwdHit value computed here is thrown away. So on that path we skip both entirely.
+               The coordinate handed to runLookup on that path is already the matched parcel's own
+               centroid (resolveCountyParcel returns it), so the point-in-polygon below has a good
+               anchor without them. If the folio pin fails, we fall back to that centroid rather
+               than an address point — slightly weaker, but it only happens when the parcel layer
+               refuses a folio it just gave us.
+           NG911 is still resolved ONCE for the county, not per-candidate. */
+        let ngHit=null, fwdHit=null;
+        const _skipAnchor = !!(searchCtx && searchCtx.folioHint);
+        if(!_skipAnchor && searchCtx && searchCtx.hn){
+          const _apFeed = ADDRPOINT_FEEDS[norm(countyName)];
+          const _anchors = await Promise.all([
+            resolveAddressNG911(countyName, searchCtx, lat, lng).catch(()=>null),
+            // FORWARD ADDRESS-POINT ANCHOR (lean-feed counties, e.g. Collier): query the address-point
+            // layer directly by house number — independent of the geocoder. If found, this point is the
+            // authoritative location: drive the parcel point-in-polygon from HERE, not from the (often
+            // off-by-one or off-parcel) geocoded pin. Fixes both wrong-house and "no parcel at point".
+            _apFeed ? forwardAddrPoint(countyName, searchCtx, lat, lng).catch(()=>null)
+                    : Promise.resolve(null)
+          ]);
+          ngHit=_anchors[0]; fwdHit=_anchors[1];
         }
         // For a point-only NG911 county (e.g. Collier — authoritative point, no STRAP), run the
         // parcel point-in-polygon from the NG911 point instead of the geocoded point.
@@ -17990,7 +18145,8 @@ async function runLookup(lat,lng,searchCtx){
           const _fileUrl = countyName ? ADDRPOINT_FILES[norm(countyName)] : null;
           if(_fileUrl && _fileUrl.indexOf('REPLACE-ME')<0 && isFinite(lat) && isFinite(lng)){
             const _eps=0.0008, _bb=L.latLngBounds([lat-_eps,lng-_eps],[lat+_eps,lng+_eps]);
-            const _fr=await queryHostedFile(_fileUrl,_bb);
+            // ⚡ Short budget: don't hold the whole card behind a 4.6MB download on a cold session.
+            const _fr=await queryHostedFile(_fileUrl,_bb,SQFT_FILE_BUDGET_MS);
             if(_fr && _fr.length){
               // anchor to the selected parcel polygon, not the (possibly drifted) geocoded click
               const _bx=pickFilePointForParcel(_fr, (parcel&&parcel.features&&parcel.features[0])||null, lat, lng);
@@ -18885,7 +19041,8 @@ async function runLookup(lat,lng,searchCtx){
       if(_fileUrl && _fileUrl.indexOf('REPLACE-ME')<0 && isFinite(lat) && isFinite(lng)){
         const _eps=0.0008;
         const _bb=L.latLngBounds([lat-_eps,lng-_eps],[lat+_eps,lng+_eps]);
-        const _fr=await queryHostedFile(_fileUrl,_bb);
+        // ⚡ Short budget — see SQFT_FILE_BUDGET_MS. A re-render lands the real figure moments later.
+        const _fr=await queryHostedFile(_fileUrl,_bb,SQFT_FILE_BUDGET_MS);
         if(_fr && _fr.length){
           // pick the file point that belongs to the SELECTED parcel (inside its polygon),
           // not merely nearest the geocoded click — which can sit on a neighbour's lot.
@@ -20683,7 +20840,31 @@ async function attachUnitsToCandidates(cfg, searchCtx, matches){
 // Like lookupCountyParcelByFolio, but returns the FULL feature (geometry + all attributes) in the
 // same shape as a live-feed query result, so runLookup can drop it in as `liveRes`. Used to pin the
 // exact matched parcel on through-lots / corner lots where a coordinate query hits the neighbour.
+/* ⚡ PERF (2026-09-01): the SAME parcel was fetched by the SAME folio two or three times in a single
+   search — once inside resolveCountyParcel()'s address-point pre-step, again by the FOLIO PIN in
+   runLookup(), and sometimes a third time on the unit path. Each is a full round trip to the county
+   layer. Memoized per (county, folio) with a short TTL so repeat asks inside one lookup are free
+   while a later search still sees fresh data. In-flight promises are shared, so two concurrent
+   callers collapse into one request. */
+const _folioFeatCache = new Map();          // key -> {p:Promise, at:ms}
+const FOLIO_FEAT_TTL = 45000;
 async function fetchCountyParcelFeatureByFolio(countyName, folio){
+  if(!countyName || !folio) return _fetchCountyParcelFeatureByFolioRaw(countyName, folio);
+  const key = norm(countyName)+'|'+folioKey(folio);
+  const now = Date.now();
+  const hit = _folioFeatCache.get(key);
+  if(hit && (now-hit.at) < FOLIO_FEAT_TTL) return hit.p;
+  const p = _fetchCountyParcelFeatureByFolioRaw(countyName, folio)
+    .then(v=>{
+      // Don't cache a miss for long — a transient failure shouldn't poison the next lookup.
+      if(!v) _folioFeatCache.delete(key);
+      return v;
+    }, e=>{ _folioFeatCache.delete(key); throw e; });
+  _folioFeatCache.set(key, {p, at:now});
+  if(_folioFeatCache.size > 40) _folioFeatCache.delete(_folioFeatCache.keys().next().value);
+  return p;
+}
+async function _fetchCountyParcelFeatureByFolioRaw(countyName, folio){
   const cfg = countyName ? COUNTY_PARCEL_RESOLVERS[norm(countyName)] : null;
   if(!cfg || !folio) return null;
   // FORMAT TOLERANCE. The folio can arrive from several sources that punctuate it differently: the
@@ -21066,10 +21247,38 @@ async function tryTypedUnitJump(county, searchCtx, pr, before){
    shoreline exactly where a county-boundary hit-test is least reliable.
 
    Both paths share the fan-out now. The detected county is a PREFERENCE for ranking, never a gate. */
+/* ⚡ PERF (2026-09-01): this was `Promise.all` over every wired county, so a Naples search sat
+   there until Charlotte, Lee AND Sarasota had all answered — each with a 12-second abort. Collier's
+   own answer was typically back in 1-2s and then waited on the slowest stranger. Measured 8-11s of
+   the ~12s total came from here.
+
+   The fan-out itself still matters: two counties can hold the same house number + street, and
+   rankCountyHits() needs to see both to detect that. But it only needs a moment. So: fire all four,
+   and once the FIRST real hit lands, give the rest a short tail before answering. If nobody hits we
+   still wait for all of them (an unwired address must exhaust every layer before falling through to
+   the geocoder). Late results still write into `out`, which is harmless — the caller reads it
+   synchronously on the next line. */
+const COUNTY_FANOUT_TAIL_MS = 1500;
 async function resolveAllCounties(searchCtx){
   if(!searchCtx || !searchCtx.hn) return [];
-  return Promise.all(Object.keys(COUNTY_PARCEL_RESOLVERS).map(cty =>
-    resolveCountyParcel(cty, searchCtx).then(r=>({cty,r})).catch(()=>({cty,r:null}))));
+  const keys = Object.keys(COUNTY_PARCEL_RESOLVERS);
+  if(!keys.length) return [];
+  const out = keys.map(cty=>({cty, r:null}));
+  return new Promise(resolve=>{
+    let pending=keys.length, done=false, tail=null;
+    const finish=()=>{ if(done) return; done=true; if(tail) clearTimeout(tail); resolve(out); };
+    keys.forEach((cty,i)=>{
+      resolveCountyParcel(cty, searchCtx)
+        .then(r=>r, ()=>null)
+        .then(r=>{
+          out[i].r = r || null;
+          pending--;
+          if(pending<=0) return finish();
+          const hit = r && (r.multi || (isFinite(r.lat) && isFinite(r.lng)));
+          if(hit && !tail) tail=setTimeout(finish, COUNTY_FANOUT_TAIL_MS);
+        });
+    });
+  });
 }
 /* Rank resolver hits: nearest the rough point first, the preferred county promoted if it hit.
    farAll = two or more counties matched and NONE is near — genuinely ambiguous, so the caller
