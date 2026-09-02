@@ -11099,7 +11099,7 @@ function noteRollResult(ok){
   // Two strikes, then stand down for two minutes. One timeout can be a cold point-in-polygon.
   if(ROLL_HEALTH.fails>=2) ROLL_HEALTH.downUntil=Date.now()+120000;
 }
-async function arcQueryRetry(url, lat, lng, outFields, withGeom, timeoutMs, tries, abortRetry){
+async function arcQueryRetry(url, lat, lng, outFields, withGeom, timeoutMs, tries, abortRetry, growOnAbort){
   let lastErr=null;
   const n=tries||2;
   let tmo=timeoutMs;
@@ -11113,7 +11113,11 @@ async function arcQueryRetry(url, lat, lng, outFields, withGeom, timeoutMs, trie
       // point-in-polygon) pass abortRetry:true — for them, a timeout is exactly when to try again,
       // with a LONGER window each pass, instead of surfacing "signal aborted" to the user.
       if(aborted && !abortRetry) break;
-      if(i<n-1){ if(aborted) tmo=Math.round((tmo||6000)*1.6); await new Promise(r=>setTimeout(r,250)); }
+      /* growOnAbort defaults TRUE (the roll is genuinely slow, so widen the window each pass). Pass
+         false for a host that STALLS rather than crawls — see the FEMA note at EP.flood. Growing the
+         window there just makes the dead attempt cost longer; the fix is a fresh connection, fast. */
+      if(i<n-1){ if(aborted && growOnAbort!==false) tmo=Math.round((tmo||6000)*1.6);
+                 await new Promise(r=>setTimeout(r,250)); }
     }
   }
   throw lastErr;
@@ -18230,6 +18234,15 @@ function addrPointBadgeHTML(pid){
     return `<div class="note" style="padding-top:4px">${bits.join(' ')} <span class="muted" style="font-size:10px">— per Collier addressing</span></div>`;
   }catch(e){ return ''; }
 }
+/* A card outline in a "still retrieving" state. Used by the progressive paints so a slow source
+   occupies its slot instead of the panel silently lacking it, then gets replaced in place. */
+function skeletonCard(icn, title, src, msg){
+  return `<div class="card noprint"><div class="ch"><span class="icn">[ ${esc(icn)} ]</span>`
+    + `<h2>${esc(title)}</h2><div class="src">${src}</div></div><div class="cb">`
+    + `<div class="freshline"><span class="badge live">● RETRIEVING</span> ${esc(msg)}</div>`
+    + `<div class="note">Waiting on the source. This card fills in on its own — no need to search again.</div>`
+    + `</div></div>`;
+}
 function renderParcelGeneric(a, d){
   let h='';
   const owner = d.owner?pick(a,d.owner):null;
@@ -18314,6 +18327,17 @@ function renderParcelGeneric(a, d){
 }
 /* Retry just the roll and patch the card, rather than re-running the whole 14-second lookup for two
    attributes. Clears the breaker first — the user asking IS the signal that it's worth another go. */
+/* Re-runs the lookup for a card that failed on a slow FEMA host. Same approach as the roll retry:
+   replay the original searchCtx so the folio/unit match is kept rather than re-guessed. */
+function wireFloodRetry(){
+  const b=document.getElementById('floodRetryBtn'); if(!b) return;
+  b.onclick=function(){
+    this.disabled=true; this.textContent='↻ Retrying…';
+    if(lastLoc && typeof runLookup==='function'){
+      try{ runLookup(lastLoc.lat, lastLoc.lng, _lastLookupCtx||undefined); }catch(e){}
+    }
+  };
+}
 function wireRollRetry(){
   const b=document.getElementById('rollRetryBtn'); if(!b) return;
   b.onclick=function(){
@@ -18460,7 +18484,21 @@ async function _runLookupInner(lat,lng,searchCtx){
     ).then(v=>{ noteRollResult(!!(v && !v.__err && v.features)); return v; },
            e=>{ noteRollResult(false); return {__err:e.message}; });
   };
-  const pFlood   = _timed('flood (FEMA)', arcQueryRetry(EP.flood, lat, lng, 'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, FLOOD_TIMEOUT)).catch(e=>({__err:e.message}));
+  /* ⚡ FEMA STALLS, IT DOESN'T CRAWL (measured 2026-09-01, 12 identical queries from the console).
+     Healthy responses come back in 82-88 ms. But roughly 2 in 5 requests never get a response at
+     all and sit until the abort timer fires — 9009, 9011, 9006, 9002 ms. Spacing them 1.5 s apart
+     didn't help; cache-busting didn't matter; concurrency didn't matter. A request either answers
+     almost instantly or it hangs. That is a dead keep-alive socket being reused, not a slow server
+     (note the strict TLS 1.2 preconnect at the top of this file — an older stack that drops idle
+     connections without telling the client).
+     The old call took the default `abortRetry` (undefined), so arcQueryRetry's
+     `if(aborted && !abortRetry) break;` gave up on the FIRST stall and surfaced "signal is aborted
+     without reason" — after burning the full 9 s for nothing.
+     So: retry ON abort, with a SHORT FLAT window. 2.5 s is ~28× a healthy response, so it only ever
+     trips on a stall; abandoning fast and reconnecting is the entire fix. Four attempts takes the
+     miss rate from ~40% to ~3% while the typical lookup still costs ~85 ms. growOnAbort:false
+     because widening the window would only make each dead attempt more expensive. */
+  const pFlood   = _timed('flood (FEMA)', arcQueryRetry(EP.flood, lat, lng, 'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, 2500, 4, true, false)).catch(e=>({__err:e.message}));
   const pCity    = _timed('city boundary', arcQuery(EP.city,    lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
   const pCounty  = _timed('county boundary', arcQuery(EP.county,  lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
   const pLive    = liveSource.url ? _timed('live parcel feed', arcQuery(liveSource.url, lat, lng, '*', true)).catch(e=>({__err:e.message})) : Promise.resolve(null);
@@ -20157,9 +20195,15 @@ async function _runLookupInner(lat,lng,searchCtx){
      (9-14s timeout). The full render further below replaces this once flood + enrichment resolve —
      no data is lost, the user just sees their parcel/owner result in ~1s instead of waiting on flood. */
   if(myId===runId && html){
+    /* Render flood as a REAL card in a retrieving state rather than leaving a gap and a one-line
+       strip. FEMA's NFHL is the slowest of the remaining sources and the one users watch for, so
+       showing the card outline with its status stops the panel from appearing to be missing it.
+       The full render below replaces this card in place once pFlood resolves. */
     results.innerHTML = '<div class="cardflow">' + html
+      + skeletonCard('FLD','FEMA Flood Hazard','FEMA National<br>Flood Hazard Layer',
+                     'querying the effective NFHL for this parcel…')
       + '<div class="card noprint"><div class="cb"><div class="freshline">'
-      + '<span class="badge live">● LOADING</span> pulling flood, wind, zoning, permits &amp; utilities…'
+      + '<span class="badge live">● LOADING</span> pulling wind, zoning, permits &amp; utilities…'
       + '</div></div></div></div>';
     document.body.classList.add('has-results');
   }
@@ -20178,7 +20222,113 @@ async function _runLookupInner(lat,lng,searchCtx){
   html += `<div class="freshline"><span class="badge live">● LIVE</span> effective NFHL, queried in real time</div>`;
   let nfhlZone=null;   // captured for the county cross-check below
   if(flood.__err){
-    html += `<div class="note">Flood service did not respond (${esc(flood.__err)}).</div>`;
+    /* 🩹 SAME PATTERN AS THE GROUND-ELEVATION ROW (see _geSlotId below).
+       Two problems with what this did before:
+         · it printed the raw error, so a plain timeout surfaced as "signal is aborted without
+           reason" — which is only what the browser says when an AbortController fires with no
+           reason attached. It reads like a crash and offers the user nothing.
+         · it gave up. But the inline budget is deliberately short (FLOOD_TIMEOUT, 9 s desktop /
+           14 s mobile) because flood is on the critical path for first paint. Once the card is
+           already on screen that constraint is gone — so retry in the BACKGROUND on a generous
+           budget, exactly as the ground-elevation row does with 3DEP.
+       The card shows a live "retrieving" line with the pulse dot while that runs, and only reports
+       a failure if the second, longer attempt also comes back empty. */
+    const _fldSlot='fldslot_'+myId;
+    html += `<div id="${_fldSlot}"><div class="note">`
+      + `<span class="muted">FEMA’s point lookup didn’t answer — reading the zone off the parcel polygon… </span>`
+      + `<span class="zone-spin" aria-hidden="true"></span></div></div>`;
+    (async()=>{
+      /* 🩹 THE REAL BUG (2026-09-01, found because the zone was visible ON THE MAP while the card
+         said it timed out).
+         The whole-parcel flood section — queryFloodZonesOnParcel plus ten more queries, measured at
+         436 ms total — lives inside `} else if(flood.features && flood.features.length){`. So a
+         failure of the ONE-POINT query threw away a working, faster source that had the answer.
+         Two different questions, and the parcel one is the better one for equipment siting:
+           · point query  → the zone at a single coordinate. One badge.
+           · whole parcel → every zone the lot touches. On a split lot that is the answer that
+                            matters, because where the pad goes decides which zone applies.
+         So read the parcel polygon first. Only if that fails too do we fall back to retrying
+         FEMA's point service on a long budget. */
+      const _ring = f => f && f.geometry && f.geometry.rings && f.geometry.rings.length ? f : null;
+      const _pf = (parcel && !parcel.__err && parcel.features && _ring(parcel.features[0])) ? parcel.features[0]
+                : (typeof liveRes!=='undefined' && liveRes && liveRes.features && _ring(liveRes.features[0])) ? liveRes.features[0]
+                : (live && !live.__err && live.features && _ring(live.features[0])) ? live.features[0] : null;
+      if(_pf){
+        let pzs=null;
+        try{ pzs = await queryFloodZonesOnParcel(_pf, countyName); }catch(_){}
+        if(myId!==runId) return;
+        const _slot0=document.getElementById(_fldSlot);
+        if(_slot0 && pzs && pzs.length){
+          const _zs=pzs.map(z=>String((z && (z.FLD_ZONE||z.zone)) || '').trim()).filter(Boolean);
+          const _uniq=[...new Set(_zs)];
+          const _isS=z=>/^(A|V)/i.test(z) && !/^(X|AREA NOT|D$)/i.test(z);
+          const _anyS=_uniq.some(_isS);
+          // Dedupe: FEMA often returns several rows for the same zone, which rendered as "12–12 ft".
+          const _bfes=[...new Set(pzs.map(z=>z && z.STATIC_BFE)
+                        .filter(v=>v!=null && Number(v)>-9999).map(Number))].sort((a,b)=>a-b);
+          _slot0.innerHTML =
+              `<div class="field"><div class="k">Flood zone${_uniq.length>1?'s on this parcel':''}</div>`
+            + `<div class="v big">` + _uniq.map(z=>`<span class="badge ${_isS(z)?'sfha':''}">${esc(z)}</span>`).join(' ')
+            + `</div></div>`
+            + (_bfes.length?`<div class="field"><div class="k">Base flood elev.</div><div class="v">`
+                + (_bfes.length>1 ? Math.min(..._bfes)+'–'+Math.max(..._bfes) : _bfes[0])
+                + ` ft <span class="muted" style="font-size:11px">NAVD88</span></div></div>`:'')
+            + (_uniq.length>1
+                ? `<div class="note warnbox">This lot is SPLIT across ${_uniq.length} flood zones. `
+                  + `Which one governs depends on where the equipment actually sits — pin the pad location `
+                  + `on the county FIRM viewer below before setting an elevation.</div>`
+                : '')
+            + `<div class="note">Read from the parcel polygon against FEMA's NFHL, because FEMA's `
+            + `single-point lookup didn't answer. ${_anyS?'This is an SFHA. ':''}The county links below `
+            + `are the adopted maps and are worth cross-checking either way. Search again for the full `
+            + `card — LiMWA, LOMAs, FIRM panel and ground elevation need the complete pass.</div>`;
+          try{ if(window.__exportData){ window.__exportData.floodZone=_uniq.join(' / ');
+               if(_bfes.length) window.__exportData.bfe=Math.min(..._bfes); } }catch(_){}
+          try{ window.__floodFallback={via:'whole parcel', zones:_uniq, bfes:_bfes}; }catch(_){}
+          return;                                  // got it — no need to retry FEMA's point service
+        }
+      }
+      // Parcel route unavailable (no polygon) or came back empty — now retry the point service.
+      const _slot1=document.getElementById(_fldSlot);
+      if(_slot1) _slot1.innerHTML = `<div class="note">`
+        + `<span class="muted">No zone on the parcel polygon either — retrying FEMA's point service… </span>`
+        + `<span class="zone-spin" aria-hidden="true"></span></div>`;
+      let f2=null;
+      // 25 s. The card is up, nothing is blocked, and NFHL is frequently just slow rather than down.
+      try{ f2 = await arcQueryRetry(EP.flood, lat, lng,
+             'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, 25000, 2); }catch(_){}
+      if(myId!==runId) return;
+      const slot=document.getElementById(_fldSlot); if(!slot) return;
+      if(f2 && !f2.__err && f2.features && f2.features.length){
+        const _z=f2.features[0].attributes||{};
+        const _zone=_z.FLD_ZONE||'—';
+        const _sfha=/^(A|V)/i.test(_zone) && !/^(X|AREA NOT|D$)/i.test(_zone);
+        const _bfe=(_z.STATIC_BFE!=null && Number(_z.STATIC_BFE)>-9999) ? Number(_z.STATIC_BFE) : null;
+        slot.innerHTML =
+            `<div class="field"><div class="k">Flood zone</div><div class="v big">`
+          + `<span class="badge ${_sfha?'sfha':''}">${esc(_zone)}</span>`
+          + (_z.ZONE_SUBTY?` <span class="muted" style="font-size:11px">${esc(_z.ZONE_SUBTY)}</span>`:'')
+          + `</div></div>`
+          + (_bfe!=null?`<div class="field"><div class="k">Base flood elev.</div><div class="v">${_bfe} ft <span class="muted" style="font-size:11px">NAVD88</span></div></div>`:'')
+          + `<div class="note">Recovered on a background retry after FEMA’s first response timed out. `
+          + `This is the zone and BFE at the searched point. Search again to rebuild the full flood `
+          + `card — the county cross-check, whole-parcel zone split, LiMWA and ground elevation all `
+          + `need the full pass.</div>`;
+        try{ if(window.__exportData){ window.__exportData.floodZone=_zone; if(_bfe!=null) window.__exportData.bfe=_bfe; } }catch(_){}
+      } else {
+        const _fe=String((f2&&f2.__err)||flood.__err||'');
+        const _timedOut=/abort|timeout|timed out/i.test(_fe);
+        slot.innerHTML = `<div class="note warnbox">`
+          + (_timedOut
+              ? `FEMA’s flood service didn’t answer on either attempt, so the zone for this parcel `
+                + `couldn’t be read. This is FEMA’s server, not your parcel — the zone still exists. `
+                + `Use the county links below, which are the adopted maps anyway.`
+              : `FEMA’s flood service returned an error: ${esc(_fe)}.`)
+          + ` <button type="button" class="wbtn" id="floodRetryBtn" style="margin-top:6px">↻ Retry flood lookup</button>`
+          + `</div>`;
+        wireFloodRetry();
+      }
+    })();
   } else if(flood.features && flood.features.length){
     const zones=flood.features.map(f=>f.attributes);
     const z=zones[0];
@@ -21196,7 +21346,8 @@ async function _runLookupInner(lat,lng,searchCtx){
   const _sum = buildSummaryStrip(window.__exportData, window.__printMeta);
   results.innerHTML = setStatus('ok','Done — '+(new Date()).toLocaleTimeString())
     + _bc + _sum + '<div class="cardflow">' + html + '</div>';
-  wireRollRetry();          // the button only exists once the card above is in the DOM
+  wireRollRetry();          // the buttons only exist once the cards above are in the DOM
+  wireFloodRetry();
   tabifyResults(results);
   /* ---- FDEM NEIGHBOUR AUTO-RUN (non-blocking) --------------------------------------------------
      Automatically check the single CLOSEST parcel through the statewide registry a moment after
