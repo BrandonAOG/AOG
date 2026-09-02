@@ -846,7 +846,14 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     #map{inset:0 0 0 0}
     #panel{
       top:auto;left:0;right:0;bottom:0;width:100%;max-width:100%;
-      height:var(--sheet-h, 50vh);max-height:calc(100vh - var(--abh,48px) - 8px);
+      /* ⚠️ Must clear BOTH fixed bars. This used to subtract only --abh (the action bar), so a
+         fully-expanded sheet's top edge landed at exactly abh+8px — which is where .layerswitch
+         is pinned on mobile. The toolbar then sat on top of the first ~40px of sheet content, i.e.
+         directly over the address input. Worse on a device whose text metrics wrap the toolbar to
+         two rows, which is why it looked fine at first and then "got wide".
+         --tbh is the measured toolbar height (see the --abh sync block). */
+      height:var(--sheet-h, 50vh);
+      max-height:calc(100vh - var(--abh,48px) - var(--tbh,40px) - 14px);
       border-radius:18px 18px 0 0;border-left:none;border-right:none;border-bottom:none;
       box-shadow:0 -10px 40px var(--shadow-strong);
       transition:height .28s cubic-bezier(.22,1,.36,1),transform .28s cubic-bezier(.22,1,.36,1);
@@ -23755,9 +23762,17 @@ window.Sheet=Sheet;
    above all read from it. */
 (function(){
   const bar=document.getElementById('action-bar'); if(!bar) return;
+  const tb=document.querySelector('.layerswitch');
   function sync(){
     const h=bar.offsetHeight||48;
     document.documentElement.style.setProperty('--abh', h+'px');
+    /* The mobile layout pins the toolbar just below the action bar, so the bottom sheet has to
+       clear it too or it covers the address input. Measured rather than assumed because the row
+       wraps to two lines at larger text sizes. Only consumed inside the mobile media query. */
+    if(tb){
+      const t=tb.offsetHeight||40;
+      document.documentElement.style.setProperty('--tbh', t+'px');
+    }
   }
   sync();
   window.addEventListener('load', sync);
@@ -23765,6 +23780,9 @@ window.Sheet=Sheet;
   window.addEventListener('orientationchange', ()=>setTimeout(sync,200));
   if(window.visualViewport) window.visualViewport.addEventListener('resize', sync);
   setTimeout(sync,100); setTimeout(sync,600);
+  /* The toolbar's height changes when the storm picker appears with the cone, or when the row wraps
+     — neither fires resize. Watch it directly so the sheet cap follows. */
+  try{ if(tb) new ResizeObserver(sync).observe(tb); }catch(e){}
 })();
 
 (async function restore(){
