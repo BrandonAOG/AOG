@@ -810,6 +810,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     overflow-x:auto;scrollbar-width:none;background:var(--panel2);
     -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
   .tabbar::-webkit-scrollbar{display:none}
+  /* Faint dot on a tab whose card hasn't landed yet — distinguishes "waiting" from "empty". */
+  .tab .tcount.tpend{opacity:.45;font-weight:400}
   .tab{flex:none;background:none;border:none;cursor:pointer;font-family:var(--disp);font-weight:600;
     font-size:12px;letter-spacing:.03em;color:var(--dim);padding:9px 13px 8px;border-bottom:2px solid transparent;
     white-space:nowrap;transition:color .12s,border-color .12s}
@@ -18450,6 +18452,7 @@ async function _runLookupInner(lat,lng,searchCtx){
     if(bits.length){ _imgMetaEl.textContent='📷 '+bits.join(' · '); _imgMetaEl.style.display=''; }
   }).catch(()=>{});
 
+  _activeTab=null;    // a new location starts fresh; the tab is only sticky WITHIN one lookup
   results.innerHTML = setStatus('busy','Querying official GIS services…');
   if(window.Sheet) Sheet.setState('full');   // bring results into view on mobile
 
@@ -18827,10 +18830,11 @@ async function _runLookupInner(lat,lng,searchCtx){
      paints further down (parcel+flood, then the full panel) replace this as their data arrives. */
   if(myId===runId){
     results.innerHTML = '<div class="cardflow">' + html
-      + '<div class="card noprint"><div class="cb"><div class="freshline">'
+      + '<div class="card noprint" data-notab="1"><div class="cb"><div class="freshline">'
       + '<span class="badge live">● LOADING</span> pulling parcel, flood &amp; site detail…'
       + '</div></div></div></div>';
     document.body.classList.add('has-results');
+    tabifyResults(results);
   }
 
   /* ---- Parcel / owner : prefer LIVE feed (manual paste OR pre-wired county), else statewide roll ---- */
@@ -20202,10 +20206,11 @@ async function _runLookupInner(lat,lng,searchCtx){
     results.innerHTML = '<div class="cardflow">' + html
       + skeletonCard('FLD','FEMA Flood Hazard','FEMA National<br>Flood Hazard Layer',
                      'querying the effective NFHL for this parcel…')
-      + '<div class="card noprint"><div class="cb"><div class="freshline">'
+      + '<div class="card noprint" data-notab="1"><div class="cb"><div class="freshline">'
       + '<span class="badge live">● LOADING</span> pulling wind, zoning, permits &amp; utilities…'
       + '</div></div></div></div>';
     document.body.classList.add('has-results');
+    tabifyResults(results);
   }
 
   /* ---- Flood ---- */
@@ -20637,10 +20642,11 @@ async function _runLookupInner(lat,lng,searchCtx){
      The full render below replaces this; nothing is lost, the search just *loads* in ~2s. */
   if(myId===runId){
     results.innerHTML = '<div class="cardflow">' + html
-      + '<div class="card noprint"><div class="cb"><div class="freshline">'
+      + '<div class="card noprint" data-notab="1"><div class="cb"><div class="freshline">'
       + '<span class="badge live">● LOADING</span> pulling wind design, zoning, permits &amp; utilities…'
       + '</div></div></div></div>';
     document.body.classList.add('has-results');
+    tabifyResults(results);
   }
 
   /* ---- Wind Design (FBC 8th Ed. / ASCE 7-22): site design wind speed + calculation ----
@@ -21348,7 +21354,7 @@ async function _runLookupInner(lat,lng,searchCtx){
     + _bc + _sum + '<div class="cardflow">' + html + '</div>';
   wireRollRetry();          // the buttons only exist once the cards above are in the DOM
   wireFloodRetry();
-  tabifyResults(results);
+  tabifyResults(results, {final:true});
   /* ---- FDEM NEIGHBOUR AUTO-RUN (non-blocking) --------------------------------------------------
      Automatically check the single CLOSEST parcel through the statewide registry a moment after
      the panel paints — a 📝 drops if it holds a certificate. Uses the exact same polite machinery
@@ -21424,10 +21430,49 @@ function buildSummaryStrip(ed, meta){
   return '<div class="summary-strip"><div class="sum-addr">'+(addr||'Selected location')+'</div>'
        + (chips?('<div class="sum-chips">'+chips+'</div>'):'') + '</div>';
 }
-function tabifyResults(root){
+/* 🩹 THE TAB BAR ONLY EXISTED AT THE END (fixed 2026-09-01).
+   tabifyResults() was called once, from the FINAL render. During the three progressive paints the
+   panel was a plain vertical stack with no tab bar, so while flood was still loading there was
+   nothing to toggle — the tabs appeared only when the whole lookup had finished. It's now called
+   from every paint, which needs two extra things:
+     · the chosen tab must SURVIVE a repaint. Each paint rebuilds the bar from scratch and used to
+       activate the first tab, so switching to Flood mid-load would have snapped you back to Aerial
+       a second later. _activeTab remembers it.
+     · the "● LOADING" strips must not become tab content. They carry data-notab and stay in normal
+       flow above the panels, so they read as status rather than as a card filed under Site. */
+let _activeTab=null;
+/* The tab roster is FIXED — the same eight categories on every lookup — so the bar should appear
+   whole from the first paint instead of growing a tab at a time as cards land. Any category with no
+   real card yet gets a placeholder in its own panel, so you can tab straight to Flood and watch it
+   fill rather than waiting for the tab to exist. Icons/titles mirror the real cards. */
+const TAB_STUBS={
+  aerial   : ['EYE','Aerial & Street View'],
+  site     : ['PCL','Parcel & Owner'],
+  hoa      : ['HOA','HOA / Community Association'],
+  zoning   : ['ZON','Zoning & Setbacks'],
+  flood    : ['FLD','FEMA Flood Hazard'],
+  wind     : ['WND','Wind Design (FBC)'],
+  utilities: ['PWR','Electric & Gas'],
+  permits  : ['DOC','Permits & Documents']
+};
+/* `final` matters. Mid-lookup an empty tab means "still fetching". On the LAST paint it means the
+   parcel genuinely has nothing there — no HOA, no elevation certificate — and saying "fetching"
+   forever would be a lie that looks like a hang. */
+function _tabStub(key, final){
+  const [icn,title]=TAB_STUBS[key]||['—',key];
+  const body = final
+    ? `<div class="note">Nothing published for this parcel.</div>`
+    : `<div class="freshline"><span class="badge live">● FETCHING</span> retrieving data…</div>`
+      + `<div class="note">This fills in on its own — no need to search again.</div>`;
+  return `<div class="card noprint" data-stub="${key}"><div class="ch">`
+       + `<span class="icn">[ ${esc(icn)} ]</span><h2>${esc(title)}</h2></div>`
+       + `<div class="cb">${body}</div></div>`;
+}
+function tabifyResults(root, opts){
   const flow = root.querySelector('.cardflow');
   if(!flow) return;
-  const cards=[...flow.querySelectorAll(':scope > .card')];
+  const cards=[...flow.querySelectorAll(':scope > .card')].filter(c=>!c.hasAttribute('data-notab'));
+  const loose=[...flow.querySelectorAll(':scope > .card[data-notab]')];
   if(!cards.length) return;
   const MAP=[
     [/jurisdiction/i,'site'],[/parcel/i,'site'],
@@ -21444,17 +21489,21 @@ function tabifyResults(root){
     let key='site'; for(const [re,k] of MAP){ if(re.test(h)){ key=k; break; } }
     (bucket[key]=bucket[key]||[]).push(c);
   });
+  const isFinal = !!(opts && opts.final);
   const bar=document.createElement('div'); bar.className='tabbar'; bar.setAttribute('role','tablist');
   const panels=document.createElement('div'); panels.className='tabpanels';
   let first=null;
   TABS.forEach(([key,label])=>{
-    const items=bucket[key]; if(!items||!items.length) return;
+    const items=bucket[key]||[];
+    // Every roster tab is built, whether or not its card has arrived — see TAB_STUBS.
     if(!first) first=key;
     const btn=document.createElement('button'); btn.className='tab'; btn.dataset.tab=key; btn.type='button';
-    btn.innerHTML=label+(items.length>1?'<span class="tcount">'+items.length+'</span>':'');
+    btn.innerHTML=label+(items.length>1?'<span class="tcount">'+items.length+'</span>':'')
+      + (items.length?'':'<span class="tcount tpend">·</span>');   // faint dot = still waiting
     bar.appendChild(btn);
     const panel=document.createElement('div'); panel.className='tabpanel'; panel.dataset.tab=key;
-    items.forEach(c=>panel.appendChild(c));
+    if(items.length) items.forEach(c=>panel.appendChild(c));
+    else panel.innerHTML=_tabStub(key, isFinal);
     panels.appendChild(panel);
   });
   flow.replaceWith(panels);
@@ -21466,12 +21515,19 @@ function tabifyResults(root){
   if(sumEl) sticky.appendChild(sumEl);   // summary lives here, in normal (non-sticky) flow
   panels.parentNode.insertBefore(sticky, panels);
   panels.parentNode.insertBefore(bar, panels);   // tab bar right above the panels, sticky
+  // Loading strips ride along after the panels, outside the tab system.
+  loose.forEach(el=>panels.parentNode.appendChild(el));
   const activate=key=>{
     bar.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===key));
     panels.querySelectorAll('.tabpanel').forEach(p=>p.classList.toggle('active', p.dataset.tab===key));
   };
-  bar.addEventListener('click',e=>{ const b=e.target.closest('.tab'); if(b) activate(b.dataset.tab); });
-  if(first) activate(first);
+  bar.addEventListener('click',e=>{ const b=e.target.closest('.tab');
+    if(b){ _activeTab=b.dataset.tab; activate(_activeTab); } });
+  /* Keep the tab you were on. If that tab hasn't been built yet on this paint (its card is still
+     loading) fall back to the first available one rather than showing an empty panel. */
+  const have=[...bar.querySelectorAll('.tab')].map(t=>t.dataset.tab);
+  const want=(_activeTab && have.includes(_activeTab)) ? _activeTab : first;
+  if(want) activate(want);
 }
 
 function titleCase(s){ return String(s||'').toLowerCase().replace(/\b([a-z])/g,m=>m.toUpperCase()).replace(/\bMc([a-z])/,(m,c)=>'Mc'+c.toUpperCase()); }
