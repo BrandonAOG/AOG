@@ -4285,18 +4285,38 @@ function setBasemap(which){
   }
   refreshAerialAttribution();   // set the one county credit on Local HD, clear it on every other basemap
 }
+/* ── SHARED TOOLBAR-MENU POSITIONER (2026-09-01) ───────────────────────────────────────────────
+   All five toolbar dropdowns had the same hardcoded rule copy-pasted:
+       let top = r.top - mh - 6;  if(top < 8) top = r.bottom + 6;
+   i.e. always open UPWARD, flip down only if it would clear the top of the window. That is right
+   for the desktop layout, where .layerswitch sits at bottom:18px. But on phones the toolbar moves
+   to the TOP (top: var(--abh) + 8px), so "upward" means over the action bar and off the screen —
+   and a short menu still satisfies top>=8, so it never flipped.
+   This picks the side with more room instead of assuming, and caps the height to that room with
+   internal scrolling so a long menu (Layers, Weather) is never cut off at either end. */
+function positionToolbarMenu(btn, menu, minW){
+  if(!btn || !menu) return;
+  const r=btn.getBoundingClientRect();
+  const vh=window.innerHeight, vw=window.innerWidth, GAP=6, EDGE=8;
+  menu.style.maxHeight='';                       // measure natural height before constraining
+  const mh=menu.offsetHeight||120, mw=menu.offsetWidth||minW||160;
+  const roomAbove=r.top-EDGE-GAP, roomBelow=vh-r.bottom-EDGE-GAP;
+  // Prefer the side that fits; if neither fits outright, take the roomier one and scroll inside.
+  const below = (mh<=roomBelow) ? true : (mh<=roomAbove) ? false : (roomBelow>=roomAbove);
+  const room = below ? roomBelow : roomAbove;
+  if(mh>room) menu.style.maxHeight=Math.max(120,room)+'px';
+  menu.style.overflowY = (mh>room) ? 'auto' : '';
+  const h=Math.min(mh, Math.max(120,room));
+  menu.style.top = (below ? r.bottom+GAP : Math.max(EDGE, r.top-h-GAP)) + 'px';
+  let left=r.left;
+  if(left+mw>vw-EDGE) left=vw-mw-EDGE;
+  if(left<EDGE) left=EDGE;
+  menu.style.left=left+'px';
+}
 function closeBasemapMenu(){ basemapMenu.hidden=true; }
 function openBasemapMenu(){
-  // position the fixed popup just above the button (escapes the bar's overflow:hidden clip)
-  const r=btnBasemap.getBoundingClientRect();
-  basemapMenu.hidden=false;
-  const mh=basemapMenu.offsetHeight||120, mw=basemapMenu.offsetWidth||140;
-  let top=r.top-mh-6;
-  if(top<8) top=r.bottom+6;                 // not enough room above → open below
-  let left=r.left;
-  if(left+mw>window.innerWidth-8) left=window.innerWidth-mw-8;  // keep on-screen
-  basemapMenu.style.top=top+'px';
-  basemapMenu.style.left=left+'px';
+  basemapMenu.hidden=false;                  // must be laid out before it can be measured
+  positionToolbarMenu(btnBasemap, basemapMenu, 140);
 }
 btnBasemap.onclick=(e)=>{ e.stopPropagation(); if(basemapMenu.hidden) openBasemapMenu(); else closeBasemapMenu(); };
 basemapMenu.querySelectorAll('button[data-bm]').forEach(b=>{
@@ -5365,14 +5385,9 @@ function openElevSourceMenu(anchorEl){
     const fine = c.px<=1.0001;
     _elevMenuEl.appendChild(row(c.label, fine?'high-res LiDAR':'regional', c.oid, _elevLockOid===c.oid));
   });
-  // Position the fixed popup just above the trigger (same approach as the basemap menu).
+  // Sixth toolbar dropdown — same shared positioner, so it flips correctly with the toolbar at top.
   _elevMenuEl.hidden=false;
-  const r=anchorEl.getBoundingClientRect();
-  const mh=_elevMenuEl.offsetHeight||160, mw=_elevMenuEl.offsetWidth||170;
-  let top=r.top-mh-6; if(top<8) top=r.bottom+6;
-  let left=r.left; if(left+mw>window.innerWidth-8) left=window.innerWidth-8-mw;
-  _elevMenuEl.style.top=top+'px';
-  _elevMenuEl.style.left=left+'px';
+  positionToolbarMenu(anchorEl, _elevMenuEl, 170);
 }
 
 /* Render from the cached samples. Split out from the fetch so zooming can add or drop the
@@ -5973,13 +5988,7 @@ document.querySelectorAll('#tempTimeRow .ttime').forEach(btn=>{
 const btnHazards=document.getElementById('btnHazards');
 const hazardsMenu=document.getElementById('hazardsMenu');
 function closeHazardsMenu(){ if(hazardsMenu) hazardsMenu.hidden=true; }
-function _positionHazardsMenu(){
-  const r=btnHazards.getBoundingClientRect();
-  const mh=hazardsMenu.offsetHeight||100, mw=hazardsMenu.offsetWidth||150;
-  let top=r.top-mh-6; if(top<8) top=r.bottom+6;
-  let left=r.left; if(left+mw>window.innerWidth-8) left=window.innerWidth-mw-8;
-  hazardsMenu.style.top=top+'px'; hazardsMenu.style.left=left+'px';
-}
+function _positionHazardsMenu(){ positionToolbarMenu(btnHazards, hazardsMenu, 150); }
 function openHazardsMenu(){
   hazardsMenu.hidden=false;
   _positionHazardsMenu();
@@ -7368,12 +7377,8 @@ const btnLayers=document.getElementById('btnLayers');
 const layersMenu=document.getElementById('layersMenu');
 function closeLayersMenu(){ if(layersMenu) layersMenu.hidden=true; }
 function openLayersMenu(){
-  const r=btnLayers.getBoundingClientRect();
   layersMenu.hidden=false;
-  const mh=layersMenu.offsetHeight||120, mw=layersMenu.offsetWidth||160;
-  let top=r.top-mh-6; if(top<8) top=r.bottom+6;
-  let left=r.left; if(left+mw>window.innerWidth-8) left=window.innerWidth-mw-8;
-  layersMenu.style.top=top+'px'; layersMenu.style.left=left+'px';
+  positionToolbarMenu(btnLayers, layersMenu, 160);
 }
 if(btnLayers) btnLayers.onclick=(e)=>{ e.stopPropagation(); if(layersMenu.hidden) openLayersMenu(); else closeLayersMenu(); };
 if(layersMenu) layersMenu.addEventListener('click',(e)=>e.stopPropagation());
@@ -7681,12 +7686,7 @@ const stormPickMenu=document.getElementById('stormPickMenu');
 function closeStormMenu(){ if(stormPickMenu) stormPickMenu.hidden=true; }
 function _positionStormMenu(){
   if(!btnStormPick||!stormPickMenu) return;
-  const r=btnStormPick.getBoundingClientRect();
-  const mh=stormPickMenu.offsetHeight||140, mw=stormPickMenu.offsetWidth||210;
-  let top=r.top-mh-6; if(top<8) top=r.bottom+6;               // opens upward, flips down if no room
-  let left=r.left; if(left+mw>window.innerWidth-8) left=window.innerWidth-mw-8;
-  if(left<8) left=8;
-  stormPickMenu.style.top=top+'px'; stormPickMenu.style.left=left+'px';
+  positionToolbarMenu(btnStormPick, stormPickMenu, 210);
 }
 function openStormMenu(){ if(!stormPickMenu) return; stormPickMenu.hidden=false; _positionStormMenu(); }
 if(btnStormPick) btnStormPick.onclick=(e)=>{ e.stopPropagation();
@@ -10623,13 +10623,7 @@ if(btnWarn) btnWarn.onclick=function(){
 const btnWeather=document.getElementById('btnWeather');
 const weatherMenu=document.getElementById('weatherMenu');
 function closeWeatherMenu(){ if(weatherMenu) weatherMenu.hidden=true; }
-function _positionWeatherMenu(){
-  const r=btnWeather.getBoundingClientRect();
-  const mh=weatherMenu.offsetHeight||120, mw=weatherMenu.offsetWidth||160;
-  let top=r.top-mh-6; if(top<8) top=r.bottom+6;
-  let left=r.left; if(left+mw>window.innerWidth-8) left=window.innerWidth-mw-8;
-  weatherMenu.style.top=top+'px'; weatherMenu.style.left=left+'px';
-}
+function _positionWeatherMenu(){ positionToolbarMenu(btnWeather, weatherMenu, 160); }
 function openWeatherMenu(){ weatherMenu.hidden=false; _positionWeatherMenu(); }
 // Re-anchor when a picker row (surge/evac categories) changes the menu height.
 function repositionWeatherMenu(){ if(weatherMenu && !weatherMenu.hidden) requestAnimationFrame(_positionWeatherMenu); }
