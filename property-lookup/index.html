@@ -903,11 +903,16 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:none}
     .layerswitch::-webkit-scrollbar{display:none}
     .layerswitch > *{flex:0 0 auto}          /* never let flex squash the labels */
-    /* Fade on whichever edge has more content — added by JS only when it actually overflows, so a
-       short toolbar (no storm picker) doesn't get a pointless gradient over its last button. */
-    .layerswitch.ovf-r{mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent)}
-    .layerswitch.ovf-l{mask-image:linear-gradient(to left,#000 calc(100% - 22px),transparent)}
-    .layerswitch.ovf-lr{mask-image:linear-gradient(to right,transparent,#000 22px,#000 calc(100% - 22px),transparent)}
+    /* ⚠️ NO mask-image / transform / filter ON THIS ELEMENT, EVER.
+       An edge-fade gradient used to live here (.ovf-l / .ovf-r / .ovf-lr, applied by JS when the row
+       overflowed). It broke every dropdown: mask-image creates a CONTAINING BLOCK for
+       position:fixed descendants, exactly like transform and filter do. So .basemap-menu stopped
+       being fixed to the viewport and became fixed to THIS element — its computed top:97px then
+       placed it inside the toolbar's own box, where overflow clipped it, and no menu appeared at
+       all. The whole reason the dropdowns can escape this scroll container is that they are
+       viewport-fixed; anything that establishes a containing block here destroys that.
+       The fade was cosmetic. It is gone. If a scroll affordance is ever wanted, it must be a
+       SIBLING overlay element, not a paint effect on the scroller. */
     .wx-legend{ bottom:12px; }        /* toolbar is up top here, so the panel can sit low again */
     /* Natural order now — the picker sits where it belongs, immediately left of Time-lapse, and is
        reachable by scrolling rather than by being shuffled to the end. */
@@ -23475,20 +23480,33 @@ window.Sheet=Sheet;
           its button. */
   (function wireToolbarScroll(){
     const bar=document.querySelector('.layerswitch'); if(!bar) return;
-    const sync=()=>{
-      const over=bar.scrollWidth-bar.clientWidth;
-      bar.classList.remove('ovf-l','ovf-r','ovf-lr');
-      if(over<=2) return;                                  // fits: no gradient at all
-      const atStart=bar.scrollLeft<=2, atEnd=bar.scrollLeft>=over-2;
-      bar.classList.add(atStart ? 'ovf-r' : atEnd ? 'ovf-l' : 'ovf-lr');
-    };
-    let closeTimer=null;
+    /* Previously toggled .ovf-* fade classes here. Removed — see the CSS note: the gradient made
+       this element a containing block and broke every dropdown. Nothing to sync now, but the
+       listener stays because the re-anchor below still needs it. */
+    const sync=()=>{ bar.classList.remove('ovf-l','ovf-r','ovf-lr'); };
+    /* ⚠️ DO NOT CLOSE MENUS ON SCROLL. The first version of this closed every open .basemap-menu
+       60 ms after any scroll event, to stop a fixed-position dropdown being left stranded away from
+       its button. On a TOUCHSCREEN that broke the toolbar outright: tapping a button inside a
+       scrollable row emits a small scroll, so the menu opened and was immediately closed again —
+       indistinguishable from the button doing nothing.
+       Re-anchoring achieves the same thing without eating taps: the menu follows its button. */
+    const REPOS={ basemapMenu:'btnBasemap', hazardsMenu:'btnHazards',
+                  layersMenu:'btnLayers',  weatherMenu:'btnWeather',
+                  stormPickMenu:'btnStormPick' };
+    let reposTimer=null;
     bar.addEventListener('scroll',()=>{
       sync();
-      clearTimeout(closeTimer);
-      closeTimer=setTimeout(()=>{
-        document.querySelectorAll('.basemap-menu:not([hidden])').forEach(m=>{ m.hidden=true; });
-      },60);
+      clearTimeout(reposTimer);
+      reposTimer=setTimeout(()=>{
+        Object.keys(REPOS).forEach(mid=>{
+          const m=document.getElementById(mid), b=document.getElementById(REPOS[mid]);
+          if(!m || m.hidden || !b) return;
+          const r=b.getBoundingClientRect();
+          // Button scrolled out of the row entirely — now there's nothing to anchor to.
+          if(r.right<8 || r.left>window.innerWidth-8){ m.hidden=true; return; }
+          try{ positionToolbarMenu(b, m, 160); }catch(e){}
+        });
+      },40);
     },{passive:true});
     window.addEventListener('resize',sync);
     // The storm picker appears and disappears with the cone, changing the row's width.
