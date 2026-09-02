@@ -3679,7 +3679,34 @@ async function queryZoning(lat,lng, cityName, countyName){
       if(!r) return [];
       // A byCity value may be a single url OR an array (e.g. unincorporated Lee: on-prem first, then
       // its AGOL mirror as a fast fallback). Normalise both to an array.
-      if(r.byCity){ const u = r.byCity[norm(cityName||'')] || r.byCity['']; if(u) return Array.isArray(u)?u.slice():[u]; }
+      if(r.byCity){
+        /* A postal-derived city must not select a municipal sublayer — see __cityIsPostal. Fall
+           through to the county/unincorporated entry, which at worst returns no hit rather than
+           another city's district. */
+        const _cn = window.__cityIsPostal ? '' : norm(cityName||'');
+        let u = r.byCity[_cn];
+        /* Second chance for any suffix the strip above didn't anticipate. LONGEST key first —
+           "FORTMYERS" is a prefix of "FORTMYERSBEACH", so a naive scan would send a Fort Myers
+           Beach parcel to the Fort Myers layer. */
+        if(!u && _cn){
+          const _keys = Object.keys(r.byCity).filter(k=>k).sort((a,b)=>b.length-a.length);
+          for(const k of _keys){ if(_cn.indexOf(k)===0){ u=r.byCity[k]; break; } }
+        }
+        /* ── CITY LAYER, THEN THE COUNTY LAYER AS A FALLBACK ──────────────────────────────────
+           This used to return the city's sublayer ALONE, so an empty city layer meant no district
+           at all. 4634 San Antonio Ln is the case that exposed it: FDOT correctly reports Estero,
+           byCity sends the query to DCD_Zoning sublayer 5, and sublayer 5 has no polygon there —
+           while the map overlay plainly renders "LEE COUNTY DCD · RS-1" over the same lot from
+           sublayer 0. Estero incorporated in 2014 and its parcels still largely carry Lee County's
+           districts, so the city sublayer is sparse and the county sublayer holds the answer.
+           Query both, most specific first. queryZoning() takes the first layer that returns a
+           feature, so a real city district still wins where one exists; the county layer only
+           answers when the city's is empty. Costs one extra parallel query on city parcels. */
+        const _out = u ? (Array.isArray(u)?u.slice():[u]) : [];
+        const _cty = r.byCity[''];
+        if(_cty) (Array.isArray(_cty)?_cty:[_cty]).forEach(c=>{ if(_out.indexOf(c)===-1) _out.push(c); });
+        if(_out.length) return _out;
+      }
       return r.urls || (r.url?[r.url]:[]);
     };
     const reg = cityReg || cntyReg;
@@ -18598,6 +18625,22 @@ async function _runLookupInner(lat,lng,searchCtx){
   /* ---- Location / jurisdiction ---- */
   let countyName = (!county.__err && county.features && county.features[0]) ? county.features[0].attributes.NAME : null;
   let cityName   = (!city.__err   && city.features   && city.features[0])   ? city.features[0].attributes.NAME   : null;
+  /* ── STRIP THE LSAD SUFFIX OFF FDOT'S PLACE NAME ────────────────────────────────────────────
+     FDOT returns incorporated places with their legal-status suffix attached for some entities and
+     not others: "Cape Coral" but "Estero village", "Fort Myers Beach town". Everything downstream
+     keys on norm(cityName) — the byCity zoning map, LEE_INCORP, the jurisdiction code links — and
+     those keys are the bare name. So norm("Estero village") = "ESTEROVILLAGE" matched nothing,
+     zoning fell through to byCity[''] (the UNINCORPORATED Lee layer, which by design returns no hit
+     for an in-city point), and the Zoning card showed its "no live layer wired" note on every
+     Estero lookup, on every device — even though Estero's layer is wired (DCD_Zoning sublayer 5).
+     Cape Coral was unaffected, which is why this looked device-specific rather than city-specific.
+     Stripped here, at the single point the name is derived, so it fixes every consumer at once
+     rather than just the zoning lookup. Order matters: "Fort Myers Beach town" must lose only
+     "town", never "Beach". */
+  if(cityName){
+    const _c = String(cityName).trim().replace(/\s+(village|city|town|borough|municipality)$/i,'').trim();
+    if(_c) cityName = _c;
+  }
   /* ── FDOT BOUNDARY FALLBACK ─────────────────────────────────────────────────────────────────
      Both of the above come from gis.fdot.gov — the only two calls in this file that touch that
      host, and the only one with no preconnect. Observed on an older iPhone: the parcel feed
@@ -18639,9 +18682,21 @@ async function _runLookupInner(lat,lng,searchCtx){
     if(_pc){
       cityName = String(_pc).trim();
       _jurDerived = _jurDerived ? (_jurDerived + '; municipality from the address') : 'municipality from the address';
+      /* ⚠️ POSTAL CITY IS NOT A JURISDICTION.
+         Both fallback sources above — the parcel record's city field and the city in the typed
+         address — are MAILING addresses. 4618 San Antonio Ln carries a Bonita Springs address and
+         physically sits in the Village of Estero. FDOT's boundary query is a spatial hit and gets
+         this right; a postal name cannot.
+         Left unflagged, this fed "Bonita Springs" to the byCity zoning map, which queried Bonita's
+         sublayer 7 at a point inside Estero, got no polygon, and showed no zoning at all. On a
+         parcel where the wrong city's layer DID happen to cover the point, it would instead have
+         returned a confidently wrong district — worse than blank, on a permit tool.
+         So mark it. The value is good enough to display; it must not key a jurisdiction lookup. */
+      window.__cityIsPostal = true;
     }
   }
   window.__jurDerived = _jurDerived;   // the Jurisdiction card says so when this is set
+  if(!_jurDerived) window.__cityIsPostal = false;   // FDOT answered — the name is jurisdictional
   window.__lastCounty = countyName || '';   // for the live-feed diagnostic
   window.__lastCity   = cityName || '';      // so the zoning overlay can prefer the city's own layer
   prefetchCountyFile(countyName);            // SPEED: start downloading+indexing address points now,
@@ -18918,6 +18973,12 @@ async function _runLookupInner(lat,lng,searchCtx){
      announce itself rather than look authoritative. */
   html += window.__jurDerived
     ? `<div class="freshline"><span class="badge unk">▣ DERIVED</span> FDOT boundary service didn’t respond — ${esc(window.__jurDerived)}</div>`
+      + (window.__cityIsPostal
+          ? `<div class="note warnbox">The municipality above is the <b>mailing</b> city, which is not `
+            + `always the jurisdiction — a Bonita Springs address can sit inside the Village of Estero. `
+            + `Zoning and setbacks were NOT looked up against a city layer for that reason. Confirm the `
+            + `governing jurisdiction before relying on this.</div>`
+          : '')
     : `<div class="freshline"><span class="badge live">● LIVE</span> queried in real time</div>`;
   html += fieldRow('County', countyName?esc(titleCase(countyName))+' County':'<span class="muted">— see appraiser link —</span>','big');
   html += fieldRow('Municipality', cityName?esc(titleCase(cityName))
