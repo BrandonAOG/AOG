@@ -18858,6 +18858,24 @@ async function _runLookupInner(lat,lng,searchCtx){
      showed 5 fields, click showed 14, from the same folio and the same live feed.
      So retry when the primary came back EMPTY as well — and when retrying, use points that are
      genuinely different from the one that already failed (see _rollProbePoints). */
+  /* ⚡ THE GRACED RESULT WAS BEING THROWN AWAY (2026-09-01, found via trace(true) on 112 1st Ave N).
+     First paint races the primary roll against a 1200 ms grace so a slow roll can't hold the panel:
+         parcel = await Promise.race([ pParcel, grace → {features:[], __graced:true} ]);
+     When the roll is slower than the grace — 3632 ms on that run — `parcel` is permanently set to
+     the EMPTY placeholder. `__graced` was written but never read anywhere, so:
+       · the roll's real answer, already paid for in full, was discarded;
+       · `_rollEmpty` was therefore true, which fired the re-anchor (3 more queries, 1921 ms) to go
+         and re-fetch what the primary had just returned;
+       · and the already-correct guard added above could never fire, because there was no roll
+         record left to check the house number against.
+     The primary is in flight regardless and costs nothing extra to collect. Await it here — AFTER
+     first paint, so usability is untouched — and adopt its result. The re-anchor then usually has
+     nothing to do. */
+  if(parcel && parcel.__graced && typeof pParcel!=='undefined' && pParcel){
+    const _late = await _timedTail(pParcel.catch(()=>null), 'parcel roll (collected after grace)');
+    if(myId!==runId) return;
+    if(_late && !_late.__err && _late.features && _late.features[0]) parcel=_late;
+  }
   const _rollEmpty = !(parcel && !parcel.__err && parcel.features && parcel.features[0]);
   /* ⚡ ALREADY-CORRECT GUARD (2026-09-01, from a live trace on 5249 Nautilus Dr, Cape Coral).
      The re-anchor exists for ONE reason: the roll record fetched at the geocoded point might be the
@@ -18872,8 +18890,20 @@ async function _runLookupInner(lat,lng,searchCtx){
      So: if the roll record we already hold carries the house number we searched for, it is not the
      wrong parcel and no amount of re-anchoring can improve it. Skip. This cannot mask the bug the
      re-anchor was written for, because that bug is by definition a house-number MISMATCH. */
+  /* ⚠️ COUNTIES WHERE THE RE-ANCHOR IS A DELIBERATE SAFEGUARD, NOT WASTE.
+     Collier is the standing example and it must keep re-anchoring even when the roll record's house
+     number looks right. Two reasons, both specific to Collier:
+       · its live parcel layer carries NO living area (10 fields, confirmed against the service), so
+         the roll record is the only thing standing behind that figure and is worth a second point;
+       · it has a long-running ANCHORING problem — the NG911 address-point layer has mis-filed
+         blocks, and through-lot / corner-lot geometry makes point-in-polygon land on the neighbour.
+         A matching house number on the roll record does NOT prove the anchor was right there, which
+         is exactly the assumption the guard below makes.
+     The guard's real target was Lee, where the marker recentres to the parcel centroid on every
+     folio pin and re-anchored needlessly. Keep the saving there; keep the safety net in Collier. */
+  const REANCHOR_ALWAYS = new Set(['COLLIER']);
   let _rollAlreadyRight=false;
-  if(!_rollEmpty){
+  if(!_rollEmpty && !REANCHOR_ALWAYS.has(norm(countyName||''))){
     const _rollAddr=parcelAddrText(parcel.features[0].attributes||{});
     const _rollHN=_rollAddr?houseNum(_rollAddr):null;
     // Prefer the number the user typed; on a map click fall back to the authoritative live address.
@@ -18886,6 +18916,8 @@ async function _runLookupInner(lat,lng,searchCtx){
   }
   if(_rollAlreadyRight){
     _timings.push({label:'parcel roll re-anchor (skipped — roll already on the right parcel)', ms:0});
+  } else if(!_rollEmpty && REANCHOR_ALWAYS.has(norm(countyName||''))){
+    _timings.push({label:'parcel roll re-anchor (kept — '+titleCase(countyName||'')+' anchoring safeguard)', ms:0});
   }
   if(_rollAnchor && !_rollAlreadyRight){
     const _dd=(_rollAnchor.lat-lat)*(_rollAnchor.lat-lat)+(_rollAnchor.lng-lng)*(_rollAnchor.lng-lng);
