@@ -39,6 +39,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
 <link rel="preconnect" href="https://hazards.fema.gov" crossorigin>          <!-- NFHL export: slowest handshake in the app (strict TLS 1.2) — pre-open it -->
 <link rel="preconnect" href="https://basemap.nationalmap.gov" crossorigin>   <!-- USGS Topo basemap tiles -->
+<link rel="preconnect" href="https://elevation.nationalmap.gov" crossorigin> <!-- USGS 3DEP ground elevation: stalls on a cold/dead socket, so hold one open -->
 <link rel="preconnect" href="https://mapservices.weather.noaa.gov" crossorigin> <!-- NWS warnings / NOAA overlays -->
 <link rel="preconnect" href="https://tiledimageservices2.arcgis.com" crossorigin> <!-- Collier 2026 LERC tiles -->
 
@@ -20544,22 +20545,59 @@ async function _runLookupInner(lat,lng,searchCtx){
         } else {
           html += `<div id="${_geSlotId}"><div class="field"><div class="k">Ground elev.</div>`
                 + `<div class="v"><span class="muted">checking USGS 3DEP… </span><span class="zone-spin" aria-hidden="true"></span></div></div></div>`;
-          (async()=>{
+          /* ⚡ RE-FETCH JUST THIS ROW, AND RETRY IT AUTOMATICALLY (2026-09-01).
+             First version of this escalated the budget on each attempt — 12 s → 20 s → 28 s — on the
+             assumption that 3DEP was SLOW, because computeStatisticsHistograms has to rasterise the
+             parcel polygon on demand.
+             That assumption was wrong, and the evidence was the button itself: pressing ↻ Re-fetch
+             brings the reading up INSTANTLY. A host that needed a longer window would not answer in
+             100 ms on the very next request. So elevation.nationalmap.gov stalls the same way
+             hazards.fema.gov does (see the note at EP.flood) — a request either answers fast or
+             hangs on a dead keep-alive socket and never answers at all.
+             Escalating the budget is therefore the wrong medicine: it makes each dead attempt cost
+             MORE while doing nothing about the cause. What works is abandoning fast and opening a
+             fresh connection. Four short flat attempts do that automatically, so the failure row
+             should now be rare rather than routine. The button stays for when all four stall. */
+          const _geSpin = (msg)=>{ const el=document.getElementById(_geSlotId); if(!el) return;
+            el.innerHTML = `<div class="field"><div class="k">Ground elev.</div>`
+              + `<div class="v"><span class="muted">${esc(msg)} </span>`
+              + `<span class="zone-spin" aria-hidden="true"></span></div></div>`; };
+          const _geFail = (tries)=>{ const el=document.getElementById(_geSlotId); if(!el) return;
+            el.innerHTML = `<div class="field"><div class="k">Ground elev.</div><div class="v">`
+              + `<span class="muted">USGS 3DEP didn’t return a reading here`
+              + (tries>1?` (${tries} attempts)`:``) + ` — retry, or use the Elevation Heights tool `
+              + `or an Elevation Certificate</span> `
+              + `<button type="button" class="wbtn" id="${_geSlotId}-btn" style="margin-left:6px">↻ Re-fetch</button>`
+              + `</div></div>`;
+            const b=document.getElementById(_geSlotId+'-btn');
+            if(b) b.onclick=()=>_geTry(true); };
+          /* 4 s per attempt. A healthy 3DEP polygon read is well inside that, so this only ever
+             trips on a stall — and then we reconnect rather than keep waiting. */
+          const GE_ATTEMPT_MS = 4000, GE_ATTEMPTS = 4;
+          let _geTries=0;
+          const _geOnce = async (budget)=>{
             let g=null;
-            // Background retry — the card's already up, so give 3DEP a generous 12 s to come back with
-            // a real reading (vs the ~3 s inline budget). Lee's own LiDAR is tried first where it applies.
-            try{ g = await (isLee ? queryLeeGroundElevation(pFeat).then(r=>r||queryGroundElevation(pFeat, countyName, 12000))
-                                  : queryGroundElevation(pFeat, countyName, 12000)); }catch(_){}
-            if(myId!==runId) return;
-            const slot=document.getElementById(_geSlotId); if(!slot) return;
-            if(_geBad(g)){
-              slot.innerHTML = `<div class="field"><div class="k">Ground elev.</div>`
-                + `<div class="v"><span class="muted">USGS 3DEP didn't return a reading here — use the Elevation Heights tool or an Elevation Certificate</span></div></div>`;
-            } else {
-              slot.innerHTML = _buildGroundElevRow(g, _geRefCtx);
-              _geExport(g);
+            // Lee's own 2018 LiDAR is a 50-ft point grid — finer than 3DEP — so try it first there.
+            try{ g = await (isLee ? queryLeeGroundElevation(pFeat).then(r=>r||queryGroundElevation(pFeat, countyName, budget))
+                                  : queryGroundElevation(pFeat, countyName, budget)); }catch(_){}
+            return g;
+          };
+          const _geTry = async (manual)=>{
+            for(let i=0;i<GE_ATTEMPTS;i++){
+              _geTries++;
+              _geSpin(i===0 ? (manual?'re-checking USGS 3DEP…':'checking USGS 3DEP…')
+                            : `USGS 3DEP didn’t respond — retrying (${i+1}/${GE_ATTEMPTS})…`);
+              const g=await _geOnce(GE_ATTEMPT_MS);
+              // Only bail on a superseded run for the AUTOMATIC pass. A manual re-fetch is the user
+              // asking about the parcel on screen right now, so honour it either way.
+              if(!manual && myId!==runId) return;
+              const el=document.getElementById(_geSlotId); if(!el) return;
+              if(!_geBad(g)){ el.innerHTML=_buildGroundElevRow(g, _geRefCtx); _geExport(g); return; }
+              if(i<GE_ATTEMPTS-1) await new Promise(r=>setTimeout(r,200));   // let the socket close
             }
-          })();
+            _geFail(_geTries);
+          };
+          _geTry(false);
         }
         if(leeLimwa || colLimwa){
           html += `<div class="field"><div class="k">LiMWA</div><div class="v"><span class="badge sfha">Inside Limit of Moderate Wave Action</span></div></div>`;
