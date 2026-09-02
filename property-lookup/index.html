@@ -889,12 +889,29 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     .field{flex-direction:column;gap:2px}
     .field .k{width:auto}
     .field .v{text-align:left}
-    .layerswitch{bottom:auto;top:calc(var(--abh,48px) + 8px);right:12px;left:auto;margin-inline:0;width:auto}
+    /* SCROLLABLE TOOLBAR ON PHONES.
+       This row (Time-lapse · Satellite · Hazards · Elevation heights · Layers · Weather, plus the
+       storm picker when a cone is up) is wider than any phone screen. It used to be pinned by its
+       right edge with overflow:hidden, so whichever end didn't fit was simply unreachable — the
+       Weather button was cut in half and the storm picker had to be flex-ordered to the visible end
+       just to be tappable.
+       Now it spans the viewport and scrolls horizontally instead, so every button is reachable and
+       nothing needs reordering. Safe because .basemap-menu is position:fixed and therefore escapes
+       this container's overflow — an absolutely-positioned dropdown would have been clipped. */
+    .layerswitch{bottom:auto;top:calc(var(--abh,48px) + 8px);left:12px;right:12px;margin-inline:0;
+      width:auto;overflow-x:auto;overflow-y:hidden;justify-content:flex-start;
+      -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:none}
+    .layerswitch::-webkit-scrollbar{display:none}
+    .layerswitch > *{flex:0 0 auto}          /* never let flex squash the labels */
+    /* Fade on whichever edge has more content — added by JS only when it actually overflows, so a
+       short toolbar (no storm picker) doesn't get a pointless gradient over its last button. */
+    .layerswitch.ovf-r{mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent)}
+    .layerswitch.ovf-l{mask-image:linear-gradient(to left,#000 calc(100% - 22px),transparent)}
+    .layerswitch.ovf-lr{mask-image:linear-gradient(to right,transparent,#000 22px,#000 calc(100% - 22px),transparent)}
     .wx-legend{ bottom:12px; }        /* toolbar is up top here, so the panel can sit low again */
-    /* The toolbar is anchored by its RIGHT edge here and is wider than a phone screen, so its left
-       end runs off-screen. Flex order moves the storm picker to the visible right end — on desktop
-       it stays where it belongs, immediately left of Time-lapse. */
-    .storm-pick{ order:9; border-right:none; border-left:1px solid var(--line) }
+    /* Natural order now — the picker sits where it belongs, immediately left of Time-lapse, and is
+       reachable by scrolling rather than by being shuffled to the end. */
+    .storm-pick{ border-right:1px solid var(--line) }
     .crosshair{display:none}
     footer{display:none}             /* hide sources/hub footer on phones */
     .suggest .sg{padding:13px 12px;font-size:13px}  /* bigger tap targets */
@@ -23455,6 +23472,35 @@ window.Sheet=Sheet;
 
   // Selectors for the page's own floating UI that sits over the map — hidden only
   // during capture so they don't clutter the screenshot. The map LAYERS stay visible.
+  /* ---- Scrollable toolbar support (phones) --------------------------------------------------
+     Two things CSS can't do on its own:
+       1. Only fade an edge that actually has hidden content. A fixed gradient would dim the last
+          button even when the row fits.
+       2. The dropdowns are position:fixed and placed from the button's rect, so they do NOT follow
+          the row when it scrolls. Close them on scroll rather than leave a menu stranded away from
+          its button. */
+  (function wireToolbarScroll(){
+    const bar=document.querySelector('.layerswitch'); if(!bar) return;
+    const sync=()=>{
+      const over=bar.scrollWidth-bar.clientWidth;
+      bar.classList.remove('ovf-l','ovf-r','ovf-lr');
+      if(over<=2) return;                                  // fits: no gradient at all
+      const atStart=bar.scrollLeft<=2, atEnd=bar.scrollLeft>=over-2;
+      bar.classList.add(atStart ? 'ovf-r' : atEnd ? 'ovf-l' : 'ovf-lr');
+    };
+    let closeTimer=null;
+    bar.addEventListener('scroll',()=>{
+      sync();
+      clearTimeout(closeTimer);
+      closeTimer=setTimeout(()=>{
+        document.querySelectorAll('.basemap-menu:not([hidden])').forEach(m=>{ m.hidden=true; });
+      },60);
+    },{passive:true});
+    window.addEventListener('resize',sync);
+    // The storm picker appears and disappears with the cone, changing the row's width.
+    try{ new ResizeObserver(sync).observe(bar); }catch(e){}
+    sync();
+  })();
   const UI_OVERLAYS = ['#coordReadout','#radarClock','#zoningLegend','#wxLegend','#coneFloat','#warnFloat','#stormFloat','.layerswitch',
                        '#sheetTab','.crosshair','.leaflet-control-container'];
 
