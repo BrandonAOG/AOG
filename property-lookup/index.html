@@ -18374,7 +18374,10 @@ function renderParcelGeneric(a, d){
   if(jv)   h += fieldRow('Just (market) value'+(a.__asmtYr?' '+esc(String(a.__asmtYr)):''), jv);
   else if(a.__gladesMkt!=null) h += fieldRow('Market value'+(a.__asmtYr?' '+esc(String(a.__asmtYr)):'')+' (land + building)', fmtMoney(a.__gladesMkt));
   if(a.__assessedVal!=null) h += fieldRow('Assessed value', fmtMoney(a.__assessedVal));
-  if(a.__taxableVal!=null)  h += fieldRow('Taxable value', fmtMoney(a.__taxableVal));
+  if(a.__bldgVal!=null)     h += fieldRow('Building value', fmtMoney(a.__bldgVal));
+  if(a.__taxableVal!=null)  h += fieldRow('Taxable value'
+    + (a.__taxableCertified ? ' <span class="muted" style="font-size:11px">(last certified)</span>' : ''),
+    fmtMoney(a.__taxableVal));
   if(land) h += fieldRow('Land value', land);
   if(yr){ const effExtra = (a.__effYr!=null && String(a.__effYr)!==String(yr)) ? ` (effective ${esc(String(a.__effYr))})` : '';
     const bldExtra = (a.__bldgCount!=null && Number(a.__bldgCount)>1) ? ` · ${esc(String(a.__bldgCount))} bldgs` : '';
@@ -18392,7 +18395,7 @@ function renderParcelGeneric(a, d){
     /* Under-roof vs under-air is the distinction that matters for a load calc, and it's also the
        pair that the min() reconciliation compares — so showing both makes that visible instead of
        leaving you to wonder which figure the Living area row picked. */
-    const _ur=Number(a.__underRoof), _ha=Number(a.TOT_LVG_AR||a.HEATEDAREA||0);
+    const _ur=Number(a.__underRoof), _ha=Number(a.TOT_LVG_AR||a.HEATEDAREA||a.LIVING||0);
     h += fieldRow('Under roof', fmtNum(_ur)+' sq ft'
       + (_ha>0 && _ur>_ha ? ' <span class="muted" style="font-size:11px">('+fmtNum(_ur-_ha)+' sq ft unconditioned)</span>' : ''));
   }
@@ -18410,12 +18413,26 @@ function renderParcelGeneric(a, d){
   if(a.__statedDims)
     h += fieldRow('Lot (per appraiser)', esc(String(a.__statedDims))
       + ' <span class="muted" style="font-size:11px">stated frontage × depth</span>');
+  if(a.__units!=null) h += fieldRow('Living units', esc(String(a.__units)));
+  if(a.__acres!=null) h += fieldRow('Acreage (measured)', (Math.round(Number(a.__acres)*1000)/1000)+' ac');
+  if(a.__subdivision) h += fieldRow('Subdivision', esc(String(a.__subdivision)));
+  /* Charlotte-only today, and the three that matter most for an install quote: public water/sewer
+     vs well/septic, whether the road is paved for equipment access, and waterfront exposure. */
+  if(a.__utilities)  h += fieldRow('Utilities (per appraiser)', esc(String(a.__utilities)));
+  if(a.__roads)      h += fieldRow('Road', esc(String(a.__roads)));
+  if(a.__waterfront) h += fieldRow('Waterfront', esc(String(a.__waterfront)));
+  if(a.__condoId)    h += fieldRow('Condo ID', esc(String(a.__condoId)));
+  if(a.__taxDist)    h += fieldRow('Tax district', esc(String(a.__taxDist)));
+  if(a.__neighborhood) h += fieldRow('Neighborhood', esc(String(a.__neighborhood)));
+  if(a.__municipality)
+    h += fieldRow('Municipality (per appraiser)', esc(String(a.__municipality)));
   if(a.__fireDist) h += fieldRow('Fire district', esc(String(a.__fireDist)));
   if(a.__municode)
     h += fieldRow('Municipality code', esc(String(a.__municode))
       + ' <span class="muted" style="font-size:11px">appraiser MUNICODE — raw, not mapped to a name</span>');
   if(a.__maintDate)
     h += fieldRow('Parcel record updated', esc(String(a.__maintDate)));
+  if(a.__notes) h += fieldRow('Appraiser notes', '<span style="font-size:11px">'+esc(String(a.__notes))+'</span>');
   if(a.__apprUrl)
     // .palink is the class the Jurisdiction card's appraiser link already uses.
     h += `<a class="palink" href="${esc(String(a.__apprUrl))}" target="_blank" rel="noopener">`
@@ -19264,6 +19281,92 @@ async function _runLookupInner(lat,lng,searchCtx){
     if(norm(countyName)==='SARASOTA'){
       const _id=liveRes.features[0].attributes.ID;
       if(_id!=null && String(_id).trim()!=='') det.pid='ID';
+    }
+    /* ── SARASOTA: ParcelProperty_Scpao, 66 fields ──────────────────────────────────────────────
+       Nearly as complete as Lee's, and almost none of it was being read. detectFields() already
+       finds NAME1/ACCOUNT/JUST/YRBL/LIVING/SALE_AMT/SALE_DATE, but several fields match none of its
+       patterns — notably FULLADDRESS (site address), LOCCITY, LSQFT and the mailing block — so this
+       fills those by name as well as adding the fields with no detector channel at all.
+       Deliberately NOT touching ZONING. */
+    if(norm(countyName)==='SARASOTA'){
+      const _la=liveRes.features[0].attributes;
+      const _n=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.\-]/g,''))>0;
+      const _t=v=>v!=null&&String(v).trim()!=='' ? String(v).trim() : null;
+
+      // Detector gaps — these exist on the layer but match none of its regexes.
+      if(!det.site && _t(_la.FULLADDRESS)) det.site='FULLADDRESS';
+      if(!det.city && _t(_la.LOCCITY))     det.city='LOCCITY';
+      if(!det.lotSqft && _n(_la.LSQFT))    det.lotSqft='LSQFT';
+      if(!det.mail && _t(_la.NAME_ADD2))   det.mail='NAME_ADD2';
+      if(!det.mailCity && _t(_la.CITY))    det.mailCity='CITY';
+
+      // Roll-owned fields, now local.
+      if(_la.__assessedVal==null && _n(_la.ASSD)) _la.__assessedVal=_la.ASSD;
+      if(_la.__taxableVal==null  && _n(_la.TXBL)) _la.__taxableVal=_la.TXBL;
+      if(_n(_la.IMPROVEMT)) _la.__bldgVal=_la.IMPROVEMT;
+      /* LEGAL1..4 are a wrapped description, one line per field. */
+      if(_la.__legal==null){
+        const _lg=[_la.LEGAL1,_la.LEGAL2,_la.LEGAL3,_la.LEGAL4].map(_t).filter(Boolean);
+        if(_lg.length) _la.__legal=_lg.join(' ');
+      }
+      /* LNVS_N is deliberately ignored: the name doesn't establish that it's land value and a wrong
+         land figure is worse than none. Building value (IMPROVEMT) is unambiguous, so that's shown
+         instead — JUST minus IMPROVEMT is NOT computed here because agricultural and exempt parcels
+         break that arithmetic. */
+
+      // Generator-sizing + site context.
+      if(_n(_la.GRND_AREA)) _la.__underRoof=_la.GRND_AREA;   // vs LIVING = under air
+      if(_n(_la.BEDR))  _la.__beds=_la.BEDR;
+      if(_n(_la.BATH))  _la.__baths=_la.BATH;
+      if(_n(_la.LIVUNITS) && Number(_la.LIVUNITS)>1) _la.__units=_la.LIVUNITS;
+      const _pool=_t(_la.POOL);
+      if(_pool && !/^(n|no|none|0)$/i.test(_pool)) _la.__amenities=(/^(y|yes|1)$/i.test(_pool)?'Pool':'Pool ('+_pool+')');
+
+      // Provenance + jurisdiction. MUNICIPALITY here is a NAME, not a code like Lee's MUNICODE.
+      if(_t(_la.MUNICIPALITY)) _la.__municipality=_t(_la.MUNICIPALITY);
+      if(_t(_la.SUBD)) _la.__subdivision=_t(_la.SUBD);
+      if(_n(_la.MeasuredAcreage)) _la.__acres=_la.MeasuredAcreage;
+      if(_t(_la.HYPERLINK) && /^https?:/i.test(_t(_la.HYPERLINK))) _la.__apprUrl=_t(_la.HYPERLINK);
+      if(_n(_la.LastUpdate)){ try{ const _d=new Date(Number(_la.LastUpdate));
+        if(_d.getUTCFullYear()>2000) _la.__maintDate=_d.toISOString().slice(0,10); }catch(e){} }
+      if(_t(_la.NOTES)) _la.__notes=_t(_la.NOTES);
+    }
+
+    /* ── CHARLOTTE: Property Ownership, layer 17, 50 fields ─────────────────────────────────────
+       The "lean" note elsewhere in this file is HALF right. Charlotte carries a full valuation set,
+       land use, legal, utilities and an appraiser deep link — but genuinely has NO living area, NO
+       year built and NO sale history, so those three still come from the roll. Worth knowing which
+       is which: a Charlotte card missing values is a bug, missing living area is the data.
+       ⚠️ Every money field on this layer is typed String, so they need numeric coercion before
+       fmtMoney sees them or they render as raw text. Deliberately NOT touching zoningcode. */
+    if(norm(countyName)==='CHARLOTTE'){
+      const _la=liveRes.features[0].attributes;
+      const _t=v=>v!=null&&String(v).trim()!=='' ? String(v).trim() : null;
+      // "1,234.00" / "$1,234" / "" → number or null
+      const _money=v=>{ const x=_t(v); if(!x) return null;
+        const nu=Number(x.replace(/[^0-9.\-]/g,'')); return (isFinite(nu)&&nu>0)?nu:null; };
+
+      if(!det.jv){ const _jv=_money(_la.totvalue); if(_jv!=null){ _la.__jvNum=_jv; det.jv='__jvNum'; } }
+      if(!det.land){ const _lv=_money(_la.totlandvalue); if(_lv!=null){ _la.__landNum=_lv; det.land='__landNum'; } }
+      const _bv=_money(_la.totbuildvalue); if(_bv!=null) _la.__bldgVal=_bv;
+      const _av=_money(_la.assessedvalue); if(_av!=null && _la.__assessedVal==null) _la.__assessedVal=_av;
+      // prioryeartaxvalue is the LAST CERTIFIED taxable value — labelled as such at render.
+      const _tv=_money(_la.prioryeartaxvalue); if(_tv!=null && _la.__taxableVal==null){ _la.__taxableVal=_tv; _la.__taxableCertified=true; }
+
+      // 'landuse' is the readable description; 'usecode' is the bare code the detector grabs.
+      if(_t(_la.landuse)) { _la.__useDesc=_t(_la.landuse); if(!det.use) det.use='landuse'; }
+      if(_la.__legal==null && _t(_la.shortlegal)) _la.__legal=_t(_la.shortlegal);
+      if(_t(_la.AccountLink) && /^https?:/i.test(_t(_la.AccountLink))) _la.__apprUrl=_t(_la.AccountLink);
+
+      /* Site-context fields no other county in this app publishes, and all three bear directly on a
+         standby install: whether the lot is on public utilities or well/septic, whether the road is
+         paved (equipment access), and whether it's waterfront (wind exposure + surge). */
+      if(_t(_la.utilities)) _la.__utilities=_t(_la.utilities);
+      if(_t(_la.roads))     _la.__roads=_t(_la.roads);
+      const _w=_t(_la.water); if(_w && !/^(n|no|none|0)$/i.test(_w)) _la.__waterfront=_w;
+      if(_t(_la.taxdistrict))  _la.__taxDist=_t(_la.taxdistrict);
+      if(_t(_la.neighborhood)) _la.__neighborhood=_t(_la.neighborhood);
+      if(_t(_la.CONDOID))      _la.__condoId=_t(_la.CONDOID);
     }
     // Some live county feeds are "lean" — they carry owner/value/zoning but NO living-area or
     // year-built (Charlotte's layer 17, Collier's similar layer). The dated statewide FDOR roll
