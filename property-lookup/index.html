@@ -22807,7 +22807,13 @@ const addrEl=document.getElementById('addr');
 const sugEl=document.getElementById('suggest');
 let sugItems=[], sugActive=-1, sugSeq=0, sugTimer=null, lastSugQ='', addrSaveTimer=null;
 
-function hideSuggest(){ sugEl.classList.remove('show'); sugEl.innerHTML=''; sugItems=[]; sugActive=-1; }
+/* 🩹 lastSugQ MUST BE CLEARED HERE.
+   It was only ever assigned, never reset, and the input handler bails on `q===lastSugQ`. So any
+   path that closed the dropdown while leaving the text intact made the same string un-searchable:
+   press Escape then type-and-delete a character, backspace below 4 chars and retype the 4th, or
+   blur and come back — the query matches lastSugQ, the handler returns, and no dropdown ever comes
+   back. Intermittent and keystroke-dependent, which is exactly what made it hard to pin down. */
+function hideSuggest(){ sugEl.classList.remove('show'); sugEl.innerHTML=''; sugItems=[]; sugActive=-1; lastSugQ=''; }
 function renderSuggest(items){
   sugItems=items; sugActive=-1;
   if(!items.length){ hideSuggest(); return; }
@@ -22821,7 +22827,10 @@ function renderSuggest(items){
   }).join('');
   sugEl.classList.add('show');
 }
-function setSugMsg(msg){ sugEl.innerHTML=`<div class="sgmsg">${esc(msg)}</div>`; sugEl.classList.add('show'); sugItems=[]; sugActive=-1; }
+function setSugMsg(msg){
+  hideHistory();   // renderSuggest() did this; this path didn't, so both panels could show at once
+  sugEl.innerHTML=`<div class="sgmsg">${esc(msg)}</div>`; sugEl.classList.add('show'); sugItems=[]; sugActive=-1;
+}
 
 /* ---- Autocomplete tuning: in-session cache + relevance ranking (no new dependency) ----
    The cache makes re-typing / backspacing instant and cuts redundant network calls.
@@ -23074,10 +23083,13 @@ addrEl.addEventListener('input',()=>{
   addrSaveTimer=setTimeout(()=>STORE.set('fl_addr',addrEl.value||''),400);
   clearTimeout(sugTimer);
   if(q.length<4){ hideSuggest(); return; }
-  if(q===lastSugQ) return;
 
-  // Instant path: if we've already fetched this exact query this session, show it with no delay.
+  /* Cache check BEFORE the unchanged-query check. It used to come after, so a string we already
+     had results for still hit the `q===lastSugQ` early return and rendered nothing. */
   const cachedNow = sugCacheGet(q.toLowerCase().replace(/\s+/g,' ').trim());
+  // Unchanged text AND the dropdown is already up: nothing to do. If it's down, fall through and
+  // re-open it rather than treating "same string" as "already handled".
+  if(q===lastSugQ && sugEl.classList.contains('show')) return;
   if(cachedNow){
     lastSugQ=q; ++sugSeq;
     if(cachedNow.length) renderSuggest(cachedNow);
@@ -23134,12 +23146,20 @@ addrEl.addEventListener('keydown',e=>{
   }
   if(e.key==='Enter') doSearch();
 });
-addrEl.addEventListener('blur',()=>setTimeout(hideSuggest,150));
+/* Blur used to call hideSuggest() at +150 ms, which empties sugItems. On touch the click fallback
+   for a suggestion row lands around +300 ms, so if mousedown didn't fire — a tap where the finger
+   drifts a few pixels — the row's handler ran against an already-cleared array and silently did
+   nothing. Hide the panel visually on blur but keep sugItems alive a little longer so a late tap
+   can still resolve; _sugPick's own dedupe stops any double handling. */
+addrEl.addEventListener('blur',()=>setTimeout(()=>{
+  sugEl.classList.remove('show'); sugActive=-1; lastSugQ='';
+  setTimeout(()=>{ if(!sugEl.classList.contains('show')){ sugEl.innerHTML=''; sugItems=[]; } }, 450);
+},150));
 
 /* ---------- Clear button ---------- */
 const clearBtn = document.getElementById('clearBtn');
 function updateClearBtn(){
-  clearBtn.classList.toggle('visible', addrEl.value.length > 0);
+  clearBtn.classList.toggle('visible', addrEl.value.trim().length > 0);   // was untrimmed: a single space showed the ×
 }
 addrEl.addEventListener('input', updateClearBtn);
 clearBtn.addEventListener('mousedown', e => {
