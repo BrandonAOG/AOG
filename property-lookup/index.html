@@ -18384,6 +18384,42 @@ function renderParcelGeneric(a, d){
   else if(a.__saleDateOnly) h += fieldRow('Last sale', esc(String(a.__saleDateOnly)));
   if(a.__legal) h += fieldRow('Legal', '<span style="font-size:11px">'+esc(String(a.__legal))+'</span>');
   if(a.__zoning) h += fieldRow('Zoning (per parcel roll)', esc(String(a.__zoning)));
+  /* ── EXTRA APPRAISER FIELDS (generic channels; Lee populates them today) ──────────────────────
+     Every one is opt-in: the row only exists if the county block set the key, so no other county's
+     card changes. Ordered by how much they matter to a standby-generator quote rather than by how
+     the source layer happens to list them. */
+  if(a.__underRoof!=null){
+    /* Under-roof vs under-air is the distinction that matters for a load calc, and it's also the
+       pair that the min() reconciliation compares — so showing both makes that visible instead of
+       leaving you to wonder which figure the Living area row picked. */
+    const _ur=Number(a.__underRoof), _ha=Number(a.TOT_LVG_AR||a.HEATEDAREA||0);
+    h += fieldRow('Under roof', fmtNum(_ur)+' sq ft'
+      + (_ha>0 && _ur>_ha ? ' <span class="muted" style="font-size:11px">('+fmtNum(_ur-_ha)+' sq ft unconditioned)</span>' : ''));
+  }
+  if(a.__stories!=null || a.__beds!=null || a.__baths!=null){
+    const _b=[];
+    if(a.__beds!=null)  _b.push(esc(String(a.__beds))+' bed');
+    if(a.__baths!=null) _b.push(String(Number(a.__baths)).replace(/\.0$/,'')+' bath');
+    if(a.__stories!=null) _b.push(String(Number(a.__stories)).replace(/\.0$/,'')+' storey'+(Number(a.__stories)>1?'s':''));
+    if(_b.length) h += fieldRow('Structure', _b.join(' · '));
+  }
+  if(a.__amenities) h += fieldRow('On site', esc(String(a.__amenities)));
+  if(a.__newConstrYr!=null)
+    h += fieldRow('New construction', 'in progress <span class="muted" style="font-size:11px">(appraiser lists a new building, year '
+      + esc(String(a.__newConstrYr)) + ' — the figures above may not include it)</span>');
+  if(a.__statedDims)
+    h += fieldRow('Lot (per appraiser)', esc(String(a.__statedDims))
+      + ' <span class="muted" style="font-size:11px">stated frontage × depth</span>');
+  if(a.__fireDist) h += fieldRow('Fire district', esc(String(a.__fireDist)));
+  if(a.__municode)
+    h += fieldRow('Municipality code', esc(String(a.__municode))
+      + ' <span class="muted" style="font-size:11px">appraiser MUNICODE — raw, not mapped to a name</span>');
+  if(a.__maintDate)
+    h += fieldRow('Parcel record updated', esc(String(a.__maintDate)));
+  if(a.__apprUrl)
+    // .palink is the class the Jurisdiction card's appraiser link already uses.
+    h += `<a class="palink" href="${esc(String(a.__apprUrl))}" target="_blank" rel="noopener">`
+       + `↗ Open THIS parcel on the county appraiser</a>`;
   /* MISSING-FIELD DISCLOSURE. A card showing owner + folio + address and nothing else is not a
      property with no building — it's a card whose roll splice failed. Name the absent fields and
      the reason, so a thin card is legible instead of mysterious, and offer the retry. */
@@ -19364,6 +19400,68 @@ async function _runLookupInner(lat,lng,searchCtx){
         try{ const _yr=new Date(Number(_la.Date_of_La)).getUTCFullYear();
           if(_yr>1900 && _yr<2100) _la.__saleDateOnly=String(_yr); }catch(e){}
       }
+    }
+    /* ── LEE: MINE THE 124-FIELD PARCEL LAYER ──────────────────────────────────────────────────
+       Lee's hosted layer carries 124 fields and the app was reading four of them. Everything the
+       FDOR statewide roll supplies is already in here, which means a Lee lookup no longer needs the
+       roll at all — when FDOR times out (four 4-second failures in one measured session) the card
+       used to lose year built, values, use, last sale and legal. Now it doesn't.
+       These are all gap-fills: each one only writes if the field is still unset, so a roll splice or
+       an auto-detected field always wins. No extra network — the live query already asks for '*'. */
+    if(norm(countyName)==='LEE'){
+      const _la=liveRes.features[0].attributes;
+      const _n=v=>v!=null&&String(v).trim()!==''&&Number(String(v).replace(/[^0-9.]/g,''))>0;
+      const _t=v=>v!=null&&String(v).trim()!=='' ? String(v).trim() : null;
+
+      // ---- fields the roll would otherwise own ----
+      if(!det.yr   && _n(_la.MINBUILTY)) det.yr='MINBUILTY';
+      if(!det.land && _n(_la.LAND))      det.land='LAND';
+      if(!det.use  && _t(_la.LANDUSEDES)) det.use='LANDUSEDES';
+      if(_la.__assessedVal==null && _n(_la.ASSESSED)) _la.__assessedVal=_la.ASSESSED;
+      if(_la.__taxableVal==null  && _n(_la.TAXABLE))  _la.__taxableVal=_la.TAXABLE;
+      if(_la.__legal==null && _t(_la.LEGAL)) _la.__legal=_t(_la.LEGAL);
+      if(_la.__bldgCount==null && _n(_la.BLDGCOUNT)) _la.__bldgCount=_la.BLDGCOUNT;
+      // Sale 1 is the most recent. S_1DATE is epoch ms; keep the year only, like Hendry.
+      if(!det.saleP && _la.__saleP==null && _n(_la.S_1AMOUNT)){
+        _la.__saleP=_la.S_1AMOUNT;
+        if(_n(_la.S_1DATE)){ try{ const _y=new Date(Number(_la.S_1DATE)).getUTCFullYear();
+          if(_y>1900 && _y<2100) _la.__saleY=String(_y); }catch(e){} }
+      }
+
+      /* ---- generator-sizing inputs ----
+         These aren't on the roll at all. A whole-house standby has to carry whatever is actually on
+         the property, and until now you'd have opened the appraiser in a second tab to find out. */
+      if(_n(_la.TOTALAREA))  _la.__underRoof=_la.TOTALAREA;      // vs HEATEDAREA = under air
+      if(_n(_la.MAXSTORIES)) _la.__stories=_la.MAXSTORIES;
+      if(_n(_la.BEDROOMS))   _la.__beds=_la.BEDROOMS;
+      if(_n(_la.BATHROOMS))  _la.__baths=_la.BATHROOMS;
+      /* Amenity flags are String, and the real values aren't documented — could be Y/N, blank, or a
+         description like "Screened". So: treat an explicit negative as absent, show anything else
+         verbatim rather than assuming a format and silently dropping a real value. */
+      const _yes=v=>{ const x=_t(v); if(!x) return null;
+        if(/^(n|no|none|false|0)$/i.test(x)) return null;
+        return /^(y|yes|true|1)$/i.test(x) ? 'Yes' : x; };
+      const _amen=[];
+      [['Pool','POOL'],['Garage','GARAGE'],['Carport','CARPORT'],
+       ['Boat dock','BOATDOCK'],['Seawall','SEAWALL']].forEach(function(p){
+        const v=_yes(_la[p[1]]); if(v) _amen.push(v==='Yes'?p[0]:p[0]+' ('+v+')');
+      });
+      if(_amen.length) _la.__amenities=_amen.join(' · ');
+
+      // ---- permit-routing + provenance ----
+      if(_t(_la.FIREDISTDE)) _la.__fireDist=_t(_la.FIREDISTDE);
+      if(_t(_la.Property_URL) && /^https?:/i.test(_t(_la.Property_URL))) _la.__apprUrl=_t(_la.Property_URL);
+      // The appraiser's own stated lot dimensions — a cross-check on the geometry-derived extent.
+      if(_n(_la.FRONTAGE) && _n(_la.DEPTH)) _la.__statedDims=Math.round(_la.FRONTAGE)+' × '+Math.round(_la.DEPTH)+' ft';
+      if(_n(_la.MAINTDATE)){ try{ const _d=new Date(Number(_la.MAINTDATE));
+        if(_d.getUTCFullYear()>2000) _la.__maintDate=_d.toISOString().slice(0,10); }catch(e){} }
+      // New construction in progress: the N* fields populate before the main ones roll over.
+      if(_n(_la.NMINBUILTY)) _la.__newConstrYr=_la.NMINBUILTY;
+      /* MUNICODE is the appraiser's own municipality code and would be the authoritative answer to
+         the Bonita-mailing-address / Estero-jurisdiction problem. Surfaced RAW because I don't have
+         Lee's code→name table; don't read a name into it. Worth capturing so the table can be built
+         from real lookups. */
+      if(_t(_la.MUNICODE)) _la.__municode=_t(_la.MUNICODE);
     }
     // Pinellas' ParcelPropertyInfo layer has no single "just value" field — only JUST_BUILDING +
     // JUST_LAND split out, plus CNTY_TAXABLE_VALUE (taxable, not market). Sum land+building into a
