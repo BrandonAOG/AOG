@@ -847,7 +847,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   <div class="card">
     <div class="card-head">
       <div class="card-title">Pool Panel Feeder Calculation</div>
-      <div class="card-sub">NEC 680 · Largest continuous motor @ 125% (NEC 430.24) · Phase A &amp; B split · Pool VA included in Step 3</div>
+      <div class="card-sub">NEC 680 · Feeder @ 125% continuous · Step 3 takes nameplate · Phase A &amp; B split</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;margin-top:4px;">
         <label class="chk-row" style="margin-bottom:0;">
           <input type="checkbox" id="has_pool" checked onchange="calc()">
@@ -952,7 +952,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
       </div>
       <div class="help-sec">
         <h3>Pool Panel Tab</h3>
-        <p>Sizes the feeder from the main panel to the pool sub-panel. The largest continuous motor (pump or heater) is multiplied by 125% per NEC 430.24. 120V loads (lights) appear on Phase A only. All 240V loads split evenly. The pool sub-panel VA is also included in the main service demand via Step 3.</p>
+        <p>Sizes the feeder from the main panel to the pool sub-panel. <strong>The whole panel is taken at 125%.</strong> <strong>430.24</strong> would allow 125% on the largest motor plus 100% of the rest, but pool equipment runs for hours at a time, so every leg is treated as a continuous load under <strong>215.2(A)(1)</strong>. That is always at or above the 430.24 minimum, and it is a rule a tech can repeat without arithmetic. The Phase A / Phase B amps shown are <em>raw</em> — what the panel actually sees — and the <strong>feeder wire and panel rating</strong> carry the 125%. 120V loads (lights) appear on Phase A only; all 240V loads split evenly.</p><p><strong>Step 3 takes the pool panel at nameplate, 100%.</strong> The 125% is a conductor-sizing rule and does not belong in a 220.82 load calculation — the same reason the EV charger is counted at nameplate here rather than at its 625.41 branch-circuit figure. Sizing the wire and stating the load are two different questions, and only the wire gets the multiplier.</p>
       </div>
       <div class="help-sec">
         <h3>Conductor Sizing</h3>
@@ -2304,11 +2304,6 @@ function calc(){
   // Total pool sub-panel feeder VA = sum of all pool loads
   // Per NEC, the feeder must carry the total demand of the sub-panel
   // Pool phase currents (raw VA/120, NO 125% multiplier — that's for conductor sizing)
-  // Largest continuous motor calc for conductor sizing only
-  var contArr_=[pmVA240_,heaterVA_].filter(function(x){return x>0;});
-  var largest_=contArr_.length?Math.max.apply(null,contArr_):0;
-  var restCont_=contArr_.reduce(function(a,b){return a+b;},0)-largest_;
-  var contAdj240_=largest_*1.25+restCont_;  // used for conductor sizing only
   var blowerVolt_=parseInt(gs('pvolt_blower'))||240;
   var blowerPhA_=(blowerVolt_===120)?blowerVA_:(blowerVA_/2);
   var blowerPhB_=(blowerVolt_===120)?0:(blowerVA_/2);
@@ -2316,21 +2311,36 @@ function calc(){
   var phI_raw=pmVA240_/2 + pmVA120_ + heaterVA_/2 + blowerPhA_ + lightVA_ + pncVA240_/2 + pncVA120_;
   var phJ_raw=pmVA240_/2 + heaterVA_/2 + blowerPhB_ + pncVA240_/2;
   var poolPhA_=phI_raw/120, poolPhB_=phJ_raw/120;
-  // Feeder sizing amps = with 125% on largest continuous motor (NEC 430.24)
-  var phI_feeder=contAdj240_/2 + pmVA120_*1.25 + blowerPhA_ + lightVA_ + pncVA240_/2 + pncVA120_ + pexVA240_/2 + pexVA120_;
-  var phJ_feeder=contAdj240_/2 + blowerPhB_ + pncVA240_/2 + pexVA240_/2;
+  // Feeder sizing amps — the WHOLE pool panel at 125%, not just the largest
+  // motor. 430.24 (125% of the largest motor, 100% of the rest) is the floor,
+  // not the ceiling; pool equipment runs for hours at a stretch, so every leg is
+  // taken as a continuous load under 215.2(A)(1). Always >= the 430.24 minimum,
+  // and it keeps the rule a tech can repeat: the pool panel is 125%.
+  var POOL_CONT=1.25;
+  var phI_base=phI_raw + pexVA240_/2 + pexVA120_;
+  var phJ_base=phJ_raw + pexVA240_/2;
+  var phI_feeder=phI_base*POOL_CONT;
+  var phJ_feeder=phJ_base*POOL_CONT;
   // phI_feeder = per-phase VA (half of each 240V load)
   // Full feeder VA = max leg amps × 240V = (max per-phase VA / 120) × 240
-  var poolFdrVA=Math.max(phI_feeder,phJ_feeder)/120*240;  // full 240V feeder VA for Step 3
+  var poolFdrVA=Math.max(phI_feeder,phJ_feeder)/120*240;  // feeder sizing only — carries the 125%
+  // What Step 3 gets is the pool panel's NAMEPLATE total, at 100%. The 125% is a
+  // conductor-sizing rule (215.2(A)(1) / 430.24) and has no place in a 220.82
+  // load calculation — the same reason the EV charger is taken at nameplate here
+  // rather than at the 625.41 branch-circuit figure. Sizing the wire and stating
+  // the load are two different questions; only the wire gets the multiplier.
+  var poolNameplateVA = pmVA240_ + pmVA120_ + heaterVA_ + blowerVA_ + lightVA_
+                      + pncVA240_ + pncVA120_ + pexVA240_ + pexVA120_;
   var tc_pool=document.getElementById('tot_pool_panel');
-  if(tc_pool) tc_pool.textContent=gc('mgd_pool')?'MGD':fmt(Math.round(poolFdrVA));
+  if(tc_pool) tc_pool.textContent=gc('mgd_pool')?'MGD':fmt(Math.round(poolNameplateVA));
 
   // ── Step 3 ──
   // Managed pool panel: excluded from the service demand, but poolFdrVA itself
   // is untouched so the Pool tab still sizes the sub-feeder and breaker.
   var poolManaged=gc('mgd_pool');
-  window.AOG_POOLVA=poolFdrVA;
-  var totApp=(poolManaged?0:poolFdrVA), totNeut120=0, zeroVA=[];  // zeroVA: qty set but VA is 0  // pool panel already included
+  window.AOG_POOLVA=poolNameplateVA;
+  window.AOG_POOLFDR=poolFdrVA;
+  var totApp=(poolManaged?0:poolNameplateVA), totNeut120=0, zeroVA=[];  // zeroVA: qty set but VA is 0  // pool panel already included
   for(var i=0;i<APPLS.length;i++){
     var a=APPLS[i];
     if(gc('mgd_'+a.id)){ var tcM=document.getElementById('tot_'+a.id); if(tcM) tcM.textContent='MGD'; continue; }
@@ -2909,14 +2919,14 @@ function calc(){
     +'<div class="calc-line"><span>Blower</span><span class="cv">'+fmt(blowerVA_)+' VA</span></div>'
     +'<div class="calc-line"><span>Pool Light(s) — 120V, Phase A only</span><span class="cv">'+fmt(lightVA_)+' VA</span></div>'
     +(pncVA_total>0?'<div class="calc-line"><span>Non-continuous loads</span><span class="cv">'+fmt(pncVA_total)+' VA</span></div>':'')
-    +'<div class="calc-line" style="border-top:1px solid var(--border);margin-top:4px;padding-top:4px;"><span>Largest continuous (NEC 430.24)</span><span class="cv">'+fmt(largest_)+' × 1.25 = '+fmt(largest_*1.25)+' VA</span></div>'
+    +'<div class="calc-line" style="border-top:1px solid var(--border);margin-top:4px;padding-top:4px;"><span>Continuous factor — whole panel (215.2(A)(1))</span><span class="cv">× 1.25</span></div>'
     +'<div class="calc-line"><span><strong>Phase A load (display)</strong></span><span class="cv"><strong>'+fmt(phI_)+' VA ÷ 120 = '+poolPhA.toFixed(2)+' A</strong></span></div>'
     +'<div class="calc-line"><span><strong>Phase B load (display)</strong></span><span class="cv"><strong>'+fmt(phJ_)+' VA ÷ 120 = '+poolPhB.toFixed(2)+' A</strong></span></div>'
     +'<div class="calc-line"><span>Feeder sizing amps (w/ 125%)</span><span class="cv">'+poolFeederMax.toFixed(2)+' A</span></div>'
     +'<div class="calc-line"><span>Min. feeder wire (NEC 310.16 75°C)</span><span class="cv">'+poolWire(poolFeederMax,isAl)+'</span></div>'
     +'<div class="calc-line"><span>Min. panel breaker</span><span class="cv">'+poolSvc+' A</span></div>'
     +'<div class="calc-line"><span>Pool EGC (NEC 250.122)</span><span class="cv">'+egcWire(poolSvc,isAl)+'</span></div>'
-    +'<div class="calc-line"><span>Pool feeder VA → Step 3</span><span class="cv">'+fmt(Math.round(poolFdrVA))+' VA</span></div>';
+    +'<div class="calc-line" style="border-top:1px solid var(--border);margin-top:4px;padding-top:4px;"><span><strong>Pool panel nameplate → Step 3</strong> <span style="color:var(--text3);">(100% — the 125% sizes wire, not the load calc)</span></span><span class="cv"><strong>'+fmt(Math.round(poolNameplateVA))+' VA</strong></span></div>';
 
   aogRoomVis();
   if(typeof aogBlankZeros==='function') aogBlankZeros();
