@@ -3386,6 +3386,9 @@ function buildReportHTML(){
 
   // ── Cooking ──
   var cookLines = [];
+  // Structured counterpart to cookLines, kept so the Step 5 summary can name the
+  // appliance types without parsing the display labels back apart.
+  var cookMeta = [];
   for(var n=1;n<=ctCount;n++){
     var ci=document.getElementById('ci_cooktop_'+n); if(!ci) continue;
     var selck=document.getElementById('sel_cooktop_'+n);
@@ -3397,7 +3400,8 @@ function buildReportHTML(){
     var isgas=gasck&&gasck.checked;
     var q=parseInt((document.getElementById('qty_cooktop_'+n)||{}).value,10); if(isNaN(q)||q<0) q=0;
     var val=q*(isgas?150:(parseInt(vael&&vael.value)||0));
-    if(val) cookLines.push({name:'Cooktop '+(isgas?'(gas 150VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
+    if(val){ cookLines.push({name:'Cooktop '+(isgas?'(gas 150VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
+      cookMeta.push({type:'cooktop', qty:q, gas:!!isgas}); }
   }
   for(var n=1;n<=ovCount;n++){
     var ci=document.getElementById('ci_oven_'+n); if(!ci) continue;
@@ -3410,7 +3414,8 @@ function buildReportHTML(){
     var isgas=gasck&&gasck.checked;
     var q=parseInt((document.getElementById('qty_oven_'+n)||{}).value,10); if(isNaN(q)||q<0) q=0;
     var val=q*(isgas?500:(parseInt(vael&&vael.value)||0));
-    if(val) cookLines.push({name:'Wall Oven '+(isgas?'(gas 500VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
+    if(val){ cookLines.push({name:'Wall Oven '+(isgas?'(gas 500VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
+      cookMeta.push({type:'wall oven', qty:q, gas:!!isgas}); }
   }
   for(var n=1;n<=rgCount;n++){
     var ci=document.getElementById('ci_range_'+n); if(!ci) continue;
@@ -3422,7 +3427,8 @@ function buildReportHTML(){
     var isgas=gasrg&&gasrg.checked;
     var q=parseInt((document.getElementById('qty_range_'+n)||{}).value,10); if(isNaN(q)||q<0) q=0;
     var val=q*(isgas?500:(parseInt(vael&&vael.value)||0));
-    if(val) cookLines.push({name:'Range '+(isgas?'(gas 500VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
+    if(val){ cookLines.push({name:'Range '+(isgas?'(gas 500VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
+      cookMeta.push({type:'range', qty:q, gas:!!isgas}); }
   }
   // Group identical cooking units into one line with ×N and summed VA
   (function(){
@@ -3597,6 +3603,51 @@ function buildReportHTML(){
   var applRows = applLines.map(function(r){
     return '<tr><td>'+r.name+'</td><td class="r">'+r.tot+' VA</td></tr>';
   }).join('');
+  // Steps 4 & 5 print one summary figure each, which leaves a reader guessing why
+  // a cooking load is 500 VA. Build a short qualifier from the same rows: the
+  // unit count when there is more than one, and the fuel when any of them is gas
+  // (a gas appliance contributes only its 120V control load, which is the whole
+  // reason the number looks small).
+  function aogQual(rows){
+    if(!rows.length) return '';
+    var units=0, gas=0, elec=0;
+    rows.forEach(function(r){
+      var m=String(r.name).match(/\u00d7\s*(\d+)/);
+      var q=m?parseInt(m[1],10):1;
+      units+=q;
+      if(/gas/i.test(r.name)) gas+=q; else elec+=q;
+    });
+    var bits=[];
+    if(units>1) bits.push('\u00d7'+units);
+    if(gas>0 && elec===0) bits.push('gas');
+    else if(gas>0)        bits.push(gas+' gas, '+elec+' electric');
+    return bits.length ? ' <span style="color:#8a6a3a;">'+bits.join(' \u00b7 ')+'</span>' : '';
+  }
+  // Cooking names the appliance types — "1 range · 2 wall ovens" tells a reader
+  // far more than "×3", and it is the difference between a Note 4 combination
+  // and three separate units. Order is fixed (range, cooktop, oven) so the line
+  // reads the same on every job.
+  function aogCookQual(meta){
+    if(!meta.length) return '';
+    var ORDER=['range','cooktop','wall oven'];
+    var bag={};
+    meta.forEach(function(m){
+      if(!m.qty) return;
+      var b=bag[m.type]||(bag[m.type]={qty:0, gas:0});
+      b.qty+=m.qty; if(m.gas) b.gas+=m.qty;
+    });
+    var parts=[];
+    ORDER.forEach(function(t){
+      var b=bag[t]; if(!b||!b.qty) return;
+      var word=b.qty>1 ? (t==='cooktop'?'cooktops':t==='range'?'ranges':'wall ovens') : t;
+      var fuel = b.gas===0 ? '' : (b.gas===b.qty ? ' (gas)' : ' ('+b.gas+' gas)');
+      parts.push(b.qty+' '+word+fuel);
+    });
+    return parts.length ? ' <span style="color:#8a6a3a;">'+parts.join(' \u00b7 ')+'</span>' : '';
+  }
+  var qualCook  = aogCookQual(cookMeta);
+  var qualDryer = aogQual(dryerLines);
+
   // dryerLines / cookLines are deliberately NOT appended here. They are not in
   // r3_tot, so printing them under Step 3 made that table fail to add up and
   // duplicated them under Steps 4 & 5. The loops above still run because they
@@ -3664,8 +3715,8 @@ function buildReportHTML(){
     <tr class="tot"><td>Step 3 Total (raw VA)</td><td class="r">${s3} VA</td></tr></table>
 
     <div class="sh">Steps 4 &amp; 5 — Cooking &amp; Dryer</div>
-    <table class="dt"><tr><td>Cooking Load <span style="color:#8a6a3a;">220.82(B)(3)b</span></td><td class="r">${s5} VA</td></tr>
-    <tr><td>Dryer Load <span style="color:#8a6a3a;">220.82(B)(3)c</span></td><td class="r">${s4} VA</td></tr></table>
+    <table class="dt"><tr><td>Cooking Load <span style="color:#8a6a3a;">220.82(B)(3)b</span>${qualCook}</td><td class="r">${s5} VA</td></tr>
+    <tr><td>Dryer Load <span style="color:#8a6a3a;">220.82(B)(3)c</span>${qualDryer}</td><td class="r">${s4} VA</td></tr></table>
   </div>
 
   <!-- Right: results -->
