@@ -905,6 +905,7 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
         <div class="chip hl"><div class="cl">Phase B Amps</div><div class="cv" id="rp_phB">—</div><div class="cu">A</div></div>
         <div class="chip gr"><div class="cl">Min. Pool Feeder</div><div class="cv" id="rp_wire">—</div><div class="cu" id="rp_mat">Copper</div></div>
         <div class="chip gr"><div class="cl">Min. Panel Rating</div><div class="cv" id="rp_panel">—</div><div class="cu">A</div></div>
+        <div class="chip gr" title="220.61(A) sizes it on the 120V loads only — 240V loads put nothing on the neutral. 215.2(A)(2) floors it at the 250.122 size for this feeder's OCPD. Shows — when the panel has no line-to-neutral load at all."><div class="cl">Pool Neutral</div><div class="cv" id="rp_neut">—</div><div class="cu">NEC 220.61</div></div>
         <div class="chip am"><div class="cl">Pool EGC</div><div class="cv" id="rp_egc">—</div><div class="cu">NEC 250.122</div></div>
       </div>
       <div class="calc-show" style="margin-top:10px;">
@@ -1179,6 +1180,23 @@ function wireSize(a,tbl){for(var i=0;i<tbl.length;i++)if(a<=tbl[i][0])return tbl
 // svcWire() now inlined in SVC_TABLE above
 // egcWire() now inlined in EGC_TABLE above
 function poolWire(a,isAl){return wireSize(a,isAl?AL75:CU75);}
+// NEC 240.4(D) — small conductors are capped by OCPD size regardless of the
+// ampacity their table row would allow. 12 AWG copper is 25 A at 75°C but may
+// never sit behind more than a 20 A breaker.
+var SMALL_OCPD_CU={'14 AWG':15,'12 AWG':20,'10 AWG':30};
+var SMALL_OCPD_AL={'12 AWG':15,'10 AWG':25};
+function ocpdCap(size,isAl){
+  var t=isAl?SMALL_OCPD_AL:SMALL_OCPD_CU;
+  return Object.prototype.hasOwnProperty.call(t,size)?t[size]:Infinity;
+}
+// Smallest conductor that carries the load AND is legal behind the chosen OCPD.
+function poolWireFor(amps,ocpd,isAl){
+  var tbl=isAl?AL75:CU75;
+  for(var i=0;i<tbl.length;i++){
+    if(amps<=tbl[i][0] && ocpdCap(tbl[i][1],isAl)>=ocpd) return tbl[i][1];
+  }
+  return tbl[tbl.length-1][1];
+}
 function minSvc(a){var s=[100,110,125,150,175,200,225,250,300,350,400,450,500,600,700,800,1000,1200,1600,2000,2500,3000,4000,5000];for(var i=0;i<s.length;i++)if(a<=s[i])return s[i];return 5000;}
 
 // Cooking: optional method uses raw VA directly (no Col C demand factor)
@@ -2340,7 +2358,14 @@ function calc(){
   var poolManaged=gc('mgd_pool');
   window.AOG_POOLVA=poolNameplateVA;
   window.AOG_POOLFDR=poolFdrVA;
-  var totApp=(poolManaged?0:poolNameplateVA), totNeut120=0, zeroVA=[];  // zeroVA: qty set but VA is 0  // pool panel already included
+  // The pool panel is NOT purely 240V. The light, any 120V pump and any 120V
+  // extra are line-to-neutral, so under 220.61(A) they unbalance the service
+  // neutral exactly like a 120V appliance in Step 3 does. They were being
+  // dropped because the whole pool feeder was treated as a single 240V load.
+  // A shed pool contributes nothing, same as it contributes nothing to Step 3.
+  var poolNeut120 = poolManaged ? 0
+                  : (pmVA120_ + lightVA_ + pncVA120_ + pexVA120_);
+  var totApp=(poolManaged?0:poolNameplateVA), totNeut120=poolNeut120, zeroVA=[];  // zeroVA: qty set but VA is 0  // pool panel already included
   for(var i=0;i<APPLS.length;i++){
     var a=APPLS[i];
     if(gc('mgd_'+a.id)){ var tcM=document.getElementById('tot_'+a.id); if(tcM) tcM.textContent='MGD'; continue; }
@@ -2899,13 +2924,35 @@ function calc(){
   var poolPhA=phI_/120, poolPhB=phJ_/120;
   // Feeder conductor: sized with 125% on largest continuous (NEC 430.24)
   var poolFeederMax=Math.max(phI_feeder,phJ_feeder)/120;
-  // Panel breaker: next standard size above display amps
-  var POOL_BREAKERS=[15,20,30,40,50,60,70,80,90,100,110,125,150,175,200,225,250,300,400];
-  var poolMax=Math.max(poolPhA,poolPhB);
+  // Panel breaker: next standard size above the 125% figure, NOT the raw amps.
+  // 215.3 sizes the feeder OCPD at 125% of the continuous load plus 100% of the
+  // non-continuous — the same basis the conductor uses. Sizing it off the raw
+  // display amps put a 50 A breaker in front of a conductor sized for 56.91 A,
+  // which is a nuisance trip on a hot afternoon, not a safety margin.
+  var POOL_BREAKERS=[15,20,25,30,35,40,45,50,60,70,80,90,100,110,125,150,175,200,225,250,300,350,400];
+  var poolMax=poolFeederMax;
   var poolSvc=POOL_BREAKERS[POOL_BREAKERS.length-1];
   for(var _i=0;_i<POOL_BREAKERS.length;_i++){if(poolMax<=POOL_BREAKERS[_i]){poolSvc=POOL_BREAKERS[_i];break;}}
+  // ── Pool feeder grounded conductor ──────────────────────────────────────
+  // 220.61(A): only the 120V loads unbalance it — every 240V load returns on the
+  // other ungrounded conductor and puts nothing on the neutral. 215.2(A)(2) then
+  // floors it at the 250.122 size for this feeder's OCPD, so it is never the
+  // scrap piece left on the truck. Carries the same 125% as the hots.
+  var poolNeutVA=pmVA120_ + lightVA_ + pncVA120_ + pexVA120_;
+  var poolNeutA=poolNeutVA/120*POOL_CONT;
+  var poolNeutFloor=egcWire(poolSvc,isAl);
+  var poolNeutWire;
+  if(poolNeutVA<=0){
+    poolNeutWire='—';                       // nothing line-to-neutral on this panel
+  } else {
+    var byLoad=poolWire(poolNeutA,isAl);
+    poolNeutWire=(sizeRank(byLoad)>=sizeRank(poolNeutFloor))?byLoad:poolNeutFloor;
+  }
+  window.AOG_POOLNEUT={va:poolNeutVA, amps:poolNeutA, wire:poolNeutWire, floor:poolNeutFloor};
+
   sv('rp_phA',poolPhA.toFixed(2));sv('rp_phB',poolPhB.toFixed(2));
-  sv('rp_wire',poolWire(poolFeederMax,isAl));
+  sv('rp_neut',poolNeutWire);
+  sv('rp_wire',poolWireFor(poolFeederMax,poolSvc,isAl));
   document.getElementById('rp_mat').textContent=isAl?'Aluminum':'Copper';
   sv('rp_panel',poolSvc+' A');
   sv('rp_egc',egcWire(poolSvc,isAl));
@@ -2923,8 +2970,12 @@ function calc(){
     +'<div class="calc-line"><span><strong>Phase A load (display)</strong></span><span class="cv"><strong>'+fmt(phI_)+' VA ÷ 120 = '+poolPhA.toFixed(2)+' A</strong></span></div>'
     +'<div class="calc-line"><span><strong>Phase B load (display)</strong></span><span class="cv"><strong>'+fmt(phJ_)+' VA ÷ 120 = '+poolPhB.toFixed(2)+' A</strong></span></div>'
     +'<div class="calc-line"><span>Feeder sizing amps (w/ 125%)</span><span class="cv">'+poolFeederMax.toFixed(2)+' A</span></div>'
-    +'<div class="calc-line"><span>Min. feeder wire (NEC 310.16 75°C)</span><span class="cv">'+poolWire(poolFeederMax,isAl)+'</span></div>'
+    +'<div class="calc-line"><span>Min. feeder wire (310.16 75°C, capped by 240.4(D))</span><span class="cv">'+poolWireFor(poolFeederMax,poolSvc,isAl)+'</span></div>'
     +'<div class="calc-line"><span>Min. panel breaker</span><span class="cv">'+poolSvc+' A</span></div>'
+    +'<div class="calc-line"><span>Neutral — 120V loads only (220.61(A))</span><span class="cv">'
+      +(poolNeutVA>0?(fmt(Math.round(poolNeutVA))+' VA → '+poolNeutA.toFixed(2)+' A → '+poolNeutWire
+        +(poolNeutWire===poolNeutFloor&&sizeRank(poolWire(poolNeutA,isAl))<sizeRank(poolNeutFloor)?' (215.2(A)(2) floor)':''))
+        :'no 120V load — no neutral required')+'</span></div>'
     +'<div class="calc-line"><span>Pool EGC (NEC 250.122)</span><span class="cv">'+egcWire(poolSvc,isAl)+'</span></div>'
     +'<div class="calc-line" style="border-top:1px solid var(--border);margin-top:4px;padding-top:4px;"><span><strong>Pool panel nameplate → Step 3</strong> <span style="color:var(--text3);">(100% — the 125% sizes wire, not the load calc)</span></span><span class="cv"><strong>'+fmt(Math.round(poolNameplateVA))+' VA</strong></span></div>';
 
@@ -3652,6 +3703,7 @@ function buildReportHTML(){
       <tr><td>Phase A</td><td class="r">${phA} A</td></tr>
       <tr><td>Phase B</td><td class="r">${phB} A</td></tr>
       <tr><td>Min. Pool Feeder Wire</td><td class="r">${pwire}</td></tr>
+      <tr><td>Min. Pool Neutral (NEC 220.61)</td><td class="r">${(window.AOG_POOLNEUT||{}).wire||'—'}</td></tr>
       <tr><td>Min. Panel Rating</td><td class="r">${ppanel}</td></tr>
       <tr><td>Pool EGC (NEC 250.122)</td><td class="r">${pegc}</td></tr>
     </table>
