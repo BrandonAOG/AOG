@@ -20319,7 +20319,7 @@ async function _runLookupInner(lat,lng,searchCtx){
       // MAP-CLICK ADDRESS FILL: when the lookup came from clicking the map (no searchCtx — typed
       // searches and suggestion clicks always pass one), reflect the clicked parcel's site address
       // into the search box, exactly like picking it from the dropdown would.
-      if(!searchCtx && _siteBox){ try{ addrEl.value=_siteBox; STORE.set('fl_addr',_siteBox); addToHistory(_siteBox); }catch(e){} }
+      if(!searchCtx && _siteBox && setAddrBox(_siteBox)) { try{ addToHistory(_siteBox); }catch(e){} }
       drawParcel(liveRes.features[0].geometry, {
         owner: det.owner?pick(_a,det.owner):null,
         pid:   det.pid?pick(_a,det.pid):null,
@@ -20495,7 +20495,8 @@ async function _runLookupInner(lat,lng,searchCtx){
     if(lsf) html += fieldRow('Lot area', lsf+' sq ft');
     if(site)     html += fieldRow('Site address', esc(site)+(siteCity?'<br>'+esc(siteCity):''));
     // MAP-CLICK ADDRESS FILL (roll-fallback counties): same as the live branch above.
-    if(!searchCtx && site){ try{ const _boxAddr=[site,siteCity].filter(Boolean).join(', '); addrEl.value=_boxAddr; STORE.set('fl_addr',_boxAddr); addToHistory(_boxAddr); }catch(e){} }
+    if(!searchCtx && site){ const _boxAddr=[site,siteCity].filter(Boolean).join(', ');
+      if(setAddrBox(_boxAddr)) { try{ addToHistory(_boxAddr); }catch(e){} } }
     if(mail)     html += fieldRow('Owner mailing', esc(mail)+(mailCity?'<br>'+esc(mailCity):''));
     if(sec||twn||rng) html += fieldRow('Sec-Twn-Rng', esc([sec,twn,rng].filter(Boolean).join(' - ')));
     if(jv)  html += fieldRow('Just (market) value'+(ay?' '+esc(ay):''), jv);
@@ -22952,6 +22953,11 @@ function geocoderMatchBanner(searchedLabel, snapMatched, srcLabel){
 
 async function doSearch(){
   const q=document.getElementById('addr').value.trim();
+  /* The typed text has now been consumed by this search, so release the box: a subsequent MAP CLICK
+     should still be able to fill it with the clicked parcel's address, which is how it behaved
+     before the typing guard existed. Without this reset the guard would latch on for the whole
+     session and quietly break map-click address fill. */
+  _addrUserTyped=false;
   if(!q) return;
   const mySeq=newSearch();                       // cancel any search still loading
   const stale=()=> mySeq!==searchSeq;            // true if a NEWER search has started
@@ -23076,6 +23082,26 @@ document.getElementById('go').onclick=doSearch;
 
 /* ---------- Address autocomplete (suggest as you type) ---------- */
 const addrEl=document.getElementById('addr');
+/* 🩹 "I start typing and it refreshes with what was already loading."
+   restore() ends with `await runLookup(saved lat/lng)`, but that sits BEHIND
+   `await Promise.all([autoLoadTerritories(), autoLoadGas()])` — two large geojson downloads. On a
+   phone those take seconds, so the restored lookup lands well after the page is interactive. And a
+   lookup with no searchCtx writes the resolved site address back into the box (the map-click fill).
+   Net effect: you load the page, start typing, the files land, and your half-typed address is
+   replaced by the previous parcel's. Nothing about it looked like a bug in the search box, which is
+   why it was hard to describe.
+   This flag makes the box's ownership explicit: once the user has typed in it, nothing background
+   is allowed to overwrite it. Set on real input only — not focus, since tapping the field and
+   deciding not to type shouldn't block a legitimate restore. */
+let _addrUserTyped=false;
+addrEl.addEventListener('input',()=>{ _addrUserTyped=true; });
+/* Every automated write to the box goes through here. Returns false when the user owns the field. */
+function setAddrBox(v, opts){
+  if(!v) return false;
+  if(_addrUserTyped && !(opts && opts.force)) return false;
+  try{ addrEl.value=v; STORE.set('fl_addr',v); if(typeof updateClearBtn==='function') updateClearBtn(); }catch(e){}
+  return true;
+}
 const sugEl=document.getElementById('suggest');
 let sugItems=[], sugActive=-1, sugSeq=0, sugTimer=null, lastSugQ='', addrSaveTimer=null;
 
@@ -23437,6 +23463,7 @@ addrEl.addEventListener('input', updateClearBtn);
 clearBtn.addEventListener('mousedown', e => {
   e.preventDefault(); // don't blur the input
   addrEl.value = '';
+  _addrUserTyped = false;      // box is empty — nothing left to protect
   updateClearBtn();
   hideSuggest();
   hideHistory();
@@ -24162,7 +24189,13 @@ window.Sheet=Sheet;
   const zu=STORE.get('fl_zoning_url');
   if(zu){ zoningSource={url:zu}; }   // override panel removed; a previously-saved URL still applies if present
   const loc=STORE.get('fl_loc');
-  if(loc){ try{ const o=JSON.parse(loc); if(o&&typeof o.lat==='number'){ map.setView([o.lat,o.lng], o.z||18); await runLookup(o.lat,o.lng); } }catch(e){} }
+  if(loc){ try{ const o=JSON.parse(loc); if(o&&typeof o.lat==='number'){
+    map.setView([o.lat,o.lng], o.z||18);
+    /* Restore the MAP view always — that's cheap and unobtrusive. But skip the lookup once the user
+       has started typing: they're on their way somewhere else, and this would fire a full card
+       render for the old parcel that their own search then has to supersede. */
+    if(!_addrUserTyped) await runLookup(o.lat,o.lng);
+  } }catch(e){} }
 })();
 
 /* ---------- Statewide refresh date + live-wired toggles (footer) ---------- */
