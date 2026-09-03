@@ -52,7 +52,6 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="preconnect" href="https://geocode.arcgis.com" crossorigin>         <!-- geocoder #2 (Esri World) — same, and the strongest on rural addresses -->
 <link rel="dns-prefetch" href="https://gismapserver.leegov.com">              <!-- Lee parcels + building footprints -->
 <link rel="dns-prefetch" href="https://agis3.charlottecountyfl.gov">           <!-- Charlotte parcels + footprints -->
-<link rel="dns-prefetch" href="https://ags.colliergov.net">                  <!-- county flood cross-check queries -->
 <link rel="dns-prefetch" href="https://gis.asce.org">                        <!-- ASCE 7-22 Risk Cat II design wind speed (live) -->
 <link rel="dns-prefetch" href="https://services6.arcgis.com">                <!-- Hernando LDC 2026 zoning-district layer -->
 <link rel="dns-prefetch" href="https://www25.swfwmd.state.fl.us">             <!-- SWFWMD parcel roll: Citrus + Sumter (also Polk family) -->
@@ -2330,10 +2329,18 @@ const COUNTY_FLOOD_LIVE = {
     urls:[
       /* Collier's own AGOL-hosted DFIRM polygons — 57,385 features carrying FLD_ZONE /
          ZONE_SUBTY / STATIC_BFE, the same field names FEMA uses, so detectFloodZoneField()
-         handles it unchanged. Preferred over the ags.colliergov.net MapServer below, which is a
-         CACHED map service and less reliable to query. Verified Aug 2026. */
-      "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FEMA24_FloodZones/FeatureServer/0/query",
-      "https://ags.colliergov.net/arcgis/rest/services/Operational/FemaFloodZones/MapServer/2/query" // legacy fallback — cached service
+         handles it unchanged. Now the ONLY entry — see the removal note below. Verified Aug 2026. */
+      "https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FEMA24_FloodZones/FeatureServer/0/query"
+      /* ⚰️ REMOVED 2026-09-01: a second entry here pointed at
+             https://ags.colliergov.net/arcgis/rest/services/Operational/FemaFloodZones/MapServer/2/query
+         That whole DOMAIN is gone — ags.colliergov.net returns DNS_PROBE_FINISHED_NXDOMAIN, i.e. no
+         record exists at all. Collier retired colliergov.net in favour of colliercountyfl.gov.
+         It never showed up as a bug because it was the FALLBACK: the AGOL layer above always
+         answered first. But it cost a dead DNS lookup every time the primary returned no features,
+         and it made an on-prem host look probe-able when there is nothing there.
+         Do not re-add it. If a second Collier flood source is ever wanted, the same AGOL org also
+         publishes FEMA24_Panels, FEMA24_BFE and FEMA24_LiMWA — all three already wired elsewhere in
+         this file. */
     ]},
   /* Lee County GIS "Open Data Flood Hazard" — the county's own adopted FIRM polygons (layer 0),
      alongside FIRM Panels (1), Floodway (2) and Undeveloped Coastal Barrier (3). ✅ CORS-open
