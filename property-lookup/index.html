@@ -41,6 +41,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <link rel="preconnect" href="https://basemap.nationalmap.gov" crossorigin>   <!-- USGS Topo basemap tiles -->
 <link rel="preconnect" href="https://elevation.nationalmap.gov" crossorigin> <!-- USGS 3DEP ground elevation: stalls on a cold/dead socket, so hold one open -->
 <link rel="preconnect" href="https://gis.fdot.gov" crossorigin>              <!-- FDOT city/county boundaries: only 2 calls but they gate zoning + the appraiser link -->
+<link rel="preconnect" href="https://services1.arcgis.com" crossorigin>      <!-- FDEP district mirror of the FDOR parcel roll: now the FIRST roll attempt, so warm the socket -->
 <link rel="preconnect" href="https://mapservices.weather.noaa.gov" crossorigin> <!-- NWS warnings / NOAA overlays -->
 <link rel="preconnect" href="https://tiledimageservices2.arcgis.com" crossorigin> <!-- Collier 2026 LERC tiles -->
 
@@ -1446,6 +1447,17 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
    ============================================================ */
 const EP = {
   parcel : "https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query",
+  /* ⚡ DISTRICT MIRROR OF THE SAME FDOR ROLL (found + validated 2026-09-02).
+     Florida DEP republishes the FDOR cadastral split by district. Identical field set —
+     PARCEL_ID, OWN_NAME, PHY_ADDR1, JV, LND_VAL, LND_SQFOOT, DOR_UC, ACT_YR_BLT, EFF_YR_BLT,
+     TOT_LVG_AR, SALE_PRC1/2 — but a fraction of the statewide layer's feature count, so the
+     point query has far less to scan.
+     Verified by querying folio 14010360001 (112 1st Ave N, Naples) and getting the same record
+     the statewide layer returns: OWN_NAME MILLAR, TOT_LVG_AR 9808, JV 9288968.
+     Used as a FIRST ATTEMPT only, never a replacement: it covers the south district, and this app
+     serves all 67 counties. A miss here simply falls through to the statewide layer, which needs no
+     district table to be maintained — "no feature" and "not covered" both take the same path. */
+  parcelSouth : "https://services1.arcgis.com/nRHtyn3uE1kyzoYc/arcgis/rest/services/FDORCadastral_SouthDistrict/FeatureServer/0/query",
   flood  : "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query",
   city   : "https://gis.fdot.gov/arcgis/rest/services/Admin_Boundaries/FeatureServer/7/query",
   county : "https://gis.fdot.gov/arcgis/rest/services/Admin_Boundaries/FeatureServer/5/query",
@@ -1508,7 +1520,21 @@ function appraiserParcelLink(countyName, pid){
     return _p ? `https://geoweb.martin.fl.us/general/?pcn=${encodeURIComponent(_p)}` : home;
   }
   switch(c){
-    case 'COLLIER':  return digits?`https://www.collierappraiser.com/main_search/RecordDetail.html?FolioID=${digits}`:home;
+    /* ⚠️ COLLIER HAS NO DEEP LINK. TESTED 2026-09-02, ALL FOUR FORMS FAIL:
+           main_search/RecordDetail.html?FolioID=…   (what used to be here)  → greeting page
+           Main_Search/ParcelDetail.html?FolioID=…   (real record filename)   → greeting page
+           main_search/ParcelDetail.html?FolioID=…   (lowercase folder)       → greeting page
+           index.html?page=Main_Search/ParcelDetail.html&FolioID=…            → URL sticks, greeting page
+       Reading the live frame while a record was on screen gives
+           https://www.collierappraiser.com/Main_Search/ParcelDetail.html?FolioID=14010360001
+       so the record genuinely has that address — but opening it cold redirects home. The frameset
+       (view-source on the root) contains NO <script> at all, so the ?page= parameter is never read;
+       the content frame is hardcoded to greeting.html. The record only renders inside a session the
+       Property Search establishes.
+       So this returns the HOME page deliberately, and the card labels the link honestly rather than
+       promising a parcel it can't reach. The old value was no better — it just looked deliberate.
+       Scraping is out too: the page 408s through the CORS proxy (proxy itself verified working). */
+    case 'COLLIER':  return home;
     case 'LEE':      return `https://www.leepa.org/Search/PropertySearch.aspx`;            // STRAP search
     case 'CHARLOTTE':return digits?`https://www.ccappraiser.com/Show_parcel.asp?acct=${digits}`:home;
     case 'SARASOTA': return digits?`https://www.sc-pa.com/propertysearch/parcel/details/${digits}`:home;
@@ -18365,6 +18391,9 @@ function renderParcelGeneric(a, d){
        one-glance answer about which source produced it. window.__livSource carries the same data. */
     try{ const _ls=window.__livSource;
       if(_ls && _ls.source){
+        /* No staleness warning here on purpose. Living area only changes when someone permits an
+           addition, so the figure barely moves — an age nag on every lookup would be noise about a
+           field that is almost never wrong. The build date in the source line below is enough. */
         const _warn=/unreconciled/.test(_ls.source);
         h += `<div class="note${_warn?' warnbox':''}" style="font-size:10.5px">Living area source: `
           + `<b>${esc(_ls.source)}</b>`
@@ -18617,14 +18646,24 @@ async function _runLookupInner(lat,lng,searchCtx){
          behind the breaker.
      So a slow roll costs nothing and still fills the card; a dead roll costs one non-blocking
      attempt and the card says which fields are missing and why. */
+  /* Try the smaller district mirror first, then the statewide layer. Two independent hosts, so a
+     stall on one no longer costs the whole roll — which was the actual failure mode (four 4-second
+     timeouts in one measured session), not the data being unavailable. See EP.parcelSouth. */
   const startParcelRoll = (wired) => {
-    return _timed(
-      wired ? 'parcel (state roll · footnote)' : 'parcel (state roll)',
-      arcQueryRetry(EP.parcel, lat, lng, '*', true,
-        wired ? 4000 : PARCEL_TIMEOUT,     // shorter window when it's only a footnote
-        wired ? 1    : 3,                  // …and a single pass, not three
-        !wired)                            // abort-retry only matters for the patient path
-    ).then(v=>{ noteRollResult(!!(v && !v.__err && v.features)); return v; },
+    const label = wired ? 'parcel (state roll · footnote)' : 'parcel (state roll)';
+    const ok = v => !!(v && !v.__err && v.features && v.features[0]);
+    const attempt = (url, tmo, tries) =>
+      arcQueryRetry(url, lat, lng, '*', true, tmo, tries, !wired, false)
+        .catch(e => ({ __err: e.message }));
+    return _timed(label, (async () => {
+      // Short first pass: the district layer is small, so a slow answer here means a stall.
+      if(EP.parcelSouth){
+        const fast = await attempt(EP.parcelSouth, wired ? 2500 : 3500, wired ? 1 : 2);
+        if(ok(fast)){ _timings.push({label:'  ↳ via DEP district mirror', ms:0}); return fast; }
+      }
+      return attempt(EP.parcel, wired ? 4000 : PARCEL_TIMEOUT, wired ? 1 : 3);
+    })()
+    ).then(v=>{ noteRollResult(ok(v)); return v; },
            e=>{ noteRollResult(false); return {__err:e.message}; });
   };
   /* ⚡ FEMA STALLS, IT DOESN'T CRAWL (measured 2026-09-01, 12 identical queries from the console).
@@ -19044,7 +19083,24 @@ async function _runLookupInner(lat,lng,searchCtx){
   html += fieldRow('Municipality', cityName?esc(titleCase(cityName))
                     :'<span class="muted">Unincorporated (no city)</span>');
   html += fieldRow('Coordinates', `${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-  if(paUrl) html += `<a class="palink" href="${paUrl}" target="_blank" rel="noopener">↗ Open ${esc(titleCase(countyName))} County Property Appraiser</a>`;
+  if(paUrl){
+    /* Counties whose appraiser site cannot be addressed per-parcel (see the PA switch). Saying
+       "Open the appraiser" is fine; saying it opens THIS parcel would be a lie, and the user would
+       assume the tool was broken rather than the county's site. Show the folio to paste instead. */
+    const _noDeep = new Set(['COLLIER']);
+    const _nd = _noDeep.has(norm(countyName||''));
+    html += `<a class="palink" href="${paUrl}" target="_blank" rel="noopener">↗ Open ${esc(titleCase(countyName))} County Property Appraiser`
+         + (_nd ? ' <span class="muted" style="font-size:10.5px">(home page)</span>' : '') + `</a>`;
+    if(_nd){
+      // __parcelMeta has no pid; the folio lives on __exportData.parcelId (set in renderParcelGeneric).
+      const _fol = (window.__exportData && window.__exportData.parcelId)
+        ? String(window.__exportData.parcelId) : null;
+      html += `<div class="note" style="font-size:10.5px">Collier's site can't be linked to a single `
+        + `parcel — its record page only opens inside a session its own Property Search creates. `
+        + `Use <b>Property Search</b> there and paste the folio`
+        + (_fol ? `: <b>${esc(_fol)}</b>` : ' shown above') + `.</div>`;
+    }
+  }
   html += `</div></div>`;
 
   /* ---- EARLY FIRST PAINT --------------------------------------------------------------------
@@ -19428,7 +19484,13 @@ async function _runLookupInner(lat,lng,searchCtx){
       let _livVal=null, _livSrc=null;
       if(norm(countyName)==='COLLIER' && _isNum(_fileLiv)){
         // Collier's file is the appraiser's own under-air figure — authoritative, no min().
-        _livVal=_fileLiv; _livSrc='compact file (appraiser under-air)';
+        /* Show the file's BUILD DATE, not just "compact file". A bundled file can't refresh itself,
+           so its age has to be on screen or it silently drifts — the roll's date is visible via the
+           roll rows, but this one had nothing. Living area only changes when someone builds, so a
+           few months old is fine; a few YEARS old is not, and now you can tell which. */
+        _livVal=_fileLiv;
+        _livSrc='compact file (appraiser under-air, built '
+          + String(typeof DATA_VERSION==='string' ? DATA_VERSION.replace(/[a-z]$/,'') : '?') + ')';
       } else if(_isNum(_fileLiv) && _isNum(_rollLivL)){
         // Heated area is always <= an adjusted/under-roof figure and <= a multi-structure sum, so
         // take the SMALLER. Corrects the file when IT carries the gross figure and the roll when IT
@@ -19438,7 +19500,9 @@ async function _runLookupInner(lat,lng,searchCtx){
         _livVal=_small; _livSrc='smaller of compact file & state roll';
         if(_big-_small>1) window.__livOverride={shown:_small, other:_big};
       } else if(_isNum(_fileLiv)){
-        _livVal=_fileLiv; _livSrc='compact file (roll unavailable — unreconciled)';
+        _livVal=_fileLiv; _livSrc='compact file (built '
+          + String(typeof DATA_VERSION==='string' ? DATA_VERSION.replace(/[a-z]$/,'') : '?')
+          + ', roll unavailable — unreconciled)';
       } else if(_isNum(_rollLivL)){
         _livVal=_rollLivL; _livSrc='state roll';
       }
