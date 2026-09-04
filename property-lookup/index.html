@@ -18626,6 +18626,10 @@ async function _runLookupInner(lat,lng,searchCtx){
   }).catch(()=>{});
 
   _activeTab=null;    // a new location starts fresh; the tab is only sticky WITHIN one lookup
+  /* Reset the paint cache. Without this, searching the SAME address twice would produce identical
+     markup, paintResults() would skip the DOM write as a no-op, and the panel would keep showing
+     the "Querying…" status forever. */
+  _lastPaintHTML='';
   results.innerHTML = setStatus('busy','Querying official GIS services…');
   if(window.Sheet) Sheet.setState('full');   // bring results into view on mobile
 
@@ -19114,12 +19118,11 @@ async function _runLookupInner(lat,lng,searchCtx){
      await was gating the old first paint, so a Cape Coral search felt slow; this fixes it. The two
      paints further down (parcel+flood, then the full panel) replace this as their data arrives. */
   if(myId===runId){
-    results.innerHTML = '<div class="cardflow">' + html
+    paintResults('<div class="cardflow">' + html
       + '<div class="card noprint" data-notab="1"><div class="cb"><div class="freshline">'
       + '<span class="badge live">● LOADING</span> pulling parcel, flood &amp; site detail…'
-      + '</div></div></div></div>';
+      + '</div></div></div></div>');
     document.body.classList.add('has-results');
-    tabifyResults(results);
   }
 
   /* ---- Parcel / owner : prefer LIVE feed (manual paste OR pre-wired county), else statewide roll ---- */
@@ -20645,14 +20648,13 @@ async function _runLookupInner(lat,lng,searchCtx){
        strip. FEMA's NFHL is the slowest of the remaining sources and the one users watch for, so
        showing the card outline with its status stops the panel from appearing to be missing it.
        The full render below replaces this card in place once pFlood resolves. */
-    results.innerHTML = '<div class="cardflow">' + html
+    paintResults('<div class="cardflow">' + html
       + skeletonCard('FLD','FEMA Flood Hazard','FEMA National<br>Flood Hazard Layer',
                      'querying the effective NFHL for this parcel…')
       + '<div class="card noprint" data-notab="1"><div class="cb"><div class="freshline">'
       + '<span class="badge live">● LOADING</span> pulling wind, zoning, permits &amp; utilities…'
-      + '</div></div></div></div>';
+      + '</div></div></div></div>');
     document.body.classList.add('has-results');
-    tabifyResults(results);
   }
 
   /* ---- Flood ---- */
@@ -21120,12 +21122,11 @@ async function _runLookupInner(lat,lng,searchCtx){
      whole panel until the slower enrichment lookups (wind, zoning, permits, utilities) finish.
      The full render below replaces this; nothing is lost, the search just *loads* in ~2s. */
   if(myId===runId){
-    results.innerHTML = '<div class="cardflow">' + html
+    paintResults('<div class="cardflow">' + html
       + '<div class="card noprint" data-notab="1"><div class="cb"><div class="freshline">'
       + '<span class="badge live">● LOADING</span> pulling wind design, zoning, permits &amp; utilities…'
-      + '</div></div></div></div>';
+      + '</div></div></div></div>');
     document.body.classList.add('has-results');
-    tabifyResults(results);
   }
 
   /* ---- Wind Design (FBC 8th Ed. / ASCE 7-22): site design wind speed + calculation ----
@@ -21829,11 +21830,10 @@ async function _runLookupInner(lat,lng,searchCtx){
 
   const _bc  = buildBreadcrumb(countyName, cityName, window.__printMeta);
   const _sum = buildSummaryStrip(window.__exportData, window.__printMeta);
-  results.innerHTML = setStatus('ok','Done — '+(new Date()).toLocaleTimeString())
-    + _bc + _sum + '<div class="cardflow">' + html + '</div>';
+  paintResults(setStatus('ok','Done — '+(new Date()).toLocaleTimeString())
+    + _bc + _sum + '<div class="cardflow">' + html + '</div>', {final:true});
   wireRollRetry();          // the buttons only exist once the cards above are in the DOM
   wireFloodRetry();
-  tabifyResults(results, {final:true});
   /* ---- FDEM NEIGHBOUR AUTO-RUN (non-blocking) --------------------------------------------------
      Automatically check the single CLOSEST parcel through the statewide registry a moment after
      the panel paints — a 📝 drops if it holds a certificate. Uses the exact same polite machinery
@@ -21919,6 +21919,26 @@ function buildSummaryStrip(ed, meta){
        a second later. _activeTab remembers it.
      · the "● LOADING" strips must not become tab content. They carry data-notab and stay in normal
        flow above the panels, so they read as status rather than as a card filed under Site. */
+/* ── PAINTING THE PANEL WITHOUT THE FLICKER ────────────────────────────────────────────────────
+   A lookup rebuilds #results FOUR times: an early paint, one after the parcel card, one after the
+   flood card, and the final render. #results is itself the scroll container (.body{overflow-y:auto}),
+   so every assignment to innerHTML resets scrollTop to 0 — read a card, the next paint lands, and
+   you're snapped back to the top. Four times per search. That's the "flicker".
+   The paints themselves are worth keeping: they're why the panel is usable at 1.3 s instead of 4 s.
+   What isn't worth keeping is losing your place. This restores the scroll offset synchronously in
+   the same frame, before the browser has a chance to present the intermediate state, and skips the
+   work entirely when the markup hasn't actually changed. */
+let _lastPaintHTML='';
+function paintResults(html, opts){
+  const el=document.getElementById('results'); if(!el) return;
+  if(html===_lastPaintHTML) return;          // identical markup: don't touch the DOM at all
+  const top=el.scrollTop;
+  _lastPaintHTML=html;
+  el.innerHTML=html;
+  try{ tabifyResults(el, opts); }catch(e){}
+  // Only restore if there's still something to scroll — otherwise this clamps to 0 anyway.
+  if(top>0 && el.scrollHeight>el.clientHeight) el.scrollTop=top;
+}
 let _activeTab=null;
 /* The tab roster is FIXED — the same eight categories on every lookup — so the bar should appear
    whole from the first paint instead of growing a tab at a time as cards land. Any category with no
