@@ -21014,9 +21014,19 @@ async function _runLookupInner(lat,lng,searchCtx){
               + `</div></div>`;
             const b=document.getElementById(_geSlotId+'-btn');
             if(b) b.onclick=()=>_geTry(true); };
-          /* 4 s per attempt. A healthy 3DEP polygon read is well inside that, so this only ever
-             trips on a stall — and then we reconnect rather than keep waiting. */
-          const GE_ATTEMPT_MS = 4000, GE_ATTEMPTS = 4;
+          /* ⚠️ CORRECTED FROM OBSERVATION: a real 3DEP answer can take ~15 SECONDS.
+             This was a flat 4 s per attempt, on the theory that 3DEP only ever stalls (answers fast
+             or never) the way hazards.fema.gov does. That was wrong — or at least incomplete. The
+             evidence was a card reading "didn't return a reading here (8 attempts)": four automatic
+             passes plus four from the Re-fetch button, every one of them abandoned at 4 s while the
+             server was still working on it. A budget shorter than the response time cannot succeed
+             no matter how many times it runs.
+             So: one PATIENT first attempt, then shorter retries. If 15 s is the cold cost of
+             rasterising the parcel polygon, the later passes should benefit from a warm cache; if
+             they don't, the honest answer is that 3DEP won't serve this lot and the card says so
+             instead of pretending 8 tries meant something. */
+          const GE_BUDGETS = [15000, 7500, 7500, 7500];
+          const GE_ATTEMPTS = GE_BUDGETS.length;
           let _geTries=0;
           const _geOnce = async (budget)=>{
             let g=null;
@@ -21028,9 +21038,13 @@ async function _runLookupInner(lat,lng,searchCtx){
           const _geTry = async (manual)=>{
             for(let i=0;i<GE_ATTEMPTS;i++){
               _geTries++;
-              _geSpin(i===0 ? (manual?'re-checking USGS 3DEP…':'checking USGS 3DEP…')
-                            : `USGS 3DEP didn’t respond — retrying (${i+1}/${GE_ATTEMPTS})…`);
-              const g=await _geOnce(GE_ATTEMPT_MS);
+              const _budget = GE_BUDGETS[i];
+              // Show the wait so a 15 s first pass reads as patience rather than a hang.
+              _geSpin(i===0
+                ? (manual?`re-checking USGS 3DEP (up to ${Math.round(_budget/1000)}s)…`
+                         :`checking USGS 3DEP (up to ${Math.round(_budget/1000)}s)…`)
+                : `USGS 3DEP didn’t respond — retrying ${i+1}/${GE_ATTEMPTS} (${Math.round(_budget/1000)}s)…`);
+              const g=await _geOnce(_budget);
               // Only bail on a superseded run for the AUTOMATIC pass. A manual re-fetch is the user
               // asking about the parcel on screen right now, so honour it either way.
               if(!manual && myId!==runId) return;
