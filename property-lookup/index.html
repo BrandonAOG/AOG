@@ -22976,7 +22976,15 @@ function geocoderMatchBanner(searchedLabel, snapMatched, srcLabel){
 }
 
 async function doSearch(){
-  const q=document.getElementById('addr').value.trim();
+  /* NORMALISE WHITESPACE AT THE INPUT BOUNDARY.
+     A pasted address can arrive with padding — "24330      MATIAS LN" is what a copy out of a
+     fixed-width report or the appraiser's site looks like. houseNum() and streetTokens() split on
+     /\s+/ so they cope, but `raw` is handed VERBATIM to the Forerunner EC matcher and the FDEM
+     neighbour lookup, and it's persisted to fl_addr so the mess comes back on reload. Collapse it
+     once, here, and write the clean version back so the box shows what was actually searched. */
+  const _rawBox=document.getElementById('addr').value;
+  const q=_rawBox.replace(/[\t\u00a0\u2000-\u200b]+/g,' ').replace(/\s+/g,' ').trim();
+  if(q && q!==_rawBox.trim()){ try{ document.getElementById('addr').value=q; }catch(e){} }
   /* The typed text has now been consumed by this search, so release the box: a subsequent MAP CLICK
      should still be able to fill it with the clicked parcel's address, which is how it behaved
      before the typing guard existed. Without this reset the guard would latch on for the whole
@@ -23121,6 +23129,9 @@ let _addrUserTyped=false;
 addrEl.addEventListener('input',()=>{ _addrUserTyped=true; });
 /* Every automated write to the box goes through here. Returns false when the user owns the field. */
 function setAddrBox(v, opts){
+  // Collapse padding here too — a site address assembled from fixed-width county fields can carry
+  // it, and this value gets persisted to fl_addr.
+  v = String(v==null?'':v).replace(/[\t\u00a0\u2000-\u200b]+/g,' ').replace(/\s+/g,' ').trim();
   if(!v) return false;
   if(_addrUserTyped && !(opts && opts.force)) return false;
   try{ addrEl.value=v; STORE.set('fl_addr',v); if(typeof updateClearBtn==='function') updateClearBtn(); }catch(e){}
