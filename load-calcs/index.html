@@ -3691,8 +3691,13 @@ function buildReportHTML(){
     <div style="font-size:8pt;color:#555;letter-spacing:0.5px;margin-top:2pt;">RESIDENTIAL LOAD CALCULATION — NEC 2020 ART. 220 PART IV, 220.82 OPTIONAL METHOD</div>
   </div>
   <div style="text-align:right;font-size:8pt;color:#333;">
-    <div style="font-weight:700;">${esc(co)||'Always On Generators'}</div>
+    <!-- This block is the JOB SITE, not the contractor. It used to print the
+         customer name and fall back to "Always On Generators" when that field
+         was blank, which made our own company name look like the service
+         address. It is a label now; the customer, if entered, follows below. -->
+    <div style="font-weight:700;letter-spacing:0.5px;color:#555;">SITE ADDRESS</div>
     <div>${esc(addr)}</div><div>${esc(city)}</div><div>${esc(phone)}</div>
+    ${co?`<div style="margin-top:2pt;color:#555;">Customer: <span style="color:#333;font-weight:700;">${esc(co)}</span></div>`:''}
   </div>
 </div>
 
