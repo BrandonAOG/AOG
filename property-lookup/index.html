@@ -18411,9 +18411,13 @@ function renderParcelGeneric(a, d){
   else if(a.__gladesMkt!=null) h += fieldRow('Market value'+(a.__asmtYr?' '+esc(String(a.__asmtYr)):'')+' (land + building)', fmtMoney(a.__gladesMkt));
   if(a.__assessedVal!=null) h += fieldRow('Assessed value', fmtMoney(a.__assessedVal));
   if(a.__bldgVal!=null)     h += fieldRow('Building value', fmtMoney(a.__bldgVal));
-  if(a.__taxableVal!=null)  h += fieldRow('Taxable value'
-    + (a.__taxableCertified ? ' <span class="muted" style="font-size:11px">(last certified)</span>' : ''),
-    fmtMoney(a.__taxableVal));
+  /* ⚠️ fieldRow() ESCAPES ITS LABEL and does NOT escape its value — see the function. Markup in
+     the label prints as literal text, which is exactly what happened here: a Charlotte lookup
+     rendered `<SPAN CLASS="MUTED"…>(LAST CERTIFIED)</SPAN>` down the side of the card. Any note
+     that needs styling belongs in the VALUE; the label stays plain text. */
+  if(a.__taxableVal!=null)  h += fieldRow('Taxable value',
+    fmtMoney(a.__taxableVal)
+    + (a.__taxableCertified ? ' <span class="muted" style="font-size:11px">last certified</span>' : ''));
   if(land) h += fieldRow('Land value', land);
   if(yr){ const effExtra = (a.__effYr!=null && String(a.__effYr)!==String(yr)) ? ` (effective ${esc(String(a.__effYr))})` : '';
     const bldExtra = (a.__bldgCount!=null && Number(a.__bldgCount)>1) ? ` · ${esc(String(a.__bldgCount))} bldgs` : '';
