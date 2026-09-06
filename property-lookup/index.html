@@ -2349,6 +2349,62 @@ const FORERUNNER_COUNTY = {
    (the FEMA NFHL card is unaffected) — and we always offer the official county viewer link.
    ⚠️ COLLIER layer is the county's published "Flood Zones" sublayer; it's a CACHED map service,
       so live query + public CORS are NOT confirmed from here — verify in a browser. */
+/* ── CITY-LEVEL FLOOD LAYERS ───────────────────────────────────────────────────────────────────
+   Lee's and Collier's county FIRM layers CARVE OUT their incorporated municipalities — confirmed by
+   querying Lee's directly: 7,646 features carry a real zone, and exactly 6 are null placeholders,
+   one per city (Cape Coral, Fort Myers, Bonita Springs, Estero, Sanibel, Fort Myers Beach). The
+   county doesn't administer floodplain inside them, so a city address can never get a county
+   cross-check. A city-run layer is a genuine independent source rather than a subset.
+
+   Found by sweeping 751 candidate services against test points in all nine Lee/Collier
+   municipalities. Only two produced a current, FEMA-schema layer:
+
+     MARCO ISLAND    its own GIS, 2024 data. Also publishes a "Design Flood Elevation 9' NAVD"
+                     layer — a LOCAL standard above the FEMA BFE, which is the elevation a pad
+                     actually has to clear on Marco. Linked below; not yet parsed (see note).
+     BONITA SPRINGS  three dated FIRMs on its AGOL org; FIRM_20221202 is the current one.
+
+   Deliberately NOT wired, and why:
+     CAPE CORAL      nothing found. 751 candidates, its own hostnames unreachable. Not a gap in the
+                     search — there is no public city flood layer.
+     FORT MYERS      only "Archived_FEMA_Flood_Zones_view" (2008, 2018). Archived by name.
+     ESTERO          "Current Compound Flooding 100-Year" — a surge+rainfall model, NOT a FIRM.
+                     Useful, but comparing it to a FEMA zone would be comparing different things.
+     SANIBEL         a candidate answered but the test point landed in open water. Re-test with a
+                     real address before wiring.
+     NAPLES, EVERGLADES CITY   nothing found. */
+const CITY_FLOOD_LIVE = {
+  MARCOISLAND: { label:"Marco Island 2024 FIRM (city GIS)",
+    viewer:"https://www.cityofmarcoisland.com/building/page/flood-information",
+    urls:["https://gis.cityofmarcoisland.com/arcgis/rest/services/General/BaseFloodElevations2024/MapServer/9/query"],
+    /* Marco enforces a design flood elevation ABOVE the FEMA BFE. Surfaced as a link rather than a
+       parsed value: the layer's elevation field name is unconfirmed, and inventing a mapping to
+       print a number a pad gets built to is exactly the wrong place to guess. */
+    localStandard:{ label:"Marco Island design flood elevation", value:"9 ft NAVD88",
+      url:"https://gis.cityofmarcoisland.com/arcgis/rest/services/General/BaseFloodElevations2024/MapServer" } },
+  /* NAPLES — the city runs its own ArcGIS at g.naplesgov.com, a hostname no sweep guessed. Found by
+     harvesting the layer URLs out of the city's Web AppBuilder viewer config, which is the reliable
+     way to find a municipal service: the app item's /data endpoint names its webmap, and the webmap
+     names its operational layers.
+     ⚠️ THE YEAR MATTERS. That server publishes FEMA_2005_Zones, FEMA_2012_Zones and FEMA_2019_Zones
+     side by side, and they disagree at the same address:
+         2005  VE, BFE 12 NAVD        2012  AE, "AE 11"        2019  AE, STATIC_BFE 9
+     Wiring an older one would render a "differs · FEMA says AE" that is really just a superseded
+     map. 2019 is the current one and agrees with the effective NFHL (which also returns AE here).
+     Sublayer 2 — sublayer 0 is a group layer with no fields, which is what made the first probe
+     look empty. */
+  NAPLES: { label:"City of Naples 2019 FIRM (city GIS)",
+    viewer:"https://www.arcgis.com/apps/webappviewer/index.html?id=8c659a4e1f0843889b2da105048557a8",
+    urls:["https://g.naplesgov.com/arcgis/rest/services/Building/FEMA_2019_Zones/MapServer/2/query"] },
+  // FDOT returns this as "City of Naples"; the LSAD strip only removes a TRAILING "city", so both
+  // spellings are registered rather than relying on one normalisation surviving.
+  CITYOFNAPLES: { label:"City of Naples 2019 FIRM (city GIS)",
+    viewer:"https://www.arcgis.com/apps/webappviewer/index.html?id=8c659a4e1f0843889b2da105048557a8",
+    urls:["https://g.naplesgov.com/arcgis/rest/services/Building/FEMA_2019_Zones/MapServer/2/query"] },
+  BONITASPRINGS: { label:"Bonita Springs FIRM (city GIS, eff. 2022-12-02)",
+    viewer:"https://www.cityofbonitasprings.org/",
+    urls:["https://services9.arcgis.com/YMMDDoyt1fVMlPjl/arcgis/rest/services/FIRM_20221202/FeatureServer/0/query"] }
+};
 const COUNTY_FLOOD_LIVE = {
   COLLIER: { label:"Collier County 2024 DFIRM",
     viewer:"https://experience.arcgis.com/experience/70ae02cb985c4d288556ba5d00629fc7",
@@ -2429,20 +2485,62 @@ function detectFloodZoneField(fields){
   return { zone:find([/^FLD_?ZONE$/,/^FLOOD_?ZONE$/,/^ZONE$/,/FLD.?ZONE/,/FLOOD.?ZONE/,/ZONE/]),
            sub: find([/^ZONE_?SUBTY/,/SUBTY/,/^FLD_?SUBTY/]) };
 }
-async function queryCountyFlood(lat,lng,countyName){
-  const reg = countyName ? COUNTY_FLOOD_LIVE[norm(countyName)] : null;
+async function queryCountyFlood(lat,lng,countyName,cityName){
+  // City layer first where one exists — the county carves cities out, so it has nothing to say.
+  const reg = (cityName && CITY_FLOOD_LIVE[norm(cityName)])
+           || (countyName ? COUNTY_FLOOD_LIVE[norm(countyName)] : null);
   if(!reg) return null;
   const cands = reg.urls || (reg.url?[reg.url]:[]);
   for(const cu of cands){
     const r = await arcQuery(cu, lat, lng, '*', false, ENRICH_TIMEOUT).catch(e=>({__err:e.message}));
-    if(r && !r.__err && r.features && r.features[0]){
-      const a = r.features[0].attributes || {};
-      const det = detectFloodZoneField(Object.keys(a));
-      const zone = det.zone!=null ? a[det.zone] : null;
-      const sub  = (det.sub!=null && a[det.sub]!=null && String(a[det.sub]).trim()!=='') ? a[det.sub] : null;
-      if(zone!=null && String(zone).trim()!==''){
+    if(r && !r.__err && r.features && r.features.length){
+      /* ⚠️ MUST SCAN ALL INTERSECTING FEATURES, NOT JUST features[0].
+         Lee's OpenData_FloodHazard layer 0 ("FIRM", 7,652 features) mixes real flood polygons with
+         COMMUNITY OUTLINES. At 201 SW 32nd Ter the first — and only — feature returned was:
+             FLD_ZONE   null
+             FLOODZONE  "City of Cape Coral"
+             Shape_Area 3,315,674,797        (the whole city)
+         Taking features[0] and letting detectFloodZoneField() fall through to FLOODZONE printed
+         "City of Cape Coral" as the county flood zone and then compared that against FEMA's "AE".
+         A community name is not a zone. So: reject any candidate whose zone value doesn't look like
+         a FEMA zone designation, and keep looking through the remaining features. */
+      const isZone = v => {
+        const t = String(v==null?'':v).trim().toUpperCase();
+        if(!t) return false;
+        // A, AE, AH, AO, A99, V, VE, X, X500, D, plus the two spelled-out "no zone" values.
+        return /^(A|AE|AH|AO|A99|AR|V|VE|X|X500|D|OPEN WATER|AREA NOT INCLUDED)$/.test(t)
+            || /^(A|V|X)[0-9]{1,2}$/.test(t);
+      };
+      let sawFeatures = false;
+      for(const f of r.features){
+        const a = f.attributes || {};
+        sawFeatures = true;
+        const det = detectFloodZoneField(Object.keys(a));
+        const zone = det.zone!=null ? a[det.zone] : null;
+        if(!isZone(zone)) continue;          // community outline, null row, or a stray text field
+        const sub  = (det.sub!=null && a[det.sub]!=null && String(a[det.sub]).trim()!=='') ? a[det.sub] : null;
         const info = await getLayerInfo(cu).catch(()=>null);
         return { zone, sub, layerName:(info&&info.name)||reg.label, lastEdit:(info&&info.lastEdit)||null, url:cu };
+      }
+      /* Features came back but none carried a real zone. On Lee's layer this is a MUNICIPAL
+         CARVE-OUT, not sparse data — confirmed by querying it directly:
+             FLD_ZONE IS NOT NULL   7,646     (full coverage: X, X (shaded), AE, VE, AH, AO, A, CAZ)
+             FLD_ZONE IS NULL           6     Cape Coral, Fort Myers, Bonita Springs, Estero,
+                                              Sanibel, Fort Myers Beach — one placeholder each
+         The county maps UNINCORPORATED Lee only; it doesn't administer floodplain inside the
+         municipalities, so each is a single hole in the layer carrying just its name and FIRM
+         community number. A cross-check is therefore impossible for any address in those six, and
+         saying "no polygon here" implied a gap in the data rather than a jurisdictional boundary.
+         The community number is worth surfacing on its own — it's required on Elevation Certificates
+         and permit applications. */
+      if(sawFeatures){
+        const a0 = (r.features.find(f=>{
+          const at=f.attributes||{};
+          return Object.keys(at).some(k=>/^(FLOODZONE|COMMUNITY|FIRMCommunity)$/i.test(k) && at[k]);
+        }) || r.features[0]).attributes || {};
+        const place = nhcPick(a0, ['FLOODZONE','COMMUNITY','MUNICIPALITY','CITY']);
+        const comm  = nhcPick(a0, ['FIRMCommunity','FIRM_COMM','CID','COMMUNITY_NO','COMM_NO']);
+        return { __indexOnly:true, place: place||null, community: comm||null };
       }
     }
   }
@@ -10991,6 +11089,12 @@ function detectFields(fields){
     pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/,/^PARCEL$/,/^HPARCEL$/]),
     site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/,/^SITUS_ADDRESS$/]),
     city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/,/^STR_CITY$/,/^SITE_MAILING_CITY$/,/^SCITY$/,/^SITUS_POSTAL_CITY$/]),
+    /* No zip channel existed, so SiteZipCode was fetched on every Collier lookup and thrown away —
+       the Site address row showed street + city and stopped. Same for Lee's SITEZIP, Charlotte's
+       zipcode and Sarasota's ZIP. Mail zip is kept separate so an owner's out-of-state zip can
+       never be printed as the property's. */
+    zip:   find([/^SITE_?ZIP/,/^PHY_?ZIP/,/^S_ZIP/,/^SITUS.*ZIP/,/^PROP.*ZIP/,/^ZIPCODE$/,/^ZIP$/,/^SITE_MAILING_ZIP/]),
+    mailZip: find([/^MAIL.*ZIP/,/^OWN.*ZIP/,/^M_ZIP/,/^ZIP_?CODE_?M/]),
     jv:    find([/^JV$/,/^JUST_?VAL/,/^JUSTVALUE$/,/^MKT_?VAL/,/^MARKET_?VAL/,/^MARKETVALUE$/,/^TOTAL_?VAL/,/^JUST$/,/^TOTVAL/,/^TOT_VAL$/,/^ASSD_TOT$/,/^JV_HMSTD$/,/^CER_JUST_VALUE$/,/^TOTAL_MKT$/,/^CAD_JUST_VALUE$/]),
     land:  find([/^LND_?VAL/,/^LAND_?VAL/,/^LAND$/,/^TOT_LND_VA$/,/^JUST_LAND$/,/^CER_LAND_VALUE$/,/^LAND_MKT$/,/^CAD_JUST_LNDVAL$/]),
     // /^ACT$/ is Hillsborough (Tampa-hosted) "Actual Year Built"; /^EFF$/ is its remodel year (fallback).
@@ -15883,8 +15987,27 @@ const NG911 = {
     numField:"Add_Number", stField:"St_Name", unitField:"Unit", strapField:"STRAP",
     lonField:"Longitude", latField:"Latitude", addrField:"Full_Address"
   },
-  // Collier NG911 disabled — it caused address-resolution problems. Collier now falls back to the
-  // normal geocoder + point-in-polygon parcel path like uncovered counties.
+  /* COLLIER — re-enabled 2026-09-05 for GEOMETRY ONLY, after auditing all 297,908 points against
+     the county's own parcel polygons (point-in-polygon, offline).
+        of the 203,531 points with both a folio and a polygon to test:
+            99.41% land inside the parcel their FLN names
+             0.58% (1,180) land in a DIFFERENT parcel — 388 of a 400-sample in the City of Naples,
+                   and 378 of 400 on a folio within 200 of the claimed one, i.e. literally next door
+     ⚠️ NOTE WHICH HALF IS WRONG. Cross-checking those against the appraiser's own CAMA addresses
+     came out 17-to-7 AGAINST THE FOLIO: the point sits on the correct house and the FLN attached to
+     it names the neighbour. e.g. "108 S Bahama Ave" carries FLN 57192000000, which the appraiser
+     says is 112 S Bahama; the parcel the point actually falls in is 108.
+     So strapField is deliberately LEFT UNSET. Pinning a parcel by this layer's folio would import
+     the neighbour's record — the exact wrong-house bug this was disabled for — whereas the
+     COORDINATE is trustworthy and the existing point-in-polygon resolves the parcel from it.
+     Removing this entry reverts to the previous behaviour completely; nothing else depends on it. */
+  COLLIER: {
+    url:"https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/Site_Address_Points_b/FeatureServer/3/query",
+    numField:"ADDRNUM", stField:"FULLNAME", unitField:"UNITID", addrField:"FULLADDR",
+    strictStreet:true,
+    // No strapField, no lat/lonField — geometry x/y is used, and FLN is never read.
+    maxDriftM: 400
+  }
 };
 /* Strict street agreement for NG911 candidate filtering. Unlike sameStreet() (lenient, any-token
    overlap), this requires the distinctive street tokens — INCLUDING ordinals/numbers like 8TH —
@@ -15947,6 +16070,21 @@ async function resolveAddressNG911(countyName, ctx, refLat, refLng){
         const d=(c.lat-refLat)*(c.lat-refLat)+(c.lng-refLng)*(c.lng-refLng);
         if(d<best){ best=d; chosen=c; }
       }
+    }
+    /* ⚠️ SANITY GATE. A SINGLE candidate used to be accepted unconditionally — the `cands.length>1`
+       guard above means no distance check ran at all when only one row came back. So when the house
+       number plus the first street token matched a point on a DIFFERENT street, it was taken on
+       trust however far away it was. That is the most likely source of the original wrong-house
+       reports, and it is a code fault rather than a data fault.
+       A correct address point sits within a lot or two of where the geocoder landed. Past maxDriftM
+       they are describing different places, and returning null (fall back to the geocoder) beats
+       returning something confidently wrong. Only applied when we HAVE a reference point. */
+    if(cfg.maxDriftM && isFinite(refLat) && isFinite(refLng)){
+      const R=6371000, p=Math.PI/180;
+      const dLat=(chosen.lat-refLat)*p, dLng=(chosen.lng-refLng)*p;
+      const h=Math.sin(dLat/2)**2 + Math.cos(refLat*p)*Math.cos(chosen.lat*p)*Math.sin(dLng/2)**2;
+      const metres = 2*R*Math.asin(Math.sqrt(h));
+      if(metres > cfg.maxDriftM) return null;
     }
     // Unambiguous = the surviving candidates all describe ONE street identity (same distinctive
     // street text + same direction). Used by the geocoder-skipping path, which has no reference
@@ -17037,6 +17175,142 @@ async function queryWindSpeed(lat,lng){
   });
 }
 
+/* ── ADOPTED WIND-SPEED LAYERS (jurisdiction's own FBC figures) ────────────────────────────────
+   The card's live value comes from the ASCE 7-22 Risk Cat II contour layer — the national dataset.
+   Some jurisdictions publish the FBC-ADOPTED figures they actually review against, with the code
+   figure number attached. Those are the numbers on a permit, so a cross-check is worth having: an
+   agreement is a citation you can put in the packet, a disagreement is something to resolve BEFORE
+   the engineer seals it.
+   Found on the City of Naples server (g.naplesgov.com) — three services, one per Risk Category.
+   Each carries WindZone (mph), RiskCatagory [sic — their spelling] and Figure (e.g. "1609A"). */
+const WIND_ADOPTED = {
+  NAPLES: {
+    label: 'City of Naples adopted FBC wind speeds',
+    cats: [
+      { cat:'I',        url:'https://g.naplesgov.com/arcgis/rest/services/Building/WindSpeedRiskCatagoryI/MapServer/1/query' },
+      { cat:'II',       url:'https://g.naplesgov.com/arcgis/rest/services/Building/WindSpeedRiskCatagoryII/MapServer/1/query' },
+      { cat:'III & IV', url:'https://g.naplesgov.com/arcgis/rest/services/Building/WindSpeedRiskCatagoryIII/MapServer/1/query' }
+    ] }
+};
+WIND_ADOPTED.CITYOFNAPLES = WIND_ADOPTED.NAPLES;   // FDOT spells it "City of Naples"
+
+/* County-level adopted wind, used when the city has no layer of its own. City wins where both exist:
+   it's the more specific jurisdiction and the one issuing the permit.
+
+   ⚠️ THE SOURCES DISAGREE, AND THE WIDEST ONE IS NOT THE RIGHT ONE.
+   A sweep of 1,160 services across all 30 wired counties turned up a Florida DEP dataset —
+   Wind_Zone_Polygons_Category_1..4 on services1.arcgis.com/nRHtyn3uE1kyzoYc — covering 30/30
+   counties with all four categories. Tempting, and deliberately NOT wired. At Naples:
+        Naples city (FBC Fig 1609A)   Cat II 170        <- matches the card's live ASCE 7-22 value
+        Collier FBC8                  Cat 2  166
+        DEP statewide                 Cat 2  160        <- 10 mph light
+   The DEP layer also returns strings like ">200" for Monroe, which is a legend band rather than a
+   design value, so it is probably an older code edition or a different purpose entirely
+   (manufactured-housing wind zones use the same "Zone" vocabulary). A 30/30 layer that is 10 mph
+   light would be confidently wrong everywhere, which is worse than having nothing.
+   So: only jurisdiction-adopted layers here, even though that means fewer counties. */
+/* Coverage established by walking every county's OWN GIS — 29 counties, 5,576 services, hosts taken
+   from COUNTY_LIVE / ZONING_LIVE / COUNTY_FLOOD_LIVE rather than guessed. Only THREE publish a wind
+   layer of their own:
+       COLLIER   FBC8 Wind Load Cat 1-4, interpolated values          -> wired
+       MARTIN    wind_zones A/B/C, labelled by risk category          -> wired
+       SARASOTA  WindLoadCategory{,_7,_8} — three copies of the SAME layer, all Category I / 140 mph.
+                 No Category II anywhere on that server, and Cat II is the one that governs a standby
+                 genset, so a lone Cat I row would understate the design speed. NOT wired.
+   Notably LEE publishes nothing: 1,036 services, zero wind-related. Everywhere else the card shows
+   the ASCE 7-22 contour alone, which is correct and sufficient on its own. */
+const WIND_ADOPTED_COUNTY = {
+  /* Collier publishes its own FBC 8th Edition wind loads, one service per risk category. Values are
+     interpolated (148/159/171/179 unincorporated, 152/166/179/187 at Naples) rather than map bands,
+     so these are contour reads, not zones. Sublayer ids run BACKWARDS: Cat 1 is 28, Cat 4 is 25. */
+  COLLIER: {
+    label: 'Collier County adopted FBC 8th Ed. wind loads',
+    cats: [
+      { cat:'I',   url:'https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FBC8_Wind_Load_Cat_1_(Editable)_view/FeatureServer/28/query' },
+      { cat:'II',  url:'https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FBC8_Wind_Load_Cat_2_(Editable)_view/FeatureServer/27/query' },
+      { cat:'III', url:'https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FBC8_Wind_Load_Cat_3_(Editable)_view/FeatureServer/26/query' },
+      { cat:'IV',  url:'https://services2.arcgis.com/SlIq32SqARUHIhSx/arcgis/rest/services/FBC8_Wind_Load_Cat_4_(Editable)_view/FeatureServer/25/query' }
+    ] },
+  /* MARTIN — its own GIS, three polygons explicitly labelled by risk category. Note the layer names
+     use "Wind Zone A/B/C" while the CATEGORY field carries the same letters, so the config supplies
+     the roman numerals: A = II, B = III & IV, C = I. Without that the card would render "Risk
+     Category A", which means nothing to a plans reviewer. */
+  MARTIN: {
+    label: 'Martin County adopted wind zones',
+    cats: [
+      { cat:'I',        url:'https://geoweb.martin.fl.us/arcgis/rest/services/Administrative_Areas/wind_zones/MapServer/2/query' },
+      { cat:'II',       url:'https://geoweb.martin.fl.us/arcgis/rest/services/Administrative_Areas/wind_zones/MapServer/0/query' },
+      { cat:'III & IV', url:'https://geoweb.martin.fl.us/arcgis/rest/services/Administrative_Areas/wind_zones/MapServer/1/query' }
+    ],
+    /* The CATEGORY field returns "A"/"B"/"C". Ignore it and use the config's cat, or every row would
+       be labelled by the county's internal zone letter instead of the code's risk category. */
+    ignoreCatField: true }
+};
+
+
+/* ── REGIONAL / STATEWIDE FALLBACKS: REMOVED 2026-09-05 ────────────────────────────────────────
+   Two broad tiers were wired here and then taken out. Recording why, because the data is fine and
+   someone will otherwise re-add it:
+       services2.arcgis.com/7XOSGW3VgfWJK7Ia  Charlotte County BOCC, "FBC 2023 Hurricane Wind
+                                              Speeds Cat 1-4", 17 of 30 wired counties
+       services1.arcgis.com/nRHtyn3uE1kyzoYc  Florida DEP wind zone polygons, 30/30, but banded —
+                                              returns legend strings like ">200" for Monroe
+   Both are legitimate government publishers, and both are the SAME source the card already reads:
+   NIST WindMaps, ASCE/SEI 7-22, FBC 8th Ed. (2023) Figure 1609.3. That is precisely the problem.
+   They restate the number already shown, at 10 mph band resolution instead of an interpolated
+   contour, so the only thing they could ever add was a few mph of apparent disagreement that is a
+   banding artefact. On a permit tool a second number that looks like it contradicts the first is a
+   liability, not a feature — and no amount of label wording fixed that.
+   What IS kept is the jurisdiction-adopted tier (Naples, Collier): those cite the FBC figure number
+   the plans reviewer actually holds, which the ASCE contour cannot supply. That is a citation, not
+   a second opinion. If a broad fallback is ever wanted again, Palm Beach County GIS publishes the
+   same polygons with full metadata and is the better copy. */
+
+/* City, then county. Only jurisdiction-ADOPTED layers — nothing broader, by design (see above).
+   Returns null where the jurisdiction publishes nothing, and the card then shows the ASCE 7-22
+   value alone, which is what it did before any of this and is defensible on its own. */
+function pickAdoptedWind(cityName, countyName){
+  return (cityName && WIND_ADOPTED[norm(cityName)])
+      || (countyName ? WIND_ADOPTED_COUNTY[norm(countyName)] : null)
+      || null;
+}
+
+/* Query every Risk Category at the point. Returns [{cat, mph, figure}] — all of them, because a
+   genset serving an essential facility is Risk Cat IV, not II, and the higher figure is the one
+   that governs there. */
+async function queryAdoptedWind(lat, lng, cityName, countyName){
+  // City first — more specific jurisdiction, and the one issuing the permit.
+  const reg = pickAdoptedWind(cityName, countyName);
+  if(!reg) return null;
+  const geom = `geometry=${pointGeom(lat,lng)}&geometryType=esriGeometryPoint&inSR=4326`
+             + `&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json`;
+  const out = [];
+  await Promise.all(reg.cats.map(async c=>{
+    try{
+      const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), ENRICH_TIMEOUT);
+      const r=await fetch(c.url+'?'+geom,{signal:ctrl.signal}); clearTimeout(t);
+      if(!r.ok) return; const j=await r.json();
+      const a=(j.features&&j.features[0]&&j.features[0].attributes)||null;
+      if(!a) return;
+      /* Field names differ by publisher — Naples uses WindZone/RiskCatagory/Figure, Collier's FBC8
+         uses WindZone/Category, others use Speed or WindSpeed. Detect rather than hardcode. */
+      const mphKey = Object.keys(a).find(k=>/^(WINDZONE|WIND_?SPEED|WINDSPEED|SPEED|VULT|V_?ULT|MPH)$/i.test(k));
+      const catKey = Object.keys(a).find(k=>/^(RISKCAT\w*|RISK_?CATEGORY|CATEGORY|CAT)$/i.test(k));
+      const figKey = Object.keys(a).find(k=>/^(FIGURE|FIG|FIG_?NO)$/i.test(k));
+      const raw = mphKey ? a[mphKey] : null;
+      const mph=Number(String(raw==null?'':raw).replace(/[^0-9.]/g,''));
+      if(!(mph>0)) return;                       // the county-boundary sublayer has null WindZone
+      // A value like ">200" is a legend band, not a design speed — flag it rather than print a
+      // number the source didn't actually assert.
+      const approx = /[><~]/.test(String(raw==null?'':raw));
+      out.push({ cat:(!reg.ignoreCatField && catKey && a[catKey]!=null && String(a[catKey]).trim()!=='' ? a[catKey] : c.cat),
+                 mph, approx, figure: figKey ? a[figKey] : null });
+    }catch(e){}
+  }));
+  // Sort by speed so the governing (highest) figure is easy to spot.
+  return out.length ? { label:reg.label, cats:out.sort((x,y)=>x.mph-y.mph) } : null;
+}
+
 function renderWindDesign(lat, lng, cityName, countyName, liveWind){
   let key = norm(countyName);
   if(!SWFL_VULT[key] && norm(cityName)==='CAPECORAL') key='LEE';   // Cape Coral → Lee
@@ -17075,6 +17349,43 @@ function renderWindDesign(lat, lng, cityName, countyName, liveWind){
     K<sub>z</sub> = velocity-pressure exposure coefficient (height &amp; exposure), K<sub>zt</sub> = topographic factor, K<sub>d</sub> = wind directionality, K<sub>e</sub> = ground-elevation factor. Design pressures then p = q·G·C<sub>p</sub> (main system) or q·(GC<sub>p</sub>) (components &amp; cladding). ASD conversion: V<sub>asd</sub> = V<sub>ult</sub> · √0.6.</div>`;
   h+=`<div class="note"><b>Code references:</b> V<sub>ult</sub> per FBC-B § 1609.3, Figures 1609.3(1) [Risk Cat II], 1609.3(2) [III], 1609.3(3) [IV], 1609.3(4) [I]. V<sub>asd</sub> conversion § 1609.3.1 / Table 1609.3.1 (Eq. 16-33). Wind-borne debris region § 1609.2. Load procedure &amp; velocity pressure: ASCE 7-22 Ch. 26–30.</div>`;
   h+=`<a class="palink" href="https://ascehazardtool.org/" target="_blank" rel="noopener" style="margin-top:8px">↗ ASCE 7 Hazard Tool — official site wind speed (enter ${lat.toFixed(5)}, ${lng.toFixed(5)})</a>`;
+  /* Adopted-code cross-check — see RENDER CONTRACT. Slot now, patched when the jurisdiction's own
+     layers answer; nothing waits on it. */
+  const _waReg = pickAdoptedWind(cityName, countyName);
+  if(_waReg){
+    const _waSlot = 'waslot_' + runId;
+    h+=`<div id="${_waSlot}"><div class="freshline snap" style="margin-top:10px">`
+      + `<span class="badge live">● CHECKING</span> ${esc(_waReg.label)}… `
+      + `<span class="zone-spin" aria-hidden="true"></span></div></div>`;
+    const _waRun = runId, _waVult = vult;
+    (async()=>{
+      let w=null;
+      try{ w = await queryAdoptedWind(lat, lng, cityName, countyName); }catch(e){}
+      if(_waRun !== runId) return;
+      if(!w){ patchSlot(_waSlot, ''); return; }   // nothing published here: stay quiet, don't nag
+      // "II" from Naples, "2" from Collier's FBC8 — both mean Risk Category II.
+      const catII = w.cats.find(c=>/^(II|2)$/i.test(String(c.cat).trim()));
+      let flag = '';
+      if(catII && _waVult!=null){
+        const d = Math.abs(catII.mph - _waVult);
+        flag = d<=2 ? `<span class="badge safe">matches ASCE</span>`
+             : `<span class="badge sfha">differs · ASCE says ${_waVult} mph</span>`;
+      }
+      patchSlot(_waSlot,
+          `<div class="freshline snap" style="margin-top:10px"><span class="badge live">● LIVE</span> `
+        + `${esc(w.label)} — the figures this jurisdiction reviews against</div>`
+        + w.cats.map(c=>fieldRow('Risk Category ' + esc(String(c.cat)),
+            `${c.approx?'~':''}${c.mph} mph`
+            + (c.figure ? ` <span class="muted" style="font-size:11px">FBC Figure ${esc(String(c.figure))}</span>` : '')
+            + (/^(II|2)$/i.test(String(c.cat).trim()) && flag ? ' ' + flag : ''))).join('')
+        + `<div class="note">These are the jurisdiction's <b>adopted</b> FBC wind speeds, with the code `
+        + `figure cited — the number a plans reviewer checks against. A standby generator is normally `
+        + `<b>Risk Category II</b>; it becomes <b>III or IV</b> when it serves an essential facility `
+        + `(hospital, shelter, fire/police, water plant), and the higher speed governs there. `
+        + `Categories not listed had no polygon at this point. Where this differs from the ASCE value `
+        + `above, design to the adopted figure and confirm with the engineer of record.</div>`);
+    })();
+  }
   h+=`<div class="note warnbox">For generator &amp; LP-tank installs: the unit's wind rating, its slab/anchorage, and the tank anchoring must be designed to the <b>site V<sub>ult</sub></b>. The figures here are a planning aid — the permit's engineer of record sets the official design value.</div>`;
   h+=`</div></div>`;
   return h;
@@ -18358,6 +18669,33 @@ function skeletonCard(icn, title, src, msg){
     + `<div class="note">Waiting on the source. This card fills in on its own — no need to search again.</div>`
     + `</div></div>`;
 }
+/* Join a site address to its city WITHOUT repeating it.
+   Some feeds return the city already baked into the address field — Collier's NG911 FULLADDR is
+   literally "112 1st AVE N, City of Naples" — so a plain [site, city].join(', ') produced
+   "112 1st AVE N, City of Naples, Naples". Compare on letters only so "City of Naples" vs "NAPLES"
+   and "Naples" vs "naples" all count as already-present. */
+function joinSiteCity(site, city){
+  const s=String(site||'').trim(), c=String(city||'').trim();
+  if(!s) return c || '';
+  if(!c) return s;
+  const norm=v=>String(v).toUpperCase().replace(/[^A-Z]/g,'');
+  const tail=norm(s.split(',').pop());     // whatever already follows the last comma
+  const want=norm(c);
+  // "CITYOFNAPLES" contains "NAPLES", and a bare "NAPLES" equals it — either way, don't append.
+  if(want && tail && (tail===want || tail.indexOf(want)>=0 || want.indexOf(tail)>=0)) return s;
+  return s + ', ' + c;
+}
+/* Re-point the living-area provenance when a county block overrides AFTER the shared decision.
+   window.__livSource is set in that shared block; anything that changes det.liv later — Brevard's
+   BCPAO splice is the one that caught this — left the label describing the source it replaced. The
+   card then read "Living area source: state roll" while displaying BCPAO's figure, which is a small
+   lie in the one place the whole point was to stop guessing. Call this whenever det.liv is moved. */
+function setLivSource(source, value, extra){
+  try{
+    window.__livSource = Object.assign({}, window.__livSource || {}, extra || {},
+      { source: source, value: value });
+  }catch(e){}
+}
 function renderParcelGeneric(a, d){
   let h='';
   const owner = d.owner?pick(a,d.owner):null;
@@ -18378,8 +18716,17 @@ function renderParcelGeneric(a, d){
   const sy    = d.saleY?pick(a,d.saleY):null;
   const mail  = d.mail?pick(a,d.mail):null;
   const mailCity = d.mailCity?pick(a,d.mailCity):null;
+  /* Zips arrive as Integer on some layers (Collier's SiteZipCode) and String on others, and a few
+     carry ZIP+4 as 9 digits. Normalise to 5, or 5-4 when the extension is real. */
+  const _zipTxt = v => { const t=String(v==null?'':v).trim().replace(/[^0-9-]/g,'');
+    if(!t) return null;
+    const dg=t.replace(/\D/g,'');
+    if(dg.length===9) return dg.slice(0,5)+'-'+dg.slice(5);
+    return dg.length>=5 ? dg.slice(0,5) : null; };
+  const zip     = d.zip?_zipTxt(pick(a,d.zip)):null;
+  const mailZip = d.mailZip?_zipTxt(pick(a,d.mailZip)):null;
   const use   = d.use?useLabel(pick(a,d.use)):null;
-  try{ window.__parcelMeta = { owner: owner||'', site: [site, city].filter(Boolean).join(', ') }; }catch(e){}
+  try{ window.__parcelMeta = { owner: owner||'', site: joinSiteCity(site, city) }; }catch(e){}
   try{ if(window.__exportData){ const ed=window.__exportData;
     if(owner) ed.owner=owner; if(site) ed.address=site; if(city) ed.city=city;
     if(liv) ed.sqft=String(liv).replace(/[^0-9.]/g,''); if(pid) ed.parcelId=String(pid); } }catch(e){}
@@ -18404,8 +18751,10 @@ function renderParcelGeneric(a, d){
     try{ if(window.__livOverride){ h += `<div class="note">Living area shown is the heated/living figure (${window.__livOverride.shown.toLocaleString('en-US')} sq ft). The other source listed ${window.__livOverride.other.toLocaleString('en-US')} sq ft &mdash; an adjusted/under-roof or multi-structure total.</div>`; window.__livOverride=null; } }catch(e){}
   }
   if(lotSf) h += fieldRow('Lot area', lotSf+' sq ft');
-  if(site) h += fieldRow('Site address', esc(site)+(city?'<br>'+esc(city):''));
-  if(mail) h += fieldRow('Owner mailing', esc(mail)+(mailCity?'<br>'+esc(mailCity):''));
+  if(site) h += fieldRow('Site address',
+    esc(site) + ((city||zip) ? '<br>'+esc([city, zip].filter(Boolean).join(' ')) : ''));
+  if(mail) h += fieldRow('Owner mailing',
+    esc(mail) + ((mailCity||mailZip) ? '<br>'+esc([mailCity, mailZip].filter(Boolean).join(' ')) : ''));
   if(use)  h += fieldRow('Existing use', esc(use));
   if(jv)   h += fieldRow('Just (market) value'+(a.__asmtYr?' '+esc(String(a.__asmtYr)):''), jv);
   else if(a.__gladesMkt!=null) h += fieldRow('Market value'+(a.__asmtYr?' '+esc(String(a.__asmtYr)):'')+' (land + building)', fmtMoney(a.__gladesMkt));
@@ -18630,6 +18979,9 @@ async function _runLookupInner(lat,lng,searchCtx){
      markup, paintResults() would skip the DOM write as a no-op, and the panel would keep showing
      the "Querying…" status forever. */
   _lastPaintHTML='';
+  // …and the slot registry, or the previous parcel's answers would be re-applied over this one's
+  // placeholders — the worst possible failure: one property's data on another property's card.
+  try{ _slotPatches.clear(); }catch(e){}
   results.innerHTML = setStatus('busy','Querying official GIS services…');
   if(window.Sheet) Sheet.setState('full');   // bring results into view on mobile
 
@@ -18815,8 +19167,8 @@ async function _runLookupInner(lat,lng,searchCtx){
   // stacking serially. Each is awaited later where it's rendered; all fail-fast (short timeout).
   const pZoning      = _timed('zoning', queryZoning(lat, lng, cityName, countyName)).catch(()=>null);
   const pWind        = _timed('wind (ASCE 7-22)', queryWindSpeed(lat, lng)).catch(()=>null);   // live ASCE 7-22 Risk Cat II; null → county fallback
-  const pCountyFlood = (countyName && COUNTY_FLOOD_LIVE[norm(countyName)])
-                         ? _timed('county flood', queryCountyFlood(lat, lng, countyName)).catch(()=>null) : Promise.resolve(null);
+  const pCountyFlood = ((cityName && CITY_FLOOD_LIVE[norm(cityName)]) || (countyName && COUNTY_FLOOD_LIVE[norm(countyName)]))
+                         ? _timed('county/city flood', queryCountyFlood(lat, lng, countyName, cityName)).catch(()=>null) : Promise.resolve(null);
   /* The authoritative parcel source in a wired county — and one of the slower calls in the
      lookup — so it belongs in the timing panel like every other feed. _timedTail() wraps a
      promise that's already been built (the IIFE above) rather than at call time. */
@@ -19768,7 +20120,9 @@ async function _runLookupInner(lat,lng,searchCtx){
           // living area: UNDER_AIR_SQFT (heated) preferred; else BLDG_ADJ_SQ_FOOTAGE (adjusted/under-roof)
           const _liv = _n(_info.UNDER_AIR_SQFT) ? _info.UNDER_AIR_SQFT
                      : (_n(_info.BLDG_ADJ_SQ_FOOTAGE) ? _info.BLDG_ADJ_SQ_FOOTAGE : null);
-          if(_n(_liv)){ _la.__browardLiv=Number(String(_liv).replace(/[^0-9.]/g,'')); det.liv='__browardLiv'; window.__livOverride=null; }
+          if(_n(_liv)){ _la.__browardLiv=Number(String(_liv).replace(/[^0-9.]/g,'')); det.liv='__browardLiv';
+            window.__livOverride=null;
+            setLivSource('Broward BCPA (appraiser feed)', _la.__browardLiv, {rollValue:null}); }
           // year built (actual preferred, else BLDG_YEAR_BUILT); 0 = no building → skip
           const _yr = _n(_info.ACTUAL_YEAR_BUILT) ? _info.ACTUAL_YEAR_BUILT
                     : (_n(_info.BLDG_YEAR_BUILT) ? _info.BLDG_YEAR_BUILT : null);
@@ -19849,7 +20203,10 @@ async function _runLookupInner(lat,lng,searchCtx){
           if(_s(_acc.siteAddress)){ _la.__brevardSite=String(_acc.siteAddress).trim(); det.site='__brevardSite'; det.city=null; }
           // primary building: living area (heated base) + year built + use
           const _b = (_acc.buildings && _acc.buildings[0]) ? _acc.buildings[0] : null;
-          if(_b && _num(_b.totalBaseArea)){ _la.__brevardLiv=_b.totalBaseArea; det.liv='__brevardLiv'; window.__livOverride=null; }
+          if(_b && _num(_b.totalBaseArea)){ _la.__brevardLiv=_b.totalBaseArea; det.liv='__brevardLiv';
+            window.__livOverride=null;
+            // BCPAO's API is the appraiser's own record and fresher than the annual roll — say so.
+            setLivSource('BCPAO property API (appraiser, live)', _b.totalBaseArea, {rollValue:null}); }
           if(_b && _num(_b.yearBuilt)){ _la.__brevardYr=_b.yearBuilt; det.yr='__brevardYr'; }
           // use (readable text from the API)
           const _use = _acc.propertyUse && _acc.propertyUse.description;
@@ -19917,7 +20274,8 @@ async function _runLookupInner(lat,lng,searchCtx){
       // Just (market) value, land value, living area.
       if(!det.jv && _n(_la.CurrJust)){ _la.JV=_la.CurrJust; det.jv='JV'; }
       if(!det.land && _n(_la.CurrLand)){ _la.LND_VAL=_la.CurrLand; det.land='LND_VAL'; }
-      if(!det.liv && _n(_la.FinArea)){ _la.TOT_LVG_AR=_la.FinArea; det.liv='TOT_LVG_AR'; }
+      if(!det.liv && _n(_la.FinArea)){ _la.TOT_LVG_AR=_la.FinArea; det.liv='TOT_LVG_AR';
+        setLivSource('Osceola parcel feed (FinArea)', _la.FinArea); }
       // Assessed value directly; taxable = just − exemptions (only when both present and sane).
       if(_la.__assessedVal==null && _n(_la.AssessedVa)) _la.__assessedVal=_la.AssessedVa;
       if(_la.__taxableVal==null && _n(_la.CurrJust)){
@@ -19979,7 +20337,8 @@ async function _runLookupInner(lat,lng,searchCtx){
       }
       // FLA = finished living area (heated) — the TRUE living figure, not total under-roof. Same
       // distinction that bit Marion (bld1_sf) and Hernando (CER_STRU_SQFT); verify on a known house.
-      if(!det.liv && _n(_la.FLA)){ _la.TOT_LVG_AR=_la.FLA; det.liv='TOT_LVG_AR'; }
+      if(!det.liv && _n(_la.FLA)){ _la.TOT_LVG_AR=_la.FLA; det.liv='TOT_LVG_AR';
+        setLivSource('Monroe parcel feed (FLA)', _la.FLA); }
       // Condos carry CONDO_YEARBLT instead of YRBLT (YRBLT is PRESENT BUT BLANK on condo units).
       // ⚠️ detectFields matches on field NAMES, not values — so det.yr is already 'YRBLT' here even
       // when that field is an empty string. Testing `!det.yr` alone would never fire this fallback
@@ -20485,7 +20844,7 @@ async function _runLookupInner(lat,lng,searchCtx){
     const ay=pick(a,'ASMNT_YR');
     const sp=fmtMoney(pick(a,'SALE_PRC1')), sy=pick(a,'SALE_YR1');
     const useTxt=useLabel(pick(a,'DOR_UC','PA_UC','LAND_USE'));
-    try{ let _siteFull=[site, siteCity].filter(Boolean).join(', ');
+    try{ let _siteFull=joinSiteCity(site, siteCity);
       if(parcel.__fileOwnerCorrected && searchCtx && searchCtx.fileUnit && _siteFull && _siteFull.indexOf('#')<0)
         _siteFull=_siteFull.replace(/,/, ' #'+searchCtx.fileUnit+',');
       window.__parcelMeta = { owner: owner||'', site:_siteFull }; }catch(e){}
@@ -20500,9 +20859,14 @@ async function _runLookupInner(lat,lng,searchCtx){
       try{ if(window.__livOverride){ html += `<div class="note">Living area shown is the heated/living figure (${window.__livOverride.shown.toLocaleString('en-US')} sq ft). The other source listed ${window.__livOverride.other.toLocaleString('en-US')} sq ft &mdash; an adjusted/under-roof or multi-structure total.</div>`; window.__livOverride=null; } }catch(e){}
     }
     if(lsf) html += fieldRow('Lot area', lsf+' sq ft');
-    if(site)     html += fieldRow('Site address', esc(site)+(siteCity?'<br>'+esc(siteCity):''));
+    /* Roll branch: PHY_ZIPCD is the FDOR zip field. Same normalisation as the live branch. */
+    const _rzip=(()=>{ const v=pick(a,'PHY_ZIPCD','PHY_ZIP','SITE_ZIP');
+      const dg=String(v==null?'':v).replace(/\D/g,'');
+      return dg.length===9 ? dg.slice(0,5)+'-'+dg.slice(5) : (dg.length>=5 ? dg.slice(0,5) : null); })();
+    if(site)     html += fieldRow('Site address',
+      esc(site) + ((siteCity||_rzip) ? '<br>'+esc([siteCity,_rzip].filter(Boolean).join(' ')) : ''));
     // MAP-CLICK ADDRESS FILL (roll-fallback counties): same as the live branch above.
-    if(!searchCtx && site){ const _boxAddr=[site,siteCity].filter(Boolean).join(', ');
+    if(!searchCtx && site){ const _boxAddr=joinSiteCity(site, siteCity);
       if(setAddrBox(_boxAddr)) { try{ addToHistory(_boxAddr); }catch(e){} } }
     if(mail)     html += fieldRow('Owner mailing', esc(mail)+(mailCity?'<br>'+esc(mailCity):''));
     if(sec||twn||rng) html += fieldRow('Sec-Twn-Rng', esc([sec,twn,rng].filter(Boolean).join(' - ')));
@@ -20519,7 +20883,7 @@ async function _runLookupInner(lat,lng,searchCtx){
     drawParcel(parcel.features[0].geometry, {
       owner: owner||null,
       pid:   pid||null,
-      site:  [site, siteCity].filter(Boolean).join(', ')||null
+      site:  joinSiteCity(site, siteCity)||null
     });
     // CENTER-OF-LOT for roll-fallback counties: move the marker from the search point to the parcel
     // centroid, then (where a footprint layer exists) onto the building via the async nudge.
@@ -20682,6 +21046,7 @@ async function _runLookupInner(lat,lng,searchCtx){
            budget, exactly as the ground-elevation row does with 3DEP.
        The card shows a live "retrieving" line with the pulse dot while that runs, and only reports
        a failure if the second, longer attempt also comes back empty. */
+    // see RENDER CONTRACT
     const _fldSlot='fldslot_'+myId;
     html += `<div id="${_fldSlot}"><div class="note">`
       + `<span class="muted">FEMA’s point lookup didn’t answer — reading the zone off the parcel polygon… </span>`
@@ -21001,17 +21366,18 @@ async function _runLookupInner(lat,lng,searchCtx){
              MORE while doing nothing about the cause. What works is abandoning fast and opening a
              fresh connection. Four short flat attempts do that automatically, so the failure row
              should now be rare rather than routine. The button stays for when all four stall. */
-          const _geSpin = (msg)=>{ const el=document.getElementById(_geSlotId); if(!el) return;
-            el.innerHTML = `<div class="field"><div class="k">Ground elev.</div>`
+                    // see RENDER CONTRACT
+          const _geSpin = (msg)=>{ patchSlot(_geSlotId,
+            `<div class="field"><div class="k">Ground elev.</div>`
               + `<div class="v"><span class="muted">${esc(msg)} </span>`
-              + `<span class="zone-spin" aria-hidden="true"></span></div></div>`; };
-          const _geFail = (tries)=>{ const el=document.getElementById(_geSlotId); if(!el) return;
-            el.innerHTML = `<div class="field"><div class="k">Ground elev.</div><div class="v">`
+              + `<span class="zone-spin" aria-hidden="true"></span></div></div>`); };
+          const _geFail = (tries)=>{ patchSlot(_geSlotId,
+            `<div class="field"><div class="k">Ground elev.</div><div class="v">`
               + `<span class="muted">USGS 3DEP didn’t return a reading here`
               + (tries>1?` (${tries} attempts)`:``) + ` — retry, or use the Elevation Heights tool `
               + `or an Elevation Certificate</span> `
               + `<button type="button" class="wbtn" id="${_geSlotId}-btn" style="margin-left:6px">↻ Re-fetch</button>`
-              + `</div></div>`;
+              + `</div></div>`);
             const b=document.getElementById(_geSlotId+'-btn');
             if(b) b.onclick=()=>_geTry(true); };
           /* ⚠️ CORRECTED FROM OBSERVATION: a real 3DEP answer can take ~15 SECONDS.
@@ -21048,8 +21414,10 @@ async function _runLookupInner(lat,lng,searchCtx){
               // Only bail on a superseded run for the AUTOMATIC pass. A manual re-fetch is the user
               // asking about the parcel on screen right now, so honour it either way.
               if(!manual && myId!==runId) return;
-              const el=document.getElementById(_geSlotId); if(!el) return;
-              if(!_geBad(g)){ el.innerHTML=_buildGroundElevRow(g, _geRefCtx); _geExport(g); return; }
+              /* No slot-exists bail: patchSlot() records the answer even when the paint that creates
+                 the slot hasn't happened yet, and applySlotPatches() applies it on arrival. The old
+                 `if(!el) return` silently threw away a fast 3DEP result. */
+              if(!_geBad(g)){ patchSlot(_geSlotId, _buildGroundElevRow(g, _geRefCtx)); _geExport(g); return; }
               if(i<GE_ATTEMPTS-1) await new Promise(r=>setTimeout(r,200));   // let the socket close
             }
             _geFail(_geTries);
@@ -21094,7 +21462,8 @@ async function _runLookupInner(lat,lng,searchCtx){
     html += `<div class="note">No effective NFHL polygon at this point. This usually means the area is unmapped or outside digital flood-map coverage — check the FEMA Map Service Center directly.</div>`;
   }
   // --- LIVE county DFIRM cross-check (e.g. Collier's adopted 2024 map) vs the effective NFHL above ---
-  const cfReg = countyName ? COUNTY_FLOOD_LIVE[norm(countyName)] : null;
+  const cfReg = (cityName && CITY_FLOOD_LIVE[norm(cityName)])
+             || (countyName ? COUNTY_FLOOD_LIVE[norm(countyName)] : null);
   if(cfReg){
     /* This is a CROSS-CHECK, not a primary source — the effective NFHL zone is already rendered
        above, and this only adds a "matches FEMA / differs" badge. But it was a bare await, so a
@@ -21102,22 +21471,70 @@ async function _runLookupInner(lat,lng,searchCtx){
        on Lee's on-prem gismapserver, i.e. ~70% of the total spent on a badge.
        Now it gets a 1.5 s ceiling. If it wins, the badge renders exactly as before; if it doesn't,
        the card carries on and says the cross-check was skipped rather than silently omitting it. */
-    const CF_CEILING = 1500;
-    const cf = await Promise.race([ pCountyFlood, new Promise(res=>setTimeout(()=>res({__slow:true}), CF_CEILING)) ]);
-    if(myId!==runId) return;
-    if(cf && cf.__slow){
-      html += `<div class="note">County DFIRM cross-check skipped — ${esc(cfReg.label)} didn't respond in time. The FEMA zone above still stands; re-run the lookup if you need the county comparison.</div>`;
-    }
-    else if(cf && cf.zone!=null && String(cf.zone).trim()!==''){
-      const cz=String(cf.zone).trim();
-      let flag;
-      if(nfhlZone==null || nfhlZone==='—')      flag=`<span class="badge unk">county only</span>`;
-      else if(norm(cz)===norm(nfhlZone))         flag=`<span class="badge safe">matches FEMA</span>`;
-      else                                       flag=`<span class="badge sfha">differs · FEMA says ${esc(nfhlZone)}</span>`;
-      html += `<div class="freshline snap" style="margin-top:10px"><span class="badge live">● LIVE</span> county cross-check${cf.lastEdit?' · layer updated '+esc(cf.lastEdit.toLocaleDateString()):''}</div>`;
-      html += `<div class="field"><div class="k">${esc(cfReg.label)}</div><div class="v zone">${esc(cz)} ${flag}</div></div>`;
-      if(cf.sub) html += fieldRow('County zone subtype', esc(cf.sub));
-      html += `<div class="note">Read live from ${esc(cfReg.label)}'s GIS. When it differs from the effective FEMA NFHL above, that's usually a pending/preliminary revision or a local LOMR — the county viewer is the authoritative adopted map.</div>`;
+    /* ── NON-BLOCKING COUNTY CROSS-CHECK (slot-and-patch, same as the ground-elevation row) ──
+       This used to race pCountyFlood against a ceiling and await it inline, so the whole flood card
+       — and everything after it — waited on the county host. Lee's gismapserver measured 11,852 ms
+       on a live probe, which meant the old 1,500 ms ceiling never completed there, and a ceiling
+       generous enough to work would have stalled the card for twelve seconds.
+       It doesn't need to block anything. The FEMA zone is already rendered above; this only adds a
+       "matches FEMA / differs" badge. So: drop a slot with a live spinner, let the card finish, and
+       patch the slot when the county answers. No ceiling, because nothing is waiting on it. */
+    // see RENDER CONTRACT
+    const _cfSlot = 'cfslot_' + myId;
+    html += `<div id="${_cfSlot}"><div class="freshline snap" style="margin-top:10px">`
+      + `<span class="badge live">● CHECKING</span> ${esc(cfReg.label)} cross-check… `
+      + `<span class="zone-spin" aria-hidden="true"></span></div></div>`;
+    const _nfhlForCheck = nfhlZone;   // capture: the patch runs long after this scope has moved on
+    (async () => {
+      let cf = null;
+      try { cf = await pCountyFlood; } catch (e) {}
+      // A superseded lookup has already repainted the panel, so the slot is gone and so is the point.
+      // Do NOT require the slot to exist yet — an early answer arrives before the paint that puts
+      // it in the DOM. patchSlot() records it either way and the next paint applies it.
+      if (myId !== runId) return;
+      if (cf && cf.zone != null && String(cf.zone).trim() !== '') {
+        const cz = String(cf.zone).trim();
+        let flag;
+        if (_nfhlForCheck == null || _nfhlForCheck === '—') flag = `<span class="badge unk">county only</span>`;
+        else if (norm(cz) === norm(_nfhlForCheck))          flag = `<span class="badge safe">matches FEMA</span>`;
+        else flag = `<span class="badge sfha">differs · FEMA says ${esc(_nfhlForCheck)}</span>`;
+        patchSlot(_cfSlot,
+            `<div class="freshline snap" style="margin-top:10px"><span class="badge live">● LIVE</span> `
+          + `county cross-check${cf.lastEdit ? ' · layer updated ' + esc(cf.lastEdit.toLocaleDateString()) : ''}</div>`
+          + `<div class="field"><div class="k">${esc(cfReg.label)}</div><div class="v zone">${esc(cz)} ${flag}</div></div>`
+          + (cf.sub ? fieldRow('County zone subtype', esc(cf.sub)) : '')
+          + `<div class="note">Read live from ${esc(cfReg.label)}'s GIS. When it differs from the `
+          + `effective FEMA NFHL above, that's usually a pending/preliminary revision or a local `
+          + `LOMR — the county viewer is the authoritative adopted map.</div>`);
+      } else if (cf && cf.__indexOnly) {
+        /* MUNICIPAL CARVE-OUT — render nothing. A deliberate exception to the RENDER CONTRACT's
+           "never silence" rule, and the reasoning is worth keeping: this isn't a source that failed
+           or a lookup that found nothing, it's a source that structurally does not apply. Lee's
+           layer maps unincorporated county only and carves out all six municipalities (Cape Coral,
+           Fort Myers, Bonita Springs, Estero, Sanibel, Fort Myers Beach), so for a city address
+           there is nothing to cross-check and never will be. An explanation of that on every city
+           lookup is noise, not information. The slot is emptied so no placeholder is left behind. */
+        patchSlot(_cfSlot, '');
+      } else {
+        patchSlot(_cfSlot, `<div class="note">No ${esc(cfReg.label)} polygon at this point, so there's `
+          + `no county cross-check to show. The FEMA zone above still stands — use the county viewer `
+          + `below if you need the adopted map.</div>`);
+      }
+    })();
+    /* LOCAL DESIGN STANDARD. Some municipalities enforce a design flood elevation ABOVE the FEMA
+       BFE — Marco Island's is 9 ft NAVD88. That is the number a generator pad actually has to
+       clear there, and it appears nowhere in the FEMA data, so a card showing only the NFHL zone
+       and BFE is telling you less than the jurisdiction requires. Rendered statically because it's
+       a published standard, not a per-parcel query; the layer link is there to verify against. */
+    if(cfReg.localStandard){
+      const ls = cfReg.localStandard;
+      html += `<div class="field"><div class="k">${esc(ls.label)}</div><div class="v big">${esc(ls.value)}</div></div>`;
+      html += `<div class="note warnbox">This jurisdiction enforces a design flood elevation <b>above</b> `
+            + `the FEMA base flood elevation. Equipment must meet the LOCAL standard, not just the BFE `
+            + `shown above. Confirm the current requirement with the city floodplain office before `
+            + `setting a pad height — the value here is the published standard, not a per-parcel `
+            + `determination.</div>`;
+      if(ls.url) html += `<a class="palink" href="${esc(ls.url)}" target="_blank" rel="noopener">↗ City design-flood-elevation layer</a>`;
     }
     if(cfReg.viewer) html += `<a class="palink" href="${esc(cfReg.viewer)}" target="_blank" rel="noopener" style="margin-top:8px">↗ ${esc(cfReg.label)} viewer (official adopted map)</a>`;
   }
@@ -21180,7 +21597,8 @@ async function _runLookupInner(lat,lng,searchCtx){
   // background (up to its full ENRICH_TIMEOUT), and INJECT the finished zoning HTML into the
   // placeholder when it lands — guarded by runId so a late result can't land on a newer lookup.
   const ZONING_FAST = 2000;                                         // card-paint window
-  const ZONING_MAX  = (typeof ENRICH_TIMEOUT==='number' ? ENRICH_TIMEOUT : 6000) + 300;  // true-timeout window
+  // ZONING_MAX removed — the background patch is uncapped now (see RENDER CONTRACT). pZoning's own
+  // request timeout is the only bound, which is where a bound belongs.
   const _zoneSlotId = 'zoningLive-' + runId;
   let zhit = await Promise.race([ pZoning,
     new Promise(res=>setTimeout(()=>res({__slow:true}), ZONING_FAST)) ]);
@@ -21191,15 +21609,20 @@ async function _runLookupInner(lat,lng,searchCtx){
     html += `<div id="${_zoneSlotId}" class="freshline snap" style="margin-top:10px">`
           + `<span class="badge unk">▣ ZONING</span> confirming live district… `
           + `<span class="zone-spin" aria-hidden="true"></span></div>`;
-    // Background: wait for the real result (bounded by ZONING_MAX), then build + inject its HTML.
+    /* Background patch — see RENDER CONTRACT.
+       This used to race the background wait against ZONING_MAX (ENRICH_TIMEOUT + 300) as well, so a
+       jurisdiction whose zoning service is merely slow had its district DISCARDED after ~6 s even
+       though the query was still running and would have answered. The inline 2 s window is what
+       keeps the card fast; capping the background wait as well caps nothing useful — the card has
+       already rendered and the slot is just sitting there. pZoning carries its own request timeout,
+       so this can't hang forever. */
     (async()=>{
-      const late = await Promise.race([ pZoning,
-        new Promise(res=>setTimeout(()=>res({__timeout:true}), Math.max(0, ZONING_MAX-ZONING_FAST))) ]);
+      let late=null;
+      try{ late = await pZoning; }catch(e){}
       if(myId!==runId) return;                          // a newer lookup superseded this one — drop it
       const slot=document.getElementById(_zoneSlotId);
       if(!slot) return;
-      const built = _buildZoningInner(late && !late.__timeout ? late : {__slow:true});
-      slot.outerHTML = built;
+      slot.outerHTML = _buildZoningInner(late || {__slow:true});
     })();
   }
   // Build the zoning inner HTML for a given result. Called inline (fast) or from the background inject.
@@ -21207,8 +21630,8 @@ async function _runLookupInner(lat,lng,searchCtx){
   function _buildZoningInner(zhit){
     let html = '';
     if(zhit && zhit.__slow){
-    _timings.push({label:'zoning (skipped — over '+ZONING_MAX+'ms)', ms:ZONING_MAX, err:true});
-    html += `<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> live district lookup skipped — the ${esc(jurName)} zoning service didn't respond in time</div>`;
+    _timings.push({label:'zoning (no live district returned)', ms:0, err:true});
+    html += `<div class="freshline snap" style="margin-top:10px"><span class="badge unk">▣ ZONING</span> live district lookup didn't return — the ${esc(jurName)} zoning service gave no polygon for this parcel</div>`;
     html += `<div class="note">The setbacks and district rules below come from the adopted code and still apply. Only the live point-in-polygon confirmation of <b>which</b> district this parcel sits in was skipped — confirm the district on the jurisdiction's zoning map before relying on the setbacks.</div>`;
   } else
   // Polk County's countywide Future Land Use layer (used as the zoning-equivalent — see POLK notes)
@@ -21933,6 +22356,42 @@ function buildSummaryStrip(ed, meta){
        a second later. _activeTab remembers it.
      · the "● LOADING" strips must not become tab content. They carry data-notab and stay in normal
        flow above the panels, so they read as status rather than as a card filed under Site. */
+/* ══ RENDER CONTRACT ═══════════════════════════════════════════════════════════════════════════
+   NO CARD BLOCKS ON A SLOW SOURCE. Everything renders itself after the search.
+
+   Every card bug in this file has come from breaking this rule, not from bad data:
+     · the county cross-check raced a 1,500 ms ceiling that Lee's 11,852 ms host could never win,
+       so the badge simply never appeared — and a ceiling generous enough to work would have
+       frozen the card for twelve seconds to earn a badge;
+     · the flood card gave up on a FEMA timeout instead of reading the zone off the parcel polygon
+       it already had;
+     · the ground-elevation row abandoned 3DEP at 4 s when a real answer takes up to 15;
+     · the tab bar only appeared at the FINAL paint, so nothing could be toggled while loading.
+
+   THE PATTERN — five steps, and all five matter:
+     1. Emit a slot with a live badge:
+            html += `<div id="thing_${myId}"><span class="badge live">● CHECKING</span> …
+                     <span class="zone-spin"></span></div>`;
+     2. NEVER await the slow thing inline while building the HTML.
+     3. An async IIFE awaits it — UNCAPPED, because nothing is waiting on it — then patches
+            document.getElementById('thing_'+myId).innerHTML = …
+     4. Guard the patch on BOTH the slot still existing AND myId === runId. A superseded lookup has
+        already repainted the panel; writing into it puts one parcel's data on another's card.
+     5. End in one of THREE honest states, never silence:
+            the value  ·  "nothing published for this point"  ·  a failure WITH a retry button.
+        A branch that renders nothing is indistinguishable from a feature that isn't wired, which
+        is exactly how the Collier cross-check hid for weeks.
+
+   Implementations, all tagged `see RENDER CONTRACT`: ground elevation (_geSlotId), flood
+   parcel-polygon fallback (_fldSlot), county cross-check (_cfSlot), zoning (_zoneSlotId), and the
+   per-tab stubs in tabifyResults().
+
+   KNOWN VIOLATION, deliberate and documented: BATCH_CEILING in the whole-parcel flood section caps
+   11 parallel queries at 4.2 s / 6.2 s mobile, so a straggler contributes nothing. Converting it
+   needs 308 lines and 31 `html +=` sites moved into an IIFE — a real refactor, not a tweak, and
+   worth doing on purpose rather than in passing.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
 /* ── PAINTING THE PANEL WITHOUT THE FLICKER ────────────────────────────────────────────────────
    A lookup rebuilds #results FOUR times: an early paint, one after the parcel card, one after the
    flood card, and the final render. #results is itself the scroll container (.body{overflow-y:auto}),
@@ -21943,6 +22402,27 @@ function buildSummaryStrip(ed, meta){
    the same frame, before the browser has a chance to present the intermediate state, and skips the
    work entirely when the markup hasn't actually changed. */
 let _lastPaintHTML='';
+/* ── SLOT PATCH REGISTRY (part of the RENDER CONTRACT) ────────────────────────────────────────
+   🩹 A patch that landed BEFORE the final paint was silently reverted. The slot markup lives in the
+   `html` string, so when paintResults() reassigned innerHTML from that same string it restored the
+   "● CHECKING" placeholder over the answer — permanently, since the IIFE had already run and would
+   never fire again. The county cross-check sat on CHECKING forever whenever it resolved faster than
+   the rest of the card, which is most of the time.
+   So a patch is recorded here as well as written to the DOM, and every paint re-applies whatever
+   has already arrived. Any slot filled at any time survives every subsequent repaint. */
+const _slotPatches = new Map();     // slot id -> innerHTML that has already been resolved
+function patchSlot(id, innerHTML){
+  _slotPatches.set(id, innerHTML);
+  const el = document.getElementById(id);
+  if(el) el.innerHTML = innerHTML;
+  return !!el;
+}
+function applySlotPatches(root){
+  _slotPatches.forEach((v, id) => {
+    const el = (root || document).querySelector('#' + CSS.escape(id));
+    if(el && el.innerHTML !== v) el.innerHTML = v;
+  });
+}
 function paintResults(html, opts){
   const el=document.getElementById('results'); if(!el) return;
   if(html===_lastPaintHTML) return;          // identical markup: don't touch the DOM at all
@@ -21950,6 +22430,8 @@ function paintResults(html, opts){
   _lastPaintHTML=html;
   el.innerHTML=html;
   try{ tabifyResults(el, opts); }catch(e){}
+  // Re-apply anything a background slot already answered, or this paint would revert it.
+  try{ applySlotPatches(el); }catch(e){}
   // Only restore if there's still something to scroll — otherwise this clamps to 0 anyway.
   if(top>0 && el.scrollHeight>el.clientHeight) el.scrollTop=top;
 }
