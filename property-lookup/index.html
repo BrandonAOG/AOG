@@ -247,6 +247,21 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .badge.sfha{color:var(--warn);border-color:var(--sfha-line);background:var(--sfha-bg)}
   .badge.safe{color:var(--good);border-color:var(--safe-line);background:var(--safe-bg)}
   .badge.unk{color:var(--dim);border-color:var(--unk-line);background:var(--unk-bg)}
+  .badge.stalled{color:var(--warn);border-color:var(--warn);background:transparent}
+  /* Per-card retry. Lives in the card header (.ch) so it sits with the card it re-runs, and in
+     stalled stubs where it is the only way forward short of a whole new search. */
+  .retrybtn{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.04em;
+    color:var(--signal);background:transparent;border:1px solid var(--line);border-radius:5px;
+    padding:2px 8px;cursor:pointer;white-space:nowrap;margin-left:auto}
+  .retrybtn:hover:not(:disabled){border-color:var(--signal);background:rgba(57,211,255,.08)}
+  .retrybtn:disabled{opacity:.55;cursor:default}
+  /* A retry that changes nothing still has to SAY something, or a working button reads as dead. */
+  .retrybtn.rb-ok{color:var(--good);border-color:var(--good);opacity:1}
+  .retrybtn.rb-same{color:var(--dim);border-color:var(--line);opacity:1}
+  .retrybtn.rb-bad{color:var(--warn);border-color:var(--warn);opacity:1}
+  .retrybtn .rspin{display:inline-block;animation:rspin 900ms linear infinite}
+  @keyframes rspin{to{transform:rotate(360deg)}}
+  .ch:has(.retrybtn){display:flex;align-items:center;gap:8px}
 
   .note{font-size:11px;color:var(--dim);line-height:1.5;padding:8px 0 2px}
   .note.warnbox{background:var(--warnbox-bg);border:1px solid var(--warnbox-line);border-radius:8px;padding:10px 11px;color:var(--warnbox-ink)}
@@ -18982,6 +18997,7 @@ async function _runLookupInner(lat,lng,searchCtx){
   // …and the slot registry, or the previous parcel's answers would be re-applied over this one's
   // placeholders — the worst possible failure: one property's data on another property's card.
   try{ _slotPatches.clear(); }catch(e){}
+  try{ clearCardRetries(); }catch(e){}   // retries capture this lookup's scope; never outlive it
   results.innerHTML = setStatus('busy','Querying official GIS services…');
   if(window.Sheet) Sheet.setState('full');   // bring results into view on mobile
 
@@ -19421,6 +19437,10 @@ async function _runLookupInner(lat,lng,searchCtx){
   window.__ecAreaUrl = null; window.__ecAreaPinned=false; _ecAreaKey=''; clearTimeout(_ecAreaTimer);
   try{ clearNfhlCache(); }catch(e){}   // per-parcel flood query cache — must not survive a new lookup
 
+  /* NO retry registered for Aerial. renderAerialScout() fetches nothing — it builds Google deep
+     links plus one Esri export <img> URL — so a "retry" there would only re-request an image, which
+     is not what the button implies. A retry control on a card with no source to re-query makes the
+     ones that DO matter look decorative. */
   /* ---- Aerial & Street View: scout the property first (keyless deep-links + Esri aerial) ---- */
   html += renderAerialScout(lat, lng);
 
@@ -21565,6 +21585,21 @@ async function _runLookupInner(lat,lng,searchCtx){
      whole panel on await pWind — a slow/dead wind host used to freeze everything here. The live
      ASCE-contour value swaps in a moment later (see upgradeWindCard after the final paint). */
   html += renderWindDesign(lat, lng, cityName, countyName, null);
+  /* Wind is fully re-runnable on its own: queryWindSpeed() and renderWindDesign() are both
+     standalone, so a retry re-hits the ASCE contour host and rebuilds just this card. */
+  registerCardRetry('wind','Wind Design', async ()=>{
+    const w = await queryWindSpeed(lat, lng).catch(()=>null);
+    const live = (w && typeof w.v==='number') ? w : null;
+    /* renderWindDesign() silently falls back to the county planning figure when the ASCE contour
+       host gives nothing. That card is still CORRECT, so a plain success flash would hide the
+       fact that you are no longer looking at a per-point ASCE value — a distinction that matters
+       on a permit. Report which source actually answered. */
+    return { html: renderWindDesign(lat, lng, cityName, countyName, live),
+             label: live ? ('\u2713 ASCE '+live.v+' mph') : '\u26A0 County figure',
+             ok: !!live,
+             note: live ? 'Live per-point ASCE 7-22 value'
+                        : 'ASCE contour host did not answer — showing the county planning figure' };
+  });
 
   /* ---- Zoning & setbacks: from the local CODE + permitting portal, NOT the appraiser ---- */
   const zr = resolveZoning(cityName, countyName);
@@ -22428,6 +22463,7 @@ function paintResults(html, opts){
   if(html===_lastPaintHTML) return;          // identical markup: don't touch the DOM at all
   const top=el.scrollTop;
   _lastPaintHTML=html;
+  _clearStubWatch();          // this paint supersedes whatever the last one was waiting on
   el.innerHTML=html;
   try{ tabifyResults(el, opts); }catch(e){}
   // Re-apply anything a background slot already answered, or this paint would revert it.
@@ -22462,6 +22498,107 @@ function _tabStub(key, final){
   return `<div class="card noprint" data-stub="${key}"><div class="ch">`
        + `<span class="icn">[ ${esc(icn)} ]</span><h2>${esc(title)}</h2></div>`
        + `<div class="cb">${body}</div></div>`;
+}
+/* ══ PER-CARD RETRY ══════════════════════════════════════════════════════════════════════════
+   Re-runs ONE card's sources and swaps that card in place. It does not re-geocode, re-query the
+   parcel, or touch any other card. Generalises the in-place swap the live-wind upgrade already
+   does (see the pWind.then block after the final paint), which found its card by <h2> text and
+   replaced innerHTML.
+
+   A retry is registered as a closure DURING the lookup, so it captures lat/lng/cityName/
+   countyName from that lookup's scope — no context object to thread through, and no risk of a
+   retry running against a stale position. Registrations are cleared at the start of every search.
+
+   To wire a card: where it renders, call
+       registerCardRetry('<tabkey>', '<label>', async () => { ...re-query...; return cardHtml; });
+   The closure must resolve to one complete <div class="card">…</div>, or null on failure. */
+var _cardRetry = new Map();   // var: registerCardRetry() is called from lookup code declared
+                              // far above this line, so no temporal dead zone.
+function registerCardRetry(key, label, run){ _cardRetry.set(key, {label, run}); }
+function clearCardRetries(){ _cardRetry.clear(); }
+function _retryBtnHtml(key, label){
+  return '<button class="retrybtn" type="button" data-retry="'+key+'" '
+       + 'title="Re-run just this card — does not repeat the whole search">\u21BB Retry</button>';
+}
+/* Flash a result on the button itself. A retry against a healthy source often returns the SAME
+   answer in ~200 ms, so with only a spinner the button looks broken when it is in fact working —
+   which is exactly how this first read in testing. Every retry now ends in a visible verdict. */
+function _retryFlash(btn, text, cls, ms){
+  if(!btn) return;
+  btn.disabled=true; btn.className='retrybtn '+cls; btn.innerHTML=text;
+  setTimeout(()=>{ if(!btn.isConnected) return;
+    btn.className='retrybtn'; btn.disabled=false; btn.innerHTML='\u21BB Retry'; }, ms||2600);
+}
+/* A retry closure may return either:
+     a string                       — the card HTML, verdict inferred by comparing card bodies, or
+     { html, label, ok, note }      — html plus a short button label and an optional tooltip note,
+                                      for sources that can succeed while still degrading (e.g. wind
+                                      falling back from the live ASCE contour to the county figure). */
+async function runCardRetry(key){
+  const entry=_cardRetry.get(key); if(!entry) return;
+  const root=document.getElementById('results'); if(!root) return;
+  const panel=root.querySelector('.tabpanel[data-tab="'+key+'"]'); if(!panel) return;
+  const btn=panel.querySelector('[data-retry="'+key+'"]');
+  if(btn){ btn.disabled=true; btn.className='retrybtn'; btn.innerHTML='<span class="rspin">\u21BB</span> Retrying'; }
+  // Compare CARD BODIES, not whole panels — the header carries the retry button itself, which
+  // would otherwise make every result look like a change.
+  const bodyBefore=(panel.querySelector('.card > .cb')||{}).innerHTML||'';
+  let res=null, err=null;
+  try{ res=await entry.run(); }catch(e){ err=String(e&&e.message||e); }
+  const html = (res && typeof res==='object') ? res.html : res;
+  if(html){
+    panel.innerHTML=html;
+    const ch=panel.querySelector('.card > .ch');
+    if(ch && !ch.querySelector('.retrybtn')) ch.insertAdjacentHTML('beforeend', _retryBtnHtml(key, entry.label));
+    try{ applySlotPatches(panel); }catch(e){}
+    const btn2=panel.querySelector('[data-retry="'+key+'"]');
+    const bodyAfter=(panel.querySelector('.card > .cb')||{}).innerHTML||'';
+    if(btn2 && res && typeof res==='object' && res.label){
+      if(res.note) btn2.title=res.note;
+      _retryFlash(btn2, esc(res.label), res.ok===false?'rb-bad':'rb-ok');
+    }else{
+      const changed = bodyAfter!==bodyBefore;
+      _retryFlash(btn2, changed?'\u2713 Updated':'\u2713 No change', changed?'rb-ok':'rb-same');
+    }
+  }else{
+    _retryFlash(btn, '\u2715 No answer', 'rb-bad', 3200);
+    const cb=panel.querySelector('.card > .cb');
+    if(cb) cb.insertAdjacentHTML('afterbegin',
+      '<div class="freshline"><span class="badge stalled">\u25CF STILL NO ANSWER</span> '
+      + (err?esc(err):'the source did not respond')+'</div>');
+  }
+}
+document.addEventListener('click', e=>{
+  const b=e.target.closest && e.target.closest('[data-retry]');
+  if(b){ e.preventDefault(); runCardRetry(b.getAttribute('data-retry')); }
+});
+
+/* ══ STALLED-STUB WATCHDOG ═══════════════════════════════════════════════════════════════════
+   Longer than the slowest enrichment (ENRICH_TIMEOUT plus the FDEM EC's 12 s ceiling) so a merely
+   slow source still lands normally. Only a lookup that has stopped progressing trips this. */
+const STUB_STALL_MS = 25000;
+var _stubWatch = null;   // var, not let: paintResults() is declared above and calls
+                         // _clearStubWatch(), so this must not sit in a temporal dead zone.
+function _clearStubWatch(){ if(_stubWatch){ clearTimeout(_stubWatch); _stubWatch=null; } }
+function _armStubWatch(scope){
+  _clearStubWatch();
+  _stubWatch=setTimeout(()=>{
+    _stubWatch=null;
+    if(!scope||!scope.querySelectorAll) return;
+    scope.querySelectorAll('.card[data-stub]').forEach(card=>{
+      const key=card.getAttribute('data-stub');
+      const cb=card.querySelector('.cb'); if(!cb||cb.querySelector('[data-stalled]')) return;
+      const can=_cardRetry.has(key);
+      cb.innerHTML='<div class="freshline" data-stalled="1">'
+        + '<span class="badge stalled">\u25CF NO RESPONSE</span> this source didn\'t answer</div>'
+        + '<div class="note">'+(can ? 'Retry re-runs only this card — the rest of the lookup stays as it is.'
+                                    : 'Search again to retry.')+'</div>';
+      if(can){
+        const ch=card.querySelector('.ch');
+        if(ch && !ch.querySelector('.retrybtn')) ch.insertAdjacentHTML('beforeend', _retryBtnHtml(key,''));
+      }
+    });
+  }, STUB_STALL_MS);
 }
 function tabifyResults(root, opts){
   const flow = root.querySelector('.cardflow');
@@ -22506,6 +22643,11 @@ function tabifyResults(root, opts){
     const panel=document.createElement('div'); panel.className='tabpanel'; panel.dataset.tab=key;
     if(items.length) items.forEach(c=>panel.appendChild(c));
     else panel.innerHTML=_tabStub(key, isFinal);
+    // A card that can be re-run on its own gets its own retry control, in its own header.
+    if(_cardRetry.has(key)){
+      const ch=panel.querySelector('.card > .ch');
+      if(ch && !ch.querySelector('.retrybtn')) ch.insertAdjacentHTML('beforeend', _retryBtnHtml(key,''));
+    }
     panels.appendChild(panel);
   });
   flow.replaceWith(panels);
@@ -22517,8 +22659,13 @@ function tabifyResults(root, opts){
   if(sumEl) sticky.appendChild(sumEl);   // summary lives here, in normal (non-sticky) flow
   panels.parentNode.insertBefore(sticky, panels);
   panels.parentNode.insertBefore(bar, panels);   // tab bar right above the panels, sticky
-  // Loading strips ride along after the panels, outside the tab system.
-  loose.forEach(el=>panels.parentNode.appendChild(el));
+  /* The "● LOADING pulling wind, zoning, permits…" strips used to be appended here, OUTSIDE the
+     tab system — so they rendered under whichever tab you were on. Standing on Flood and reading
+     "pulling wind design…" made a global progress note look like a stuck flood card. Every pending
+     tab already gets its own _tabStub() card in its own panel, which is the same information in
+     the right place, so the strips are dropped rather than displayed. */
+  loose.forEach(el=>el.remove());
+  if(isFinal) _clearStubWatch(); else _armStubWatch(panels.parentNode);
   const activate=key=>{
     bar.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===key));
     panels.querySelectorAll('.tabpanel').forEach(p=>p.classList.toggle('active', p.dataset.tab===key));
