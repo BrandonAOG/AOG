@@ -191,58 +191,23 @@ body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backgr
 .derate-notice{padding:10px 14px;background:rgba(249,115,22,.07);border:1px solid rgba(249,115,22,.25);border-radius:3px;font-family:var(--font-mono);font-size:.67rem;letter-spacing:1px;color:var(--orange-bright);margin-bottom:16px;display:none}
 .derate-notice.show{display:block}
 
-/* DIVIDER */
-.mode-divider{text-align:center;margin:28px 0 20px;position:relative}
-.mode-divider::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(251,191,36,.3),rgba(249,115,22,.3),transparent)}
-.mode-divider-inner{position:relative;display:inline-block;padding:0 18px;font-family:var(--font-display);font-size:.68rem;letter-spacing:5px;color:var(--text-dim);text-transform:uppercase;background:var(--bg-dark)}
-
 /* LOAD BUILDER (secondary) */
-.appliance-picker-title{font-family:var(--font-mono);font-size:.68rem;letter-spacing:3px;color:var(--orange-bright);text-transform:uppercase;margin-bottom:12px}
 .appliance-cats{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
 .cat-btn{padding:4px 11px;background:rgba(15,21,53,.8);border:1px solid rgba(251,191,36,.2);border-radius:2px;color:var(--text-dim);font-family:var(--font-mono);font-size:.63rem;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .2s}
 .cat-btn:hover,.cat-btn.active{border-color:var(--yellow-bright);color:var(--yellow-bright);background:rgba(251,191,36,.08)}
-.appliance-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:7px;max-height:250px;overflow-y:auto;padding-right:4px}
-.appliance-list::-webkit-scrollbar{width:4px}.appliance-list::-webkit-scrollbar-track{background:rgba(15,21,53,.5)}.appliance-list::-webkit-scrollbar-thumb{background:rgba(251,191,36,.3);border-radius:2px}
-.appliance-item{padding:9px 11px;background:rgba(10,14,39,.7);border:1px solid rgba(59,130,246,.2);border-radius:3px;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;gap:2px}
-.appliance-item:hover{border-color:var(--orange);background:rgba(249,115,22,.07);transform:translateY(-1px)}
-.appliance-item-name{font-family:var(--font-body);font-size:.78rem;font-weight:500;color:var(--text)}
-.appliance-item-watts{font-family:var(--font-mono);font-size:.63rem;color:var(--text-dim);letter-spacing:1px}
 .custom-add-row{display:grid;grid-template-columns:1fr 95px 95px auto;gap:7px;margin-top:12px;align-items:end}
 @media(max-width:600px){.custom-add-row{grid-template-columns:1fr 1fr}.add-btn{grid-column:1/-1}}
 .add-btn{padding:10px 18px;background:linear-gradient(135deg,var(--yellow-bright),var(--orange));border:none;border-radius:3px;font-family:var(--font-display);font-size:.63rem;font-weight:700;letter-spacing:3px;color:var(--bg-dark);cursor:pointer;text-transform:uppercase;transition:all .2s;clip-path:polygon(5px 0%,100% 0%,calc(100% - 5px) 100%,0% 100%);white-space:nowrap}
 .add-btn:hover{box-shadow:0 0 14px rgba(251,191,36,.5);transform:scale(1.02)}.add-btn:active{transform:scale(.98)}
-.load-table-wrap{margin-top:16px;border:1px solid rgba(251,191,36,.15);border-radius:3px;overflow:hidden}
-.load-table-header{display:grid;grid-template-columns:1fr 85px 85px 85px 34px;background:rgba(251,191,36,.05);border-bottom:1px solid rgba(251,191,36,.15);padding:7px 13px}
 .th{font-family:var(--font-mono);font-size:.58rem;letter-spacing:2px;color:var(--blue-electric);text-transform:uppercase}
-@media(max-width:580px){.load-table-header{grid-template-columns:1fr 68px 68px 32px}.th-start{display:none}}
-.load-rows{max-height:280px;overflow-y:auto}.load-rows::-webkit-scrollbar{width:4px}.load-rows::-webkit-scrollbar-thumb{background:rgba(251,191,36,.3);border-radius:2px}
-.load-row{display:grid;grid-template-columns:1fr 85px 85px 85px 34px;padding:9px 13px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center;animation:rowIn .3s ease}
 @keyframes rowIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
-@media(max-width:580px){.load-row{grid-template-columns:1fr 68px 68px 32px}.td-start{display:none}}
-.td-name{font-family:var(--font-body);font-size:.8rem;color:var(--text)}
 .td-qty{display:flex;align-items:center;gap:5px}
 .qty-btn{width:18px;height:18px;background:rgba(15,21,53,.9);border:1px solid rgba(251,191,36,.3);border-radius:2px;color:var(--yellow-bright);font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
 .qty-btn:hover{background:rgba(251,191,36,.15)}
 .qty-val{font-family:var(--font-mono);font-size:.78rem;color:var(--text);min-width:18px;text-align:center}
-.td-watts,.td-start{font-family:var(--font-mono);font-size:.76rem;color:var(--text-dim)}.td-start{color:rgba(249,115,22,.7)}
-.td-total{font-family:var(--font-mono);font-size:.8rem;color:var(--yellow-bright);font-weight:600}
 .del-btn{width:22px;height:22px;background:none;border:1px solid rgba(239,68,68,.3);border-radius:2px;color:rgba(239,68,68,.6);font-size:.78rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
 .del-btn:hover{background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red)}
-.load-totals-row{display:grid;grid-template-columns:1fr 85px 85px 85px 34px;padding:11px 13px;background:rgba(251,191,36,.05);border-top:2px solid rgba(251,191,36,.2);align-items:center}
-@media(max-width:580px){.load-totals-row{grid-template-columns:1fr 68px 68px 32px}.tot-start{display:none}}
 .tot-label{font-family:var(--font-display);font-size:.63rem;letter-spacing:3px;color:var(--yellow-bright);text-transform:uppercase}
-.tot-val{font-family:var(--font-mono);font-size:.83rem;font-weight:700;color:var(--yellow-bright);text-shadow:0 0 8px rgba(251,191,36,.4)}
-.tot-start-val{font-family:var(--font-mono);font-size:.83rem;color:var(--orange-bright)}
-.empty-loads{padding:28px 13px;text-align:center;font-family:var(--font-mono);font-size:.72rem;letter-spacing:2px;color:var(--text-dim)}
-
-/* SIZING RESULT */
-.sizing-result{margin-top:18px;padding:16px 20px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.25);border-radius:3px;display:none}
-.sizing-result.show{display:block}
-.sizing-result-title{font-family:var(--font-mono);font-size:.64rem;letter-spacing:3px;color:#10B981;text-transform:uppercase;margin-bottom:10px}
-.sizing-result-body{font-family:var(--font-mono);font-size:.76rem;color:var(--text);letter-spacing:1px;line-height:2}
-.sizing-highlight{color:var(--yellow-bright);font-weight:700}
-.sizing-btn{margin-top:12px;padding:9px 20px;background:linear-gradient(135deg,#10B981,#059669);border:none;border-radius:3px;font-family:var(--font-display);font-size:.62rem;font-weight:700;letter-spacing:3px;color:#fff;cursor:pointer;text-transform:uppercase;transition:all .2s}
-.sizing-btn:hover{box-shadow:0 0 14px rgba(16,185,129,.5);transform:scale(1.02)}
 
 /* NO RESULT */
 .no-result{text-align:center;padding:40px 20px;font-family:var(--font-mono);font-size:.74rem;letter-spacing:2px;color:var(--text-dim)}
@@ -383,9 +348,73 @@ body.light-mode .theme-icon { stroke: #D97706; }
 body.light-mode .panel { background: #FAFAFA; border-color: rgba(217,119,6,0.25); color: #1F2937; }
 body.light-mode .container { color: #1F2937; }
 
+/* Light mode: remap the palette so light-on-light text (recommended pipe row,
+   spec cells, disclaimer) stays readable in daylight. */
+body.light-mode {
+  --text:#111827; --text-dim:#4B5563;
+  --yellow:#B45309; --yellow-bright:#B45309; --orange:#C2410C; --orange-bright:#C2410C; --orange-deep:#9A3412;
+  --blue:#1E3A8A; --blue-bright:#1D4ED8; --blue-electric:#0369A1;
+  --green:#047857; --red:#B91C1C;
+  --bg-dark:#FFFFFF; --bg-mid:#F8FAFC; --bg-light:#F1F5F9;
+}
+body.light-mode .field-input, body.light-mode .field-select { background:#FFFFFF; border-color:rgba(180,83,9,.35); color:#111827 }
+body.light-mode .field-select option, body.light-mode .field-select optgroup { background:#FFFFFF; color:#111827 }
+body.light-mode .info-cell, body.light-mode .gas-app-item,
+body.light-mode .cool-btn, body.light-mode .fuel-mini, body.light-mode .cat-btn { background:#FFFFFF }
+body.light-mode .pipe-table tr.recommended { background:rgba(180,83,9,.12) }
+body.light-mode .pipe-table tr.recommended td { color:#111827 }
+body.light-mode .pipe-table td { color:#374151 }
+body.light-mode .disclaimer { background:#F3F4F6; border-color:rgba(0,0,0,.1); color:#374151 }
+body.light-mode .stage-group, body.light-mode .sub-section { background:#FFFFFF }
+body.light-mode .mi-model, body.light-mode .btu-card-value { text-shadow:none }
+body.light-mode .badge-green{color:#047857}body.light-mode .badge-red{color:#B91C1C}
+body.light-mode .pipe-rec-tag { color:#047857 }
+
 @media (max-width: 480px) {
   .action-bar { padding: 4px 4px; padding-top: max(4px, env(safe-area-inset-top, 4px)); gap: 3px; }
 }
+
+/* ===== GAS APPLIANCE LOAD BUILDER ===== */
+.sub-section{margin-bottom:22px;padding:16px 18px;border:1px solid rgba(59,130,246,.22);border-radius:4px;background:rgba(10,14,39,.3)}
+.sub-section-title{font-family:var(--font-display);font-size:.68rem;font-weight:700;letter-spacing:4px;color:var(--blue-electric);text-transform:uppercase;margin-bottom:4px}
+.sub-section-desc{font-family:var(--font-mono);font-size:.62rem;color:var(--text-dim);letter-spacing:1px;margin-bottom:14px}
+.gas-app-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:7px;max-height:230px;overflow-y:auto;padding-right:4px;margin-bottom:12px}
+.gas-app-list::-webkit-scrollbar{width:4px}.gas-app-list::-webkit-scrollbar-track{background:rgba(15,21,53,.5)}.gas-app-list::-webkit-scrollbar-thumb{background:rgba(251,191,36,.3);border-radius:2px}
+.gas-app-item{padding:9px 11px;background:rgba(10,14,39,.7);border:1px solid rgba(59,130,246,.2);border-radius:3px;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;gap:2px}
+.gas-app-item:hover{border-color:var(--orange);background:rgba(249,115,22,.07);transform:translateY(-1px)}
+.gas-app-item-name{font-family:var(--font-body);font-size:.78rem;font-weight:500;color:var(--text)}
+.gas-app-item-btu{font-family:var(--font-mono);font-size:.63rem;color:var(--text-dim);letter-spacing:1px}
+.gas-rows{max-height:240px;overflow-y:auto}
+.gas-rows::-webkit-scrollbar{width:4px}.gas-rows::-webkit-scrollbar-thumb{background:rgba(251,191,36,.3);border-radius:2px}
+.gas-table-wrap{margin-top:12px;border:1px solid rgba(251,191,36,.15);border-radius:3px;overflow:hidden}
+.gas-table-header,.gas-row,.gas-totals-row{display:grid;grid-template-columns:1fr 92px 112px 104px 34px;align-items:center;gap:6px}
+.gas-table-header{background:rgba(251,191,36,.05);border-bottom:1px solid rgba(251,191,36,.15);padding:7px 13px}
+.gas-row{padding:9px 13px;border-bottom:1px solid rgba(255,255,255,.04);animation:rowIn .3s ease}
+.gas-totals-row{padding:11px 13px;background:rgba(251,191,36,.05);border-top:2px solid rgba(251,191,36,.2)}
+@media(max-width:640px){.gas-table-header,.gas-row,.gas-totals-row{grid-template-columns:1fr 76px 96px 30px}.gas-col-total{display:none}}
+.gas-btu-input{width:100%;padding:5px 7px;background:rgba(10,14,39,.85);border:1px solid rgba(251,191,36,.3);border-radius:3px;color:var(--yellow-bright);font-family:var(--font-mono);font-size:.76rem;font-weight:600;text-align:right;-moz-appearance:textfield}
+.gas-btu-input:focus{outline:none;border-color:var(--yellow-bright);box-shadow:0 0 8px rgba(251,191,36,.25)}
+.gas-btu-input::-webkit-outer-spin-button,.gas-btu-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+body.light-mode .gas-btu-input{background:#FFFFFF;border-color:rgba(180,83,9,.4)}
+.gas-td-name{font-family:var(--font-body);font-size:.8rem;color:var(--text)}
+.gas-td-btu{font-family:var(--font-mono);font-size:.78rem;color:var(--yellow-bright);font-weight:600;text-align:right}
+.empty-gas{padding:22px 13px;text-align:center;font-family:var(--font-mono);font-size:.7rem;letter-spacing:2px;color:var(--text-dim)}
+/* include-on-run toggle */
+.run-incl{display:flex;align-items:center;gap:9px;margin-top:11px;padding:9px 12px;border:1px dashed rgba(16,185,129,.3);border-radius:3px;background:rgba(16,185,129,.04);cursor:pointer}
+.run-incl input{width:15px;height:15px;accent-color:#10B981;cursor:pointer;flex-shrink:0}
+.run-incl-txt{font-family:var(--font-mono);font-size:.64rem;letter-spacing:1px;color:var(--text-dim);line-height:1.5}
+.run-incl-txt b{color:#10B981;font-weight:700}
+/* regulator banner */
+.reg-banner{padding:13px 16px;border-radius:3px;margin-bottom:18px;border:1px solid;font-family:var(--font-mono);font-size:.72rem;letter-spacing:1px;line-height:1.75}
+.reg-banner.shared{background:rgba(249,115,22,.08);border-color:rgba(249,115,22,.4);color:var(--orange-bright)}
+.reg-banner.dedicated{background:rgba(16,185,129,.07);border-color:rgba(16,185,129,.35);color:#10B981}
+.reg-banner-title{font-family:var(--font-display);font-size:.72rem;font-weight:900;letter-spacing:3px;text-transform:uppercase;margin-bottom:7px;display:block}
+.reg-banner b{color:var(--yellow-bright);font-weight:700}
+.reg-pass{color:#10B981;font-weight:700}
+.reg-fail{color:var(--red);font-weight:700}
+/* data warning */
+.data-warn{padding:10px 14px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.3);border-radius:3px;font-family:var(--font-mono);font-size:.66rem;letter-spacing:1px;line-height:1.7;color:var(--red);margin-bottom:16px;display:none}
+.data-warn.show{display:block}
 </style>
 <script src="../update-banner.js"></script>
 </head>
@@ -451,7 +480,7 @@ body.light-mode .container { color: #1F2937; }
 
 <!-- STEP 2 -->
 <div class="panel">
-  <div class="panel-header"><div class="panel-num">02</div><div><div class="panel-title">Model &amp; Site Configuration</div><div class="panel-desc">Select model · elevation · two-stage pipe run setup</div></div></div>
+  <div class="panel-header"><div class="panel-num">02</div><div><div class="panel-title">Model &amp; Site Configuration</div><div class="panel-desc">Model · elevation · regulator config · appliance load · pipe runs</div></div></div>
   <div class="panel-body">
 
     <div class="config-row" style="margin-bottom:20px">
@@ -465,8 +494,59 @@ body.light-mode .container { color: #1F2937; }
         <input class="field-input" type="number" id="elev" value="0" min="0" max="12000">
         <div class="field-hint">Guardian: −3.5%/1,000 ft · Protector: −3%/1,000 ft</div>
       </div>
-      <div class="field-wrap" style="display:flex;flex-direction:column;justify-content:flex-end;grid-column:span 2">
+      <div class="field-wrap" id="meter-class-wrap">
+        <label class="field-label" for="meter-class">Meter / Regulator Class</label>
+        <select class="field-select" id="meter-class" onchange="onMeterClassChange()">
+          <option value="" selected>— Not specified —</option>
+          <option value="175">AC-175 — 175 CFH</option>
+          <option value="250">AC-250 — 250 CFH (typical residential)</option>
+          <option value="400">AC-400 — 400 CFH</option>
+          <option value="425">AL-425 — 425 CFH</option>
+          <option value="630">AC-630 — 630 CFH</option>
+          <option value="800">AL-800 — 800 CFH</option>
+          <option value="1000">AL-1000 — 1,000 CFH</option>
+          <option value="1400">AL-1400 — 1,400 CFH</option>
+          <option value="2300">AL-2300 — 2,300 CFH</option>
+          <option value="custom">Custom — enter from tag →</option>
+        </select>
+        <div class="field-hint">Ratings at 0.5" W.C. drop · the meter tag governs</div>
       </div>
+      <div class="field-wrap">
+        <label class="field-label" for="meter-cap"><span id="meter-cap-label">Meter Capacity</span> — CFH <span style="opacity:.6">(optional)</span></label>
+        <input class="field-input" type="number" id="meter-cap" placeholder="e.g. 250" min="0" step="5" oninput="document.getElementById('meter-class').value='custom'">
+        <div class="field-hint" id="meter-cap-hint">As stamped on the meter or regulator tag</div>
+      </div>
+    </div>
+
+    <!-- GAS APPLIANCE LOAD BUILDER -->
+    <div class="sub-section">
+      <div class="sub-section-title">▸ Other Gas Appliances on the Run</div>
+      <div class="sub-section-desc">Add every appliance fed by the same piping. Total connected load is added to the generator demand on any run you tag below.</div>
+
+      <div class="appliance-cats">
+        <button class="cat-btn active" onclick="filterGasCat('all',this)">All</button>
+        <button class="cat-btn" onclick="filterGasCat('heat',this)">Heating</button>
+        <button class="cat-btn" onclick="filterGasCat('water',this)">Water</button>
+        <button class="cat-btn" onclick="filterGasCat('kitchen',this)">Kitchen</button>
+        <button class="cat-btn" onclick="filterGasCat('laundry',this)">Laundry</button>
+        <button class="cat-btn" onclick="filterGasCat('outdoor',this)">Outdoor</button>
+        <button class="cat-btn" onclick="filterGasCat('other',this)">Other</button>
+      </div>
+      <div class="gas-app-list" id="gas-app-list"></div>
+
+      <div class="custom-add-row" style="grid-template-columns:1fr 120px 95px auto">
+        <div class="field-wrap"><label class="field-label">Custom Appliance</label><input class="field-input" type="text" id="gas-custom-name" placeholder="Appliance name…"></div>
+        <div class="field-wrap"><label class="field-label">BTU/hr</label><input class="field-input" type="number" id="gas-custom-btu" placeholder="80000" min="0" step="1000"></div>
+        <div class="field-wrap"><label class="field-label">Qty</label><input class="field-input" type="number" id="gas-custom-qty" value="1" min="1"></div>
+        <div class="field-wrap"><label class="field-label">&nbsp;</label><button class="add-btn" onclick="addCustomGasAppliance()">+ Add</button></div>
+      </div>
+
+      <div class="gas-table-wrap">
+        <div class="gas-table-header"><div class="th">Appliance</div><div class="th">Qty</div><div class="th" style="text-align:right">BTU/hr each</div><div class="th gas-col-total" style="text-align:right">Line Total</div><div class="th"></div></div>
+        <div class="gas-rows" id="gas-rows"><div class="empty-gas">No gas appliances added — generator only</div></div>
+        <div class="gas-totals-row"><div class="tot-label">Total Connected Appliance Load</div><div></div><div></div><div class="gas-td-btu gas-col-total" id="gas-total-val" style="font-size:.9rem">0</div><div></div></div>
+      </div>
+      <div class="field-hint" style="margin-top:8px">Presets are typical values — <b>edit the BTU/hr to match the nameplate</b>. NFPA 54 §402.1: size for the total connected load, no diversity factor applied.</div>
     </div>
 
     <!-- NATURAL GAS pipe stages -->
@@ -485,7 +565,7 @@ body.light-mode .container { color: #1F2937; }
               <label class="field-label" for="ng1-press">Supply Pressure from Meter</label>
               <select class="field-select" id="ng1-press">
                 <optgroup label="── Low / Near-Atmospheric ──">
-                  <option value="0.25psi">¼ PSI (7" WC) — Low medium, some residential</option>
+                  <option value="0.25psi">¼ PSI (7" WC) — Low pressure meter outlet</option>
                   <option value="0.5psi">½ PSI (14" WC) — Lower medium pressure</option>
                   <option value="1psi">1 PSI (28" WC) — Medium-low pressure</option>
                 </optgroup>
@@ -512,6 +592,8 @@ body.light-mode .container { color: #1F2937; }
               </select>
             </div>
           </div>
+          <label class="run-incl"><input type="checkbox" id="ng1-incl" checked>
+            <span class="run-incl-txt"><b>Shared piping</b> — carries the generator plus every appliance. Set automatically when appliances are added; uncheck ONLY if the generator has its own dedicated gas service.</span></label>
         </div>
         <button class="add-run-btn stage-add-btn" onclick="addPipeRun('ng',1,this)">Add Run — Gas Meter to Second Stage Regulator</button>
       </div>
@@ -538,7 +620,6 @@ body.light-mode .container { color: #1F2937; }
                 </optgroup>
                 <optgroup label="── Higher Low Pressure ──">
                   <option value="14wc">14" WC — 0.5 PSI delivery</option>
-                  <option value="0.5psi">0.5 PSI (14" WC) — Higher low pressure</option>
                   <option value="1psi">1 PSI (28" WC)</option>
                   <option value="2psi">2 PSI — High low-pressure delivery</option>
                 </optgroup>
@@ -555,6 +636,8 @@ body.light-mode .container { color: #1F2937; }
               </select>
             </div>
           </div>
+          <label class="run-incl"><input type="checkbox" id="ng2-incl" onchange="clearResults()">
+            <span class="run-incl-txt">Does the <b>second-stage regulator also feed house appliances?</b> Leave OFF if it steps down for the generator alone. ON means the generator inlet pressure must hold with every appliance firing at once.</span></label>
         </div>
         <button class="add-run-btn stage-add-btn" onclick="addPipeRun('ng',2,this)">Add Run — Second Stage Regulator to Generator</button>
       </div>
@@ -605,6 +688,8 @@ body.light-mode .container { color: #1F2937; }
               </select>
             </div>
           </div>
+          <label class="run-incl"><input type="checkbox" id="lp1-incl" checked>
+            <span class="run-incl-txt"><b>Shared piping</b> — carries the generator plus every appliance. Set automatically when appliances are added; uncheck ONLY if the generator has its own dedicated gas service.</span></label>
         </div>
         <button class="add-run-btn stage-add-btn" onclick="addPipeRun('lp',1,this)">Add Run — First Stage Reg. to Second Stage Reg.</button>
       </div>
@@ -629,7 +714,6 @@ body.light-mode .container { color: #1F2937; }
                 </optgroup>
                 <optgroup label="── Higher Low Pressure Delivery ──">
                   <option value="14wc">14" WC — 0.5 PSI delivery</option>
-                  <option value="0.5psi">0.5 PSI (14" WC) — Higher delivery</option>
                   <option value="1psi">1 PSI (28" WC)</option>
                   <option value="2psi">2 PSI — High low-pressure delivery</option>
                 </optgroup>
@@ -646,6 +730,8 @@ body.light-mode .container { color: #1F2937; }
               </select>
             </div>
           </div>
+          <label class="run-incl"><input type="checkbox" id="lp2-incl" onchange="clearResults()">
+            <span class="run-incl-txt">Does the <b>second-stage regulator also feed house appliances?</b> Leave OFF if it steps down for the generator alone. ON means the generator inlet pressure must hold with every appliance firing at once.</span></label>
         </div>
         <button class="add-run-btn stage-add-btn" onclick="addPipeRun('lp',2,this)">Add Run — Second Stage Regulator to Generator</button>
       </div>
@@ -679,6 +765,8 @@ body.light-mode .container { color: #1F2937; }
         <div class="mi-badges" id="mi-badges"></div>
       </div>
 
+      <div class="data-warn" id="data-warn"></div>
+      <div class="reg-banner dedicated" id="reg-banner"></div>
       <div class="derate-notice" id="derate-notice"></div>
 
       <div class="btu-hero">
@@ -740,7 +828,7 @@ body.light-mode .container { color: #1F2937; }
         <div id="extra-pipe-results"></div>
 
         <div class="disclaimer">
-          NFPA 54 / IFGC Schedule 40 black steel pipe. Base table: NFPA 54 Table 402.4(2) — 0.5" W.C. pressure drop, SG = 0.60, 1,020 BTU/ft³ NG. Medium-pressure NG capacities from P₁²−P₂² Spitzglass formula (NFPA 54 Appendix D). NG BTU content per Generac spec: 1,000 BTU/ft³ Guardian · 1,036 BTU/ft³ Protector — comparison normalized to CFH per NFPA 54 §402. LP capacity scaled per NFPA 58 §5.5 / NFPA 54 Appendix D Spitzglass formula: LP_SCALE = (2,516 BTU/ft³ ÷ 1,020 BTU/ft³) × (SG_NG/SG_LP)^0.541 = (2,516/1,020) × (0.60/1.52)^0.541 ≈ 1.492 — accounts for LP propane vapor density (SG = 1.52) and BTU content. LP high-pressure multipliers recalculated per NFPA 58 §5.5 for SG = 1.52. PE SDR-11 per NFPA 54 Table 402.4(19) approx. CSST / TracPipe per manufacturer installation tables — verify with current install guide. Size for full rated load at sea level — derate for elevation per Generac spec. ANSI Z21.75 14" flex connector required at generator. Derate additional capacity for fittings and branch loads. Verify all sizing with a licensed gas fitter and authority having jurisdiction (AHJ).
+          NFPA 54 / IFGC Schedule 40 black steel pipe. Base table: NFPA 54 Table 402.4(2) — 0.5" W.C. pressure drop, SG = 0.60, 1,020 BTU/ft³ NG. Medium-pressure NG capacities from P₁²−P₂² Spitzglass formula (NFPA 54 Appendix D). NG BTU content per Generac spec: 1,000 BTU/ft³ Guardian · 1,036 BTU/ft³ Protector — comparison normalized to CFH per NFPA 54 §402. LP capacity scaled per NFPA 58 §5.5 / NFPA 54 Appendix D Spitzglass formula: LP_SCALE = (2,516 BTU/ft³ ÷ 1,020 BTU/ft³) × (SG_NG/SG_LP)^0.541 = (2,516/1,020) × (0.60/1.52)^0.541 ≈ 1.492 — accounts for LP propane vapor density (SG = 1.52) and BTU content. LP high-pressure multipliers recalculated per NFPA 58 §5.5 for SG = 1.52. PE SDR-11 per NFPA 54 Table 402.4(19) approx. CSST / TracPipe per manufacturer installation tables — verify with current install guide. Length column is rounded UP to the next NFPA table length, per NFPA 54 §402.4 — never interpolated down. Runs tagged as shared piping carry the generator PLUS the total connected appliance load (NFPA 54 §402.1 — no diversity factor applied). Size for full rated load at sea level — derate for elevation per Generac spec. ANSI Z21.75 14" flex connector required at generator. <b>Lengths entered are physical run length only — add equivalent length for every elbow, tee and valve before sizing.</b> Pressure multipliers above 1 PSI are engineering approximations, not NFPA table values — verify medium/high-pressure runs by calculation. Verify all sizing with a licensed gas fitter and authority having jurisdiction (AHJ).
         </div>
       </div>
 
@@ -748,52 +836,9 @@ body.light-mode .container { color: #1F2937; }
   </div>
 </div>
 
-<!-- DIVIDER -->
-<div class="mode-divider"><div class="mode-divider-inner">Optional · Generator Sizing Tool</div></div>
-
-<!-- LOAD BUILDER -->
-<div class="panel">
-  <div class="panel-header"><div class="panel-num">✦</div><div><div class="panel-title">Load Calculator</div><div class="panel-desc">Add your loads to determine what generator size you need</div></div></div>
-  <div class="panel-body">
-
-    <div class="appliance-picker-title">▸ Quick-Add Appliances</div>
-    <div class="appliance-cats">
-      <button class="cat-btn active" onclick="filterCat('all',this)">All</button>
-      <button class="cat-btn" onclick="filterCat('hvac',this)">HVAC</button>
-      <button class="cat-btn" onclick="filterCat('kitchen',this)">Kitchen</button>
-      <button class="cat-btn" onclick="filterCat('water',this)">Water</button>
-      <button class="cat-btn" onclick="filterCat('lights',this)">Lights &amp; AV</button>
-      <button class="cat-btn" onclick="filterCat('motors',this)">Pumps &amp; Motors</button>
-      <button class="cat-btn" onclick="filterCat('medical',this)">Medical</button>
-      <button class="cat-btn" onclick="filterCat('other',this)">Other</button>
-    </div>
-    <div class="appliance-list" id="appliance-list"></div>
-
-    <div class="custom-add-row">
-      <div class="field-wrap"><label class="field-label">Custom Load</label><input class="field-input" type="text" id="custom-name" placeholder="Appliance name…"></div>
-      <div class="field-wrap"><label class="field-label">Run W</label><input class="field-input" type="number" id="custom-run" placeholder="1200" min="0"></div>
-      <div class="field-wrap"><label class="field-label">Start W</label><input class="field-input" type="number" id="custom-start" placeholder="1200" min="0"></div>
-      <div class="field-wrap"><label class="field-label">&nbsp;</label><button class="add-btn" onclick="addCustomLoad()">+ Add</button></div>
-    </div>
-
-    <div class="load-table-wrap">
-      <div class="load-table-header"><div class="th">Load / Circuit</div><div class="th">Qty</div><div class="th th-start">Start W</div><div class="th">Run W</div><div class="th"></div></div>
-      <div class="load-rows" id="load-rows"><div class="empty-loads">⚡ No loads added yet</div></div>
-      <div class="load-totals-row"><div class="tot-label">Total</div><div></div><div class="tot-start-val tot-start" id="tot-start-val">0 W</div><div class="tot-val" id="tot-run-val">0 W</div><div></div></div>
-    </div>
-
-    <div class="sizing-result" id="sizing-result">
-      <div class="sizing-result-title">▸ Sizing Recommendation</div>
-      <div class="sizing-result-body" id="sizing-result-body">—</div>
-      <button class="sizing-btn" onclick="applyRecommendedModel()">▶ Load This Model in Lookup</button>
-    </div>
-
-  </div>
-</div>
-
 <div class="footer">
   <div class="footer-text">Always On Generators · Field Operations Portal</div>
-  <div class="footer-version">GENERAC GAS CALC <span>v1.0</span> · BrandonAOG  · 2026</div>
+  <div class="footer-version">GENERAC GAS CALC <span>v1.1</span> · BrandonAOG  · 2026</div>
 </div>
 </div>
 
@@ -814,37 +859,37 @@ const GM = [
   {cooled:"air", kw_ng:14,   kw_lp:14,  label:"14kW NextGen · G007258-0 / G007323-0",  model:"Generac 14kW Guardian NextGen",   num:"G007258-0 / G007323-0",  grp:"Guardian NextGen Series",
    ng_cfh_f:243,  ng_cfh_h:189,  lp_gph_f:2.92, lp_gph_h:1.76,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
-   snd:"65 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:60, weight:"391 lb",
+   snd:"65 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:60, weight:"391 lb", ver:"Spec sheet — 14/18 kW Air-Cooled Standby (G007258/G007259)",
    desc:"Air-cooled · NextGen Series · G-Force 800 · 2-cyl 817cc · 3,600 RPM · 46.4\"L × 26.3\"W × 30.7\"H"},
 
   {cooled:"air", kw_ng:17,   kw_lp:18,  label:"18kW NextGen · G007259-0 / G007324-0",  model:"Generac 18kW Guardian NextGen",   num:"G007259-0 / G007324-0",  grp:"Guardian NextGen Series",
    ng_cfh_f:235,  ng_cfh_h:164,  lp_gph_f:2.87, lp_gph_h:1.65,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
-   snd:"65 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:80, weight:"426 lb",
+   snd:"65 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:80, weight:"426 lb", ver:"Spec sheet — 14/18 kW Air-Cooled Standby (G007258/G007259)",
    desc:"Air-cooled · NextGen Series · G-Force 800 · 2-cyl 817cc · 3,600 RPM · 46.4\"L × 26.3\"W × 30.7\"H"},
 
   {cooled:"air", kw_ng:21,   kw_lp:22,  label:"22kW NextGen · G007260-0 / G007325-0",  model:"Generac 22kW Guardian NextGen",   num:"G007260-0 / G007325-0",  grp:"Guardian NextGen Series",
    ng_cfh_f:311,  ng_cfh_h:221,  lp_gph_f:3.71, lp_gph_h:2.45,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
-   snd:"67 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:100, weight:"451 lb",
+   snd:"67 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:100, weight:"451 lb", ver:"Spec sheet — 22/24/26/28 kW G-Force 1000",
    desc:"Air-cooled · NextGen Series · G-Force 1000 · 2-cyl 997cc · 3,600 RPM · 46.4\"L × 26.3\"W × 30.7\"H"},
 
   {cooled:"air", kw_ng:22.5, kw_lp:24,  label:"24kW NextGen · G007261-0 / G007326-0",  model:"Generac 24kW Guardian NextGen",   num:"G007261-0 / G007326-0",  grp:"Guardian NextGen Series",
    ng_cfh_f:291,  ng_cfh_h:197,  lp_gph_f:3.71, lp_gph_h:2.45,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
-   snd:"67 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:110, weight:"461 lb",
+   snd:"67 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:100, weight:"461 lb", ver:"Spec sheet — 22/24/26/28 kW G-Force 1000",
    desc:"Air-cooled · NextGen Series · G-Force 1000 · 2-cyl 997cc · 3,600 RPM · 46.4\"L × 26.3\"W × 30.7\"H"},
 
   {cooled:"air", kw_ng:24,   kw_lp:26,  label:"26kW NextGen · G007327-0 / G007328-0",  model:"Generac 26kW Guardian NextGen",   num:"G007327-0 / G007328-0",  grp:"Guardian NextGen Series",
    ng_cfh_f:316,  ng_cfh_h:182,  lp_gph_f:3.95, lp_gph_h:2.05,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
-   snd:"67 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:125, weight:"524 lb",
+   snd:"67 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:110, weight:"524 lb", ver:"Spec sheet — 22/24/26/28 kW G-Force 1000",
    desc:"Air-cooled · NextGen Series · G-Force 1000 · 2-cyl 997cc · 3,600 RPM · 46.4\"L × 26.3\"W × 30.7\"H"},
 
   {cooled:"air", kw_ng:25,   kw_lp:28,  label:"28kW NextGen · G007282-0 / G007329-0",  model:"Generac 28kW Guardian NextGen",   num:"G007282-0 / G007329-0",  grp:"Guardian NextGen Series",
    ng_cfh_f:297,  ng_cfh_h:182,  lp_gph_f:3.97, lp_gph_h:2.23,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
-   snd:"67 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:125, weight:"524 lb",
+   snd:"67 / 55 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:125, weight:"524 lb", ver:"Spec sheet — 22/24/26/28 kW G-Force 1000",
    desc:"Air-cooled · NextGen Series · G-Force 1000 · 2-cyl 997cc · 3,600 RPM · 46.4\"L × 26.3\"W × 30.7\"H"},
 
   // ── GUARDIAN AIR-COOLED — LEGACY SERIES ─────────────────────────
@@ -967,35 +1012,35 @@ const GM = [
    ng_cfh_f:417, ng_cfh_h:258, ng_cfh_75:335, ng_cfh_25:177,
    lp_gph_f:5.0, lp_gph_h:3.4, lp_gph_75:4.2, lp_gph_25:2.6,
    ng_btu_cf:1036, lp_btu_gal:91452, req_ng:'3.5–14" WC', req_lp:'7–14" WC',
-   snd:"66 / 59 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:600, cb:150, weight:"—",
+   snd:"66 / 59 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:600, cb:150, weight:"—", ver:"Spec sheet — Protector XG 32/40/48/60/80 kW",
    desc:"Liquid-cooled · 4.5L I-4 NA · 1,800 RPM · 1-Ph or 3-Ph · Power Zone 410 · NFPA 110 · Metro Gray"},
 
   {cooled:"liq", kw_ng:40,  kw_lp:40,  label:"LP 40kW  /  NG 40kW  ·  XG04045",  model:"40kW Protector XG",  num:"XG04045", grp:"Protector XG (4.5L I-4)",
    ng_cfh_f:494, ng_cfh_h:297, ng_cfh_75:396, ng_cfh_25:198,
    lp_gph_f:5.8, lp_gph_h:3.8, lp_gph_75:4.8, lp_gph_25:2.8,
    ng_btu_cf:1036, lp_btu_gal:91452, req_ng:'3.5–14" WC', req_lp:'7–14" WC',
-   snd:"66 / 59 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:600, cb:200, weight:"—",
+   snd:"66 / 59 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:600, cb:200, weight:"—", ver:"Spec sheet — Protector XG 32/40/48/60/80 kW",
    desc:"Liquid-cooled · 4.5L I-4 NA · 1,800 RPM · 1-Ph or 3-Ph · Power Zone 410 · NFPA 110 · Metro Gray"},
 
   {cooled:"liq", kw_ng:48,  kw_lp:48,  label:"LP 48kW  /  NG 48kW  ·  XG04845",  model:"48kW Protector XG",  num:"XG04845", grp:"Protector XG (4.5L I-4)",
    ng_cfh_f:576, ng_cfh_h:335, ng_cfh_75:456, ng_cfh_25:215,
    lp_gph_f:6.6, lp_gph_h:4.2, lp_gph_75:5.4, lp_gph_25:3.0,
    ng_btu_cf:1036, lp_btu_gal:91452, req_ng:'3.5–14" WC', req_lp:'7–14" WC',
-   snd:"58 / 54 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:600, cb:200, weight:"—",
+   snd:"58 / 54 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:600, cb:200, weight:"—", ver:"Spec sheet — Protector XG 32/40/48/60/80 kW",
    desc:"Liquid-cooled · 4.5L I-4 NA · 1,800 RPM · 1-Ph or 3-Ph · Power Zone 410 · NFPA 110 · Metro Gray"},
 
   {cooled:"liq", kw_ng:60,  kw_lp:60,  label:"LP 60kW  /  NG 60kW  ·  XG06045",  model:"60kW Protector XG",  num:"XG06045", grp:"Protector XG (4.5L I-4)",
    ng_cfh_f:972, ng_cfh_h:571, ng_cfh_75:765, ng_cfh_25:391,
    lp_gph_f:11.0,lp_gph_h:6.4, lp_gph_75:8.6, lp_gph_25:4.2,
    ng_btu_cf:1036, lp_btu_gal:91452, req_ng:'3.5–14" WC', req_lp:'7–14" WC',
-   snd:"64 / 55 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:3000, cb:300, weight:"—",
+   snd:"64 / 55 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:3000, cb:300, weight:"—", ver:"Spec sheet — Protector XG 32/40/48/60/80 kW",
    desc:"Liquid-cooled · 4.5L I-4 Turbo+AC · 1,800 RPM · 1-Ph or 3-Ph · Power Zone 410 · NFPA 110 · Metro Gray"},
 
   {cooled:"liq", kw_ng:80,  kw_lp:75,  label:"LP 75kW  /  NG 80kW  ·  XG08045",  model:"80kW Protector XG",  num:"XG08045", grp:"Protector XG (4.5L I-4)",
    ng_cfh_f:1270,ng_cfh_h:698, ng_cfh_75:972, ng_cfh_25:449,
    lp_gph_f:14.2,lp_gph_h:7.9, lp_gph_75:11.0,lp_gph_25:4.9,
    ng_btu_cf:1036, lp_btu_gal:91452, req_ng:'3.5–14" WC', req_lp:'7–14" WC',
-   snd:"64 / 55 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:3000, cb:400, weight:"—",
+   snd:"64 / 55 dB(A) op / exercise", warr:"5 Year / 2,000 Hr", der_pct:3.0, der_above:3000, cb:400, weight:"—", ver:"Spec sheet — Protector XG 32/40/48/60/80 kW",
    desc:"Liquid-cooled · 4.5L I-4 Turbo+AC · 1,800 RPM · 1-Ph or 3-Ph · Power Zone 410 · NFPA 110 · Metro Gray"},
 
   // ── PROTECTOR RG (9.0L V8) ───────────────────────────────────────
@@ -1075,60 +1120,52 @@ const PIPE_MATERIALS = {
   },
 };
 
-// ── APPLIANCES ───────────────────────────────────────────────────────
-const APPLIANCES=[
-  {name:"Central A/C (2-ton)",    run:2500,start:5500, cat:"hvac"},
-  {name:"Central A/C (3-ton)",    run:3500,start:7500, cat:"hvac"},
-  {name:"Central A/C (4-ton)",    run:4700,start:9500, cat:"hvac"},
-  {name:"Central A/C (5-ton)",    run:5500,start:11500,cat:"hvac"},
-  {name:"Heat Pump (3-ton)",       run:3800,start:8000, cat:"hvac"},
-  {name:"Mini-Split (1-ton)",      run:1100,start:1800, cat:"hvac"},
-  {name:"Mini-Split (2-ton)",      run:2000,start:3200, cat:"hvac"},
-  {name:"Furnace Fan (1/2 HP)",    run:800, start:2400, cat:"hvac"},
-  {name:"Window A/C",              run:1200,start:2400, cat:"hvac"},
-  {name:"Space Heater",            run:1500,start:1500, cat:"hvac"},
-  {name:"Refrigerator",            run:200, start:800,  cat:"kitchen"},
-  {name:"Chest Freezer",           run:200, start:500,  cat:"kitchen"},
-  {name:"Microwave (1,000W)",      run:1000,start:1000, cat:"kitchen"},
-  {name:"Dishwasher",              run:1200,start:1200, cat:"kitchen"},
-  {name:"Range — 1 Burner",        run:1500,start:1500, cat:"kitchen"},
-  {name:"Range — Full Electric",   run:6000,start:6000, cat:"kitchen"},
-  {name:"Elec Water Htr (30 gal)", run:3000,start:3000, cat:"water"},
-  {name:"Elec Water Htr (50 gal)", run:4500,start:4500, cat:"water"},
-  {name:"Gas Water Htr (fan)",     run:300, start:300,  cat:"water"},
-  {name:"Well Pump (1/2 HP)",      run:750, start:2000, cat:"water"},
-  {name:"Well Pump (1 HP)",        run:1500,start:4000, cat:"water"},
-  {name:"Sump Pump (1/3 HP)",      run:400, start:1300, cat:"water"},
-  {name:"Sump Pump (1/2 HP)",      run:800, start:2000, cat:"water"},
-  {name:"Pool Pump (1 HP)",        run:1500,start:3500, cat:"water"},
-  {name:"Pool Pump (2 HP)",        run:2800,start:6000, cat:"water"},
-  {name:"LED Lighting (10 bulbs)", run:100, start:100,  cat:"lights"},
-  {name:"LED Lighting (20 bulbs)", run:200, start:200,  cat:"lights"},
-  {name:"TV + Receiver",           run:450, start:450,  cat:"lights"},
-  {name:"Computer (desktop)",      run:300, start:300,  cat:"lights"},
-  {name:"Security System",         run:200, start:200,  cat:"lights"},
-  {name:"Router / Modem",          run:30,  start:30,   cat:"lights"},
-  {name:"Garage Door Opener",      run:500, start:1000, cat:"motors"},
-  {name:"Air Compressor (1 HP)",   run:1600,start:4800, cat:"motors"},
-  {name:"Washing Machine",         run:1150,start:2300, cat:"motors"},
-  {name:"Electric Dryer",          run:5000,start:5000, cat:"motors"},
-  {name:"Gas Dryer (fan only)",    run:700, start:700,  cat:"motors"},
-  {name:"EV Charger (Level 1)",    run:1440,start:1440, cat:"motors"},
-  {name:"EV Charger (Level 2)",    run:7200,start:7200, cat:"motors"},
-  {name:"CPAP / BiPAP",            run:50,  start:50,   cat:"medical"},
-  {name:"O2 Concentrator",         run:600, start:600,  cat:"medical"},
-  {name:"Home Elevator",           run:1500,start:3000, cat:"medical"},
-  {name:"Stair Lift",              run:300, start:600,  cat:"medical"},
-  {name:"Hot Tub (240V)",          run:3500,start:6000, cat:"other"},
-  {name:"Whole-House Fan",         run:1500,start:2500, cat:"other"},
+// ── GAS APPLIANCES (typical connected input, BTU/hr) ─────────────────
+// Typical nameplate values. ALWAYS use the actual nameplate rating when known.
+const GAS_APPLIANCES=[
+  {name:"Furnace — 60,000 BTU",        btu:60000,  cat:"heat"},
+  {name:"Furnace — 80,000 BTU",        btu:80000,  cat:"heat"},
+  {name:"Furnace — 100,000 BTU",       btu:100000, cat:"heat"},
+  {name:"Furnace — 120,000 BTU",       btu:120000, cat:"heat"},
+  {name:"Boiler — 100,000 BTU",        btu:100000, cat:"heat"},
+  {name:"Boiler — 150,000 BTU",        btu:150000, cat:"heat"},
+  {name:"Boiler — 200,000 BTU",        btu:200000, cat:"heat"},
+  {name:"Garage Unit Heater (45k)",    btu:45000,  cat:"heat"},
+  {name:"Garage Unit Heater (75k)",    btu:75000,  cat:"heat"},
+  {name:"Fireplace / Log Set",         btu:30000,  cat:"heat"},
+  {name:"Direct-Vent Fireplace",       btu:40000,  cat:"heat"},
+  {name:"Wall / Space Heater",         btu:30000,  cat:"heat"},
+  {name:"Water Heater — 40 gal",       btu:40000,  cat:"water"},
+  {name:"Water Heater — 50 gal",       btu:40000,  cat:"water"},
+  {name:"Water Heater — 75 gal",       btu:75000,  cat:"water"},
+  {name:"Tankless WH — 160k",          btu:160000, cat:"water"},
+  {name:"Tankless WH — 199k",          btu:199000, cat:"water"},
+  {name:"Range / Cooktop (4-burner)",  btu:65000,  cat:"kitchen"},
+  {name:"Range — Commercial Style",    btu:120000, cat:"kitchen"},
+  {name:"Cooktop Only",                btu:40000,  cat:"kitchen"},
+  {name:"Wall Oven",                   btu:25000,  cat:"kitchen"},
+  {name:"Clothes Dryer",               btu:22000,  cat:"laundry"},
+  {name:"Clothes Dryer — Stacked",     btu:20000,  cat:"laundry"},
+  {name:"Clothes Dryer — Commercial",  btu:35000,  cat:"laundry"},
+  {name:"Pool Heater — 250k",          btu:250000, cat:"outdoor"},
+  {name:"Pool Heater — 400k",          btu:400000, cat:"outdoor"},
+  {name:"Spa / Hot Tub Heater",        btu:125000, cat:"outdoor"},
+  {name:"Outdoor Grill",               btu:60000,  cat:"outdoor"},
+  {name:"Fire Pit",                    btu:60000,  cat:"outdoor"},
+  {name:"Patio Heater",                btu:40000,  cat:"outdoor"},
+  {name:"Outdoor Kitchen (typ.)",      btu:90000,  cat:"outdoor"},
+  {name:"Gas Log Lighter",             btu:15000,  cat:"other"},
+  {name:"Mosquito Mister",             btu:10000,  cat:"other"},
+  {name:"Second Generator",            btu:200000, cat:"other"},
 ];
 
 // ── STATE ────────────────────────────────────────────────────────────
-let cooling='air', fuel='ng', loads=[], suggestedModel=null;
+let cooling='air', fuel='ng', gasLoads=[];
 
 window.addEventListener('DOMContentLoaded',()=>{
   populateModelDropdown();
-  renderApplianceList('all');
+  renderGasApplianceList('all');
+  renderGasTable();
 });
 
 // ── COOLING / FUEL ───────────────────────────────────────────────────
@@ -1145,6 +1182,16 @@ function setFuel(f){
   document.getElementById('btn-lp').classList.toggle('active',f==='lp');
   document.getElementById('ng-pipe-config').style.display=f==='ng'?'flex':'none';
   document.getElementById('lp-pipe-config').style.display=f==='lp'?'flex':'none';
+  // LP has no utility meter — the equivalent check is the regulator's own rating,
+  // and the AC/AL diaphragm classes do not apply.
+  const isNG = f==='ng';
+  document.getElementById('meter-class-wrap').style.display = isNG ? 'flex' : 'none';
+  document.getElementById('meter-cap-label').textContent = isNG ? 'Meter Capacity' : '1st Stage Reg. Capacity';
+  document.getElementById('meter-cap-hint').textContent  = isNG
+    ? 'As stamped on the meter or regulator tag'
+    : 'Rated capacity of the first-stage regulator, from its tag';
+  if(!isNG){ document.getElementById('meter-class').value=''; }
+  document.getElementById('meter-cap').value='';
   clearResults();
 }
 function clearResults(){
@@ -1183,24 +1230,97 @@ function onModelChange(){
 }
 
 // ── PRESSURE MULTIPLIER LOOKUP ────────────────────────────────────────
+// NOTE: these are capacity multipliers applied to the NFPA 54 Table 402.4(2)
+// base column (0.5" W.C. drop). Values that describe the SAME pressure must
+// return the SAME multiplier — 14" W.C. and 0.5 PSI are one and the same, as
+// are 7" W.C. and 0.25 PSI.
 function getPressMult(pressVal, fuelType) {
   if (fuelType === 'ng') {
     const M = {
       '3.5wc':  0.85, '5wc':    0.90, '7wc':    1.00, '8wc':    1.05,
-      '10wc':   1.15, '11wc':   1.20, '14wc':   1.45,
-      '0.25psi': 0.95,'0.5psi':  1.50,'1psi':    2.20,'2psi':    8.50,
+      '10wc':   1.15, '11wc':   1.20, '14wc':   1.50,
+      '0.25psi': 1.00,'0.5psi':  1.50,'1psi':    2.20,'2psi':    8.50,
       '5psi':   14.00,'10psi':  18.00,'15psi':  24.00,'30psi':  38.00,'60psi':  60.00,
     };
     return M[pressVal] || 1.0;
   } else {
     const M = {
       '8wc':    0.90, '10wc':   0.97, '11wc':   1.00, '12wc':   1.03,
-      '14wc':   1.45, '0.5psi': 1.50, '1psi':   2.20, '2psi':   4.00,
+      '14wc':   1.50, '0.5psi': 1.50, '1psi':   2.20, '2psi':   4.00,
       '5psi':   7.00, '10psi': 11.50, '15psi': 16.00, '20psi': 20.00,
       '25psi': 23.50, '30psi': 28.50, '60psi': 42.00, '100psi':62.00, '200psi':98.00,
     };
     return M[pressVal] || 1.0;
   }
+}
+
+// ── GAS APPLIANCE LOAD BUILDER ────────────────────────────────────────
+function filterGasCat(cat,btn){
+  btn.parentNode.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderGasApplianceList(cat);
+}
+function renderGasApplianceList(cat){
+  const items = cat==='all' ? GAS_APPLIANCES : GAS_APPLIANCES.filter(a=>a.cat===cat);
+  document.getElementById('gas-app-list').innerHTML = items.map(a=>
+    `<div class="gas-app-item" onclick='quickAddGas(${JSON.stringify(a)})'><div class="gas-app-item-name">${a.name}</div><div class="gas-app-item-btu">${a.btu.toLocaleString()} BTU/hr</div></div>`
+  ).join('');
+}
+function markStage1Shared(){
+  // One meter, one service regulator: the moment there is a second appliance on
+  // the property the first stage carries it. Not a choice — derive it.
+  ['ng1-incl','lp1-incl'].forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=true; });
+}
+function quickAddGas(a){
+  const first = gasLoads.length===0;
+  const ex = gasLoads.find(l=>l.name===a.name && l.btu===a.btu);
+  if(ex) ex.qty++; else gasLoads.push({name:a.name, btu:a.btu, qty:1});
+  if(first) markStage1Shared();
+  renderGasTable(); clearResults();
+}
+function addCustomGasAppliance(){
+  const name = document.getElementById('gas-custom-name').value.trim() || 'Custom Appliance';
+  const btu  = parseInt(document.getElementById('gas-custom-btu').value) || 0;
+  const qty  = Math.max(1, parseInt(document.getElementById('gas-custom-qty').value) || 1);
+  if(btu<=0){ document.getElementById('gas-custom-btu').focus(); return; }
+  const first = gasLoads.length===0;
+  gasLoads.push({name, btu, qty});
+  if(first) markStage1Shared();
+  document.getElementById('gas-custom-name').value='';
+  document.getElementById('gas-custom-btu').value='';
+  document.getElementById('gas-custom-qty').value='1';
+  renderGasTable(); clearResults();
+}
+function setGasBtu(i,v){
+  const n = parseInt(v);
+  gasLoads[i].btu = (isNaN(n)||n<0) ? 0 : n;
+  renderGasTable(); clearResults();
+}
+function changeGasQty(i,d){ gasLoads[i].qty=Math.max(1,gasLoads[i].qty+d); renderGasTable(); clearResults(); }
+function removeGasLoad(i){ gasLoads.splice(i,1); renderGasTable(); clearResults(); }
+function gasApplianceTotal(){ return gasLoads.reduce((s,l)=>s+l.btu*l.qty,0); }
+function renderGasTable(){
+  const rows = document.getElementById('gas-rows');
+  const tot  = gasApplianceTotal();
+  document.getElementById('gas-total-val').textContent = tot.toLocaleString()+' BTU/hr';
+  if(!gasLoads.length){
+    rows.innerHTML='<div class="empty-gas">No gas appliances added — generator only</div>';
+    return;
+  }
+  rows.innerHTML = gasLoads.map((l,i)=>`
+    <div class="gas-row">
+      <div class="gas-td-name">${l.name}</div>
+      <div class="td-qty"><button class="qty-btn" onclick="changeGasQty(${i},-1)">−</button><span class="qty-val">${l.qty}</span><button class="qty-btn" onclick="changeGasQty(${i},1)">+</button></div>
+      <input class="gas-btu-input" type="number" min="0" step="1000" value="${l.btu}" title="Nameplate BTU/hr — edit to match the tag" onchange="setGasBtu(${i},this.value)">
+      <div class="gas-td-btu gas-col-total">${(l.btu*l.qty).toLocaleString()}</div>
+      <button class="del-btn" onclick="removeGasLoad(${i})">✕</button>
+    </div>`).join('');
+}
+function onMeterClassChange(){
+  const v = document.getElementById('meter-class').value;
+  if(v && v!=='custom') document.getElementById('meter-cap').value = v;
+  if(v==='') document.getElementById('meter-cap').value = '';
+  clearResults();
 }
 
 // ── GENERATE RESULTS ─────────────────────────────────────────────────
@@ -1243,8 +1363,20 @@ function generateResults(){
     `<span class="badge badge-blue">${m.cb}A breaker</span>`,
     derateF<1?`<span class="badge badge-orange">−${Math.round((1-derateF)*100)}% altitude derate</span>`:'',
     m.kw_ng!==m.kw_lp&&fuel==='ng'?`<span class="badge badge-red">NG ≠ LP rating</span>`:'',
-    m.grp.includes('Legacy')?`<span class="badge badge-orange">Legacy — Verify BTUs w/ Spec Sheet</span>`:'',
+    m.ver?`<span class="badge badge-green">✓ Spec-sheet verified</span>`
+         :`<span class="badge badge-red">⚠ Unverified fuel data</span>`,
   ].filter(Boolean).join('');
+
+  // ── DATA PROVENANCE ────────────────────────────────────────────────
+  const dw = r('data-warn');
+  if(m.ver){
+    dw.className='data-warn';
+  } else {
+    dw.className='data-warn show';
+    dw.innerHTML = `⚠ <b>Fuel consumption for this model has not been checked against a spec sheet.</b> `
+      + `Confirm the full-load ${fuel==='ng'?'CFH':'GPH'} figure on the Generac spec sheet for <b>${m.num}</b> before you commit to a pipe size — `
+      + `Generac's published numbers are not monotonic across kW, so a neighbouring model is not a safe substitute.`;
+  }
 
   const dn=r('derate-notice');
   if(derateF<1){
@@ -1255,12 +1387,12 @@ function generateResults(){
   r('btu-full-val').textContent=fmtBTU(btuFull);
   r('btu-full-sub').textContent=fuel==='ng'
     ?`${cfhF} CFH × ${m.ng_btu_cf.toLocaleString()} BTU/ft³`
-    :`${gphF} GPH × 91,452 BTU/gal`;
+    :`${gphF} GPH × ${m.lp_btu_gal.toLocaleString()} BTU/gal`;
 
   r('btu-half-val').textContent=fmtBTU(btuHalf);
   r('btu-half-sub').textContent=fuel==='ng'
     ?`${cfhH} CFH × ${m.ng_btu_cf.toLocaleString()} BTU/ft³`
-    :`${gphH} GPH × 91,452 BTU/gal`;
+    :`${gphH} GPH × ${m.lp_btu_gal.toLocaleString()} BTU/gal`;
 
   if(fuel==='ng'){
     r('flow-label').textContent='Natural Gas — Full Load';
@@ -1271,7 +1403,7 @@ function generateResults(){
     r('flow-label').textContent='LP Propane — Full Load';
     r('flow-val').textContent=gphF.toFixed(2);
     r('flow-unit').textContent='GPH  (gal/hr)';
-    r('flow-sub').textContent=`Half load: ${gphH.toFixed(2)} GPH`;
+    r('flow-sub').textContent=`${Math.round(gphF*m.lp_btu_gal/2516).toLocaleString()} CFH · Half load: ${gphH.toFixed(2)} GPH`;
   }
 
   const hasSpec25 = m.ng_cfh_25 != null;
@@ -1325,31 +1457,48 @@ function generateResults(){
   ).join('');
 
   const LP_SCALE = (2516/1020) * Math.pow(0.60/1.52, 0.541);
+  // Table capacities are stated at 1,020 BTU/ft³. Normalise the generator's
+  // demand onto that same basis so the comparison is CFH-vs-CFH, not BTU-vs-BTU.
   const ngBtuAdj = fuel === 'ng' ? (1020 / m.ng_btu_cf) : 1.0;
 
-  function buildPipeTable(tbodyId, thUnitId, runLen, pressMult, isLP, matKey){
+  const applBTU = gasApplianceTotal();
+
+  function buildPipeTable(tbodyId, thUnitId, runLen, pressMult, isLP, matKey, inclAppl){
     const mat = PIPE_MATERIALS[matKey] || PIPE_MATERIALS.steel;
     const matSizes = mat.sizes;
     const matData  = mat.data;
-    const li = PIPE_LENGTHS.reduce((b,l,i)=>Math.abs(l-runLen)<Math.abs(PIPE_LENGTHS[b]-runLen)?i:b,0);
-    document.getElementById(thUnitId).textContent = isLP ? 'GPH Capacity' : 'CFH Capacity';
+
+    // NFPA 54 §402.4: use the NEXT LONGER length column, never the nearest.
+    // Rounding to nearest overstates capacity on any run past the midpoint
+    // (a 120 ft run must be read on the 150 ft column, not the 100 ft one).
+    let li = PIPE_LENGTHS.findIndex(l => l >= runLen);
+    let overLen = false;
+    if(li === -1){ li = PIPE_LENGTHS.length - 1; overLen = true; }
+
+    // Demand on THIS run = generator + any appliances fed by the same piping.
+    const runApplBTU  = inclAppl ? applBTU : 0;
+    const demandBTU   = btuFull + runApplBTU;
+    // Compare on the table's own energy basis.
+    const demandTable = isLP ? demandBTU : (btuFull * ngBtuAdj + runApplBTU);
+
+    document.getElementById(thUnitId).textContent = isLP ? 'Capacity (CFH / GPH)' : 'CFH Capacity';
     const tbody = document.getElementById(tbodyId);
     tbody.innerHTML = '';
     const noteRow = document.createElement('tr');
-    noteRow.innerHTML = `<td colspan="5" style="font-family:var(--font-mono);font-size:.6rem;color:var(--text-dim);padding:6px 12px;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.06)">📐 ${mat.label} — ${mat.note} · ${PIPE_LENGTHS[li]} ft column</td>`;
+    noteRow.innerHTML = `<td colspan="5" style="font-family:var(--font-mono);font-size:.6rem;color:var(--text-dim);padding:6px 12px;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.06)">📐 ${mat.label} — ${mat.note} · ${PIPE_LENGTHS[li]} ft column${overLen?' <span style="color:var(--red)">⚠ run exceeds 500 ft — table capacity NOT valid, calculate longest-length method</span>':''}${runApplBTU?` · <span style="color:var(--orange-bright)">demand ${fmtBTU(btuFull)} gen + ${fmtBTU(runApplBTU)} appliances = ${fmtBTU(demandBTU)} BTU/hr</span>`:''}${pressMult>2?` · <span style="color:var(--red)">⚠ ${pressMult}× medium/high-pressure multiplier is an approximation — confirm against NFPA 54 Table 402.4(11)/(12) before sizing</span>`:''}</td>`;
     tbody.appendChild(noteRow);
     let found = false;
     matSizes.forEach(size => {
       if(!matData[size]) return;
       let capBTU = matData[size][li] * pressMult;
       if(isLP) capBTU *= LP_SCALE;
-      const ok     = capBTU >= btuFull * (isLP ? 1.0 : ngBtuAdj);
+      const ok     = capBTU >= demandTable;
       const isRec  = ok && !found;
       if(isRec) found = true;
       const capDisp = isLP
-        ? (capBTU / m.lp_btu_gal).toFixed(1) + ' GPH'
+        ? Math.round(capBTU / 2516).toLocaleString() + ' CFH<span style="opacity:.6"> · ' + (capBTU / m.lp_btu_gal).toFixed(1) + ' GPH</span>'
         : Math.round(capBTU / 1020).toLocaleString() + ' CFH';
-      const pct  = Math.round((btuFull / capBTU) * 100);
+      const pct  = Math.round((demandTable / capBTU) * 100);
       const note = isRec ? '✓ Minimum recommended'
         : ok ? `${pct}% of capacity used`
         : 'Undersized for this load';
@@ -1363,6 +1512,11 @@ function generateResults(){
         <td style="font-size:.66rem;color:${isRec ? '#10B981' : ok ? 'var(--text-dim)' : 'var(--red)'}">${note}</td>`;
       tbody.appendChild(tr);
     });
+    if(!found){
+      const warnRow = document.createElement('tr');
+      warnRow.innerHTML = `<td colspan="5" style="font-family:var(--font-mono);font-size:.66rem;color:var(--red);padding:9px 12px;background:rgba(239,68,68,.07)">✕ NO listed size carries ${fmtBTU(demandBTU)} BTU/hr at ${PIPE_LENGTHS[li]} ft on this material — shorten the run, raise the pressure, or go to a larger material/size than this table covers.</td>`;
+      tbody.appendChild(warnRow);
+    }
   }
 
   let run1Len, run2Len, run1Mult, run2Mult, run1Label, run2Label, run1PressLabel, run2PressLabel;
@@ -1396,13 +1550,17 @@ function generateResults(){
   const mat1Label = PIPE_MATERIALS[run1Mat]?.label || '';
   const mat2Label = PIPE_MATERIALS[run2Mat]?.label || '';
 
+  const run1Incl = document.getElementById(fuel==='ng'?'ng1-incl':'lp1-incl').checked;
+  const run2Incl = document.getElementById(fuel==='ng'?'ng2-incl':'lp2-incl').checked;
+  const dem = inc => fmtBTU(btuFull + (inc?applBTU:0)) + ' BTU/hr' + (inc&&applBTU?' (gen + appliances)':'');
+
   r('pipe1-title').textContent = run1Label;
-  r('pipe1-meta').textContent  = `${run1Len} ft · ${run1PressLabel} · ${mat1Label} · Full load: ${fmtBTU(btuFull)} BTU/hr`;
-  buildPipeTable('pipe1-tbody','th1-unit', run1Len, run1Mult, fuel==='lp', run1Mat);
+  r('pipe1-meta').textContent  = `${run1Len} ft · ${run1PressLabel} · ${mat1Label} · Demand: ${dem(run1Incl)}`;
+  buildPipeTable('pipe1-tbody','th1-unit', run1Len, run1Mult, fuel==='lp', run1Mat, run1Incl);
 
   r('pipe2-title').textContent = run2Label;
-  r('pipe2-meta').textContent  = `${run2Len} ft · ${run2PressLabel} · ${mat2Label} · Full load: ${fmtBTU(btuFull)} BTU/hr`;
-  buildPipeTable('pipe2-tbody','th2-unit', run2Len, run2Mult, fuel==='lp', run2Mat);
+  r('pipe2-meta').textContent  = `${run2Len} ft · ${run2PressLabel} · ${mat2Label} · Demand: ${dem(run2Incl)}`;
+  buildPipeTable('pipe2-tbody','th2-unit', run2Len, run2Mult, fuel==='lp', run2Mat, run2Incl);
 
   const extraContainer = document.getElementById('extra-pipe-results');
   extraContainer.innerHTML = '';
@@ -1417,6 +1575,8 @@ function generateResults(){
     const pressOpt  = document.getElementById(`press-${runId}`);
     const pressLabel = pressOpt.options[pressOpt.selectedIndex].text.split('—')[0].trim();
     const matLabel = PIPE_MATERIALS[matKey]?.label || matKey;
+    const inclEl   = document.getElementById(`incl-${runId}`);
+    const incl     = inclEl ? inclEl.checked : false;
 
     const stageDiv = document.createElement('div');
     stageDiv.className = 'pipe-stage';
@@ -1426,7 +1586,7 @@ function generateResults(){
       <div class="pipe-stage-hdr extra">
         <span class="pipe-stage-num">⑶</span>
         <span class="pipe-stage-title-txt">Additional Run ${extraRunNum - 2}</span>
-        <span class="pipe-stage-meta">${runLen} ft · ${pressLabel} · ${matLabel} · Full load: ${fmtBTU(btuFull)} BTU/hr</span>
+        <span class="pipe-stage-meta">${runLen} ft · ${pressLabel} · ${matLabel} · Demand: ${dem(incl)}</span>
       </div>
       <table class="pipe-table">
         <thead><tr>
@@ -1436,11 +1596,73 @@ function generateResults(){
         <tbody id="${tbId}"></tbody>
       </table>`;
     extraContainer.appendChild(stageDiv);
-    buildPipeTable(tbId, thId, runLen, pressMult, fuel === 'lp', matKey);
+    buildPipeTable(tbId, thId, runLen, pressMult, fuel === 'lp', matKey, incl);
     extraRunNum++;
   });
 
+  // ── REGULATOR / METER STATUS ────────────────────────────────────────
+  renderRegBanner(m, btuFull, applBTU);
+
   document.getElementById('results-output').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ── REGULATOR / METER STATUS ───────────────────────────────────────────
+// Stage 1 (meter or tank first stage) is shared BY DEFINITION whenever there is
+// more than the generator on the property — it is derived, not asked. Stage 2 is
+// the real field variable: does the step-down regulator serve the generator
+// alone, or the house as well?
+function renderRegBanner(m, btuFull, applBTU){
+  const el       = document.getElementById('reg-banner');
+  const reqPress = fuel==='ng' ? m.req_ng : m.req_lp;
+  const btuPerCF = fuel==='ng' ? 1000 : 2516;   // appliance basis
+  const s1 = document.getElementById(fuel==='ng'?'ng1-incl':'lp1-incl').checked;
+  const s2 = document.getElementById(fuel==='ng'?'ng2-incl':'lp2-incl').checked;
+
+  const stage1BTU = btuFull + (s1 ? applBTU : 0);
+  const stage2BTU = btuFull + (s2 ? applBTU : 0);
+  const genCFH    = fuel==='ng' ? m.ng_cfh_f : Math.round(m.lp_gph_f * m.lp_btu_gal / 2516);
+  const applCFH   = Math.round(applBTU / btuPerCF);
+  const stage1CFH = genCFH + (s1 ? applCFH : 0);
+
+  const s1Name = fuel==='ng' ? 'Gas meter → second-stage regulator' : 'Tank first stage → second stage';
+  const s2Name = 'Second-stage regulator → generator';
+
+  el.className = 'reg-banner ' + (s2 ? 'shared' : 'dedicated');
+  let html = `<span class="reg-banner-title">${s2?'⚠ Shared Second Stage':'✓ Dedicated Second Stage'}</span>`;
+
+  // ---- Stage 1 ----
+  html += `<b>1st stage — ${s1Name}:</b> `;
+  if(s1 && applBTU){
+    html += `<span style="color:var(--orange-bright);font-weight:700">SHARED</span> — carries generator <b>${btuFull.toLocaleString()}</b> + appliances <b>${applBTU.toLocaleString()}</b> = <b>${stage1BTU.toLocaleString()} BTU/hr</b> (${stage1CFH.toLocaleString()} CFH).<br>`;
+  } else if(s1 && !applBTU){
+    html += `generator only, <b>${btuFull.toLocaleString()} BTU/hr</b> (${genCFH.toLocaleString()} CFH). <span style="color:var(--red)">⚠ No appliances entered — if this property has a furnace, water heater or range, add them or the meter load is understated.</span><br>`;
+  } else {
+    html += `<span style="color:#10B981;font-weight:700">DEDICATED SERVICE</span> — generator on its own meter/service, <b>${btuFull.toLocaleString()} BTU/hr</b> (${genCFH.toLocaleString()} CFH). Confirm this is genuinely a separate service.<br>`;
+  }
+
+  // ---- Stage 2 ----
+  html += `<b>2nd stage — ${s2Name}:</b> `;
+  if(s2){
+    html += `<span style="color:var(--orange-bright);font-weight:700">SHARED</span> — the step-down regulator also feeds the house: <b>${stage2BTU.toLocaleString()} BTU/hr</b>. `;
+    html += `It must hold <b>${reqPress}</b> at the generator inlet with every appliance firing at once AND the generator at full load. Size the regulator for the combined load, not the generator alone.`;
+  } else {
+    html += `<span style="color:#10B981;font-weight:700">DEDICATED</span> — steps down for the generator alone: <b>${btuFull.toLocaleString()} BTU/hr</b>, delivering <b>${reqPress}</b> at the inlet at full load.`;
+  }
+
+  // ---- Meter capacity check (volumetric — meters are stamped in CFH) ----
+  const capCFH = parseInt(document.getElementById('meter-cap').value) || 0;
+  if(capCFH > 0){
+    const pass = capCFH >= stage1CFH;
+    const pct  = Math.round(stage1CFH / capCFH * 100);
+    html += `<br><br><b>${fuel==='ng'?'Meter':'First-stage regulator'} check:</b> rated <b>${capCFH.toLocaleString()} CFH</b> vs <b>${stage1CFH.toLocaleString()} CFH</b> required — `;
+    html += pass
+      ? `<span class="reg-pass">✓ PASS (${pct}% used, ${(capCFH-stage1CFH).toLocaleString()} CFH spare)</span>`
+      : `<span class="reg-fail">✕ FAIL — short by ${(stage1CFH-capCFH).toLocaleString()} CFH. ${fuel==='ng'?'The utility must upsize the meter':'A larger first-stage regulator is required'} before this generator will run at full load.</span>`;
+    if(pass && pct>85) html += ` <span style="color:var(--orange-bright)">⚠ Over 85% of meter capacity — no headroom for future appliances.</span>`;
+  } else {
+    html += `<br><br><span style="opacity:.75">${fuel==='ng'?'Pick the meter class in Step 2 for a pass/fail check — this is where these jobs usually die (an AC-250 will not carry a 22kW on its own).':'Enter the first-stage regulator capacity in Step 2 for a pass/fail check.'}</span>`;
+  }
+  el.innerHTML = html;
 }
 
 // ── DYNAMIC PIPE RUNS ─────────────────────────────────────────────────
@@ -1456,7 +1678,7 @@ function addPipeRun(fuelType, stageNum, btn) {
 
   const ngS1Press = `
     <optgroup label="── Low / Near-Atmospheric ──">
-      <option value="0.25psi">¼ PSI (7" WC) — Low medium</option>
+      <option value="0.25psi">¼ PSI (7" WC) — Low pressure</option>
       <option value="0.5psi">½ PSI (14" WC) — Lower medium</option>
       <option value="1psi">1 PSI (28" WC)</option>
     </optgroup>
@@ -1482,7 +1704,6 @@ function addPipeRun(fuelType, stageNum, btn) {
     </optgroup>
     <optgroup label="── Higher Low Pressure ──">
       <option value="14wc">14" WC — 0.5 PSI</option>
-      <option value="0.5psi">0.5 PSI</option>
       <option value="1psi">1 PSI</option>
       <option value="2psi">2 PSI</option>
     </optgroup>`;
@@ -1513,7 +1734,6 @@ function addPipeRun(fuelType, stageNum, btn) {
     </optgroup>
     <optgroup label="── Higher Delivery ──">
       <option value="14wc">14" WC — 0.5 PSI</option>
-      <option value="0.5psi">0.5 PSI</option>
       <option value="1psi">1 PSI</option>
       <option value="2psi">2 PSI</option>
     </optgroup>`;
@@ -1557,7 +1777,9 @@ function addPipeRun(fuelType, stageNum, btn) {
         <label class="field-label">Pipe Material</label>
         <select class="field-select" id="mat-${runId}">${matOpts}</select>
       </div>
-    </div>`;
+    </div>
+    <label class="run-incl"><input type="checkbox" id="incl-${runId}" ${stageNum===1?'checked':''}>
+      <span class="run-incl-txt">${stageNum===1?'<b>Shared piping</b> — carries the generator plus every appliance':'Second-stage regulator <b>also feeds house appliances</b>'}</span></label>`;
 
   btn.parentNode.insertBefore(card, btn);
 }
@@ -1565,84 +1787,6 @@ function addPipeRun(fuelType, stageNum, btn) {
 function removePipeRun(cardId) {
   const el = document.getElementById(cardId);
   if(el) el.remove();
-}
-
-// ── LOAD BUILDER ─────────────────────────────────────────────────────
-function filterCat(cat,btn){document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderApplianceList(cat);}
-function renderApplianceList(cat){
-  const items=cat==='all'?APPLIANCES:APPLIANCES.filter(a=>a.cat===cat);
-  document.getElementById('appliance-list').innerHTML=items.map(a=>
-    `<div class="appliance-item" onclick='quickAdd(${JSON.stringify(a)})'><div class="appliance-item-name">${a.name}</div><div class="appliance-item-watts">Run: ${a.run.toLocaleString()}W · Start: ${a.start.toLocaleString()}W</div></div>`
-  ).join('');
-}
-function quickAdd(a){const ex=loads.find(l=>l.name===a.name);if(ex)ex.qty++;else loads.push({name:a.name,run:a.run,start:a.start,qty:1});renderLoadTable();calcSizing();}
-function addCustomLoad(){
-  const name=document.getElementById('custom-name').value.trim()||'Custom Load';
-  const run=parseInt(document.getElementById('custom-run').value)||0;
-  const start=parseInt(document.getElementById('custom-start').value)||run;
-  if(run<=0){document.getElementById('custom-run').focus();return;}
-  loads.push({name,run,start,qty:1});
-  ['custom-name','custom-run','custom-start'].forEach(id=>document.getElementById(id).value='');
-  renderLoadTable();calcSizing();
-}
-function changeQty(i,d){loads[i].qty=Math.max(1,loads[i].qty+d);renderLoadTable();calcSizing();}
-function removeLoad(i){loads.splice(i,1);renderLoadTable();calcSizing();}
-function renderLoadTable(){
-  const rows=document.getElementById('load-rows');
-  if(!loads.length){rows.innerHTML='<div class="empty-loads">⚡ No loads added yet</div>';document.getElementById('tot-run-val').textContent='0 W';document.getElementById('tot-start-val').textContent='0 W';document.getElementById('sizing-result').className='sizing-result';return;}
-  const totalRun=loads.reduce((s,l)=>s+l.run*l.qty,0);
-  const maxStart=Math.max(...loads.map(l=>l.start));
-  rows.innerHTML=loads.map((l,i)=>`
-    <div class="load-row">
-      <div class="td-name">${l.name}</div>
-      <div class="td-qty"><button class="qty-btn" onclick="changeQty(${i},-1)">−</button><span class="qty-val">${l.qty}</span><button class="qty-btn" onclick="changeQty(${i},1)">+</button></div>
-      <div class="td-start td-watts">${(l.start*l.qty).toLocaleString()} W</div>
-      <div class="td-total">${(l.run*l.qty).toLocaleString()} W</div>
-      <button class="del-btn" onclick="removeLoad(${i})">✕</button>
-    </div>`).join('');
-  document.getElementById('tot-run-val').textContent=totalRun.toLocaleString()+' W';
-  document.getElementById('tot-start-val').textContent=maxStart.toLocaleString()+' W';
-}
-
-function calcSizing(){
-  if(!loads.length){document.getElementById('sizing-result').className='sizing-result';return;}
-  const totalRun=loads.reduce((s,l)=>s+l.run*l.qty,0);
-  const maxStart=Math.max(...loads.map(l=>l.start));
-  const peakW=totalRun+maxStart;
-  const minKW=peakW/1000/0.8;
-
-  const mKW=m=>fuel==='ng'?m.kw_ng:m.kw_lp;
-  const candidates=GM.filter(m=>m.cooled===cooling);
-  const rec=candidates.find(m=>mKW(m)>=minKW)||candidates[candidates.length-1];
-  suggestedModel=rec;
-
-  const btuFull=fuel==='ng'?rec.ng_cfh_f*rec.ng_btu_cf:rec.lp_gph_f*rec.lp_btu_gal;
-  const body=document.getElementById('sizing-result-body');
-  body.innerHTML=`
-    Running Load: <span class="sizing-highlight">${totalRun.toLocaleString()} W (${(totalRun/1000).toFixed(1)} kW)</span><br>
-    Peak w/ Surge: <span class="sizing-highlight">${peakW.toLocaleString()} W</span> · Min Generator: <span class="sizing-highlight">${Math.ceil(minKW*10)/10} kW</span> (80% rule)<br>
-    Recommended: <span class="sizing-highlight">${rec.model}</span> · ${rec.num}<br>
-    BTU/hr Full Load: <span class="sizing-highlight">${Math.round(btuFull).toLocaleString()} BTU/hr</span>
-  `;
-  document.getElementById('sizing-result').className='sizing-result show';
-}
-
-function applyRecommendedModel(){
-  if(!suggestedModel)return;
-  const sel=document.getElementById('model-select');
-  const opt=[...sel.options].find(o=>o.value===suggestedModel.num);
-  if(opt){
-    sel.value=suggestedModel.num;
-    window.scrollTo({top:0,behavior:'smooth'});
-  } else {
-    if(suggestedModel.cooled!==cooling){setCooling(suggestedModel.cooled);}
-    setTimeout(()=>{
-      const s=document.getElementById('model-select');
-      const o=[...s.options].find(x=>x.value===suggestedModel.num);
-      if(o)s.value=suggestedModel.num;
-    },100);
-  }
-  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 // ── HELPERS ──────────────────────────────────────────────────────────
