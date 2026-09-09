@@ -5315,6 +5315,270 @@ async function identifyElevationSource(lat,lng){
   }catch(e){ return null; }
 }
 
+/* ===================================================================================================
+   S3Elev — USGS 3DEP 1 m bare-earth tiles read DIRECTLY from the AWS Open Data bucket (prd-tnm).
+
+   WHY: elevation.nationalmap.gov (the 3DEP ImageServer) and epqs.nationalmap.gov fall over for hours
+   at a time — verified 9 Sep 2026: metadata 9.7 s, getSamples/identify/EPQS all timed out. The SAME
+   1 m GeoTIFFs the ImageServer mosaics are staged as static files on S3, and S3 answered a Range
+   request in 227 ms while USGS was down. Same data, same NAVD88 datum, same metres — no USGS server
+   in the path.
+
+   HOW: USGS names each tile by the 10 km UTM cell of its UPPER-LEFT corner ("x42y290" = easting
+   420 000, northing 2 900 000, zone in the name for the FDEM DRRA project else 17). So a lat/lng maps
+   to a tile by arithmetic — no catalog call. Tiles are internally tiled 256x256 with overviews, so
+   geotiff.js reads one pixel for ~64 KB via HTTP Range. Verified 9 Sep 2026 at Naples: tile 1.25 m
+   vs FDEP 10 m 1.21 m vs Ian 2022 LiDAR 1.23 m.
+
+   COVERAGE: every FL 1 m project in the bucket (listed below). Anything not covered returns null and
+   the caller falls through to the existing ImageServer / SWFWMD / EPQS chain — nothing removed.
+
+   UNITS: values are METRES (Float32, NoData -3.4e38). sample() returns metres to match getSamples so
+   downstream code (×ELEV_M_TO_FT) is unchanged; parcelStats() returns FEET like queryGroundElevation.
+
+   PUBLIC API (all async, all null-safe):
+     S3Elev.ready()                      → builds/loads the tile index (cached 7 days in localStorage)
+     S3Elev.tileFor(lat, lng)            → {url, project, year, key} | null
+     S3Elev.sample(points, opts)         → {samples:[{value(m), location:{x,y}, resolution:1}],
+                                            coverage:0..1, __s3:{project,year,px}} | null
+                                           points = [[lng,lat], ...]  (same order as getSamples)
+     S3Elev.parcelStats(ring, opts)      → {min,max,med (ft), src, method, year, project, n} | null
+                                           ring = [[lng,lat], ...] outer ring, WGS84
+     S3Elev.selfTest()                   → logs the verified Naples reading (expect ≈1.25 m / 4.1 ft)
+   opts.timeoutMs (default 8000) caps the whole call; on timeout the call resolves null.
+   =================================================================================================== */
+var S3Elev = (function(){
+  'use strict';
+  var BUCKET  = 'https://prd-tnm.s3.amazonaws.com/';
+  var PREFIX  = 'StagedProducts/Elevation/1m/Projects/';
+  var LS_KEY  = 's3elev_idx_v1';
+  var LS_TTL  = 7*24*3600*1000;          // re-list the bucket weekly (new projects appear rarely)
+  var M_TO_FT = 3.28084;
+
+  /* Every Florida 1 m project present in the bucket on 9 Sep 2026. When two projects cover the same
+     10 km cell the NEWEST wins (year parsed from the name); ties keep this order. Add a name here if
+     USGS publishes a new FL collect — nothing else changes. */
+  var PROJECTS = [
+    'FL_ManateeCounty_B25','FL_MiamiDade_D23',
+    'FL_Southwest_A_2018','FL_Southwest_B_2018','FL_Southwest_B_TL_2018',
+    'FL_Peninsular_2018_D18','FL_Peninsular_FDEM_2018_D19_DRRA',
+    'FL_GulfCoast_Topography_2018','FL_WestEvergladesNP_2018_B18',
+    'FL_Southeast_B1_2018','FL_Southeast_B2_2018','FL_Southeast_TL_2018',
+    'FL_2018PascoCounty_C22','FL_Panhandle_B1_2018','FL_Panhandle_B2_2018','FL_Panhandle_B3_2018',
+    'FL_HurricaneMichael_2020_D20','FL_TopobathyFLKeysNOAA_2019_D20','FL_LeonCo_2018',
+    'FL_2017EscambiaSantaRosa_C22','FL_2017FortDrum_C22','FL_2017PalmCoast_C22',
+    'FL_Everglades_NP_LiDAR_2017_D16','FL_Lower_Choctawhatchee_2017','FL_Lower_Choctawhatchee_TL_2017',
+    'FL_SuwanneeRiver_2017','FL_Upper_Saint_Johns_2017','FL_PalmBeachCo_2016','FL_Osceola_2015',
+    'FL_SRWMD_NC_2015','FL_PeaceRiver_2014'
+  ];
+  function projectYear(name){
+    var m = name.match(/(?:19|20)\d\d/); if(m) return +m[0];
+    m = name.match(/_[BCD](\d\d)(?:_|$)/); if(m) return 2000 + +m[1];   // B25 / D23 style
+    return 0;
+  }
+
+  /* ---- lat/lng → UTM (WGS84; NAD83(2011) differs by ~1 m at most, irrelevant at 10 km cells and
+          within a 1 m pixel for our purposes) ---- */
+  function toUTM(lat, lng){
+    var zone = Math.floor((lng+180)/6)+1, a=6378137, f=1/298.257223563, k0=0.9996;
+    var e2=f*(2-f), ep2=e2/(1-e2), p=lat*Math.PI/180, l0=((zone-1)*6-180+3)*Math.PI/180, l=lng*Math.PI/180;
+    var N=a/Math.sqrt(1-e2*Math.pow(Math.sin(p),2)), T=Math.pow(Math.tan(p),2), C=ep2*Math.pow(Math.cos(p),2), A=Math.cos(p)*(l-l0);
+    var M=a*((1-e2/4-3*e2*e2/64-5*Math.pow(e2,3)/256)*p-(3*e2/8+3*e2*e2/32+45*Math.pow(e2,3)/1024)*Math.sin(2*p)
+            +(15*e2*e2/256+45*Math.pow(e2,3)/1024)*Math.sin(4*p)-(35*Math.pow(e2,3)/3072)*Math.sin(6*p));
+    var E=500000+k0*N*(A+(1-T+C)*Math.pow(A,3)/6+(5-18*T+T*T+72*C-58*ep2)*Math.pow(A,5)/120);
+    var Nn=k0*(M+N*Math.tan(p)*(A*A/2+(5-T+9*C+4*C*C)*Math.pow(A,4)/24+(61-58*T+T*T+600*C-330*ep2)*Math.pow(A,6)/720));
+    return { zone:zone, E:E, N:Nn };
+  }
+  /* Cell key. NOTE the +1: tile names give the UPPER-left corner, so a point at northing 2 891 652
+     lives in the tile named y290 (2 890 000–2 900 000), not y289. Getting this wrong reads outside
+     the image and geotiff.js silently returns 0.0 — see the guard in _readPoint. */
+  function cellKey(u){ return u.zone+':'+Math.floor(u.E/10000)+':'+(Math.floor(u.N/10000)+1); }
+
+  /* ---- geotiff.js, loaded once, on first use. jsdelivr primary, unpkg fallback. ---- */
+  var _lib=null;
+  function lib(){
+    if(!_lib){
+      _lib = import('https://cdn.jsdelivr.net/npm/geotiff@2.1.3/+esm')
+        .catch(function(){ return import('https://unpkg.com/geotiff@2.1.3/dist-module/geotiff.js'); });
+    }
+    return _lib;
+  }
+
+  /* ---- Tile index: "zone:x:y" → {p:projectIndex, f:filename}. Built from ListObjectsV2 on each
+          project's TIFF/ folder (paged), ~1–2 s cold in parallel, then localStorage for a week. ---- */
+  var _idx=null, _idxPromise=null;
+  function ready(force){
+    if(_idx && !force) return Promise.resolve(_idx);
+    if(_idxPromise && !force) return _idxPromise;
+    _idxPromise = (async function(){
+      if(!force){
+        try{
+          var raw = localStorage.getItem(LS_KEY);
+          if(raw){ var c = JSON.parse(raw);
+            if(c && c.ts && (Date.now()-c.ts) < LS_TTL && c.idx && c.projects && c.projects.join()===PROJECTS.join()){
+              _idx=c.idx; return _idx; } }
+        }catch(e){}
+      }
+      var idx = {}, counts = {};
+      await Promise.all(PROJECTS.map(async function(p, pi){
+        var token=null, n=0;
+        try{
+          do{
+            var u = BUCKET+'?list-type=2&max-keys=1000&prefix='+encodeURIComponent(PREFIX+p+'/TIFF/')
+                  + (token ? '&continuation-token='+encodeURIComponent(token) : '');
+            var ctrl=new AbortController(); var t=setTimeout(function(){ctrl.abort();}, 15000);
+            var x = await (await fetch(u,{signal:ctrl.signal})).text(); clearTimeout(t);
+            var re=/<Key>([^<]+\.tif)<\/Key>/gi, m;
+            while((m=re.exec(x))){
+              var fname = m[1].slice(m[1].lastIndexOf('/')+1);
+              var mm = fname.match(/(?:_1M_(\d\d))?_x(\d+)y(\d+)_/i);
+              if(!mm) continue;
+              var key=(mm[1]||'17')+':'+ +mm[2] +':'+ +mm[3];
+              var cur=idx[key];
+              if(!cur || projectYear(p) > projectYear(PROJECTS[cur.p])) idx[key]={p:pi,f:fname};
+              n++;
+            }
+            token=(x.match(/<NextContinuationToken>([^<]+)</)||[])[1]||null;
+          }while(token);
+        }catch(e){ counts[p]='ERR '+e.name; return; }
+        counts[p]=n;
+      }));
+      _idx=idx;
+      try{ localStorage.setItem(LS_KEY, JSON.stringify({ts:Date.now(), projects:PROJECTS, idx:idx})); }catch(e){}
+      window.__s3ElevIndex={ cells:Object.keys(idx).length, perProject:counts };
+      return _idx;
+    })();
+    return _idxPromise;
+  }
+
+  function tileFor(lat, lng){
+    if(!_idx) return null;
+    var u=toUTM(lat,lng), key=cellKey(u), t=_idx[key];
+    if(!t) return null;
+    var p=PROJECTS[t.p];
+    return { url:BUCKET+PREFIX+p+'/TIFF/'+t.f, project:p, year:projectYear(p), key:key, utm:u };
+  }
+
+  /* ---- Open images once; keep the last few tiles' headers/blocks around (a card's grid sits in 1–2
+          tiles, and the user pans around the same area). ---- */
+  var _imgs=new Map(), IMG_MAX=8;
+  async function openImage(url){
+    if(_imgs.has(url)) return _imgs.get(url);
+    var G=await lib();
+    var pr=(async function(){
+      var tiff=await G.fromUrl(url,{allowFullFile:false});
+      var img=await tiff.getImage();
+      return { img:img, origin:img.getOrigin(), res:img.getResolution(), bbox:img.getBoundingBox(), nd:img.getGDALNoData() };
+    })();
+    _imgs.set(url, pr);
+    if(_imgs.size>IMG_MAX){ _imgs.delete(_imgs.keys().next().value); }
+    pr.catch(function(){ _imgs.delete(url); });
+    return pr;
+  }
+  async function _readPoint(T, u){
+    var b=T.bbox;
+    if(!(u.E>=b[0] && u.E<=b[2] && u.N>=b[1] && u.N<=b[3])) return null;   // never read outside → no fake 0
+    var col=Math.floor((u.E-T.origin[0])/T.res[0]), row=Math.floor((u.N-T.origin[1])/T.res[1]);
+    var r=await T.img.readRasters({window:[col,row,col+1,row+1]});
+    var v=r[0][0];
+    if(!isFinite(v) || v < -1000) return null;                                // NoData sentinel -3.4e38
+    return v;                                                                  // metres, NAVD88
+  }
+  function withTimeout(promise, ms){
+    return new Promise(function(res){
+      var done=false; var t=setTimeout(function(){ if(!done){ done=true; res(null); } }, ms);
+      promise.then(function(v){ if(!done){ done=true; clearTimeout(t); res(v); } },
+                   function(){ if(!done){ done=true; clearTimeout(t); res(null); } });
+    });
+  }
+
+  /* ---- sample(points): getSamples-shaped result. points = [[lng,lat],...] ---- */
+  async function sample(points, opts){
+    opts=opts||{};
+    return withTimeout((async function(){
+      var t0=performance.now();
+      var idx=await ready(); if(!idx) return null;
+      var groups=new Map(), meta=null;
+      points.forEach(function(p,i){
+        var t=tileFor(p[1],p[0]); if(!t) return;
+        if(!groups.has(t.url)) groups.set(t.url,{t:t,pts:[]});
+        groups.get(t.url).pts.push({i:i,u:t.utm});
+        if(!meta || t.year>meta.year) meta={project:t.project, year:t.year, px:1};
+      });
+      if(!groups.size) return null;
+      var out=new Array(points.length);
+      await Promise.all(Array.from(groups.values()).map(async function(g){
+        var T=await openImage(g.t.url);
+        for(var b=0;b<g.pts.length;b+=24){                                     // geotiff.js merges overlapping
+          await Promise.all(g.pts.slice(b,b+24).map(async function(o){       // block fetches, so 24-wide is safe
+            var v=await _readPoint(T,o.u);
+            if(v==null) return;
+            out[o.i]={ value:v, location:{x:points[o.i][0], y:points[o.i][1]}, resolution:1 };
+          }));
+        }
+      }));
+      var samples=out.filter(Boolean);
+      if(!samples.length) return null;
+      var res={ samples:samples, coverage:samples.length/points.length, __s3:meta, __source:'S3' };
+      window.__s3ElevDebug={ n:samples.length, of:points.length, tiles:groups.size, ms:Math.round(performance.now()-t0), source:meta };
+      return res;
+    })(), opts.timeoutMs||8000);
+  }
+
+  /* ---- parcelStats(ring): min/max/mean in FEET over a grid of points INSIDE the polygon ---- */
+  function pip(x,y,ring){                                                      // ray casting, ring [[lng,lat],...]
+    var inside=false;
+    for(var i=0,j=ring.length-1;i<ring.length;j=i++){
+      var xi=ring[i][0], yi=ring[i][1], xj=ring[j][0], yj=ring[j][1];
+      if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+    }
+    return inside;
+  }
+  async function parcelStats(ring, opts){
+    opts=opts||{};
+    if(!ring || ring.length<3) return null;
+    var xs=ring.map(function(p){return p[0];}), ys=ring.map(function(p){return p[1];});
+    var w=Math.min.apply(null,xs), e=Math.max.apply(null,xs), s=Math.min.apply(null,ys), n=Math.max.apply(null,ys);
+    var cx=0, cy=0; ring.forEach(function(p){cx+=p[0]; cy+=p[1];}); cx/=ring.length; cy/=ring.length;
+    /* ~15x15 grid over the bbox, keep points inside the outline; guarantee the centroid so a sliver
+       lot still gets at least one reading. Cap at ~120 points — the read cost is per 256 px block,
+       not per point, so this is one or two blocks for a normal lot. */
+    var G=15, pts=[[cx,cy]];
+    for(var i=0;i<G;i++) for(var j=0;j<G;j++){
+      var x=w+(e-w)*(i+0.5)/G, y=s+(n-s)*(j+0.5)/G;
+      if(pip(x,y,ring)) pts.push([x,y]);
+    }
+    if(pts.length>121) pts=pts.filter(function(_,k){ return k===0 || k%Math.ceil(pts.length/121)===0; });
+    var r=await sample(pts, {timeoutMs:opts.timeoutMs||4000});
+    if(!r) return null;
+    var ft=r.samples.map(function(sm){ return sm.value*M_TO_FT; });
+    /* Hydro-flattened water in 3DEP is exactly 0.000 m. If a lot edge clips a canal, exclude those
+       pixels from min/max — the card is about buildable ground. If EVERYTHING is 0 the lot really is
+       underwater/void; report null and let the ImageServer chain have its say. */
+    var land=ft.filter(function(v){ return v!==0; });
+    if(!land.length) return null;
+    var mn=Math.min.apply(null,land), mx=Math.max.apply(null,land), me=land.reduce(function(a,b){return a+b;},0)/land.length;
+    var r1=function(v){ return Math.round(v*10)/10; };
+    return { min:r1(mn), max:r1(mx), med:r1(me), n:land.length, waterPx:ft.length-land.length,
+             src:'USGS 3DEP 1 m', method:'parcel grid ('+land.length+' pts, S3 tiles)',
+             year:r.__s3&&r.__s3.year, project:r.__s3&&r.__s3.project, __source:'S3' };
+  }
+
+  async function selfTest(){
+    await ready();
+    var r=await sample([[-81.7948,26.142]],{timeoutMs:15000});
+    var v=r&&r.samples[0]&&r.samples[0].value;
+    console.log('[S3Elev] Naples test →', v!=null ? v.toFixed(3)+' m = '+(v*M_TO_FT).toFixed(2)+' ft (expect ≈1.25 m)' : 'FAILED', r&&r.__s3, window.__s3ElevDebug);
+    return v;
+  }
+
+  /* Build the index at load (fire-and-forget). Cached → instant; cold → ~1–2 s of parallel listings,
+     long before anyone has typed an address. */
+  try{ ready(); }catch(e){}
+
+  return { ready:ready, tileFor:tileFor, sample:sample, parcelStats:parcelStats, selfTest:selfTest, toUTM:toUTM, PROJECTS:PROJECTS };
+})();
+
 async function loadElevationGrid(){
   // Anchor on the parcel outline when we have one, else a fixed box around the marker.
   /* STALE-PARCEL GUARD: `marker` is recreated at the current lookup point on every search
@@ -5427,10 +5691,17 @@ async function loadElevationGrid(){
   };
   const _ok = j => j && !j.error && j.samples && j.samples.length;
   let js=null;
-  // Primary: USGS. Each attempt now waits up to 20 s (USGS is crawling as it recovers), so 3 tries
-  // is plenty — 10 patient tries could stack to minutes. Drops back to a snappy count once USGS is
-  // fast again; the 20 s cap is the temporary accommodation, not the retry count.
-  for(let a=0; a<2; a++){
+  /* PRIMARY: 1 m 3DEP tiles read straight from the AWS prd-tnm bucket (S3Elev). Same data as the
+     ImageServer, no USGS server in the path — 0.3–2 s cold, ~free warm. Only for the default (Auto)
+     mosaic: a PINNED collect is a catalog ObjectID on the ImageServer, so pins still go there.
+     Partial coverage (grid straddles the edge of a project) → let the ImageServer do the whole grid
+     so the points are one consistent dataset. */
+  if(_elevLockOid==null){
+    try{ js = await S3Elev.sample(pts, {timeoutMs:8000}); }catch(e){ js=null; }
+    if(js && js.coverage < 0.8) js=null;
+  }
+  // FALLBACK: USGS ImageServer, unchanged. Skipped entirely when the S3 tiles answered.
+  for(let a=0; a<2 && !_ok(js); a++){
     if(a>0){ await new Promise(r=>setTimeout(r,300)); mapToast('Retrying elevation service...',1200); }
     js=await _post(DEP3_SAMPLES);
     if(_ok(js)) break;
@@ -5489,7 +5760,15 @@ async function loadElevationGrid(){
   // and label straight from the pinned entry.
   let src, cov=null;
   if(_elevLockOid==null){
-    src = await _srcPromise;                      // was launched in parallel at the top of the load
+    /* When the S3 tiles answered we already KNOW the collect from the filename — label from that and
+       don't block the badge on the (possibly dead) USGS identify. Let identify finish in the
+       background so the compare-source caret still fills in when USGS is up. */
+    if(js && js.__s3){
+      src = { year:js.__s3.year, px:1, name:js.__s3.project, others:[] };
+      _srcPromise.then(r=>{ if(r && r.others) src.others=r.others; }).catch(()=>{});
+    } else {
+      src = await _srcPromise;                    // was launched in parallel at the top of the load
+    }
     cov = await esriElevCoverage((pS+pN)/2, (pW+pE)/2);
     if(cov) window.__elevCoverage=cov;
   } else {
@@ -6619,7 +6898,17 @@ async function queryGroundElevation(parcelFeature, countyName, budgetOverride){
          const j=await r.json(); return j.error?null:j; }
     catch(e){ clearTimeout(t); return null; }
   };
-  // --- preferred: statistics over the whole parcel polygon ---
+  /* PRIMARY: S3 tiles — a ~15x15 grid of 1 m pixels INSIDE the parcel outline, min/max/mean in feet.
+     Independent of every USGS server. Capped short so a miss still leaves budget for the chain below;
+     a miss here is almost always "no 1 m project covers this cell", which returns instantly. */
+  try{
+    const s3 = await S3Elev.parcelStats(rings0[0], { timeoutMs: Math.min(BUDGET, 4000) });
+    if(s3){
+      window.__groundElevDebug={ ...s3, ms:Math.round(performance.now()-t0) };
+      return s3;                                   // {min,max,med,src,method} — same shape as below
+    }
+  }catch(e){}
+  // --- fallback: statistics over the whole parcel polygon (USGS ImageServer) ---
   const sUrl = `${DEP3_BASE}/computeStatisticsHistograms?geometry=${encodeURIComponent(poly)}`
              + `&geometryType=esriGeometryPolygon&f=json`;
   const st = await grab(sUrl, BUDGET*0.7);      // leave ~30% for the centroid fallback
