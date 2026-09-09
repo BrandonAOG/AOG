@@ -5316,48 +5316,40 @@ async function identifyElevationSource(lat,lng){
 }
 
 /* ===================================================================================================
-   S3Elev — USGS 3DEP 1 m bare-earth tiles read DIRECTLY from the AWS Open Data bucket (prd-tnm).
+   S3Elev — 1 m bare-earth LiDAR tiles read DIRECTLY from public S3 buckets. Two sources:
 
-   WHY: elevation.nationalmap.gov (the 3DEP ImageServer) and epqs.nationalmap.gov fall over for hours
-   at a time — verified 9 Sep 2026: metadata 9.7 s, getSamples/identify/EPQS all timed out. The SAME
-   1 m GeoTIFFs the ImageServer mosaics are staged as static files on S3, and S3 answered a Range
-   request in 227 ms while USGS was down. Same data, same NAVD88 datum, same metres — no USGS server
-   in the path.
+   [A] USGS 3DEP 1 m GeoTIFFs, AWS Open Data bucket "prd-tnm". Statewide wherever a 1 m project
+       exists (31 Florida projects listed below). Tiles named by the 10 km UTM cell of their
+       UPPER-LEFT corner ("x42y290" = E 420 000, N 2 900 000); lookup is arithmetic.
+   [B] FEMA/USACE post-Hurricane-Ian 2022 DEM, NOAA Digital Coast bucket "noaa-nos-coastal-lidar-pds".
+       Gulf coast only (Naples → Charlotte Harbor), 1 232 one-km tiles named by MGRS cell
+       ("17RLM1619"). Newer than 3DEP's 2018 flight, so it is PREFERRED where it exists — set
+       S3Elev.preferNewest=false to turn that off and read only [A].
 
-   HOW: USGS names each tile by the 10 km UTM cell of its UPPER-LEFT corner ("x42y290" = easting
-   420 000, northing 2 900 000, zone in the name for the FDEM DRRA project else 17). So a lat/lng maps
-   to a tile by arithmetic — no catalog call. Tiles are internally tiled 256x256 with overviews, so
-   geotiff.js reads one pixel for ~64 KB via HTTP Range. Verified 9 Sep 2026 at Naples: tile 1.25 m
-   vs FDEP 10 m 1.21 m vs Ian 2022 LiDAR 1.23 m.
+   WHY: elevation.nationalmap.gov / epqs.nationalmap.gov fall over for hours (9 Sep 2026: 20 s
+   timeouts) while the SAME files on S3 answer a Range request in ~200 ms. Same data, same NAVD88,
+   no agency server in the path. Verified at Naples: [A] 1.25 m, FDEP 10 m 1.21 m, Ian LiDAR 1.23 m.
 
-   COVERAGE: every FL 1 m project in the bucket (listed below). Anything not covered returns null and
-   the caller falls through to the existing ImageServer / SWFWMD / EPQS chain — nothing removed.
+   UNITS: sample() returns METRES to match getSamples (downstream ×ELEV_M_TO_FT unchanged);
+   parcelStats() returns FEET like queryGroundElevation. [B]'s vertical unit is read from the GeoTIFF
+   header (VerticalUnitsGeoKey) and converted to metres if it is feet.
 
-   UNITS: values are METRES (Float32, NoData -3.4e38). sample() returns metres to match getSamples so
-   downstream code (×ELEV_M_TO_FT) is unchanged; parcelStats() returns FEET like queryGroundElevation.
-
-   PUBLIC API (all async, all null-safe):
-     S3Elev.ready()                      → builds/loads the tile index (cached 7 days in localStorage)
-     S3Elev.tileFor(lat, lng)            → {url, project, year, key} | null
-     S3Elev.sample(points, opts)         → {samples:[{value(m), location:{x,y}, resolution:1}],
-                                            coverage:0..1, __s3:{project,year,px}} | null
-                                           points = [[lng,lat], ...]  (same order as getSamples)
-     S3Elev.parcelStats(ring, opts)      → {min,max,med (ft), src, method, year, project, n} | null
-                                           ring = [[lng,lat], ...] outer ring, WGS84
-     S3Elev.selfTest()                   → logs the verified Naples reading (expect ≈1.25 m / 4.1 ft)
-   opts.timeoutMs (default 8000) caps the whole call; on timeout the call resolves null.
+   PUBLIC API (all async, all null-safe; opts.timeoutMs default 8000 → resolves null on timeout):
+     S3Elev.ready()                 → build/load the [A] index (localStorage, 7 days)
+     S3Elev.readyIan()              → build/load the [B] index + per-square calibration
+     S3Elev.tileFor(lat,lng)        → {url, project, year, src:'USGS'|'IAN', key} | null (best source)
+     S3Elev.sample(points, opts)    → {samples:[{value(m),location:{x,y},resolution:1}], coverage,
+                                       __s3:{project,year,px,src}} | null    points = [[lng,lat],...]
+     S3Elev.parcelStats(ring, opts) → {min,max,med (ft), src, method, year, project, n} | null
+     S3Elev.selfTest()              → logs Naples from both sources
+     S3Elev.preferNewest            → true: use [B] where it covers the WHOLE request, else [A]
    =================================================================================================== */
 var S3Elev = (function(){
   'use strict';
-  var BUCKET  = 'https://prd-tnm.s3.amazonaws.com/';
-  var PREFIX  = 'StagedProducts/Elevation/1m/Projects/';
-  var LS_KEY  = 's3elev_idx_v1';
-  var LS_TTL  = 7*24*3600*1000;          // re-list the bucket weekly (new projects appear rarely)
-  var M_TO_FT = 3.28084;
+  var M_TO_FT = 3.28084, LS_TTL = 7*24*3600*1000;
 
-  /* Every Florida 1 m project present in the bucket on 9 Sep 2026. When two projects cover the same
-     10 km cell the NEWEST wins (year parsed from the name); ties keep this order. Add a name here if
-     USGS publishes a new FL collect — nothing else changes. */
+  /* ---------------- [A] USGS 3DEP 1 m ---------------- */
+  var A_BUCKET='https://prd-tnm.s3.amazonaws.com/', A_PREFIX='StagedProducts/Elevation/1m/Projects/', A_LS='s3elev_idx_v1';
   var PROJECTS = [
     'FL_ManateeCounty_B25','FL_MiamiDade_D23',
     'FL_Southwest_A_2018','FL_Southwest_B_2018','FL_Southwest_B_TL_2018',
@@ -5372,211 +5364,288 @@ var S3Elev = (function(){
     'FL_SRWMD_NC_2015','FL_PeaceRiver_2014'
   ];
   function projectYear(name){
-    var m = name.match(/(?:19|20)\d\d/); if(m) return +m[0];
-    m = name.match(/_[BCD](\d\d)(?:_|$)/); if(m) return 2000 + +m[1];   // B25 / D23 style
+    var m=name.match(/(?:19|20)\d\d/); if(m) return +m[0];
+    m=name.match(/_[BCD](\d\d)(?:_|$)/); if(m) return 2000+ +m[1];
     return 0;
   }
 
-  /* ---- lat/lng → UTM (WGS84; NAD83(2011) differs by ~1 m at most, irrelevant at 10 km cells and
-          within a 1 m pixel for our purposes) ---- */
-  function toUTM(lat, lng){
-    var zone = Math.floor((lng+180)/6)+1, a=6378137, f=1/298.257223563, k0=0.9996;
+  /* ---------------- [B] FEMA/USACE post-Ian 2022 (NOAA bucket) ---------------- */
+  var B_BUCKET='https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/', B_PREFIX='dem/USACE_Post_Ian_FL_DEM_2022_10010/', B_LS='s3elev_ian_v1';
+  var B_NAME='FEMA/USACE Post-Ian 2022', B_YEAR=2022;
+  var preferNewest = true;
+
+  /* ---------------- shared helpers ---------------- */
+  function toUTM(lat,lng){
+    var zone=Math.floor((lng+180)/6)+1, a=6378137, f=1/298.257223563, k0=0.9996;
     var e2=f*(2-f), ep2=e2/(1-e2), p=lat*Math.PI/180, l0=((zone-1)*6-180+3)*Math.PI/180, l=lng*Math.PI/180;
     var N=a/Math.sqrt(1-e2*Math.pow(Math.sin(p),2)), T=Math.pow(Math.tan(p),2), C=ep2*Math.pow(Math.cos(p),2), A=Math.cos(p)*(l-l0);
     var M=a*((1-e2/4-3*e2*e2/64-5*Math.pow(e2,3)/256)*p-(3*e2/8+3*e2*e2/32+45*Math.pow(e2,3)/1024)*Math.sin(2*p)
             +(15*e2*e2/256+45*Math.pow(e2,3)/1024)*Math.sin(4*p)-(35*Math.pow(e2,3)/3072)*Math.sin(6*p));
     var E=500000+k0*N*(A+(1-T+C)*Math.pow(A,3)/6+(5-18*T+T*T+72*C-58*ep2)*Math.pow(A,5)/120);
     var Nn=k0*(M+N*Math.tan(p)*(A*A/2+(5-T+9*C+4*C*C)*Math.pow(A,4)/24+(61-58*T+T*T+600*C-330*ep2)*Math.pow(A,6)/720));
-    return { zone:zone, E:E, N:Nn };
+    return {zone:zone, E:E, N:Nn};
   }
-  /* Cell key. NOTE the +1: tile names give the UPPER-left corner, so a point at northing 2 891 652
-     lives in the tile named y290 (2 890 000–2 900 000), not y289. Getting this wrong reads outside
-     the image and geotiff.js silently returns 0.0 — see the guard in _readPoint. */
-  function cellKey(u){ return u.zone+':'+Math.floor(u.E/10000)+':'+(Math.floor(u.N/10000)+1); }
-
-  /* ---- geotiff.js, loaded once, on first use. jsdelivr primary, unpkg fallback. ---- */
   var _lib=null;
   function lib(){
-    if(!_lib){
-      _lib = import('https://cdn.jsdelivr.net/npm/geotiff@2.1.3/+esm')
-        .catch(function(){ return import('https://unpkg.com/geotiff@2.1.3/dist-module/geotiff.js'); });
-    }
+    if(!_lib) _lib=import('https://cdn.jsdelivr.net/npm/geotiff@2.1.3/+esm')
+      .catch(function(){ return import('https://unpkg.com/geotiff@2.1.3/dist-module/geotiff.js'); });
     return _lib;
   }
-
-  /* ---- Tile index: "zone:x:y" → {p:projectIndex, f:filename}. Built from ListObjectsV2 on each
-          project's TIFF/ folder (paged), ~1–2 s cold in parallel, then localStorage for a week. ---- */
-  var _idx=null, _idxPromise=null;
-  function ready(force){
-    if(_idx && !force) return Promise.resolve(_idx);
-    if(_idxPromise && !force) return _idxPromise;
-    _idxPromise = (async function(){
-      if(!force){
-        try{
-          var raw = localStorage.getItem(LS_KEY);
-          if(raw){ var c = JSON.parse(raw);
-            if(c && c.ts && (Date.now()-c.ts) < LS_TTL && c.idx && c.projects && c.projects.join()===PROJECTS.join()){
-              _idx=c.idx; return _idx; } }
-        }catch(e){}
-      }
-      var idx = {}, counts = {};
-      await Promise.all(PROJECTS.map(async function(p, pi){
-        var token=null, n=0;
-        try{
-          do{
-            var u = BUCKET+'?list-type=2&max-keys=1000&prefix='+encodeURIComponent(PREFIX+p+'/TIFF/')
-                  + (token ? '&continuation-token='+encodeURIComponent(token) : '');
-            var ctrl=new AbortController(); var t=setTimeout(function(){ctrl.abort();}, 15000);
-            var x = await (await fetch(u,{signal:ctrl.signal})).text(); clearTimeout(t);
-            var re=/<Key>([^<]+\.tif)<\/Key>/gi, m;
-            while((m=re.exec(x))){
-              var fname = m[1].slice(m[1].lastIndexOf('/')+1);
-              var mm = fname.match(/(?:_1M_(\d\d))?_x(\d+)y(\d+)_/i);
-              if(!mm) continue;
-              var key=(mm[1]||'17')+':'+ +mm[2] +':'+ +mm[3];
-              var cur=idx[key];
-              if(!cur || projectYear(p) > projectYear(PROJECTS[cur.p])) idx[key]={p:pi,f:fname};
-              n++;
-            }
-            token=(x.match(/<NextContinuationToken>([^<]+)</)||[])[1]||null;
-          }while(token);
-        }catch(e){ counts[p]='ERR '+e.name; return; }
-        counts[p]=n;
-      }));
-      _idx=idx;
-      try{ localStorage.setItem(LS_KEY, JSON.stringify({ts:Date.now(), projects:PROJECTS, idx:idx})); }catch(e){}
-      window.__s3ElevIndex={ cells:Object.keys(idx).length, perProject:counts };
-      return _idx;
-    })();
-    return _idxPromise;
+  async function listAll(bucket, prefix){
+    var keys=[], token=null;
+    do{
+      var u=bucket+'?list-type=2&max-keys=1000&prefix='+encodeURIComponent(prefix)+(token?'&continuation-token='+encodeURIComponent(token):'');
+      var ctrl=new AbortController(); var t=setTimeout(function(){ctrl.abort();},15000);
+      var x=await (await fetch(u,{signal:ctrl.signal})).text(); clearTimeout(t);
+      var re=/<Key>([^<]+\.tif)<\/Key>/gi, m; while((m=re.exec(x))) keys.push(m[1]);
+      token=(x.match(/<NextContinuationToken>([^<]+)</)||[])[1]||null;
+    }while(token);
+    return keys;
+  }
+  function lsGet(k){ try{ var c=JSON.parse(localStorage.getItem(k)||'null'); return (c&&c.ts&&Date.now()-c.ts<LS_TTL)?c:null; }catch(e){ return null; } }
+  function lsSet(k,obj){ try{ obj.ts=Date.now(); localStorage.setItem(k,JSON.stringify(obj)); }catch(e){} }
+  function withTimeout(promise, ms){
+    return new Promise(function(res){
+      var done=false; var t=setTimeout(function(){ if(!done){done=true; res(null);} }, ms);
+      promise.then(function(v){ if(!done){done=true; clearTimeout(t); res(v);} }, function(){ if(!done){done=true; res(null);} });
+    });
   }
 
-  function tileFor(lat, lng){
-    if(!_idx) return null;
-    var u=toUTM(lat,lng), key=cellKey(u), t=_idx[key];
-    if(!t) return null;
-    var p=PROJECTS[t.p];
-    return { url:BUCKET+PREFIX+p+'/TIFF/'+t.f, project:p, year:projectYear(p), key:key, utm:u };
-  }
-
-  /* ---- Open images once; keep the last few tiles' headers/blocks around (a card's grid sits in 1–2
-          tiles, and the user pans around the same area). ---- */
-  var _imgs=new Map(), IMG_MAX=8;
+  /* Open a tile once; keep the last few (a card's grid lives in 1–2 tiles). Reads header geokeys so
+     each source's units/CRS are known from the file itself, not assumed. */
+  var _imgs=new Map(), IMG_MAX=10;
   async function openImage(url){
     if(_imgs.has(url)) return _imgs.get(url);
     var G=await lib();
     var pr=(async function(){
       var tiff=await G.fromUrl(url,{allowFullFile:false});
-      var img=await tiff.getImage();
-      return { img:img, origin:img.getOrigin(), res:img.getResolution(), bbox:img.getBoundingBox(), nd:img.getGDALNoData() };
+      var img=await tiff.getImage(); var gk={}; try{ gk=img.getGeoKeys()||{}; }catch(e){}
+      var vu=gk.VerticalUnitsGeoKey;                                    // 9001 m, 9002 ft, 9003 ftUS
+      var vScale = (vu===9002)?0.3048 : (vu===9003)?0.3048006096 : 1;   // → metres
+      return { img:img, origin:img.getOrigin(), res:img.getResolution(), bbox:img.getBoundingBox(),
+               nd:img.getGDALNoData(), epsg:gk.ProjectedCSTypeGeoKey, vScale:vScale, hUnits:gk.ProjLinearUnitsGeoKey };
     })();
-    _imgs.set(url, pr);
-    if(_imgs.size>IMG_MAX){ _imgs.delete(_imgs.keys().next().value); }
+    _imgs.set(url,pr); if(_imgs.size>IMG_MAX) _imgs.delete(_imgs.keys().next().value);
     pr.catch(function(){ _imgs.delete(url); });
     return pr;
   }
-  async function _readPoint(T, u){
+  async function readPoint(T,u){
     var b=T.bbox;
-    if(!(u.E>=b[0] && u.E<=b[2] && u.N>=b[1] && u.N<=b[3])) return null;   // never read outside → no fake 0
+    if(!(u.E>=b[0]&&u.E<=b[2]&&u.N>=b[1]&&u.N<=b[3])) return null;        // never read outside → no fake 0
     var col=Math.floor((u.E-T.origin[0])/T.res[0]), row=Math.floor((u.N-T.origin[1])/T.res[1]);
     var r=await T.img.readRasters({window:[col,row,col+1,row+1]});
     var v=r[0][0];
-    if(!isFinite(v) || v < -1000) return null;                                // NoData sentinel -3.4e38
-    return v;                                                                  // metres, NAVD88
-  }
-  function withTimeout(promise, ms){
-    return new Promise(function(res){
-      var done=false; var t=setTimeout(function(){ if(!done){ done=true; res(null); } }, ms);
-      promise.then(function(v){ if(!done){ done=true; clearTimeout(t); res(v); } },
-                   function(){ if(!done){ done=true; clearTimeout(t); res(null); } });
-    });
+    if(!isFinite(v)||v<-1000) return null;                                 // NoData (-3.4e38 / -9999)
+    return v*T.vScale;                                                     // metres
   }
 
-  /* ---- sample(points): getSamples-shaped result. points = [[lng,lat],...] ---- */
+  /* ---------------- [A] index ---------------- */
+  var _idxA=null, _pA=null;
+  function ready(force){
+    if(_idxA&&!force) return Promise.resolve(_idxA);
+    if(_pA&&!force) return _pA;
+    _pA=(async function(){
+      var c=force?null:lsGet(A_LS);
+      if(c&&c.idx&&c.projects&&c.projects.join()===PROJECTS.join()){ _idxA=c.idx; return _idxA; }
+      var idx={}, counts={};
+      await Promise.all(PROJECTS.map(async function(p,pi){
+        try{
+          var keys=await listAll(A_BUCKET, A_PREFIX+p+'/TIFF/'), n=0;
+          keys.forEach(function(k){
+            var f=k.slice(k.lastIndexOf('/')+1), mm=f.match(/(?:_1M_(\d\d))?_x(\d+)y(\d+)_/i); if(!mm) return;
+            var key=(mm[1]||'17')+':'+ +mm[2]+':'+ +mm[3], cur=idx[key];
+            if(!cur||projectYear(p)>projectYear(PROJECTS[cur.p])) idx[key]={p:pi,f:f};
+            n++;
+          });
+          counts[p]=n;
+        }catch(e){ counts[p]='ERR '+e.name; }
+      }));
+      _idxA=idx; lsSet(A_LS,{projects:PROJECTS,idx:idx});
+      window.__s3ElevIndex={cells:Object.keys(idx).length, perProject:counts};
+      return _idxA;
+    })();
+    return _pA;
+  }
+  function tileForA(u){
+    if(!_idxA) return null;
+    var key=u.zone+':'+Math.floor(u.E/10000)+':'+(Math.floor(u.N/10000)+1);   // +1: named by UPPER-left
+    var t=_idxA[key]; if(!t) return null;
+    var p=PROJECTS[t.p];
+    return {url:A_BUCKET+A_PREFIX+p+'/TIFF/'+t.f, project:p, year:projectYear(p), src:'USGS', key:key, utm:u};
+  }
+
+  /* ---------------- [B] index — MGRS 1 km tiles, self-calibrated ----------------
+     "17RLM1619": zone 17, band R, 100 km square LM, then 1 km easting/northing digits inside the
+     square. Instead of hard-coding MGRS letter tables, we open ONE tile per 100 km square, read its
+     real bbox, and derive the square's UTM origin = bbox.min − digits×1000. Everything else in that
+     square is then arithmetic. Calibration is cached with the index. */
+  var _idxB=null, _pB=null;   // { squares:{ '17RLM': {oE,oN,size,epsg,keys:{'1619':'blk_x/file.tif'}} } }
+  function readyIan(force){
+    if(_idxB&&!force) return Promise.resolve(_idxB);
+    if(_pB&&!force) return _pB;
+    _pB=(async function(){
+      var c=force?null:lsGet(B_LS);
+      /* Only trust a cached index that actually has at least one CALIBRATED square. A build that
+         failed (listing error, sanity check tripped) must not be pinned for a week. */
+      var goodCached = c && c.squares && Object.keys(c.squares).some(function(k){ return !c.squares[k].bad && c.squares[k].oE!=null; });
+      if(goodCached){ _idxB=c; _reportIan(c.squares); return _idxB; }
+      var squares={};
+      try{
+        var keys=await listAll(B_BUCKET,B_PREFIX);
+        keys.forEach(function(k){
+          var m=k.match(/_(\d\d[A-Z])([A-Z]{2})(\d{2})(\d{2})_/); if(!m) return;    // 17R LM 16 19
+          var sq=m[1]+m[2]; (squares[sq]=squares[sq]||{keys:{}}).keys[m[3]+m[4]]=k.slice(B_PREFIX.length);
+        });
+        await Promise.all(Object.keys(squares).map(async function(sq){
+          var S=squares[sq], d=Object.keys(S.keys)[0];
+          try{
+            var T=await openImage(B_BUCKET+B_PREFIX+S.keys[d]);
+            /* Sanity: UTM metres in Florida → E 200k–900k, N 2.6M–3.5M. (State-plane feet or a wrong
+               hemisphere would fall outside this and disable the square rather than mis-place it.) */
+            var okUTM = T.bbox[0]>200000&&T.bbox[2]<900000&&T.bbox[1]>2600000&&T.bbox[3]<3500000;
+            if(!okUTM){ S.bad='bbox not UTM-metres: '+T.bbox.map(function(v){return v.toFixed(0);}).join(','); return; }
+            /* Tiles at the flight boundary are CLIPPED (e.g. 11 px × 526 px), so the tile's width says
+               nothing. But at least one edge of every tile lies on the 1 km grid — find it and derive
+               the cell's lower-left from that. bbox edges carry a half-pixel offset, hence the -0.5/+0.5. */
+            S.size=1000;
+            var cellFrom=function(lo,hi){
+              var a=Math.round(lo-0.5), b=Math.round(hi+0.5)-0;   // outer edges in whole metres
+              if(Math.abs(a%1000)<=2 || Math.abs(a%1000-1000)<=2) return Math.round(a/1000)*1000;         // left/bottom on grid
+              if(Math.abs(b%1000)<=2 || Math.abs(b%1000-1000)<=2) return Math.round(b/1000)*1000-1000;    // right/top on grid
+              return null;
+            };
+            var cellE=cellFrom(T.bbox[0],T.bbox[2]), cellN=cellFrom(T.bbox[1],T.bbox[3]);
+            if(cellE==null||cellN==null){ S.bad='no grid-aligned edge: '+T.bbox.map(function(v){return v.toFixed(1);}).join(','); return; }
+            S.oE=cellE-(+d.slice(0,2))*1000;
+            S.oN=cellN-(+d.slice(2,4))*1000;
+            S.epsg=T.epsg; S.zone=+sq.slice(0,2); S.vScale=T.vScale;
+          }catch(e){ S.bad='open failed '+e.name; }
+        }));
+      }catch(e){ window.__s3ElevIanError=e.name; }
+      _idxB={squares:squares};
+      var anyGood=Object.keys(squares).some(function(k){ return !squares[k].bad && squares[k].oE!=null; });
+      if(anyGood) lsSet(B_LS,_idxB); else { try{ localStorage.removeItem(B_LS); }catch(e){} }   // don't pin a failure
+      _reportIan(squares);
+      return _idxB;
+    })();
+    return _pB;
+  }
+  function _reportIan(squares){
+    window.__s3ElevIan={ squares:Object.keys(squares).map(function(sq){ var S=squares[sq];
+      return sq+': '+Object.keys(S.keys).length+' tiles'+(S.bad?' — DISABLED: '+S.bad:' — origin E'+S.oE+' N'+S.oN+' size '+S.size+' epsg '+S.epsg+' vScale '+S.vScale); }) };
+  }
+  function pad2(n){ return (n<10?'0':'')+n; }
+  function tileForB(u){
+    if(!_idxB) return null;
+    var sqs=_idxB.squares;
+    for(var sq in sqs){
+      var S=sqs[sq]; if(S.bad||S.zone!==u.zone) continue;
+      var dx=u.E-S.oE, dy=u.N-S.oN;
+      if(dx<0||dy<0||dx>=100000||dy>=100000) continue;
+      var d=pad2(Math.floor(dx/S.size))+pad2(Math.floor(dy/S.size)), f=S.keys[d];
+      if(!f) continue;
+      return {url:B_BUCKET+B_PREFIX+f, project:B_NAME, year:B_YEAR, src:'IAN', key:sq+d, utm:u};
+    }
+    return null;
+  }
+
+  /* Best tile for a point: newest first when preferNewest, else USGS. */
+  function tileFor(lat,lng){
+    var u=toUTM(lat,lng);
+    return (preferNewest && tileForB(u)) || tileForA(u) || null;
+  }
+
+  /* ---------------- sample(points) — getSamples-shaped ----------------
+     One VINTAGE per request: if [B] covers EVERY point use [B] for all of them, otherwise [A] for all.
+     Mixing 2022 and 2018 pixels in one grid would draw phantom steps at the seam. */
   async function sample(points, opts){
     opts=opts||{};
     return withTimeout((async function(){
       var t0=performance.now();
-      var idx=await ready(); if(!idx) return null;
+      await ready(); if(preferNewest) await readyIan();
+      var utms=points.map(function(p){ return toUTM(p[1],p[0]); });
+      var tiles=null, src=null, force=opts.force||null;   // 'IAN' | 'USGS' | null (auto)
+      if(force!=='USGS' && (preferNewest || force==='IAN')){
+        await readyIan();
+        var tb=utms.map(tileForB);
+        if(tb.every(Boolean)){ tiles=tb; src='IAN'; }
+        else if(force==='IAN') return null;               // asked for Ian, Ian doesn't cover it all
+      }
+      if(!tiles){ tiles=utms.map(tileForA); src='USGS'; }
       var groups=new Map(), meta=null;
-      points.forEach(function(p,i){
-        var t=tileFor(p[1],p[0]); if(!t) return;
+      tiles.forEach(function(t,i){
+        if(!t) return;
         if(!groups.has(t.url)) groups.set(t.url,{t:t,pts:[]});
         groups.get(t.url).pts.push({i:i,u:t.utm});
-        if(!meta || t.year>meta.year) meta={project:t.project, year:t.year, px:1};
+        if(!meta||t.year>meta.year) meta={project:t.project, year:t.year, px:1, src:t.src};
       });
       if(!groups.size) return null;
       var out=new Array(points.length);
       await Promise.all(Array.from(groups.values()).map(async function(g){
         var T=await openImage(g.t.url);
-        for(var b=0;b<g.pts.length;b+=24){                                     // geotiff.js merges overlapping
-          await Promise.all(g.pts.slice(b,b+24).map(async function(o){       // block fetches, so 24-wide is safe
-            var v=await _readPoint(T,o.u);
-            if(v==null) return;
-            out[o.i]={ value:v, location:{x:points[o.i][0], y:points[o.i][1]}, resolution:1 };
+        for(var b=0;b<g.pts.length;b+=24){
+          await Promise.all(g.pts.slice(b,b+24).map(async function(o){
+            var v=await readPoint(T,o.u); if(v==null) return;
+            out[o.i]={value:v, location:{x:points[o.i][0], y:points[o.i][1]}, resolution:1};
           }));
         }
       }));
-      var samples=out.filter(Boolean);
-      if(!samples.length) return null;
-      var res={ samples:samples, coverage:samples.length/points.length, __s3:meta, __source:'S3' };
-      window.__s3ElevDebug={ n:samples.length, of:points.length, tiles:groups.size, ms:Math.round(performance.now()-t0), source:meta };
-      return res;
+      var samples=out.filter(Boolean); if(!samples.length) return null;
+      window.__s3ElevDebug={n:samples.length, of:points.length, tiles:groups.size, ms:Math.round(performance.now()-t0), source:meta};
+      return {samples:samples, coverage:samples.length/points.length, __s3:meta, __source:'S3'};
     })(), opts.timeoutMs||8000);
   }
 
-  /* ---- parcelStats(ring): min/max/mean in FEET over a grid of points INSIDE the polygon ---- */
-  function pip(x,y,ring){                                                      // ray casting, ring [[lng,lat],...]
+  /* ---------------- parcelStats(ring) — FEET ---------------- */
+  function pip(x,y,ring){
     var inside=false;
     for(var i=0,j=ring.length-1;i<ring.length;j=i++){
-      var xi=ring[i][0], yi=ring[i][1], xj=ring[j][0], yj=ring[j][1];
-      if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+      var xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+      if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
     }
     return inside;
   }
   async function parcelStats(ring, opts){
     opts=opts||{};
-    if(!ring || ring.length<3) return null;
+    if(!ring||ring.length<3) return null;
     var xs=ring.map(function(p){return p[0];}), ys=ring.map(function(p){return p[1];});
     var w=Math.min.apply(null,xs), e=Math.max.apply(null,xs), s=Math.min.apply(null,ys), n=Math.max.apply(null,ys);
-    var cx=0, cy=0; ring.forEach(function(p){cx+=p[0]; cy+=p[1];}); cx/=ring.length; cy/=ring.length;
-    /* ~15x15 grid over the bbox, keep points inside the outline; guarantee the centroid so a sliver
-       lot still gets at least one reading. Cap at ~120 points — the read cost is per 256 px block,
-       not per point, so this is one or two blocks for a normal lot. */
+    var cx=0,cy=0; ring.forEach(function(p){cx+=p[0];cy+=p[1];}); cx/=ring.length; cy/=ring.length;
     var G=15, pts=[[cx,cy]];
     for(var i=0;i<G;i++) for(var j=0;j<G;j++){
-      var x=w+(e-w)*(i+0.5)/G, y=s+(n-s)*(j+0.5)/G;
-      if(pip(x,y,ring)) pts.push([x,y]);
+      var x=w+(e-w)*(i+0.5)/G, y=s+(n-s)*(j+0.5)/G; if(pip(x,y,ring)) pts.push([x,y]);
     }
-    if(pts.length>121) pts=pts.filter(function(_,k){ return k===0 || k%Math.ceil(pts.length/121)===0; });
-    var r=await sample(pts, {timeoutMs:opts.timeoutMs||4000});
-    if(!r) return null;
-    var ft=r.samples.map(function(sm){ return sm.value*M_TO_FT; });
-    /* Hydro-flattened water in 3DEP is exactly 0.000 m. If a lot edge clips a canal, exclude those
-       pixels from min/max — the card is about buildable ground. If EVERYTHING is 0 the lot really is
-       underwater/void; report null and let the ImageServer chain have its say. */
-    var land=ft.filter(function(v){ return v!==0; });
+    if(pts.length>121){ var st=Math.ceil(pts.length/121); pts=pts.filter(function(_,k){return k===0||k%st===0;}); }
+    var r=await sample(pts,{timeoutMs:opts.timeoutMs||4000, force:opts.force||null}); if(!r) return null;
+    if(r.coverage<0.8) return null;   // lot straddles a flight edge / NoData — don't report a partial lot
+    var ft=r.samples.map(function(sm){return sm.value*M_TO_FT;});
+    var land=ft.filter(function(v){return v!==0;});                        // hydro-flattened water = 0.000
     if(!land.length) return null;
     var mn=Math.min.apply(null,land), mx=Math.max.apply(null,land), me=land.reduce(function(a,b){return a+b;},0)/land.length;
-    var r1=function(v){ return Math.round(v*10)/10; };
+    var r1=function(v){return Math.round(v*10)/10;};
+    var m=r.__s3||{};
     return { min:r1(mn), max:r1(mx), med:r1(me), n:land.length, waterPx:ft.length-land.length,
-             src:'USGS 3DEP 1 m', method:'parcel grid ('+land.length+' pts, S3 tiles)',
-             year:r.__s3&&r.__s3.year, project:r.__s3&&r.__s3.project, __source:'S3' };
+             src: m.src==='IAN' ? 'FEMA/USACE 2022 LiDAR (1 m)' : 'USGS 3DEP 1 m',
+             method:'parcel grid ('+land.length+' pts, S3 tiles)', year:m.year, project:m.project, __source:'S3' };
   }
 
   async function selfTest(){
-    await ready();
-    var r=await sample([[-81.7948,26.142]],{timeoutMs:15000});
-    var v=r&&r.samples[0]&&r.samples[0].value;
-    console.log('[S3Elev] Naples test →', v!=null ? v.toFixed(3)+' m = '+(v*M_TO_FT).toFixed(2)+' ft (expect ≈1.25 m)' : 'FAILED', r&&r.__s3, window.__s3ElevDebug);
-    return v;
+    await ready(); await readyIan();
+    var pt=[[-81.7948,26.142]], keep=preferNewest;
+    preferNewest=false; var a=await sample(pt,{timeoutMs:15000});
+    preferNewest=true;  var b=await sample(pt,{timeoutMs:15000});
+    preferNewest=keep;
+    var f=function(r){ var v=r&&r.samples[0]&&r.samples[0].value; return v==null?'FAILED':v.toFixed(3)+' m = '+(v*M_TO_FT).toFixed(2)+' ft ('+(r.__s3&&r.__s3.project)+')'; };
+    console.log('[S3Elev] Naples  USGS 2018 →', f(a), '\n[S3Elev] Naples  Ian 2022  →', f(b), '\n', window.__s3ElevIan);
+    return {usgs:a, ian:b};
   }
 
-  /* Build the index at load (fire-and-forget). Cached → instant; cold → ~1–2 s of parallel listings,
-     long before anyone has typed an address. */
-  try{ ready(); }catch(e){}
+  try{ ready(); readyIan(); }catch(e){}
 
-  return { ready:ready, tileFor:tileFor, sample:sample, parcelStats:parcelStats, selfTest:selfTest, toUTM:toUTM, PROJECTS:PROJECTS };
+  function covers(lat,lng){ var u=toUTM(lat,lng); return { ian: !!(_idxB && tileForB(u)), usgs: !!(_idxA && tileForA(u)) }; }
+  var api={ ready:ready, readyIan:readyIan, tileFor:tileFor, covers:covers, sample:sample, parcelStats:parcelStats, selfTest:selfTest, toUTM:toUTM, PROJECTS:PROJECTS };
+  Object.defineProperty(api,'preferNewest',{ get:function(){return preferNewest;}, set:function(v){preferNewest=!!v;} });
+  return api;
 })();
 
 async function loadElevationGrid(){
@@ -5645,7 +5714,7 @@ async function loadElevationGrid(){
      caret never appeared within a usable time. Launched here, discovery resolves alongside the grid;
      we await the already-running promise later. Only for the default (Auto) load — a pinned collect
      is labelled from the known entry without a lookup. */
-  let _srcPromise = (_elevLockOid==null)
+  let _srcPromise = (_elevLockOid==null || (typeof _elevLockOid==='string'))
     ? identifyElevationSource((pS+pN)/2, (pW+pE)/2)
     : Promise.resolve(null);
 
@@ -5673,7 +5742,7 @@ async function loadElevationGrid(){
     interpolation:'RSP_BilinearInterpolation',
     f:'json'
   };
-  if(_elevLockOid!=null){
+  if(_elevLockOid!=null && typeof _elevLockOid!=='string'){
     _bodyObj.mosaicRule=JSON.stringify({mosaicMethod:'esriMosaicLockRaster',lockRasterIds:[_elevLockOid]});
   }
   const body=new URLSearchParams(_bodyObj);
@@ -5696,12 +5765,21 @@ async function loadElevationGrid(){
      mosaic: a PINNED collect is a catalog ObjectID on the ImageServer, so pins still go there.
      Partial coverage (grid straddles the edge of a project) → let the ImageServer do the whole grid
      so the points are one consistent dataset. */
-  if(_elevLockOid==null){
-    try{ js = await S3Elev.sample(pts, {timeoutMs:8000}); }catch(e){ js=null; }
+  const _s3Pin = (typeof _elevLockOid==='string' && _elevLockOid.indexOf('S3:')===0) ? _elevLockOid.slice(3) : null;  // 'IAN' | 'USGS'
+  if(_elevLockOid==null || _s3Pin){
+    try{ js = await S3Elev.sample(pts, {timeoutMs:8000, force:_s3Pin}); }catch(e){ js=null; }
     if(js && js.coverage < 0.8) js=null;
+    if(_s3Pin && !_ok(js)){
+      /* A pinned S3 source that can't cover this grid: say so and drop back to Auto rather than
+         quietly serving a different dataset under the pinned label. */
+      _elevBusy=false;
+      mapToast(_s3Pin==='IAN' ? 'The 2022 post-Ian flight doesn’t cover this whole lot — back to Auto.' : 'No USGS 1 m tile covers this lot — back to Auto.', 3200);
+      _elevLockOid=null; _elevKey='';
+      return loadElevationGrid();
+    }
   }
   // FALLBACK: USGS ImageServer, unchanged. Skipped entirely when the S3 tiles answered.
-  for(let a=0; a<2 && !_ok(js); a++){
+  for(let a=0; a<2 && !_ok(js) && !_s3Pin; a++){
     if(a>0){ await new Promise(r=>setTimeout(r,300)); mapToast('Retrying elevation service...',1200); }
     js=await _post(DEP3_SAMPLES);
     if(_ok(js)) break;
@@ -5750,6 +5828,7 @@ async function loadElevationGrid(){
   }
   _elevKey=key;
   drawElevationPoints();
+  try{ const car=document.getElementById('elevSrcCaret'); if(car && js.__s3) car.style.display=''; }catch(e){}
 
   const vals=_elevPts.map(p=>p.ft);
   const inner=_elevPts.filter(p=>p.inner).map(p=>p.ft);
@@ -5759,7 +5838,10 @@ async function loadElevationGrid(){
   // the toggle chips. When a specific collect is PINNED, we already know it, so skip the extra call
   // and label straight from the pinned entry.
   let src, cov=null;
-  if(_elevLockOid==null){
+  if(js && js.__s3){
+    src = { year:js.__s3.year, px:1, name:js.__s3.project, others:[] };
+    if(_elevLockOid==null) _srcPromise.then(r=>{ if(r && r.others) src.others=r.others; }).catch(()=>{});
+  } else if(_elevLockOid==null){
     /* When the S3 tiles answered we already KNOW the collect from the filename — label from that and
        don't block the badge on the (possibly dead) USGS identify. Let identify finish in the
        background so the compare-source caret still fills in when USGS is up. */
@@ -5873,10 +5955,24 @@ function openElevSourceMenu(anchorEl){
     return b;
   };
   _elevMenuEl.innerHTML='';
-  _elevMenuEl.appendChild(row('Auto', '(finest available)', null, _elevLockOid==null));
-  _elevCollects.forEach(c=>{
+  _elevMenuEl.appendChild(row('Auto', '(newest 1 m available)', null, _elevLockOid==null));
+  /* S3 tile sources, offered only where they cover the current grid centre. These are pinned with a
+     string oid ('S3:IAN' / 'S3:USGS') that loadElevationGrid routes to S3Elev instead of the
+     ImageServer. */
+  try{
+    const k=(_elevKey||'').split(',').map(Number);              // [s,n,w,e] of the current grid
+    let cLat=null,cLng=null;
+    if(k.length===4 && k.every(isFinite)){ cLat=(k[0]+k[1])/2; cLng=(k[2]+k[3])/2; }
+    else if(window.__printMeta && window.__printMeta.lat!=null){ cLat=window.__printMeta.lat; cLng=window.__printMeta.lng; }
+    const cov = (cLat!=null) ? S3Elev.covers(cLat,cLng) : {ian:false,usgs:false};
+    if(cov.ian)  _elevMenuEl.appendChild(row('2022 · 1m', 'FEMA/USACE post-Ian · S3', 'S3:IAN',  _elevLockOid==='S3:IAN'));
+    if(cov.usgs) _elevMenuEl.appendChild(row('2018 · 1m', 'USGS 3DEP tiles · S3',     'S3:USGS', _elevLockOid==='S3:USGS'));
+  }catch(e){}
+  /* ImageServer collects — 3 m or finer only. The 10 m / 31 m regional passes aren't useful for
+     siting a pad and are hidden here. */
+  _elevCollects.filter(c=>c.px<=3.05).forEach(c=>{
     const fine = c.px<=1.0001;
-    _elevMenuEl.appendChild(row(c.label, fine?'high-res LiDAR':'regional', c.oid, _elevLockOid===c.oid));
+    _elevMenuEl.appendChild(row(c.label, (fine?'high-res LiDAR':'regional')+' · USGS server', c.oid, _elevLockOid===c.oid));
   });
   // Sixth toolbar dropdown — same shared positioner, so it flips correctly with the toolbar at top.
   _elevMenuEl.hidden=false;
@@ -6873,7 +6969,8 @@ async function swfwmdElevationFt(lat, lng, timeoutMs){
     return v;    // already feet, NAVD88
   }catch(e){ clearTimeout(t); return null; }
 }
-async function queryGroundElevation(parcelFeature, countyName, budgetOverride){
+async function queryGroundElevation(parcelFeature, countyName, budgetOverride, opts){
+  opts = opts || {};   // {skipS3:true} bypass the S3 tiles; {only:'usgs'} stop after the ImageServer (no SWFWMD/EPQS)
   const rings0 = parcelFeature && parcelFeature.geometry && parcelFeature.geometry.rings;
   if(!rings0 || !rings0.length) return null;
   /* Outer ring only, thinned and rounded. computeStatisticsHistograms has to rasterise whatever
@@ -6901,7 +6998,7 @@ async function queryGroundElevation(parcelFeature, countyName, budgetOverride){
   /* PRIMARY: S3 tiles — a ~15x15 grid of 1 m pixels INSIDE the parcel outline, min/max/mean in feet.
      Independent of every USGS server. Capped short so a miss still leaves budget for the chain below;
      a miss here is almost always "no 1 m project covers this cell", which returns instantly. */
-  try{
+  if(!opts.skipS3) try{
     const s3 = await S3Elev.parcelStats(rings0[0], { timeoutMs: Math.min(BUDGET, 4000) });
     if(s3){
       window.__groundElevDebug={ ...s3, ms:Math.round(performance.now()-t0) };
@@ -6957,6 +7054,7 @@ async function queryGroundElevation(parcelFeature, countyName, budgetOverride){
     window.__groundElevDebug={ ...res, rawMeters:v, ms:Math.round(performance.now()-t0) };
     return res;
   }
+  if(opts.only==='usgs'){ window.__groundElevDebug={fail:'USGS ImageServer stats+identify failed', ms:Math.round(performance.now()-t0)}; return null; }
   /* SWFWMD district DEM fallback — only inside the district's counties (Charlotte, Sarasota, etc.),
      where it's verified accurate NAVD88. An INDEPENDENT source, so it can answer when USGS is down.
      Feet-native. Tried before EPQS for in-district lookups because it's a separate agency's server. */
@@ -6990,6 +7088,193 @@ async function queryGroundElevation(parcelFeature, countyName, budgetOverride){
                            ms:Math.round(performance.now()-t0)};
   return null;
 }
+
+/* ---------- GROUND ELEV. SOURCE CYCLING ----------
+   The flood card's "Ground elev." value is clickable. Each click re-queries the SAME parcel from the
+   next data source in GE_SOURCES and swaps the row in place, so you can compare vintages and servers
+   on a lot without leaving the card. Results are cached per source, so cycling back is instant; a
+   source that has no coverage or doesn't answer shows as such rather than being skipped silently.
+   The registry is keyed by the card's slot id and holds what the query needs (parcel feature,
+   county, Lee flag, BFE reference context, and the card's own row builder). */
+const GE_SOURCES = [
+  { key:'IAN',    label:'FEMA/USACE 2022 LiDAR (1 m, S3)', onlyIf:(c)=>S3Elev.covers(c.cy,c.cx).ian,
+    run: (c)=> S3Elev.parcelStats(c.ring, {timeoutMs:9000, force:'IAN'}) },
+  { key:'USGS1M', label:'USGS 3DEP 1 m 2018 (S3)', onlyIf:(c)=>S3Elev.covers(c.cy,c.cx).usgs,
+    run: (c)=> S3Elev.parcelStats(c.ring, {timeoutMs:9000, force:'USGS'}) },
+  { key:'LEE',    label:'Lee County 2018 LiDAR points', onlyIf:(c)=>c.isLee,
+    run: (c)=> queryLeeGroundElevation(c.pFeat) },
+  { key:'IMG',    label:'USGS 3DEP ImageServer (live)',
+    run: (c)=> queryGroundElevation(c.pFeat, c.countyName, c.retry?20000:12000, {skipS3:true, only:'usgs'}) },
+  /* Gated by county as a first cut, but several counties (Marion, Lake, Levy, Polk, Highlands) are
+     SPLIT between SWFWMD and a neighbouring district. dropIfEmpty lets the prefetch remove this source
+     from the rotation when the server answers quickly with no pixel — a real gap — while a timeout
+     keeps it in the list with a retry button, because that's the server, not the coverage. */
+  { key:'SWFWMD', label:'SWFWMD 2017-20 DEM (centroid)', onlyIf:(c)=>!!(c.countyName && SWFWMD_COUNTIES.has(norm(c.countyName))), dropIfEmpty:true,
+    run: async (c)=>{ const ft=await swfwmdElevationFt(c.cy, c.cx, c.retry?20000:9000); return ft==null?null:_geSingle(ft,'SWFWMD 2017-20 DEM'); } },
+  /* FDEP 10 m DEM deliberately NOT in the rotation — 10 m pixels smear pads and canal edges, so it's
+     not a number to compare against a BFE. fdep10ElevationFt() is kept for diagnostics only. */
+  { key:'EPQS',   label:'USGS EPQS (centroid)',
+    run: async (c)=>{ const ft=await epqsElevationFt(c.cy, c.cx, c.retry?20000:9000); return ft==null?null:_geSingle(ft,'USGS 3DEP (EPQS)'); } },
+];
+function _geSingle(ft, src){ const f=Math.round(ft*10)/10; return {min:f,max:f,med:f,src:src,method:'centroid point only'}; }
+/* FDEP's statewide copy of the USGS 10 m DEM — metres, coarse, but a separate state server. */
+const FDEP10_DEM = "https://ca.dep.state.fl.us/image/rest/services/MISC/USGS_National_Map_10m_DEM/ImageServer/getSamples";
+async function fdep10ElevationFt(lat, lng, timeoutMs){
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeoutMs||9000);
+  try{
+    const u=FDEP10_DEM+'?f=json&geometryType=esriGeometryPoint&returnFirstValueOnly=true&geometry='
+      +encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}));
+    const r=await fetch(u,{signal:ctrl.signal}); clearTimeout(t);
+    const j=await r.json(); const v=Number(j.samples&&j.samples[0]&&j.samples[0].value);
+    if(!isFinite(v)||v<-1000||v===0) return null;
+    return v*M_TO_FT;
+  }catch(e){ clearTimeout(t); return null; }
+}
+/* Which GE_SOURCES entry produced a result — so the initial card reading is filed under the right key. */
+function _geKeyOf(g){
+  if(!g) return null;
+  const s=String(g.src||'');
+  if(g.__source==='S3') return /2022/.test(s) ? 'IAN' : 'USGS1M';
+  if(/Lee/i.test(s)) return 'LEE';
+  if(/EPQS/.test(s)) return 'EPQS';
+  if(/SWFWMD/.test(s)) return 'SWFWMD';
+  if(/FDEP/.test(s)) return 'FDEP10';
+  return 'IMG';
+}
+window.__geCycle = window.__geCycle || {};
+function geRegister(slotId, ctx, initialG){
+  const ring0 = ctx.pFeat && ctx.pFeat.geometry && ctx.pFeat.geometry.rings && ctx.pFeat.geometry.rings[0];
+  if(!ring0) return;
+  let cx=0, cy=0; for(const p of ring0){ cx+=p[0]; cy+=p[1]; } cx/=ring0.length; cy/=ring0.length;
+  /* Only sources that actually cover THIS parcel go in the rotation: the 2022 flight only where its
+     tiles exist, the USGS tiles only where a 1 m project exists, SWFWMD only inside its district,
+     Lee's points only in Lee. The coverage test needs the S3 indexes, which are built at page load
+     and are normally ready by now; if not, the list is rebuilt the moment they are. */
+  const ctx0 = { ...ctx, ring:ring0, cx, cy };
+  const buildList = ()=> GE_SOURCES.filter(s=>{ try{ return !s.onlyIf || s.onlyIf(ctx0); }catch(e){ return false; } });
+  const st = { ...ctx0, list:buildList(), cache:{}, pending:{}, idx:0 };
+  const k=_geKeyOf(initialG);
+  const placeIdx = ()=>{ const kk=_geKeyOf(st.cache.__current||initialG); st.idx=Math.max(0, st.list.findIndex(s=>s.key===kk)); };
+  if(k){ st.cache[k]=initialG; }
+  placeIdx();
+  window.__geCycle[slotId]=st;
+  Promise.resolve().then(()=>S3Elev.ready()).then(()=>S3Elev.readyIan()).then(()=>{
+    if(window.__geCycle[slotId]!==st) return;
+    st.list=buildList(); placeIdx(); _geHintReady(slotId, st);
+  }).catch(()=>{});
+  /* PREFETCH every other source in the background so cycling is instant. Starts 1.5 s after the
+     card registers so the main render finishes first, then fires all sources in parallel — they are
+     all on different servers (S3, Lee, USGS, SWFWMD, FDEP, EPQS), so parallel costs nothing. Each is
+     capped by its own timeout inside run(); a miss is cached as null so the click doesn't re-wait.
+     If the user clicks before a prefetch lands, the click awaits the in-flight promise. */
+  setTimeout(()=>{
+    if(window.__geCycle[slotId]!==st) return;               // superseded by a newer search
+    for(const src of st.list){
+      if(st.cache[src.key]!==undefined || st.pending[src.key]) continue;
+      const t0=performance.now();
+      st.pending[src.key] = Promise.resolve().then(()=>src.run(st)).catch(()=>null).then(g=>{
+        st.cache[src.key]=g; delete st.pending[src.key];
+        /* Answered fast with nothing → no coverage here → take it out of the rotation entirely. */
+        if(g==null && src.dropIfEmpty && (performance.now()-t0)<6000){
+          const cur=st.list[st.idx];
+          st.list=st.list.filter(x=>x.key!==src.key);
+          st.idx=Math.max(0, st.list.indexOf(cur));
+        }
+        _geHintReady(slotId, st);
+        return g;
+      });
+    }
+  }, 1500);
+}
+/* Update the little "Source i of n" line's readiness marker without repainting the row. */
+function _geHintReady(slotId, st){
+  try{
+    const el=document.querySelector(`#${slotId} .ge-ready`); if(!el) return;
+    const done=st.list.filter(s=>st.cache[s.key]!==undefined).length;
+    el.textContent = done>=st.list.length ? 'all sources loaded' : `${done}/${st.list.length} sources loaded`;
+  }catch(_){}
+}
+function geRowHtml(slotId, g, src, i, n, ref, build){
+  /* Reuse the card's own row builder for a real reading; craft a placeholder for a miss. */
+  let html='';
+  const zeroish = g && Number(g.min)===0 && Number(g.max)===0 && Number(g.med)===0;   // 3DEP's bogus all-zero answer
+  if(g && g.med!=null && !zeroish){
+    html = build(Object.assign({}, g, { src:(g.src||src.label) }), ref) || '';
+  }
+  if(!html){
+    const why = zeroish ? 'returned an all-zero reading, which is a known bad answer' : 'no reading here (no coverage, or the server didn’t answer)';
+    html = `<div class="field"><div class="k">Ground elev.</div><div class="v"><span class="muted">${esc(src.label)}: ${why}</span> `
+         + `<button type="button" class="wbtn ge-retry" data-ge="${slotId}" data-key="${esc(src.key)}" style="margin-left:6px" title="Ask this source again">↻ retry</button></div></div>`;
+  }
+  const st=window.__geCycle[slotId]||{list:[],cache:{}};
+  const done=st.list.filter(s=>st.cache[s.key]!==undefined).length;
+  const ready = done>=n ? 'all sources loaded' : `${done}/${n} sources loaded`;
+  const good = v => v && v.med!=null && !(Number(v.min)===0 && Number(v.max)===0 && Number(v.med)===0);
+  const allTitle = 'Elevation sources at this parcel — click to cycle\n' + st.list.map((s,j)=>
+      (st.cache[s.key]===undefined ? '…' : good(st.cache[s.key]) ? '✓' : '✗') + (j===i?' ▶ ':'   ') + s.label
+      + (good(st.cache[s.key]) ? `  ${st.cache[s.key].min===st.cache[s.key].max ? st.cache[s.key].med : st.cache[s.key].min+'–'+st.cache[s.key].max} ft` : '')
+    ).join('\n');
+  const hint = `<div class="note ge-cycle" data-ge="${slotId}" style="margin-top:2px;opacity:.75;cursor:pointer" title="${esc(allTitle)}">Source ${i+1} of ${n} · <b>${esc(src.label)}</b> — click to try the next source · <span class="ge-ready">${ready}</span></div>`;
+  if(html.indexOf('ge-cycle')<0)   // the builder's own row is already clickable; only the placeholder needs the hook
+    html = html.replace('<div class="v">', `<div class="v ge-cycle" data-ge="${slotId}" style="cursor:pointer" title="Click to cycle elevation data sources">`);
+  html = html.replace('title="Click to cycle elevation data sources"', `title="${esc(allTitle)}"`);
+  return html + hint;
+}
+document.addEventListener('click', async (e)=>{
+  const rb = e.target && e.target.closest && e.target.closest('.ge-retry');
+  if(rb){
+    e.preventDefault(); e.stopPropagation();
+    const id=rb.getAttribute('data-ge'), key=rb.getAttribute('data-key'), st=window.__geCycle[id];
+    if(!st) return;
+    const src=st.list.find(x=>x.key===key); if(!src) return;
+    /* Non-blocking: the row stays clickable while a retry runs. Every action bumps st.gen; when
+       this retry finishes, it only paints if nothing newer has happened since. The result is cached
+       either way, so the source shows the fresh answer next time you cycle to it. */
+    const myGen = st.gen = (st.gen||0)+1;
+    try{
+      patchSlot(id, `<div class="field"><div class="k">Ground elev.</div><div class="v ge-cycle" data-ge="${id}" style="cursor:pointer" title="Click to move on while this retries"><span class="muted">re-checking ${esc(src.label)} (up to 20 s) — click to keep cycling… </span><span class="zone-spin" aria-hidden="true"></span></div></div>`);
+      let g=null;
+      try{ g = await Promise.race([src.run(Object.assign({}, st, {retry:true})), new Promise(r=>setTimeout(()=>r(null), 20000))]); }
+      catch(err){ console.warn('[geCycle] retry failed', key, err); }
+      st.cache[key]=g;
+      if(st.gen!==myGen){ _geHintReady(id, st); return; }        // user moved on — keep the result, don't repaint
+      patchSlot(id, geRowHtml(id, g, src, st.idx, st.list.length, st.ref, st.build));
+      try{ if(g && g.med!=null && st.exportFn) st.exportFn(g); }catch(_){}
+    }catch(err){ console.error('[geCycle] retry', err); }
+    return;
+  }
+  const el = e.target && e.target.closest && e.target.closest('.ge-cycle');
+  if(!el) return;
+  const id = el.getAttribute('data-ge'), st = window.__geCycle[id];
+  if(!st) return;
+  e.preventDefault();
+  /* A double-click would advance twice and silently skip a source; treat clicks < 300 ms apart as one. */
+  const now=Date.now(); if(st.lastClick && now-st.lastClick<300) return; st.lastClick=now;
+  /* Non-blocking: clicking while a source is still loading simply advances to the next one. Each
+     click bumps st.gen; a load that finishes after a newer click caches its result but doesn't paint.
+     Errors are caught and tagged [geCycle] in the console. */
+  const myGen = st.gen = (st.gen||0)+1;
+  try{
+    const n=st.list.length; st.idx=(st.idx+1)%n; const src=st.list[st.idx];
+    patchSlot(id, `<div class="field"><div class="k">Ground elev.</div><div class="v ge-cycle" data-ge="${id}" style="cursor:pointer" title="Click to skip ahead"><span class="muted">checking ${esc(src.label)} — click to skip… </span><span class="zone-spin" aria-hidden="true"></span></div></div>`);
+    let g = st.cache[src.key];
+    if(g===undefined){
+      if(st.pending[src.key]) g = await st.pending[src.key];               // prefetch already in flight
+      else {
+        const p = Promise.resolve().then(()=>src.run(st)).catch(err=>{ console.warn('[geCycle] source failed', src.key, err); return null; })
+                    .then(r=>{ st.cache[src.key]=r; delete st.pending[src.key]; return r; });
+        st.pending[src.key]=p; g = await p;
+      }
+    }
+    if(st.gen!==myGen){ _geHintReady(id, st); return; }          // user already clicked past this one
+    let html;
+    try{ html = geRowHtml(id, g, src, st.idx, n, st.ref, st.build); }
+    catch(err){ console.error('[geCycle] row build failed', src.key, err);
+      html = `<div class="field"><div class="k">Ground elev.</div><div class="v ge-cycle" data-ge="${id}" style="cursor:pointer"><span class="muted">${esc(src.label)}: could not display — click for the next source</span></div></div>`; }
+    patchSlot(id, html);
+    try{ if(g && g.med!=null && st.exportFn) st.exportFn(g); }catch(_){}
+  }catch(err){ console.error('[geCycle]', err); }
+});
 
 /* ---------- Collier County LiMWA + FIRM panels (county-hosted 2024 DFIRM) ----------
    LiMWA: 56 polylines, no attributes — presence alone is the answer (is the lot inside it).
@@ -21639,7 +21924,7 @@ async function _runLookupInner(lat,lng,searchCtx){
           const flat = g.max === g.min;
           const shown = flat ? `${esc(g.med)} ft`
                              : `${esc(g.min)} to ${esc(g.max)} ft <span class="muted">(avg ${esc(g.med)})</span>`;
-          let out = `<div class="field"><div class="k">Ground elev.</div><div class="v">${shown} <span class="muted" style="font-size:11px">NAVD88 · ${esc(g.src||'LiDAR')}</span></div></div>`;
+          let out = `<div class="field"><div class="k">Ground elev.</div><div class="v ge-cycle" data-ge="${_geSlotId}" style="cursor:pointer" title="Click to cycle elevation data sources">${shown} <span class="muted" style="font-size:11px">NAVD88 · ${esc(g.src||'LiDAR')} <span style="opacity:.6">⇄</span></span></div></div>`;
           if(ref.refBfe!=null){
             const gap = Math.round((ref.refBfe - g.med)*10)/10;
             const tag = ref.refEst ? ' <span class="muted">(est.)</span>' : '';
@@ -21656,12 +21941,17 @@ async function _runLookupInner(lat,lng,searchCtx){
         };
         const _geExport = (g)=>{ if(window.__exportData){ window.__exportData.groundElevMin=g.min;
           window.__exportData.groundElevMed=g.med; window.__exportData.groundElevMax=g.max; window.__exportData.groundElevSrc=g.src||''; } };
+        geRegister(_geSlotId, { pFeat, countyName, isLee, ref:_geRefCtx, build:_buildGroundElevRow, exportFn:_geExport }, _geBad(gElev)?null:gElev);
+        /* Initial row goes through geRowHtml too, so the "Source 1 of N" line is there from the start. */
+        const _geInitialHtml = (g)=>{ const st=window.__geCycle[_geSlotId];
+          return (st && st.list.length) ? geRowHtml(_geSlotId, g, st.list[st.idx], st.idx, st.list.length, _geRefCtx, _buildGroundElevRow)
+                                        : _buildGroundElevRow(g, _geRefCtx); };
         if(!_geBad(gElev)){
-          html += `<div id="${_geSlotId}">` + _buildGroundElevRow(gElev, _geRefCtx) + `</div>`;
+          html += `<div id="${_geSlotId}">` + _geInitialHtml(gElev) + `</div>`;
           _geExport(gElev);
         } else {
           html += `<div id="${_geSlotId}"><div class="field"><div class="k">Ground elev.</div>`
-                + `<div class="v"><span class="muted">checking USGS 3DEP… </span><span class="zone-spin" aria-hidden="true"></span></div></div></div>`;
+                + `<div class="v ge-cycle" data-ge="${_geSlotId}" style="cursor:pointer" title="Click to cycle elevation data sources"><span class="muted">checking USGS 3DEP… </span><span class="zone-spin" aria-hidden="true"></span></div></div></div>`;
           /* ⚡ RE-FETCH JUST THIS ROW, AND RETRY IT AUTOMATICALLY (2026-09-01).
              First version of this escalated the budget on each attempt — 12 s → 20 s → 28 s — on the
              assumption that 3DEP was SLOW, because computeStatisticsHistograms has to rasterise the
@@ -21678,10 +21968,12 @@ async function _runLookupInner(lat,lng,searchCtx){
                     // see RENDER CONTRACT
           const _geSpin = (msg)=>{ patchSlot(_geSlotId,
             `<div class="field"><div class="k">Ground elev.</div>`
-              + `<div class="v"><span class="muted">${esc(msg)} </span>`
+              + `<div class="v ge-cycle" data-ge="${_geSlotId}" style="cursor:pointer" title="Click to try another source now"><span class="muted">${esc(msg)} — or click to try another source </span>`
               + `<span class="zone-spin" aria-hidden="true"></span></div></div>`); };
-          const _geFail = (tries)=>{ patchSlot(_geSlotId,
-            `<div class="field"><div class="k">Ground elev.</div><div class="v">`
+          // If the user has clicked into the source cycle, the automatic retry must not paint over them.
+          const _geUserTookOver = ()=>{ const st=window.__geCycle[_geSlotId]; return !!(st && st.gen); };
+          const _geFail = (tries)=>{ if(_geUserTookOver()) return; patchSlot(_geSlotId,
+            `<div class="field"><div class="k">Ground elev.</div><div class="v ge-cycle" data-ge="${_geSlotId}" style="cursor:pointer" title="Click to cycle elevation data sources">`
               + `<span class="muted">USGS 3DEP didn’t return a reading here`
               + (tries>1?` (${tries} attempts)`:``) + ` — retry, or use the Elevation Heights tool `
               + `or an Elevation Certificate</span> `
@@ -21715,6 +22007,7 @@ async function _runLookupInner(lat,lng,searchCtx){
               _geTries++;
               const _budget = GE_BUDGETS[i];
               // Show the wait so a 15 s first pass reads as patience rather than a hang.
+              if(!manual && _geUserTookOver()) return;
               _geSpin(i===0
                 ? (manual?`re-checking USGS 3DEP (up to ${Math.round(_budget/1000)}s)…`
                          :`checking USGS 3DEP (up to ${Math.round(_budget/1000)}s)…`)
@@ -21723,10 +22016,17 @@ async function _runLookupInner(lat,lng,searchCtx){
               // Only bail on a superseded run for the AUTOMATIC pass. A manual re-fetch is the user
               // asking about the parcel on screen right now, so honour it either way.
               if(!manual && myId!==runId) return;
+              // The user is cycling sources by hand: file the answer in the cycle's cache, don't repaint.
+              if(!manual && _geUserTookOver()){
+                try{ const st=window.__geCycle[_geSlotId], k=_geKeyOf(g); if(st&&k&&!_geBad(g)) st.cache[k]=g; _geHintReady(_geSlotId, st); }catch(_){}
+                return;
+              }
               /* No slot-exists bail: patchSlot() records the answer even when the paint that creates
                  the slot hasn't happened yet, and applySlotPatches() applies it on arrival. The old
                  `if(!el) return` silently threw away a fast 3DEP result. */
-              if(!_geBad(g)){ patchSlot(_geSlotId, _buildGroundElevRow(g, _geRefCtx)); _geExport(g); return; }
+              if(!_geBad(g)){ try{ const st=window.__geCycle[_geSlotId], k=_geKeyOf(g); if(st&&k){ st.cache[k]=g; st.idx=Math.max(0,st.list.findIndex(s=>s.key===k)); } }catch(_){}
+                              patchSlot(_geSlotId, _geInitialHtml(g)); _geExport(g);
+                              return; }
               if(i<GE_ATTEMPTS-1) await new Promise(r=>setTimeout(r,200));   // let the socket close
             }
             _geFail(_geTries);
