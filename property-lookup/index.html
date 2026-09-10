@@ -116,60 +116,65 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
      Applied when the user explicitly picks light (html[data-theme="light"])
      OR, absent any explicit choice, when the OS prefers light. The toggle writes
      data-theme to override; html[data-theme="dark"] forces dark even on a light OS. */
+  /* ── LIGHT THEME ─────────────────────────────────────────────────────────────────────────
+     Same family as the dark theme, inverted: cool off-white with a navy cast, NAVY text instead of
+     near-black, navy-tinted borders, and the Site Annotator's light-mode orange. The palette has to
+     appear twice because CSS can't put a media query inside a selector: once for "OS prefers light
+     and the user hasn't chosen", once for an explicit light choice via the toggle. Keep the two
+     blocks identical — edit both or neither. */
   @media (prefers-color-scheme: light){
     html:not([data-theme]){
-      --bg:#eceef1; --panel:#ffffff; --panel2:#ffffff; --line:#d4d9e0;
-      --ink:#1b2530; --dim:#5a6675; --faint:#717d8c;
-      --signal:#C45400; --signal2:#F46800;
-      --blueprint:#0a7ea4; --good:#15935f; --warn:#cc2f2f;
-      --map-bg:#dfe3e8;
-      --panel-grad1:#ffffff; --panel-grad2:#f6f8fa;
-      --header-bg:#f6f8fa; --search-bg:#f1f3f6; --input-bg:#ffffff;
-      --card-head-bg:#f1f4f7; --foot-bg:#f1f3f6;
-      --dash:#e2e6eb; --dash2:#dde2e8; --scrollthumb:#c4ccd5;
-      --signal-ink:#ffffff;
-      --signal-hover:#A84800;
-      --warnbox-bg:#fdf4e0; --warnbox-line:#e8c98a; --warnbox-ink:#7a5a12;
-      --palink-bg:#e4f3f9; --palink-line:#a9d8e8; --palink-hover:#d3ecf4;
-      --sfha-bg:#fbe9e9; --sfha-line:#e3b0b0;
-      --safe-bg:#e6f5ee; --safe-line:#aedcc6;
-      --unk-bg:#eef1f4; --unk-line:#d0d7df;
-      --live-ink:#ffffff;
-      --drop-bg:#ffffff; --drop-line:#e2e6eb; --drop-hover:#f1f4f7;
-      --grip:#b8c0ca;
-      --bnd-bg:#d4691f; --bnd-ink:#ffffff;
+      --bg:#EEF2F5; --panel:#FFFFFF; --panel2:#F2F5F8; --line:#C9D6E0;
+      --ink:#00263E; --dim:#5A748A; --faint:#7A91A4;
+      --signal:#B84C00; --signal2:#F46800;
+      --blueprint:#0A6E92; --good:#158A5A; --warn:#C22F2F;
+      --map-bg:#E4EAF0;
+      --panel-grad1:#FFFFFF; --panel-grad2:#F5F8FA;
+      --header-bg:#F5F8FA; --search-bg:#F2F5F8; --input-bg:#FFFFFF;
+      --card-head-bg:#F2F5F8; --foot-bg:#F2F5F8;
+      --dash:#DCE5EC; --dash2:#D2DDE6; --scrollthumb:#B9C8D4;
+      --signal-ink:#FFFFFF;
+      --signal-hover:#A04200;
+      --warnbox-bg:#FFF4E6; --warnbox-line:#F2C79B; --warnbox-ink:#7A3F0A;
+      --palink-bg:#E4F3F9; --palink-line:#A9D8E8; --palink-hover:#D3ECF4;
+      --sfha-bg:#FBE9E9; --sfha-line:#E3B0B0;
+      --safe-bg:#E6F5EE; --safe-line:#AEDCC6;
+      --unk-bg:#EEF2F5; --unk-line:#C9D6E0;
+      --live-ink:#FFFFFF;
+      --drop-bg:#FFFFFF; --drop-line:#DCE5EC; --drop-hover:#F2F5F8;
+      --grip:#A9BBCA;
+      --bnd-bg:#C45400; --bnd-ink:#FFFFFF;
       --crosshair-bg:rgba(255,255,255,.88);
-      --shadow-strong:rgba(40,55,75,.18); --shadow-soft:rgba(40,55,75,.15);
-      --logo-glow:rgba(199,127,0,.30);
-      --brand-hi:#1b2530;
+      --shadow-strong:rgba(0,38,62,.16); --shadow-soft:rgba(0,38,62,.12);
+      --logo-glow:rgba(196,84,0,.30);
+      --brand-hi:#00263E;
     }
   }
-  /* Explicit user choice via the toggle — overrides the OS setting on any system. */
   html[data-theme="light"]{
-    --bg:#eceef1; --panel:#ffffff; --panel2:#ffffff; --line:#d4d9e0;
-    --ink:#1b2530; --dim:#5a6675; --faint:#717d8c;
-    --signal:#C45400; --signal2:#F46800;
-    --blueprint:#0a7ea4; --good:#15935f; --warn:#cc2f2f;
-    --map-bg:#dfe3e8;
-    --panel-grad1:#ffffff; --panel-grad2:#f6f8fa;
-    --header-bg:#f6f8fa; --search-bg:#f1f3f6; --input-bg:#ffffff;
-    --card-head-bg:#f1f4f7; --foot-bg:#f1f3f6;
-    --dash:#e2e6eb; --dash2:#dde2e8; --scrollthumb:#c4ccd5;
-    --signal-ink:#ffffff;
-    --signal-hover:#A84800;
-    --warnbox-bg:#fdf4e0; --warnbox-line:#e8c98a; --warnbox-ink:#7a5a12;
-    --palink-bg:#e4f3f9; --palink-line:#a9d8e8; --palink-hover:#d3ecf4;
-    --sfha-bg:#fbe9e9; --sfha-line:#e3b0b0;
-    --safe-bg:#e6f5ee; --safe-line:#aedcc6;
-    --unk-bg:#eef1f4; --unk-line:#d0d7df;
-    --live-ink:#ffffff;
-    --drop-bg:#ffffff; --drop-line:#e2e6eb; --drop-hover:#f1f4f7;
-    --grip:#b8c0ca;
-    --bnd-bg:#d4691f; --bnd-ink:#ffffff;
+    --bg:#EEF2F5; --panel:#FFFFFF; --panel2:#F2F5F8; --line:#C9D6E0;
+    --ink:#00263E; --dim:#5A748A; --faint:#7A91A4;
+    --signal:#B84C00; --signal2:#F46800;
+    --blueprint:#0A6E92; --good:#158A5A; --warn:#C22F2F;
+    --map-bg:#E4EAF0;
+    --panel-grad1:#FFFFFF; --panel-grad2:#F5F8FA;
+    --header-bg:#F5F8FA; --search-bg:#F2F5F8; --input-bg:#FFFFFF;
+    --card-head-bg:#F2F5F8; --foot-bg:#F2F5F8;
+    --dash:#DCE5EC; --dash2:#D2DDE6; --scrollthumb:#B9C8D4;
+    --signal-ink:#FFFFFF;
+    --signal-hover:#A04200;
+    --warnbox-bg:#FFF4E6; --warnbox-line:#F2C79B; --warnbox-ink:#7A3F0A;
+    --palink-bg:#E4F3F9; --palink-line:#A9D8E8; --palink-hover:#D3ECF4;
+    --sfha-bg:#FBE9E9; --sfha-line:#E3B0B0;
+    --safe-bg:#E6F5EE; --safe-line:#AEDCC6;
+    --unk-bg:#EEF2F5; --unk-line:#C9D6E0;
+    --live-ink:#FFFFFF;
+    --drop-bg:#FFFFFF; --drop-line:#DCE5EC; --drop-hover:#F2F5F8;
+    --grip:#A9BBCA;
+    --bnd-bg:#C45400; --bnd-ink:#FFFFFF;
     --crosshair-bg:rgba(255,255,255,.88);
-    --shadow-strong:rgba(40,55,75,.18); --shadow-soft:rgba(40,55,75,.15);
-    --logo-glow:rgba(199,127,0,.30);
-    --brand-hi:#1b2530;
+    --shadow-strong:rgba(0,38,62,.16); --shadow-soft:rgba(0,38,62,.12);
+    --logo-glow:rgba(196,84,0,.30);
+    --brand-hi:#00263E;
   }
   /* html[data-theme="dark"] needs no overrides — :root defaults are already dark,
      and because data-theme is set, the prefers-light media query above won't apply. */
@@ -219,10 +224,13 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   .hint{margin-top:8px;font-size:10.5px;color:var(--faint);font-family:var(--mono);line-height:1.5}
   .hint b{color:var(--dim)}
 
-  .body{overflow-y:auto;padding:6px 16px 16px}
+  /* scrollbar-gutter:stable reserves the scrollbar's width even when nothing scrolls, so the card
+     width — and the header chip row — is identical on short tabs (HOA, Permits) and tall ones
+     (Zoning, Flood). Without it the WIND chip wrapped only on the tabs that happened to scroll. */
+  .body{overflow-y:auto;padding:6px 16px 16px;scrollbar-gutter:stable}
   .body::-webkit-scrollbar{width:8px}.body::-webkit-scrollbar-thumb{background:var(--scrollthumb);border-radius:8px}
 
-  .status{font-family:var(--mono);font-size:11px;color:var(--dim);padding:11px 2px 5px;display:flex;align-items:center;gap:8px}
+  .status{font-family:var(--mono);font-size:11px;color:var(--dim);padding:7px 2px 2px;display:flex;align-items:center;gap:8px}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none}
   .dot.busy{background:var(--signal);animation:pulse 1s infinite}
   .dot.ok{background:var(--good)} .dot.err{background:var(--warn)}
@@ -605,10 +613,12 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 
   .empty{text-align:center;color:var(--faint);font-family:var(--mono);font-size:12px;padding:26px 10px;line-height:1.6}
 
-  .adv{margin-top:9px;border-top:1px dashed var(--dash2);padding-top:9px}
+  .adv{margin-top:7px;border-top:1px dashed var(--dash2);padding-top:7px}
   .adv summary{cursor:pointer;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--blueprint);text-transform:uppercase;list-style:none;user-select:none}
   .adv summary::-webkit-details-marker{display:none}
   .adv summary::before{content:'▸ ';color:var(--faint)}
+  .adv summary:hover{color:var(--ink)}
+  .adv[open] summary{color:var(--dim)}
   .adv[open] summary::before{content:'▾ '}
   .adv .arow{display:flex;gap:6px;margin-top:8px}
   .adv input{flex:1;min-width:0;background:var(--input-bg);border:1px solid var(--line);color:var(--ink);font-family:var(--mono);font-size:11px;padding:7px 9px;border-radius:6px;outline:none}
@@ -807,7 +817,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 
   /* ---- Breadcrumb · Summary strip · Tabs (all viewports) ---------------------------------- */
   .breadcrumb{font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--faint);
-    padding:8px 2px 0;display:flex;flex-wrap:wrap;gap:4px;align-items:center;line-height:1.3}
+    padding:5px 2px 0;display:flex;flex-wrap:wrap;gap:4px;align-items:center;line-height:1.3}
   .breadcrumb .bc{color:var(--dim)} .breadcrumb .bc.cur{color:var(--signal)}
   .breadcrumb .sep{color:var(--faint);opacity:.6}
 
@@ -815,9 +825,11 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     background:var(--card-head-bg)}
   .summary-strip .sum-addr{font-family:var(--disp);font-weight:700;font-size:14px;letter-spacing:.01em;
     color:var(--ink);padding:10px 12px 8px;line-height:1.25}
-  .summary-strip .sum-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 11px}
+  /* Sized so COUNTY · JURIS · ZONING · FLOOD · WIND fit one row in the 600 px desktop panel with a
+     typical city name; wraps gracefully below that. */
+  .summary-strip .sum-chips{display:flex;flex-wrap:wrap;gap:5px;padding:0 10px 10px}
   .sum-chips .chip{font-family:var(--mono);font-size:10.5px;line-height:1;display:inline-flex;
-    align-items:center;gap:5px;padding:6px 9px;border-radius:20px;border:1px solid var(--line);
+    align-items:center;gap:4px;padding:6px 7px;border-radius:20px;border:1px solid var(--line);
     background:var(--panel2);color:var(--ink);white-space:nowrap}
   .sum-chips .chip b{color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:9px}
   .sum-chips .chip.warn{border-color:var(--warn);color:var(--warn)}
@@ -5859,7 +5871,8 @@ async function loadElevationGrid(){
   // and label straight from the pinned entry.
   let src, cov=null;
   if(js && js.__s3){
-    src = { year:js.__s3.year, px:1, name:js.__s3.project, others:[] };
+    src = { year:js.__s3.year, px:1, name:js.__s3.project, others:[],
+            kind: js.__s3.src==='IAN' ? 'IAN' : 'USGS', via:'S3' };
     if(_elevLockOid==null) _srcPromise.then(r=>{ if(r && r.others) src.others=r.others; }).catch(()=>{});
   } else if(_elevLockOid==null){
     /* When the S3 tiles answered we already KNOW the collect from the filename — label from that and
@@ -5870,12 +5883,13 @@ async function loadElevationGrid(){
       _srcPromise.then(r=>{ if(r && r.others) src.others=r.others; }).catch(()=>{});
     } else {
       src = await _srcPromise;                    // was launched in parallel at the top of the load
+      if(src){ src.kind='USGS'; src.via='server'; }
     }
     cov = await esriElevCoverage((pS+pN)/2, (pW+pE)/2);
     if(cov) window.__elevCoverage=cov;
   } else {
     const pinned=(_elevCollects||[]).find(c=>c.oid===_elevLockOid);
-    src = pinned ? { year:pinned.year, px:pinned.px, name:pinned.name, others:[] } : null;
+    src = pinned ? { year:pinned.year, px:pinned.px, name:pinned.name, others:[], kind:'USGS', via:'server' } : null;
   }
 
   window.__elevDebug={ n:vals.length, inner:inner.length, lockOid:_elevLockOid,
@@ -5906,7 +5920,9 @@ async function loadElevationGrid(){
         o.px!=null && isFinite(o.px) && o.px <= servedPx*1.5);
       const stale = newer.length>0;
       const alt2 = newer.map(o=>o.year).join(', ');
-      elevBadge(yr ? `${yr} LiDAR · ${rtag}` : `${rtag} source`, stale, src, cov, alt2);
+      const who = src.kind==='IAN' ? 'FEMA/USACE post-Ian' : 'USGS 3DEP';
+      const how = src.via==='S3' ? 'S3 tiles' : 'USGS server';
+      elevBadge(`${yr?yr+' ':''}${who} · ${rtag} · ${how}${pinTag}`, stale, src, cov, alt2);
     }
   }
 }
@@ -5924,21 +5940,32 @@ function elevBadge(text, stale, src, cov, newerYears){
       map.getContainer().appendChild(_elevBadgeEl);
     }
     const alt = newerYears || '';
-    _elevBadgeEl.style.borderColor = stale ? 'rgba(255,180,80,.75)' : 'rgba(255,255,255,.18)';
-    /* Authoritative confirmation from Esri's public coverage layer, when it agrees this is 3DEP.
-       Purely a "verified source" stamp — same USGS data, cross-confirmed provenance. */
+    const isIan = !!(src && src.kind==='IAN');
+    /* Colour cue so a source change is unmistakable: post-Ian 2022 gets the orange accent edge and
+       title; USGS keeps the neutral edge. Stale-warning orange still wins when it applies. */
+    _elevBadgeEl.style.borderColor = stale ? 'rgba(255,180,80,.75)' : (isIan ? 'rgba(244,104,0,.85)' : 'rgba(255,255,255,.18)');
+    /* Provenance line. For USGS data: Esri's public coverage layer cross-confirms 3DEP. For the
+       post-Ian set the USGS check is irrelevant (different flight), so state its own provenance. */
     let confirm='';
-    if(cov && (cov.product || cov.datum)){
+    if(isIan){
+      confirm = '<br><span style="color:#ffb27a">✓ FEMA/USACE JALBTCX 2022 · NAVD88 · NOAA Digital Coast</span>';
+    } else if(cov && (cov.product || cov.datum)){
       const bits=[];
       if(cov.product) bits.push(cov.product.replace(/_/g,' '));
       if(cov.px!=null && isFinite(cov.px)) bits.push(cov.px+' m');
       if(cov.datum) bits.push(cov.datum);
       confirm = '<br><span style="color:#87c98a">✓ '+bits.join(' · ')+' (USGS, verified)</span>';
     }
-    _elevBadgeEl.innerHTML = '⛭ ground elevation · '+text
+    const html = '⛭ ground elevation · <b style="color:'+(isIan?'#ffb27a':'#e8e6df')+'">'+text+'</b>'
       + (stale ? '<br><span style="color:#ffb450">newer coverage exists ('+alt+') — a lot filled since may read low</span>' : '')
       + confirm;
+    const changed = _elevBadgeEl.innerHTML !== html;
+    _elevBadgeEl.innerHTML = html;
     _elevBadgeEl.hidden=false;
+    if(changed){   // brief flash so the eye catches the swap after picking a source
+      _elevBadgeEl.style.transition='none'; _elevBadgeEl.style.boxShadow='0 0 0 3px rgba(244,104,0,.55)';
+      requestAnimationFrame(()=>{ _elevBadgeEl.style.transition='box-shadow .9s ease'; _elevBadgeEl.style.boxShadow='0 0 0 0 rgba(244,104,0,0)'; });
+    }
     /* Show the ▾ source caret on the control-bar Elevation button whenever this parcel has more than
        one collect to compare; hide it otherwise. The caret (not the badge) opens the picker. */
     try{ const car=document.getElementById('elevSrcCaret');
@@ -25130,7 +25157,7 @@ window.Sheet=Sheet;
     const c=current();
     btn.textContent=ICON[c];
     btn.title=LABEL[c];
-    if(meta) meta.setAttribute('content', effectiveDark()?'#00263E':'#eceef1');
+    if(meta) meta.setAttribute('content', effectiveDark()?'#00263E':'#EEF2F5');
   }
   function apply(mode){
     if(mode==='auto'){ root.removeAttribute('data-theme'); STORE.del('aog_theme'); }
