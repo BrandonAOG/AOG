@@ -894,11 +894,14 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
        background and effectively invisible — people couldn't find the thing they were meant to
        drag. Now near-white at 55% so it reads instantly against either theme, and the zone is
        44px (Apple's minimum touch target) rather than 34. */
-    .sheet-grip{display:block;position:relative;height:44px;flex:none;cursor:grab;touch-action:none}
-    .sheet-grip::before{content:"";position:absolute;top:16px;left:50%;transform:translateX(-50%);
-      width:52px;height:5px;border-radius:3px;background:rgba(255,255,255,.55);
+    .sheet-grip{display:block;position:relative;height:52px;flex:none;cursor:grab;touch-action:none}
+    .sheet-grip::before{content:"";position:absolute;top:18px;left:50%;transform:translateX(-50%);
+      width:76px;height:6px;border-radius:4px;background:rgba(255,255,255,.62);
       transition:background .15s,width .15s,height .15s}
-    .sheet-grip:active::before{background:var(--signal);width:64px;height:6px}
+    .sheet-grip:active::before{background:var(--signal);width:92px;height:7px}
+    /* The whole search row is a drag surface as well (see the searchEl handler): the strip either
+       side of the field, and the gap under it down to the tabs, all pull the sheet. */
+    .search{touch-action:pan-y}
     /* light theme: a white bar would vanish, so go dark instead */
     html[data-theme="light"] .sheet-grip::before{background:rgba(20,26,34,.42)}
 
@@ -25962,17 +25965,16 @@ const Sheet=(function(){
     searchEl.addEventListener('touchstart',e=>{
       if(!isMobile()) return;
       if(isInteractive(e.target)) return;        // let taps on the field/buttons through
+      /* Anywhere else on this row — the margins beside the input, the space under it — is a handle. */
       pending=true; pStartY=e.touches[0].clientY;
     },{passive:true});
     searchEl.addEventListener('touchmove',e=>{
       if(!pending || dragging) return;
       const dy=e.touches[0].clientY - pStartY;
-      if(dy>8){                                  // a deliberate downward drag → take over
-        pending=false;
-        down(e);                                 // begins the real drag (preventDefault inside)
-      } else if(dy < -8){
-        pending=false;                           // upward intent isn't a dismiss gesture; bail
-      }
+      /* Either direction hands off to the sheet drag: pulling DOWN collapses/dismisses, pulling UP
+         from a half-height sheet expands it. 6 px of travel is enough — on some phones a stiffer
+         threshold meant the gesture was swallowed by the row before the sheet ever saw it. */
+      if(Math.abs(dy)>6){ pending=false; down(e); }
     },{passive:false});
     searchEl.addEventListener('touchend',()=>{ pending=false; },{passive:true});
     searchEl.addEventListener('touchcancel',()=>{ pending=false; },{passive:true});
@@ -26007,8 +26009,9 @@ const Sheet=(function(){
     bodyEl.addEventListener('touchcancel',()=>{ bPending=false; },{passive:true});
   }
 
-  /* Let the HEADER act as a drag surface too — the title block is a big, obvious grab area, and
-     on a phone it sits right under the grip. Taps on links/buttons still pass through. */
+  /* Let the HEADER act as a drag surface too — the grip, the search row and the title block form one
+     continuous handle from the top of the sheet down to the tab strip, which is what a phone user
+     reaches for. Taps on links/buttons/fields still pass through. */
   const headEl=panel.querySelector('header');
   if(headEl){
     const headDown=e=>{
