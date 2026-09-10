@@ -5071,7 +5071,7 @@ map.on('click', e => {
   }
   const um=document.getElementById('unitModal');
   if(um && um.classList.contains('show')) return;   // modal is open; the map is not the target
-  newSearch(); runLookup(e.latlng.lat, e.latlng.lng);
+  newSearch(); runLookup(e.latlng.lat, e.latlng.lng, { viaMap:true });   // a map tap must not yank the mobile sheet up
 });
 
 /* ---------- City/county separation: color-coded INCORPORATED city outlines ----------
@@ -20431,7 +20431,10 @@ async function _runLookupInner(lat,lng,searchCtx){
   try{ _slotPatches.clear(); }catch(e){}
   try{ clearCardRetries(); }catch(e){}   // retries capture this lookup's scope; never outlive it
   results.innerHTML = setStatus('busy','Querying official GIS services…');
-  if(window.Sheet) Sheet.setState('full');   // bring results into view on mobile
+  /* Only a lookup the user explicitly asked for (typed address / picked a suggestion) may pull the
+     sheet up; a map tap or a still-finishing cold-start search must not. searchCtx.viaMap is set by
+     the map-click path. */
+  if(window.Sheet) Sheet.setState('full', !(searchCtx && searchCtx.viaMap));
 
   // Fire all queries in parallel; each degrades independently.
   /* The statewide FDOR roll is deliberately patient — 3 passes with a growing window — because in
@@ -25854,7 +25857,8 @@ const Sheet=(function(){
   }
   function hide(){
     if(!isMobile()) return;
-    hidden=true;
+    hidden=true; userClosed=true;               // dismissed on purpose
+
     panel.style.transform='';                 // let the CSS .hidden translateY(105%) take over cleanly
     panel.classList.add('hidden');
     tab.classList.add('show');
@@ -25863,10 +25867,16 @@ const Sheet=(function(){
     idx=Math.max(0,Math.min(SNAPS.length-1,i));
     if(isMobile()){ show(); apply(Math.round(SNAPS[idx]*vh())); }
   }
-  function setState(name){            // semantic helpers for the lookup flow
+  /* USER INTENT WINS. A lookup used to force the sheet to full — including lookups the user didn't
+     ask for as a panel: tapping a house on the map, or a cold-start search still finishing. If they
+     have deliberately dismissed or collapsed the sheet, it must stay put; the tab at the bottom of
+     the screen (and the grip) are the only things that bring it back up. */
+  let userClosed=false;
+  function setState(name, force){
     if(!isMobile()) return;
-    if(name==='hidden') hide();
-    else if(name==='peek') snapTo(0);
+    if(name==='hidden'){ hide(); return; }
+    if(userClosed && !force) return;            // respect the dismissal — results are there when they pull it up
+    if(name==='peek') snapTo(0);
     else if(name==='full') snapTo(2);
     else snapTo(1);
   }
@@ -25921,10 +25931,11 @@ const Sheet=(function(){
     const flungDown=vY>0.6;                        // fast downward flick
     const draggedLow=frac < SNAPS[0]*1.1;          // dragged near/below the peek point
     // dragged below peek OR flicked down hard → dismiss entirely so the map is fully visible
-    if(draggedLow || flungDown){ hide(); return; }
+    if(draggedLow || flungDown){ hide(); return; }        // hide() records the intent
     // otherwise snap to nearest defined point
     let best=0,bd=1e9;
     SNAPS.forEach((s,i)=>{ const d=Math.abs(s-frac); if(d<bd){bd=d;best=i;} });
+    userClosed = (best===0);                              // dragged down to the peek sliver = leave it alone
     snapTo(best);
   }
   grip.addEventListener('touchstart',down,{passive:false});
@@ -26014,19 +26025,19 @@ const Sheet=(function(){
   window.addEventListener('mouseup',up);
   // pull-up tab brings the sheet all the way back to FULL height (top of the screen),
   // so one tap restores the panel to its largest size; the grip can then drag it down.
-  tab.addEventListener('click',()=>{ snapTo(2); });
+  tab.addEventListener('click',()=>{ userClosed=false; snapTo(2); });      // the tab is the way back
   /* Tapping the grip TOGGLES between half and full. It used to cycle peek→half→full→peek, which
      meant a tap at full height collapsed the sheet to a 16% sliver — jarring, and easy to trigger
      by accident when aiming for the panel. Dragging is still the way to reach peek or dismiss. */
   let tapStartY=0,moved=false;
   grip.addEventListener('touchstart',e=>{tapStartY=e.touches[0].clientY;moved=false;},{passive:true});
   grip.addEventListener('touchmove',e=>{ if(Math.abs(e.touches[0].clientY-tapStartY)>6) moved=true; },{passive:true});
-  grip.addEventListener('click',()=>{ if(moved) return; snapTo(idx>=2 ? 1 : 2); });
+  grip.addEventListener('click',()=>{ if(moved) return; userClosed=false; snapTo(idx>=2 ? 1 : 2); });
   // re-apply on resize/orientation change
   window.addEventListener('resize',()=>{ if(isMobile()){ if(!hidden) snapTo(idx); } else { panel.style.removeProperty('--sheet-h'); panel.classList.remove('hidden'); tab.classList.remove('show'); } });
   // init
   if(isMobile()) snapTo(1);
-  return { setState, hide, show };
+  return { setState, hide, show, isUserClosed:()=>userClosed, allowAuto:()=>{ userClosed=false; } };
 })();
 window.Sheet=Sheet;
 
