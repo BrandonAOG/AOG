@@ -2146,6 +2146,17 @@ const COUNTY_LIVE = {
     // resusesf, acres, beds/baths, use=pc, last sale yr1/pr_1, owner mailing add_1..add_4 — all
     // mapped via detectFields' Marion aliases. Source layer SR 2237 (FL State Plane ft); tool sends
     // inSR=4326 and the server reprojects. Ocala Public/Parcels service, layer 0.
+    /* ✅ PRIMARY (added 10 Sep 2026): Marion County's OWN hosted roll — "Reach_Parcels", the layer
+       behind the county appraiser's Map It+ viewer. Verified reachable, CORS-open and queryable, roll
+       updated 9/10/2026. Put ahead of the Ocala server because a Weirsdale lookup was falling all the
+       way through to the slow statewide FDOR roll (3 passes + a 2–3 s statewide cadastral request),
+       which is what made searches in Marion feel like the app didn't know what it was looking for.
+       122 fields; the ones we use: owner=OWNERNAME_1(+OWNERNAME_2), parcel=PARCEL (ALT_KEY = appraiser
+       AltKey), site=SITUS_1/SITUS_2, value=TOT_VAL (land TOT_LND_VA / bldg TOT_BLD_VA / taxable
+       TOT_TAX_VA / assessed ASSD_VAL), year built=YRBLT1, living area=RESUSESF (total RESTOTSF),
+       acres=ACRES/CalcAcres, BEDS/BATHS, POOL, GARAGE, use=PC, zoning=ZONE1, legal book/page BK1/PG1,
+       last sale LASTSALE_DATE/LASTSALE_PRICE (also YR1/PR_1). */
+    "https://services5.arcgis.com/zh4IrtLvSvA0sfub/arcgis/rest/services/Reach_Parcels/FeatureServer/0/query",
     "https://gis.ocalafl.org/arcgis/rest/services/Public/Parcels/FeatureServer/0/query"
   ]},
   HENDRY  : { label:"Hendry County (Property Appraiser parcel layer)", urls:[
@@ -12532,8 +12543,8 @@ function detectFields(fields){
   const find=(res)=>{ for(const re of res){ const m=F.find(f=>re.test(f.U)); if(m) return m.raw; } return null; };
   return {
     // /^NAME$/ (last) is Marion County's Ocala-hosted parcel layer; fully anchored so it can't false-match.
-    owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^OWN1$/,/^NAME1$/,/^ONAME$/,/^O_NAME/,/^OWNERLINE1$/,/OWN.*NAME/,/OWNER_?LINE_?1/,/^GRANTEE/,/^NAME$/,/^PAR_OWNER_NAME1$/]),
-    owner2:find([/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^OWN2$/,/^NAME2$/,/^OWNERLINE2$/,/OWNER_?LINE_?2/,/OWN.*NAME2/,/^OWNER_NAME_2$/,/^PAR_OWNER_NAME2$/]),
+    owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^OWN1$/,/^NAME1$/,/^ONAME$/,/^O_NAME/,/^OWNERLINE1$/,/OWN.*NAME/,/OWNER_?LINE_?1/,/^GRANTEE/,/^OWNERNAME_1$/,/^NAME$/,/^PAR_OWNER_NAME1$/]),
+    owner2:find([/^OWNERNAME_2$/,/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^OWN2$/,/^NAME2$/,/^OWNERLINE2$/,/OWNER_?LINE_?2/,/OWN.*NAME2/,/^OWNER_NAME_2$/,/^PAR_OWNER_NAME2$/]),
     pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/,/^PARCEL$/,/^HPARCEL$/]),
     site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/,/^SITUS_ADDRESS$/]),
     city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/,/^STR_CITY$/,/^SITE_MAILING_CITY$/,/^SCITY$/,/^SITUS_POSTAL_CITY$/]),
