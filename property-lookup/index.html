@@ -8744,9 +8744,35 @@ const Measure = (()=>{
       else if(a.dataset.act==='cancel'){ st.pts=[]; clearLive(); }
       else if(a.dataset.act==='done'){ finish(); }
       syncCtl(); });
-    document.body.appendChild(_ctl); syncCtl();
+    document.body.appendChild(_ctl); syncCtl(); placeCtl();
+    window.addEventListener('resize', placeCtl); window.addEventListener('orientationchange', placeCtl);
   }
-  function hideCtl(){ if(_ctl){ _ctl.remove(); _ctl=null; } }
+  function hideCtl(){ if(_ctl){ _ctl.remove(); _ctl=null; window.removeEventListener('resize', placeCtl); window.removeEventListener('orientationchange', placeCtl); } }
+  /* Place the strip from the REAL toolbar and panel rectangles (tablets wrap the toolbar, dock the
+     panel differently, etc.), never from a CSS guess. Prefer just above the toolbar on the right;
+     if that overlaps the property panel, slide it left of the panel or drop it below the toolbar. */
+  function placeCtl(){
+    if(!_ctl) return;
+    const vw=window.innerWidth, vh=window.innerHeight;
+    const tb=document.querySelector('.layerswitch'); const tbr=tb ? tb.getBoundingClientRect() : null;
+    const pn=document.getElementById('panel'); const pnr=(pn && !pn.classList.contains('hidden') && pn.offsetParent!==null) ? pn.getBoundingClientRect() : null;
+    _ctl.style.left='auto'; _ctl.style.right='12px'; _ctl.style.top='auto'; _ctl.style.bottom='12px';
+    const w=_ctl.offsetWidth||240, h=_ctl.offsetHeight||46;
+    let top;
+    if(tbr && tbr.height>0 && tbr.top > vh/2){ top = tbr.top - h - 10; }            // toolbar at the bottom → sit above it
+    else if(tbr && tbr.height>0){ top = tbr.bottom + 10; }                            // toolbar at the top → sit below it
+    else top = vh - h - 12;
+    let left = vw - w - 12;
+    const hits=(a,b)=> a && b && !(a.right<b.left || a.left>b.right || a.bottom<b.top || a.top>b.bottom);
+    const me=()=>({left, right:left+w, top, bottom:top+h});
+    if(hits(me(), pnr)){
+      if(pnr.left - w - 12 > 8) left = pnr.left - w - 12;                             // room to the left of the panel
+      else if(pnr.top - h - 12 > (tbr? tbr.bottom : 60)) top = pnr.top - h - 12;      // room above the panel (bottom sheet)
+      else if(tbr) top = (tbr.top > vh/2) ? tbr.bottom + 10 : tbr.top - h - 10;       // other side of the toolbar
+    }
+    top=Math.max(8, Math.min(vh-h-8, top)); left=Math.max(8, Math.min(vw-w-8, left));
+    _ctl.style.top=top+'px'; _ctl.style.left=left+'px'; _ctl.style.right='auto'; _ctl.style.bottom='auto';
+  }
   function syncCtl(){
     if(!_ctl) return; const n=st.pts.length, need=(st.mode==='area'?3:2);
     _ctl.querySelector('[data-act="undo"]').disabled = n===0;
@@ -8754,6 +8780,7 @@ const Measure = (()=>{
     const d=_ctl.querySelector('[data-act="done"]'); d.disabled = n<need;
     d.textContent = n<need ? `✓ Done (${need-n} more)` : '✓ Done';
   }
+  try{ new ResizeObserver(()=>placeCtl()).observe(document.getElementById('panel')); }catch(e){}
   function start(){
     if(st.active) return; st.active=true; showCtl();
     map.getContainer().classList.add('measuring'); map.doubleClickZoom.disable();
