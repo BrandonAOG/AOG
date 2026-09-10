@@ -8493,20 +8493,31 @@ async function redetectZoningJurisdiction(){
 map.on('zoomstart', ()=>{ if(zoningOn) zoningLayer.clearLayers(); });
 map.on('moveend zoomend', ()=>{ clearTimeout(zoningTimer); zoningTimer=setTimeout(refreshZoning,BOUNDS_DEBOUNCE); });
 
-/* ---------- Map size sanity ----------
-   Leaflet only re-measures its container on the window 'resize' event. Tablets miss that event
-   often (rotation while backgrounded, split view, desktop-mode rescale, keyboard dismissal), and
-   the map then keeps drawing tiles for the OLD size — seen on iPad as tiles filling only the top-
-   left of the screen. Watch the element itself and re-measure whenever its box changes. */
+/* ---------- Size debug overlay (add #sizedebug to the URL) ----------
+   For tablets, where there is no console: shows the numbers that decide the map's size so a
+   mismatch between the element, Leaflet's cached size and the viewport can be seen on-screen. */
 (function(){
-  const el=document.getElementById('map'); if(!el || typeof map==='undefined') return;
-  let t=null; const kick=()=>{ clearTimeout(t); t=setTimeout(()=>{ try{ map.invalidateSize({animate:false}); }catch(e){} }, 60); };
-  try{ new ResizeObserver(kick).observe(el); }catch(e){}
-  window.addEventListener('orientationchange', ()=>{ kick(); setTimeout(kick, 400); setTimeout(kick, 1200); });
-  if(window.visualViewport) window.visualViewport.addEventListener('resize', kick);
-  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) kick(); });
-  window.addEventListener('pageshow', kick);
-  setTimeout(kick, 500); setTimeout(kick, 2000);          // late layout settles (fonts, toolbar wrap, safe areas)
+  if(!/sizedebug/i.test(location.hash)) return;
+  const el=document.createElement('pre');
+  el.style.cssText='position:fixed;top:60px;left:8px;z-index:99999;background:rgba(0,0,0,.85);color:#0f0;font:11px/1.35 monospace;padding:8px;border-radius:6px;max-width:92vw;white-space:pre-wrap;pointer-events:auto';
+  document.body.appendChild(el);
+  const tick=()=>{ try{
+    const c=map.getContainer(), r=c.getBoundingClientRect(), sz=map.getSize(), vv=window.visualViewport;
+    el.textContent =
+      `window.inner      ${innerWidth} x ${innerHeight}\n`+
+      `visualViewport    ${vv?Math.round(vv.width)+' x '+Math.round(vv.height)+'  scale '+vv.scale.toFixed(2)+'  off '+Math.round(vv.offsetLeft)+','+Math.round(vv.offsetTop):'n/a'}\n`+
+      `html client       ${document.documentElement.clientWidth} x ${document.documentElement.clientHeight}\n`+
+      `body client       ${document.body.clientWidth} x ${document.body.clientHeight}\n`+
+      `#map client       ${c.clientWidth} x ${c.clientHeight}\n`+
+      `#map rect         ${Math.round(r.width)} x ${Math.round(r.height)} @ ${Math.round(r.left)},${Math.round(r.top)}\n`+
+      `Leaflet size      ${sz.x} x ${sz.y}\n`+
+      `devicePixelRatio  ${devicePixelRatio}\n`+
+      `screen            ${screen.width} x ${screen.height}  orient ${(screen.orientation&&screen.orientation.type)||window.orientation}\n`+
+      `--abh / --tbh     ${getComputedStyle(document.documentElement).getPropertyValue('--abh')||'unset'} / ${getComputedStyle(document.documentElement).getPropertyValue('--tbh')||'unset'}\n`+
+      `UA ${navigator.userAgent.slice(0,90)}`;
+  }catch(e){ el.textContent='debug error '+e; } };
+  tick(); setInterval(tick, 1000);
+  el.onclick=()=>{ try{ map.invalidateSize({animate:false}); }catch(e){} };
 })();
 
 /* ---------- Measure tool (distance / area, unit-switchable) ----------
