@@ -4629,7 +4629,7 @@ document.addEventListener('click', closeBasemapMenu);
    position:fixed and placed from their button's rect by positionToolbarMenu(), and they close via a
    document-level click listener with stopPropagation() on their own buttons. */
 (function reparentToolbarMenus(){
-  ['basemapMenu','hazardsMenu','layersMenu','weatherMenu','stormPickMenu'].forEach(function(id){
+  ['basemapMenu','hazardsMenu','layersMenu','weatherMenu','stormPickMenu','measureMenu'].forEach(function(id){
     var m=document.getElementById(id);
     if(m && m.parentNode !== document.body) document.body.appendChild(m);
   });
