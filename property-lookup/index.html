@@ -8860,7 +8860,7 @@ const Measure = (()=>{
   try{ new ResizeObserver(()=>placeCtl()).observe(document.getElementById('panel')); }catch(e){}
   function start(){
     if(window.__msLog) __msLog('start() active='+st.active);
-    if(st.active) return; st.active=true; showCtl();
+    if(st.active) return; st.active=true; try{ showCtl(); }catch(e){}
     map.getContainer().classList.add('measuring'); map.doubleClickZoom.disable();
     map.on('click',onClick); map.on('dblclick',onDbl); map.on('mousemove',onMove); map.on('contextmenu',onCtx);
     document.addEventListener('keydown',onKey); btn.classList.add('active');
@@ -8869,11 +8869,17 @@ const Measure = (()=>{
   }
   function stop(){
     if(window.__msLog) __msLog('stop() active='+st.active);
-    if(!st.active) return; finish(); st.active=false; hideCtl();
-    map.getContainer().classList.remove('measuring'); map.doubleClickZoom.enable();
-    map.off('click',onClick); map.off('dblclick',onDbl); map.off('mousemove',onMove); map.off('contextmenu',onCtx);
-    document.removeEventListener('keydown',onKey); btn.classList.remove('active');
-    if(typeof syncBtn==='function') syncBtn();
+    if(!st.active) return;
+    /* Turn the tool OFF first — unconditionally — then tidy up. If committing the half-drawn shape
+       throws for any reason, the map must still be released and the button must still go dark. */
+    st.active=false;
+    try{ map.getContainer().classList.remove('measuring'); }catch(e){}
+    try{ map.doubleClickZoom.enable(); }catch(e){}
+    try{ map.off('click',onClick); map.off('dblclick',onDbl); map.off('mousemove',onMove); map.off('contextmenu',onCtx); }catch(e){}
+    document.removeEventListener('keydown',onKey);
+    btn.classList.remove('active'); if(typeof syncBtn==='function') syncBtn();
+    try{ hideCtl(); }catch(e){}
+    try{ finish(); }catch(e){ console.warn('[measure] finish failed on stop', e); st.pts=[]; try{ clearLive(); }catch(_){} }
   }
   function setMode(m){ if(st.pts.length) finish(); st.mode=m; menu.querySelectorAll('[data-ms-mode]').forEach(b=>b.classList.toggle('active', b.dataset.msMode===m)); }
   const _modeWord = ()=> st.mode==='area'?'area':st.mode==='profile'?'profile':'distance';
@@ -8899,7 +8905,9 @@ const Measure = (()=>{
   /* Touch: long-press (450 ms) on the button opens the menu; a normal tap still toggles the tool. */
   let _lp=null, _lpFired=false, _lpX=0, _lpY=0;
   const lpStart=(x,y)=>{ _lpFired=false; _lpX=x; _lpY=y; clearTimeout(_lp);
-    _lp=setTimeout(()=>{ _lpFired=true; open(); if(navigator.vibrate) try{ navigator.vibrate(10); }catch(_){} }, 450); };
+    _lp=setTimeout(()=>{ _lpFired=true; open(); if(navigator.vibrate) try{ navigator.vibrate(10); }catch(_){}
+                          setTimeout(()=>{ _lpFired=false; }, 700);   // iOS may send no click after a long-press — don't leave the swallow armed
+                        }, 450); };
   const lpEnd=()=>clearTimeout(_lp);
   if(window.PointerEvent){
     btn.addEventListener('pointerdown',(e)=>{ if(e.pointerType==='mouse') return; lpStart(e.clientX,e.clientY); });
