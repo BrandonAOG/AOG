@@ -7139,6 +7139,108 @@ async function queryGroundElevation(parcelFeature, countyName, budgetOverride, o
   return null;
 }
 
+/* ---------- COMMUNITY / HOA LOOKUP (county GIS) ----------
+   There is no statewide HOA registry, but the counties map the pieces:
+     Lee       Subdivisions (name, Gated Y/N, type, unit counts) + Planned Developments (PUD name)
+     Sarasota  MasterAssociation + NeighborhoodAssociation — an actual association directory
+               (name, type, phone, email, website, master association)
+     Charlotte SubDivisions (plat name, book/page) + Planned/Proposed Developments (name)
+     Manatee   CDD (Community Development District name)
+   Discovered 9 Sep 2026 by walking each county's ArcGIS directory; field names verified live.
+   All queries run in parallel with short caps; anything that fails just contributes nothing. */
+const COMMUNITY_LAYERS = {
+  LEE: [
+    { key:'sub', url:'https://gismapserver.leegov.com/gisserver910/rest/services/Layers/Cadastre/MapServer/1',
+      pick:a=>({ name:a.SUBDIVNAME, gated:a.Gated, type:a.SDType, units:(a.TotalSF||0)+(a.TotalMF||0)+(a.TotalCondo||0)+(a.TotalMH||0) }) },
+    { key:'pd',  url:'https://gismapserver.leegov.com/gisserver910/rest/services/DataExplorer/Zoning/MapServer/3',
+      pick:a=>({ name:a.CASE_NAME, category:a.ZONING_CATEGORY, approved:a.INITIALAPPROVAL }) },
+  ],
+  SARASOTA: [
+    { key:'assoc',  url:'https://ags3.scgov.net/server/rest/services/Hosted/NeighborhoodAssociation/FeatureServer/0',
+      pick:a=>({ name:a.associationname||a.newassociationname, type:a.associationtype, phone:a.phonenumber, email:a.email, website:a.website,
+                 master:a.masterassociationname||a.othermasterassociation, status:a.registrationstatus }) },
+    { key:'master', url:'https://ags3.scgov.net/server/rest/services/Hosted/MasterAssociation/FeatureServer/0',
+      pick:a=>({ name:a.associationname, type:a.associationtype, phone:a.phonenumber, email:a.email }) },
+  ],
+  CHARLOTTE: [
+    { key:'sub', url:'https://agis.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGIS_Web_Layers2022/MapServer/19',
+      pick:a=>({ name:a.SUBNAME, type:a.Type, book:a.Book, page:a.Page, link:a.Link }) },
+    { key:'pd',  url:'https://agis3.charlottecountyfl.gov/arcgis/rest/services/Internal/CCGIS_ComDev_Internal/MapServer/166',
+      pick:a=>({ name:a.NAME, desc:a.DESCRIPTION, link:a.URL_LINK }) },
+  ],
+  MANATEE: [
+    { key:'cdd', url:'https://www.mymanatee.org/gisits/rest/services/opendata/Planning/FeatureServer/8',
+      pick:a=>({ name:a.CDD_NAME }) },
+  ],
+};
+async function queryCommunity(lat, lng, countyName, timeoutMs){
+  const layers = COMMUNITY_LAYERS[norm(countyName||'')] || [];
+  if(!layers.length) return null;
+  const pt = encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}));
+  const out = {};
+  await Promise.all(layers.map(async L=>{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeoutMs||7000);
+    try{
+      const r=await fetch(`${L.url}/query?f=json&geometry=${pt}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=3`, {signal:ctrl.signal});
+      const j=await r.json(); const f=j.features&&j.features[0];
+      if(f && f.attributes){ const v=L.pick(f.attributes); if(v && v.name) out[L.key]=v; }
+    }catch(e){}
+    clearTimeout(t);
+  }));
+  return Object.keys(out).length ? out : {};
+}
+const _sunbizQ = q => 'https://search.sunbiz.org/Inquiry/CorporationSearch/ByName?inquirytype=EntityName&inquiryDirectionType=ForwardList&searchNameOrder=&corporationNameSearchString=' + encodeURIComponent(q);
+function renderCommunityBlock(c, countyName){
+  if(c===null) return '';                               // county not wired → nothing to add
+  const cn = titleCase(countyName||'county');
+  let h='';
+  if(!Object.keys(c).length){
+    h += `<div class="freshline snap"><span class="badge unk">county GIS</span> no community, association or planned development mapped at this point</div>`;
+    return h;
+  }
+  const a = c.assoc || c.master;
+  if(a){
+    h += `<div class="freshline"><span class="badge live">● ASSOCIATION MAPPED</span> ${esc(cn)} County registers neighborhood &amp; master associations</div>`;
+    h += fieldRow('Association', esc(a.name), 'big');
+    if(a.type)   h += fieldRow('Type', esc(a.type));
+    if(a.master && c.assoc) h += fieldRow('Master assoc.', esc(a.master));
+    if(c.assoc && c.master && c.master.name!==a.master) h += fieldRow('Master (mapped)', esc(c.master.name));
+    if(a.phone)  h += fieldRow('Phone', esc(a.phone));
+    if(a.email)  h += fieldRow('Email', `<a href="mailto:${esc(a.email)}">${esc(a.email)}</a>`);
+    if(a.website) h += fieldRow('Website', `<a href="${esc(/^https?:/i.test(a.website)?a.website:'https://'+a.website)}" target="_blank" rel="noopener">${esc(a.website)}</a>`);
+    if(a.status) h += fieldRow('Registration', esc(a.status));
+    h += `<a class="palink" href="${esc(_sunbizQ(a.name))}" target="_blank" rel="noopener" style="margin-top:8px">↗ Sunbiz: &ldquo;${esc(a.name)}&rdquo; (officers, agent, filings)</a>`;
+  }
+  if(c.pd){
+    h += `<div class="freshline" style="margin-top:${a?10:0}px"><span class="badge ${a?'unk':'live'}">${a?'planned development':'● PLANNED DEVELOPMENT'}</span> zoning case polygon — master-planned community</div>`;
+    h += fieldRow('Community', esc(c.pd.name), a?'':'big');
+    if(c.pd.category) h += fieldRow('PD category', esc(c.pd.category));
+    if(c.pd.desc) h += fieldRow('Description', esc(c.pd.desc));
+    if(!a){
+      h += `<div class="note">A planned-development polygon almost always comes with a homeowners&rsquo; or master association that maintains the common areas, gates and roads. Search Sunbiz for the community name to find the registered corporation.</div>`;
+      h += `<a class="palink" href="${esc(_sunbizQ(c.pd.name))}" target="_blank" rel="noopener" style="margin-top:8px">↗ Sunbiz: &ldquo;${esc(c.pd.name)}&rdquo;</a>`;
+    }
+    if(c.pd.link) h += `<a class="palink" href="${esc(c.pd.link)}" target="_blank" rel="noopener" style="margin-top:6px">↗ County record for this development</a>`;
+  }
+  if(c.cdd){
+    h += `<div class="freshline" style="margin-top:8px"><span class="badge live">● CDD</span> Community Development District</div>`;
+    h += fieldRow('District', esc(c.cdd.name), (a||c.pd)?'':'big');
+    if(!a && !c.pd) h += `<div class="note">A CDD is a special taxing district that funds the community&rsquo;s infrastructure; it is paired with a master association. Assessments show on the tax bill, not the mortgage.</div>`;
+  }
+  if(c.sub){
+    const sb=c.sub, gated = String(sb.gated||'').toUpperCase()==='Y';
+    h += `<div class="freshline" style="margin-top:${(a||c.pd||c.cdd)?8:0}px"><span class="badge ${gated?'live':'unk'}">${gated?'● GATED':'subdivision'}</span> ${esc(cn)} County subdivision layer</div>`;
+    h += fieldRow('Subdivision', esc(sb.name), (a||c.pd)?'':'big');
+    const bits=[]; if(sb.type) bits.push(esc(sb.type)); if(sb.units) bits.push(sb.units+' units'); if(sb.gated!=null) bits.push(gated?'gated':'not gated');
+    if(bits.length) h += fieldRow('Details', bits.join(' · '));
+    if(sb.book) h += fieldRow('Plat', `Book ${esc(sb.book)}, Page ${esc(sb.page||'')}`);
+    if(sb.link) h += `<a class="palink" href="${esc(sb.link)}" target="_blank" rel="noopener" style="margin-top:6px">↗ Recorded plat</a>`;
+    if(gated && !a && !c.pd) h += `<div class="note">Gated subdivisions have an association by necessity (someone owns the gate and the private roads). Search Sunbiz for the subdivision name.</div>`;
+    if(!a && !c.pd) h += `<a class="palink" href="${esc(_sunbizQ(sb.name))}" target="_blank" rel="noopener" style="margin-top:8px">↗ Sunbiz: &ldquo;${esc(sb.name)}&rdquo;</a>`;
+  }
+  return h;
+}
+
 /* ---------- GROUND ELEV. SOURCE CYCLING ----------
    The flood card's "Ground elev." value is clickable. Each click re-queries the SAME parcel from the
    next data source in GE_SOURCES and swaps the row in place, so you can compare vintages and servers
@@ -21629,7 +21731,17 @@ async function _runLookupInner(lat,lng,searchCtx){
     const _googleUrl = q => 'https://www.google.com/search?q=' + encodeURIComponent(q);
 
     html += `<div class="card"><div class="ch"><span class="icn">[ HOA ]</span><h2>HOA / Community Association</h2>
-      <div class="src">FL Division of<br>Corporations · Sunbiz</div></div><div class="cb">`;
+      <div class="src">county GIS ·<br>Sunbiz</div></div><div class="cb">`;
+    /* Live county community layers (Lee/Sarasota/Charlotte/Manatee) fill this slot; the legal-
+       description extraction below stays as the fallback and as a cross-check. */
+    const _hoaSlotId='hoaLive-'+myId;
+    if(COMMUNITY_LAYERS[norm(countyName||'')]){
+      html += `<div id="${_hoaSlotId}"><div class="freshline"><span class="badge live">● CHECKING</span> ${esc(titleCase(countyName))} County community layers… <span class="zone-spin" aria-hidden="true"></span></div></div>`;
+      queryCommunity(lat, lng, countyName, 8000).then(c=>{
+        if(myId!==runId) return;
+        patchSlot(_hoaSlotId, renderCommunityBlock(c, countyName) + `<div style="height:8px"></div>`);
+      }).catch(()=>{ if(myId===runId) patchSlot(_hoaSlotId, ''); });
+    }
 
     /* Cape Coral, Lehigh Acres, Port Charlotte, North Port, Golden Gate etc. were platted city-wide by a
        single developer, so the legal description's "subdivision" is just the city (often with a unit
@@ -21648,7 +21760,7 @@ async function _runLookupInner(lat,lng,searchCtx){
       html += `<div class="note">&ldquo;${esc(_subdiv)}&rdquo; is the developer&rsquo;s city-wide plat, not a community. Lots platted this way typically have <b>no HOA</b> unless a later gated or deed-restricted community was carved out of it. If this address is inside one, its name will be on the deed or the county&rsquo;s recorded plat, not in this legal description.</div>`;
       html += `<a class="palink" href="${esc(_sunbizBase)}" target="_blank" rel="noopener" style="margin-top:8px">↗ Open Sunbiz entity search (enter a community name manually)</a>`;
     } else if(_subdiv){
-      html += `<div class="freshline"><span class="badge live">● SUBDIVISION FOUND</span> extracted from property appraiser legal description</div>`;
+      html += `<div class="freshline"><span class="badge live">● SUBDIVISION FOUND</span> from the property appraiser legal description</div>`;
       html += fieldRow('Subdivision', esc(_subdiv), 'big');
       html += `<a class="palink" href="${esc(_sunbizUrl(_subdiv))}" target="_blank" rel="noopener" style="margin-top:8px">↗ Search Sunbiz for &ldquo;${esc(_subdiv)}&rdquo;</a>`;
       html += `<a class="palink" href="${esc(_googleUrl('"' + _subdiv + '" homeowners association Florida'))} " target="_blank" rel="noopener" style="margin-top:6px">↗ Google: &ldquo;${esc(_subdiv)}&rdquo; homeowners association</a>`;
