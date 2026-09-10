@@ -663,8 +663,8 @@ function calc(){
        '<div class="metric-label" style="color:#F87171;">Conductor / Set \u2014 Violation</div>'+
        '<div class="metric-value" style="color:#F87171;font-size:clamp(1rem,3vw,1.5rem);">Not Allowed</div>'+
        '<div class="metric-sub" style="color:#FCA5A5;margin-top:6px;">Selected conductor ('+conductor+') is smaller than 1/0 AWG</div>'+
-       '<div class="metric-sub" style="color:#FCA5A5;">Paralleling prohibited \u2014 check 310.10(H)</div>'+
-       '<span class="tag tag-err" style="margin-top:8px;">310.10(H) Violation \u2014 increase sets or use larger breaker</span></div>';
+       '<div class="metric-sub" style="color:#FCA5A5;">Paralleling prohibited \u2014 check 310.10(G)</div>'+
+       '<span class="tag tag-err" style="margin-top:8px;">310.10(G) Violation \u2014 increase sets or use larger breaker</span></div>';
   }else if(ninetyMisuse){
     h+='<div class="metric" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.5);grid-column:span 2;">'+
        '<div class="metric-label" style="color:#F87171;">Conductor / Set \u2014 Violation</div>'+
@@ -744,12 +744,12 @@ function calc(){
          'Parallel sets are not recognized under this section. Set parallel sets to 1, '+
          'or switch to the General (310.16 75\u00b0C) application.</div>';
     }else if(parallelViol){
-      h+='<div class="note-block err"><strong>310.10(H) \u2014 Parallel conductor violation</strong>'+
+      h+='<div class="note-block err"><strong>310.10(G) \u2014 Parallel conductor violation</strong>'+
          'Conductors smaller than 1/0 AWG cannot be paralleled. The selected '+conductor+
          ' per set does not meet the minimum size requirement. Increase the number of parallel sets, '+
          'select a larger breaker, or verify the load requires paralleling.</div>';
     }else if(!exceeded){
-      h+='<div class="note-block"><strong>Paralleling \u2014 310.10(H)</strong>'+
+      h+='<div class="note-block"><strong>Paralleling \u2014 310.10(G)</strong>'+
          'Each of the '+sets+' sets must use '+conductor+' conductors. '+
          'All conductors in each parallel set must be the same size, insulation type, and length. '+
          'Minimum parallel size is 1/0 AWG.</div>';
