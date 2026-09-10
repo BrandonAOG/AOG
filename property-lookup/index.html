@@ -17499,9 +17499,58 @@ async function fetchMaybeGzip(url){
 /* Which URLs have a fully parsed index sitting in memory right now. queryHostedFile() uses this to
    tell "ready, read it" apart from "still downloading" — see the budget note there. */
 const _fileReady = new Set();
+/* ⚡ OFF-MAIN-THREAD INDEXING. The Lee file is ~11 MB gzipped → ~100 MB of JSON → ~700k rows. Doing
+   fetch + inflate + JSON.parse + the grid loop on the main thread froze the page for ~8 s (measured
+   10 Sep 2026: one 7,886 ms frame while panning). The same work now runs in a Web Worker built from
+   an inline blob; the finished grid comes back as a structured clone, which the main thread absorbs
+   in a fraction of a second. Falls back to the in-thread path only where Workers are unavailable. */
+const _INDEX_WORKER_SRC = `
+  self.onmessage = async (ev)=>{
+    const { url, GRID } = ev.data;
+    try{
+      const r = await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
+      let j;
+      const isGz = /\\.gz($|\\?)/i.test(url);
+      if(isGz && typeof DecompressionStream!=='undefined' && r.body){
+        try{ j = JSON.parse(await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).text()); }
+        catch(e){ j = JSON.parse(await (await fetch(url)).text()); }
+      } else { j = await r.json(); }
+      if(!j || !Array.isArray(j.rows)) { self.postMessage({ok:false}); return; }
+      const lat0=j.lat0||0, lon0=j.lon0||0, scale=j.scale||1, streets=j.streets||[], owners=j.owners||[];
+      const isFull = (j.fmt==='collier-full-v1');
+      const grid=new Map(), rows=j.rows;
+      for(let i=0;i<rows.length;i++){
+        const r=rows[i]; let x,y,num,si,unit=null,own=null,sqft=null,folio=null;
+        if(isFull){ y=lat0+r[0]/scale; x=lon0+r[1]/scale; num=r[2]||''; si=r[3];
+          unit=(r[4]!=null&&r[4]!=='')?r[4]:null; own=(r[5]!=null&&r[5]>=0&&owners[r[5]])?owners[r[5]]:null;
+          sqft=(r[6]!=null&&r[6]>0)?r[6]:null; folio=(r.length>=8&&r[7])?String(r[7]):null; }
+        else { x=lon0+r[0]/scale; y=lat0+r[1]/scale; num=r[2]||''; si=r[3]; }
+        const k=Math.floor(x/GRID)+'_'+Math.floor(y/GRID);
+        let cell=grid.get(k); if(!cell){ cell=[]; grid.set(k,cell); }
+        cell.push([x,y,num,si,unit,own,sqft,folio]);
+      }
+      self.postMessage({ok:true, grid, streets});
+    }catch(e){ self.postMessage({ok:false, err:String(e)}); }
+  };`;
+let _indexWorkerUrl=null;
+function _indexInWorker(url){
+  return new Promise((resolve)=>{
+    try{
+      if(!_indexWorkerUrl) _indexWorkerUrl = URL.createObjectURL(new Blob([_INDEX_WORKER_SRC],{type:'text/javascript'}));
+      const w = new Worker(_indexWorkerUrl);
+      const t0=performance.now();
+      w.onmessage = (ev)=>{ w.terminate(); const d=ev.data; if(d && d.ok && d.grid){ console.debug('[addr-index] built off-thread in', Math.round(performance.now()-t0),'ms:', url.split('/').pop().split('?')[0], d.grid.size,'cells'); resolve({grid:d.grid, streets:d.streets}); } else resolve(null); };
+      w.onerror = ()=>{ w.terminate(); resolve(null); };
+      w.postMessage({ url, GRID:_GRID });
+    }catch(e){ resolve(null); }
+  });
+}
 async function loadHostedFileIndex(url){
   if(_fileCache.has(url)) return _fileCache.get(url);
-  const p = fetchMaybeGzip(url).then(j=>{
+  const p = (typeof Worker!=='undefined' ? _indexInWorker(url) : Promise.resolve(null)).then(async res=>{
+    if(res) return res;
+    // fallback: the original in-thread path (only if the worker couldn't run)
+    const j = await fetchMaybeGzip(url);
     if(!j || !Array.isArray(j.rows)) return null;
     const lat0=j.lat0||0, lon0=j.lon0||0, scale=j.scale||1, streets=j.streets||[];
     const owners=j.owners||[];
