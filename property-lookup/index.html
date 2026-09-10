@@ -8493,6 +8493,22 @@ async function redetectZoningJurisdiction(){
 map.on('zoomstart', ()=>{ if(zoningOn) zoningLayer.clearLayers(); });
 map.on('moveend zoomend', ()=>{ clearTimeout(zoningTimer); zoningTimer=setTimeout(refreshZoning,BOUNDS_DEBOUNCE); });
 
+/* ---------- Map size sanity ----------
+   Leaflet only re-measures its container on the window 'resize' event. Tablets miss that event
+   often (rotation while backgrounded, split view, desktop-mode rescale, keyboard dismissal), and
+   the map then keeps drawing tiles for the OLD size — seen on iPad as tiles filling only the top-
+   left of the screen. Watch the element itself and re-measure whenever its box changes. */
+(function(){
+  const el=document.getElementById('map'); if(!el || typeof map==='undefined') return;
+  let t=null; const kick=()=>{ clearTimeout(t); t=setTimeout(()=>{ try{ map.invalidateSize({animate:false}); }catch(e){} }, 60); };
+  try{ new ResizeObserver(kick).observe(el); }catch(e){}
+  window.addEventListener('orientationchange', ()=>{ kick(); setTimeout(kick, 400); setTimeout(kick, 1200); });
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', kick);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) kick(); });
+  window.addEventListener('pageshow', kick);
+  setTimeout(kick, 500); setTimeout(kick, 2000);          // late layout settles (fonts, toolbar wrap, safe areas)
+})();
+
 /* ---------- Measure tool (distance / area, unit-switchable) ----------
    Geodesic maths: segment lengths via latLng.distanceTo (great-circle), area via the spherical-
    excess formula — no Web Mercator distortion. Accuracy is therefore your click, ~±1 ft at working
@@ -8746,14 +8762,19 @@ const Measure = (()=>{
       syncCtl(); });
     document.body.appendChild(_ctl); syncCtl(); placeCtl();
     window.addEventListener('resize', placeCtl); window.addEventListener('orientationchange', placeCtl);
+    if(window.visualViewport) window.visualViewport.addEventListener('resize', placeCtl);
+    map.on('resize', placeCtl);
+    setTimeout(placeCtl, 250);                             // once more after layout settles
   }
-  function hideCtl(){ if(_ctl){ _ctl.remove(); _ctl=null; window.removeEventListener('resize', placeCtl); window.removeEventListener('orientationchange', placeCtl); } }
+  function hideCtl(){ if(_ctl){ _ctl.remove(); _ctl=null; window.removeEventListener('resize', placeCtl); window.removeEventListener('orientationchange', placeCtl);
+    if(window.visualViewport) window.visualViewport.removeEventListener('resize', placeCtl); map.off('resize', placeCtl); } }
   /* Place the strip from the REAL toolbar and panel rectangles (tablets wrap the toolbar, dock the
      panel differently, etc.), never from a CSS guess. Prefer just above the toolbar on the right;
      if that overlaps the property panel, slide it left of the panel or drop it below the toolbar. */
   function placeCtl(){
     if(!_ctl) return;
-    const vw=window.innerWidth, vh=window.innerHeight;
+    const vv=window.visualViewport;
+    const vw=vv ? vv.width : window.innerWidth, vh=vv ? vv.height : window.innerHeight;
     const union=(els)=>{ let r=null; els.forEach(e=>{ const q=e.getBoundingClientRect(); if(!q.width||!q.height) return;
       r = r ? {left:Math.min(r.left,q.left), top:Math.min(r.top,q.top), right:Math.max(r.right,q.right), bottom:Math.max(r.bottom,q.bottom)} : {left:q.left,top:q.top,right:q.right,bottom:q.bottom}; }); return r; };
     // the toolbar is measured from its BUTTONS, not its wrapper (tablets give the wrapper a different box)
