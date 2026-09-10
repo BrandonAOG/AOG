@@ -78,37 +78,38 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
      renders immediately in fallback fonts and swaps when ready. <noscript> keeps fonts w/o JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
-<meta name="theme-color" content="#0d1117">
+<meta name="theme-color" content="#00263E">
 <!-- SPEED: defer — this was a synchronous <head> script, which stalls HTML parsing (and therefore
      first paint) until the file downloads and runs. Deferred, it still runs before DOMContentLoaded. -->
 <script src="../update-banner.js" defer></script>
 <style>
   :root{
-    --bg:#0d1117; --panel:#11161d; --panel2:#161c25; --line:#222c38;
+    /* Dark theme — deep navy to match the Site Annotator (--bg #00263E, surfaces #04324F / #0B4162). */
+    --bg:#00263E; --panel:#04324F; --panel2:#0B4162; --line:#1A4460;
     --ink:#e8edf2; --dim:#8a96a6; --faint:#5c6675;
-    --signal:#ffb000; --signal2:#ff8a3c;
+    --signal:#F46800; --signal2:#FF9147;     /* Site Annotator orange */
     --blueprint:#39d3ff; --good:#37d399; --warn:#ff5d5d;
     --mono:'IBM Plex Mono',monospace; --disp:'Saira',sans-serif; --body:'Spline Sans',sans-serif;
     /* surfaces & accents (were hard-coded; now themeable) */
-    --map-bg:#0d1117;
-    --panel-grad1:#11161d; --panel-grad2:#0f141b;
-    --header-bg:#0f141b; --search-bg:#11161d; --input-bg:#0a0e13;
-    --card-head-bg:#13191f; --foot-bg:#0d1219;
-    --dash:#1c242e; --dash2:#232d39; --scrollthumb:#222c38;
-    --signal-ink:#191100;            /* text on signal-colored buttons */
-    --signal-hover:#ffc23d;
+    --map-bg:#00263E;
+    --panel-grad1:#04324F; --panel-grad2:#022D47;
+    --header-bg:#00263E; --search-bg:#04324F; --input-bg:#001A2B;
+    --card-head-bg:#03304B; --foot-bg:#012A44;
+    --dash:#0E3F5F; --dash2:#145078; --scrollthumb:#1A4460;
+    --signal-ink:#1A0E00;            /* text on signal-colored buttons */
+    --signal-hover:#FF9147;
     --warnbox-bg:#1c1408; --warnbox-line:#4a3408; --warnbox-ink:#f0d9a8;
     --palink-bg:#0a2733; --palink-line:#14485b; --palink-hover:#0d3140;
     --sfha-bg:#1f1212; --sfha-line:#5a2222;
     --safe-bg:#0f1c16; --safe-line:#1f4d3a;
-    --unk-bg:#141a21; --unk-line:#2a323c;
+    --unk-bg:#06364F; --unk-line:#1A4460;
     --live-ink:#0a1a12;              /* text on the green LIVE badge */
-    --drop-bg:#0a0e13; --drop-line:#161d26; --drop-hover:#11161d;
-    --grip:#4a5868;
+    --drop-bg:#001A2B; --drop-line:#0E3B58; --drop-hover:#04324F;
+    --grip:#5A7A93;
     --bnd-bg:#ff8c1a; --bnd-ink:#10151b;
-    --crosshair-bg:rgba(13,17,23,.82);
+    --crosshair-bg:rgba(0,38,62,.82);
     --shadow-strong:rgba(0,0,0,.55); --shadow-soft:rgba(0,0,0,.5);
-    --logo-glow:rgba(255,176,0,.45);
+    --logo-glow:rgba(244,104,0,.45);
     --brand-hi:#ffffff;              /* bright stop in the brand-name gradient */
   }
   /* Light mode — soft paper-white.
@@ -119,7 +120,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     html:not([data-theme]){
       --bg:#eceef1; --panel:#ffffff; --panel2:#ffffff; --line:#d4d9e0;
       --ink:#1b2530; --dim:#5a6675; --faint:#717d8c;
-      --signal:#b87200; --signal2:#d4691f;
+      --signal:#C45400; --signal2:#F46800;
       --blueprint:#0a7ea4; --good:#15935f; --warn:#cc2f2f;
       --map-bg:#dfe3e8;
       --panel-grad1:#ffffff; --panel-grad2:#f6f8fa;
@@ -127,7 +128,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       --card-head-bg:#f1f4f7; --foot-bg:#f1f3f6;
       --dash:#e2e6eb; --dash2:#dde2e8; --scrollthumb:#c4ccd5;
       --signal-ink:#ffffff;
-      --signal-hover:#9c6000;
+      --signal-hover:#A84800;
       --warnbox-bg:#fdf4e0; --warnbox-line:#e8c98a; --warnbox-ink:#7a5a12;
       --palink-bg:#e4f3f9; --palink-line:#a9d8e8; --palink-hover:#d3ecf4;
       --sfha-bg:#fbe9e9; --sfha-line:#e3b0b0;
@@ -147,7 +148,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   html[data-theme="light"]{
     --bg:#eceef1; --panel:#ffffff; --panel2:#ffffff; --line:#d4d9e0;
     --ink:#1b2530; --dim:#5a6675; --faint:#717d8c;
-    --signal:#b87200; --signal2:#d4691f;
+    --signal:#C45400; --signal2:#F46800;
     --blueprint:#0a7ea4; --good:#15935f; --warn:#cc2f2f;
     --map-bg:#dfe3e8;
     --panel-grad1:#ffffff; --panel-grad2:#f6f8fa;
@@ -155,7 +156,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     --card-head-bg:#f1f4f7; --foot-bg:#f1f3f6;
     --dash:#e2e6eb; --dash2:#dde2e8; --scrollthumb:#c4ccd5;
     --signal-ink:#ffffff;
-    --signal-hover:#9c6000;
+    --signal-hover:#A84800;
     --warnbox-bg:#fdf4e0; --warnbox-line:#e8c98a; --warnbox-ink:#7a5a12;
     --palink-bg:#e4f3f9; --palink-line:#a9d8e8; --palink-hover:#d3ecf4;
     --sfha-bg:#fbe9e9; --sfha-line:#e3b0b0;
@@ -584,7 +585,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     display:flex;flex-direction:column;align-items:center;gap:1px}
   .nbr-num .nbr-hn{font-weight:700}
   .nbr-num .nbr-st{font-size:8px;font-weight:500;opacity:.82;letter-spacing:.04em}
-  .nbr-num.subject{background:#ffb000;color:#10151b;border-color:#ffd166;font-weight:700;font-size:11px;box-shadow:0 1px 6px rgba(255,176,0,.5)}
+  .nbr-num.subject{background:var(--signal);color:#10151b;border-color:#ffd166;font-weight:700;font-size:11px;box-shadow:0 1px 6px rgba(244,104,0,.5)}
   /* collapsed condo/tower stack: one badge that fans out its units on hover */
   .nbr-num.stack{background:rgba(57,211,255,.18);border-color:rgba(57,211,255,.7);color:#dff6ff;font-weight:700}
   .nbr-num.stack .nbr-st{opacity:.9}
@@ -594,11 +595,11 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   /* Elevation-Certificate 📝 note marker on the map */
   .ec-note-wrap{pointer-events:none}
   .ec-note{pointer-events:auto;cursor:pointer;width:22px;height:22px;display:flex;align-items:center;justify-content:center;
-    font-size:14px;line-height:1;background:rgba(10,16,22,.82);border:1px solid #ffb000;border-radius:6px;
+    font-size:14px;line-height:1;background:rgba(10,16,22,.82);border:1px solid var(--signal);border-radius:6px;
     box-shadow:0 1px 6px rgba(0,0,0,.45);transition:transform .12s ease}
   .ec-note:hover{transform:scale(1.25)}
   /* thin stem connecting the raised note down to its point, so it's clear which structure it marks */
-  .ec-note-stem{width:2px;height:16px;margin:0 auto;background:linear-gradient(to bottom, #ffb000, rgba(255,176,0,0));pointer-events:none}
+  .ec-note-stem{width:2px;height:16px;margin:0 auto;background:linear-gradient(to bottom, var(--signal), rgba(244,104,0,0));pointer-events:none}
   .crosshair{position:absolute;z-index:999;top:56px;right:18px;font-family:var(--mono);font-size:10.5px;color:var(--dim);background:var(--crosshair-bg);border:1px solid var(--line);padding:5px 12px;border-radius:20px;pointer-events:none}
   #imgMetaReadout{top:84px;font-size:9.5px;opacity:.85}
 
@@ -993,7 +994,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       background:color-mix(in srgb, var(--signal) 7%, transparent);
     }
   }
-  .action-bar .ab-btn:hover{ border-color:var(--signal); box-shadow:0 0 8px rgba(255,176,0,.30); }
+  .action-bar .ab-btn:hover{ border-color:var(--signal); box-shadow:0 0 8px rgba(244,104,0,.30); }
   .action-bar .theme-toggle-btn{
     flex-shrink:0; width:36px; height:36px; padding:6px; border-radius:4px; cursor:pointer;
     display:flex; align-items:center; justify-content:center;
@@ -11592,7 +11593,7 @@ async function diagnoseLiveFeeds(){
       if(_isAux) extra=' · '+esc(t.label)+(p.name?' ('+esc(p.name)+')':'')+(p.lastEdit?' · updated '+p.lastEdit.toLocaleDateString():'');
       else extra=(p.name?' · '+esc(p.name):'')+(p.owner?' · owner→'+esc(p.owner):'')+(p.pid?' · parcel→'+esc(p.pid):'')+(p.lastEdit?' · updated '+p.lastEdit.toLocaleDateString():'');
     } else if(t.label){ extra=' · '+esc(t.label); }
-    lines.push('<div style="margin-top:6px;border-top:1px solid #1c242e;padding-top:6px">'+
+    lines.push('<div style="margin-top:6px;border-top:1px solid var(--dash);padding-top:6px">'+
       '<span style="color:'+color[p.verdict]+';font-weight:600">'+mark+' '+tag+'</span>'+extra+
       '<br><span style="color:var(--faint);word-break:break-all">'+esc(p.root)+'</span>'+
       '<br><span style="color:var(--dim)">'+esc(p.detail)+'</span></div>');
@@ -11629,7 +11630,7 @@ async function showLiveDiagnostic(rawUrl){
   _diagBg();
   const el=_diagPopupEl();
   const url = (rawUrl||document.getElementById('liveUrl').value||'').trim();
-  const head='<div style="position:sticky;top:0;background:#0b1016;border-bottom:1px solid #1c242e;'+
+  const head='<div style="position:sticky;top:0;background:var(--header-bg);border-bottom:1px solid var(--dash);'+
     'padding:12px 16px;display:flex;justify-content:space-between;align-items:center">'+
     '<span style="color:#39d3ff;font-weight:700;letter-spacing:.05em">LIVE SOURCE DIAGNOSTIC</span>'+
     '<span onclick="closeDiagPopup()" style="cursor:pointer;color:#7a8a96;font-size:16px;padding:0 4px">✕</span></div>';
@@ -11658,7 +11659,7 @@ async function showLiveDiagnostic(rawUrl){
       const flds=(meta.fields||[]);
       const names=flds.map(f=>f.name);
       const d=detectFields(names);
-      body+='<div style="border-top:1px solid #1c242e;padding-top:12px;margin-top:6px">';
+      body+='<div style="border-top:1px solid var(--dash);padding-top:12px;margin-top:6px">';
       if(meta.name) body+='<div style="color:#cde;margin-bottom:8px">Layer: <b>'+esc(meta.name)+'</b>'+
         (meta.editingInfo&&meta.editingInfo.lastEditDate?' <span style="color:#7a8a96">· updated '+new Date(meta.editingInfo.lastEditDate).toLocaleDateString()+'</span>':'')+'</div>';
       // auto-detected key fields
@@ -19552,7 +19553,7 @@ async function _runLookupInner(lat,lng,searchCtx){
   window.__exportData={ lat:lat, lng:lng, today:new Date().toLocaleDateString('en-US') };
   // marker
   if(marker) map.removeLayer(marker);
-  marker=L.circleMarker([lat,lng],{renderer:canvasRenderer,radius:6,color:'#ffb000',weight:2,fillColor:'#ffb000',fillOpacity:.9}).addTo(map);
+  marker=L.circleMarker([lat,lng],{renderer:canvasRenderer,radius:6,color:'#F46800',weight:2,fillColor:'#F46800',fillOpacity:.9}).addTo(map);
   if(parcelLayer){ map.removeLayer(parcelLayer); parcelLayer=null; }
   try{ resetElevationGrid(); }catch(e){}   // grid follows the parcel — stale points must not linger
   if(homeParcelLayer){ map.removeLayer(homeParcelLayer); homeParcelLayer=null; }
@@ -23066,14 +23067,71 @@ function applySlotPatches(root){
     if(el && el.innerHTML !== v) el.innerHTML = v;
   });
 }
+/* ── IN-PLACE PAINT (no more tear-down) ──────────────────────────────────────────────────────
+   The four progressive paints used to do `el.innerHTML = html` each time, destroying every card
+   already on screen and recreating it — aerial thumbnails re-decoded, the tab bar re-mounted, slots
+   flashed their placeholder — even when that card hadn't changed. That was the visible "refresh".
+   Now only the FIRST paint (nothing to compare against) writes the whole panel. Every later paint
+   renders into a detached element, tabifies it there, and then reconciles card by card against the
+   live panel: a card whose source markup is unchanged keeps its live DOM node (moved if its position
+   shifted), a changed card is swapped, a new card is inserted, and stubs give way to real cards. The
+   tab bar's buttons are updated in place so its click handler keeps driving the live panels.
+   Each live card remembers the markup it was painted from (c.__src) so a slot that was later filled
+   by patchSlot() still compares equal and is not needlessly swapped. Falls back to the full write on
+   any surprise, so this can only be an improvement, never a regression. */
+function _stampCards(root){
+  root.querySelectorAll('.tabpanel > .card').forEach(c=>{ if(c.__src===undefined) c.__src=c.outerHTML; });
+}
+function _diffPaint(root, html, opts){
+  const livePanels=root.querySelector(':scope > .tabpanels'); if(!livePanels) return false;
+  const tmp=document.createElement('div'); tmp.innerHTML=html;
+  tabifyResults(tmp, Object.assign({}, opts||{}, {noWatch:true}));
+  const newPanels=tmp.querySelector(':scope > .tabpanels'); if(!newPanels) return false;
+  const liveBar=root.querySelector(':scope > .tabbar'), newBar=tmp.querySelector(':scope > .tabbar');
+  // 1. Status line, breadcrumb, sticky summary: small text blocks — replace outright, keep order.
+  [...root.children].forEach(ch=>{ if(ch!==livePanels && ch!==liveBar) ch.remove(); });
+  [...tmp.children].forEach(ch=>{ if(ch!==newPanels && ch!==newBar) root.insertBefore(ch, liveBar||livePanels); });
+  // 2. Tab bar: refresh labels/counts/pending dots in place; never replace the bar itself.
+  if(liveBar && newBar){
+    newBar.querySelectorAll('.tab').forEach(nb=>{
+      const lb=liveBar.querySelector(`.tab[data-tab="${nb.dataset.tab}"]`);
+      if(lb && lb.innerHTML!==nb.innerHTML) lb.innerHTML=nb.innerHTML;
+    });
+  }
+  // 3. Panels: reconcile card by card, keyed on the markup each card was painted from.
+  newPanels.querySelectorAll(':scope > .tabpanel').forEach(np=>{
+    const key=np.dataset.tab;
+    let lp=livePanels.querySelector(`:scope > .tabpanel[data-tab="${key}"]`);
+    if(!lp){ np.classList.remove('active'); livePanels.appendChild(np); _stampCards(livePanels); return; }
+    const wanted=[...np.children];
+    const pool=[...lp.children];                          // live nodes not yet matched
+    wanted.forEach((nc,i)=>{
+      const src=nc.outerHTML;
+      let j=pool.findIndex(lc=>lc && (lc.__src===src || (lc.__src===undefined && lc.outerHTML===src)));
+      let node;
+      if(j>=0){ node=pool[j]; pool[j]=null; if(node.__src===undefined) node.__src=src; }
+      else { node=nc; node.__src=src; }
+      const at=lp.children[i];
+      if(at!==node) lp.insertBefore(node, at||null);     // move / insert; a same-position node is untouched
+    });
+    pool.forEach(lc=>{ if(lc && lc.parentNode===lp) lc.remove(); });   // stubs and cards that went away
+  });
+  if(opts && opts.final) _clearStubWatch(); else _armStubWatch(root);
+  return true;
+}
 function paintResults(html, opts){
   const el=document.getElementById('results'); if(!el) return;
   if(html===_lastPaintHTML) return;          // identical markup: don't touch the DOM at all
   const top=el.scrollTop;
   _lastPaintHTML=html;
   _clearStubWatch();          // this paint supersedes whatever the last one was waiting on
-  el.innerHTML=html;
-  try{ tabifyResults(el, opts); }catch(e){}
+  let inPlace=false;
+  try{ inPlace=_diffPaint(el, html, opts); }catch(e){ console.warn('[paint] in-place diff failed, full repaint', e); inPlace=false; }
+  if(!inPlace){
+    el.innerHTML=html;
+    try{ tabifyResults(el, opts); }catch(e){}
+    _stampCards(el);
+  }
   // Re-apply anything a background slot already answered, or this paint would revert it.
   try{ applySlotPatches(el); }catch(e){}
   // Only restore if there's still something to scroll — otherwise this clamps to 0 anyway.
@@ -23273,7 +23331,7 @@ function tabifyResults(root, opts){
      tab already gets its own _tabStub() card in its own panel, which is the same information in
      the right place, so the strips are dropped rather than displayed. */
   loose.forEach(el=>el.remove());
-  if(isFinal) _clearStubWatch(); else _armStubWatch(panels.parentNode);
+  if(isFinal) _clearStubWatch(); else if(!(opts && opts.noWatch)) _armStubWatch(panels.parentNode);
   const activate=key=>{
     bar.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===key));
     panels.querySelectorAll('.tabpanel').forEach(p=>p.classList.toggle('active', p.dataset.tab===key));
@@ -25072,7 +25130,7 @@ window.Sheet=Sheet;
     const c=current();
     btn.textContent=ICON[c];
     btn.title=LABEL[c];
-    if(meta) meta.setAttribute('content', effectiveDark()?'#0d1117':'#eceef1');
+    if(meta) meta.setAttribute('content', effectiveDark()?'#00263E':'#eceef1');
   }
   function apply(mode){
     if(mode==='auto'){ root.removeAttribute('data-theme'); STORE.del('aog_theme'); }
