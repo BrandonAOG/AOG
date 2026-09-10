@@ -8493,6 +8493,37 @@ async function redetectZoningJurisdiction(){
 map.on('zoomstart', ()=>{ if(zoningOn) zoningLayer.clearLayers(); });
 map.on('moveend zoomend', ()=>{ clearTimeout(zoningTimer); zoningTimer=setTimeout(refreshZoning,BOUNDS_DEBOUNCE); });
 
+/* ---------- iPadOS desktop-mode viewport correction ----------
+   iPadOS (Safari and installed PWAs) presents a Macintosh UA and, in "desktop" mode, lays the page
+   out at 1280 px wide then scales it by ~0.64 to fit an 820 px screen (seen 10 Sep 2026: window
+   1280x1842, visualViewport scale 0.64, screen 820x1180). Consequences: the ≥1080 px DESKTOP layout
+   (600 px docked panel) is chosen for a tablet, every touch target is two-thirds size, and Leaflet's
+   cached size — measured before iPadOS switched viewports — no longer matches its container, so
+   tiles only fill part of the map. Detect the mismatch on a touch device and pin the viewport to
+   the real screen width; Safari applies the change immediately and fires a genuine resize, which
+   Leaflet handles itself. Runs once at start and again on orientation change. */
+(function(){
+  const coarse = (()=>{ try{ return matchMedia('(pointer:coarse)').matches; }catch(e){ return false; } })();
+  if(!coarse) return;
+  const meta=document.querySelector('meta[name="viewport"]'); if(!meta) return;
+  const fix=()=>{
+    const sw = (screen.orientation && /landscape/.test(screen.orientation.type)) ? Math.max(screen.width,screen.height) : Math.min(screen.width,screen.height);
+    const vv=window.visualViewport; const scale = vv ? vv.scale : 1;
+    if(sw && window.innerWidth > sw*1.15 && scale < 0.95){
+      meta.setAttribute('content', `width=${sw}, initial-scale=1.0, viewport-fit=cover`);
+      setTimeout(()=>{ try{ map.invalidateSize({animate:false}); }catch(e){} }, 300);
+      console.info('[viewport] corrected iPadOS desktop-mode layout to', sw, 'px');
+    }
+  };
+  fix(); setTimeout(fix, 600); setTimeout(fix, 2000);
+  window.addEventListener('orientationchange', ()=>{ setTimeout(fix, 300); setTimeout(fix, 1200); });
+  /* Belt and braces: if Leaflet's cached size ever disagrees with its container by more than a few
+     pixels (the symptom in the readout), re-measure — checked on visibility and after load. */
+  const check=()=>{ try{ const c=map.getContainer(), sz=map.getSize(); if(Math.abs(sz.x-c.clientWidth)>4 || Math.abs(sz.y-c.clientHeight)>4) map.invalidateSize({animate:false}); }catch(e){} };
+  setTimeout(check, 1200); setTimeout(check, 3000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(check, 200); });
+})();
+
 /* ---------- Size debug overlay (add #sizedebug to the URL) ----------
    For tablets, where there is no console: shows the numbers that decide the map's size so a
    mismatch between the element, Leaflet's cached size and the viewport can be seen on-screen. */
