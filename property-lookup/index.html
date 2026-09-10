@@ -1310,6 +1310,14 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   /* The ▾ on the Measure button opens the options menu; give it a finger-sized hit area on touch. */
   #btnMeasure #msCaret{ display:inline-block; padding:10px 10px 10px 12px; margin:-10px -10px -10px -6px; }
   @media (pointer:coarse){ #btnMeasure #msCaret{ padding:14px 14px 14px 16px; margin:-14px -12px -14px -8px; } }
+  /* Floating controls while measuring: Done / Undo / Cancel (mainly for touch, where double-tap is fiddly) */
+  #msCtl{ position:fixed; right:12px; bottom:calc(var(--tbh,52px) + 14px); z-index:1250; display:flex; gap:6px; }
+  #msCtl button{ height:40px; padding:0 14px; border-radius:20px; border:1px solid var(--line); background:var(--panel); color:var(--ink);
+    font-family:var(--mono,monospace); font-size:12px; font-weight:700; letter-spacing:.04em; box-shadow:0 6px 18px var(--shadow-soft); cursor:pointer; }
+  #msCtl button.primary{ background:var(--signal); color:var(--signal-ink); border-color:var(--signal); }
+  #msCtl button:disabled{ opacity:.45; cursor:default; }
+  @media (pointer:coarse){ #msCtl button{ height:46px; padding:0 18px; font-size:13px; } }
+  @media (max-width:680px){ #msCtl{ right:8px; left:8px; justify-content:flex-end; bottom:calc(var(--tbh,52px) + 10px); } }
   /* Elevation profile panel (Measure → Profile) */
   #msProfile{ position:fixed; left:12px; bottom:calc(var(--tbh,52px) + 14px); z-index:1200; width:440px; max-width:calc(100vw - 24px);
     background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 28px var(--shadow-strong); color:var(--ink);
@@ -8589,7 +8597,7 @@ const Measure = (()=>{
       st.items.push(it); renderItem(it);
       if(st.mode==='profile') buildProfile(it);
     }
-    st.pts=[]; clearLive();
+    st.pts=[]; clearLive(); syncCtl();
   }
 
   /* ---- Elevation profile along a finished line ----
@@ -8676,15 +8684,37 @@ const Measure = (()=>{
   }
   function onClick(e){
     const t=e.originalEvent && e.originalEvent.target;
-    if(t && t.closest && t.closest('.ms-lbl')) return;      // tap landed on a chip — not a new point
-    st.pts.push(e.latlng); drawLive(null);
+    if(t && t.closest && (t.closest('.ms-lbl') || t.closest('#msCtl'))) return;   // chip or control strip — not a new point
+    st.pts.push(e.latlng); drawLive(null); syncCtl();
   }
   function onDbl(e){ L.DomEvent.stop(e); finish(); }
   function onMove(e){ if(st.pts.length) drawLive(e.latlng); }
   function onCtx(e){ L.DomEvent.stop(e); setUnit(UNITS[(UNITS.indexOf(st.unit)+1)%UNITS.length]); if(st.pts.length) drawLive(e.latlng); mapToast(`Units: ${menu.querySelector(`[data-ms-unit="${st.unit}"]`).textContent}`, 900); }
   function onKey(e){ if(e.key==='Escape'){ if(st.pts.length){ st.pts=[]; clearLive(); } else stop(); } if(e.key==='Enter' && st.pts.length) finish(); }
+  let _ctl=null;
+  function showCtl(){
+    if(_ctl) return;
+    _ctl=document.createElement('div'); _ctl.id='msCtl';
+    _ctl.innerHTML=`<button type="button" data-act="undo" title="Remove the last point">↶ Undo</button>
+                    <button type="button" data-act="cancel" title="Discard the shape in progress (Esc)">✕ Cancel</button>
+                    <button type="button" class="primary" data-act="done" title="Finish this measurement (Enter / double-click)">✓ Done</button>`;
+    _ctl.addEventListener('click',(e)=>{ e.stopPropagation(); const a=e.target.closest('button'); if(!a) return;
+      if(a.dataset.act==='undo'){ st.pts.pop(); drawLive(null); }
+      else if(a.dataset.act==='cancel'){ st.pts=[]; clearLive(); }
+      else if(a.dataset.act==='done'){ finish(); }
+      syncCtl(); });
+    document.body.appendChild(_ctl); syncCtl();
+  }
+  function hideCtl(){ if(_ctl){ _ctl.remove(); _ctl=null; } }
+  function syncCtl(){
+    if(!_ctl) return; const n=st.pts.length, need=(st.mode==='area'?3:2);
+    _ctl.querySelector('[data-act="undo"]').disabled = n===0;
+    _ctl.querySelector('[data-act="cancel"]').disabled = n===0;
+    const d=_ctl.querySelector('[data-act="done"]'); d.disabled = n<need;
+    d.textContent = n<need ? `✓ Done (${need-n} more)` : '✓ Done';
+  }
   function start(){
-    if(st.active) return; st.active=true;
+    if(st.active) return; st.active=true; showCtl();
     map.getContainer().classList.add('measuring'); map.doubleClickZoom.disable();
     map.on('click',onClick); map.on('dblclick',onDbl); map.on('mousemove',onMove); map.on('contextmenu',onCtx);
     document.addEventListener('keydown',onKey); btn.classList.add('active');
@@ -8692,7 +8722,7 @@ const Measure = (()=>{
     mapToast(`Measuring ${_modeWord()} — click points, double-click to finish, right-click for units, Esc to stop`, 2600);
   }
   function stop(){
-    if(!st.active) return; finish(); st.active=false;
+    if(!st.active) return; finish(); st.active=false; hideCtl();
     map.getContainer().classList.remove('measuring'); map.doubleClickZoom.enable();
     map.off('click',onClick); map.off('dblclick',onDbl); map.off('mousemove',onMove); map.off('contextmenu',onCtx);
     document.removeEventListener('keydown',onKey); btn.classList.remove('active');
@@ -8724,7 +8754,7 @@ const Measure = (()=>{
   btn.addEventListener('pointermove',(e)=>{ if(e.pointerType!=='mouse') clearTimeout(_lp); });
   btn.addEventListener('click',(e)=>{ if(_lpFired){ e.stopImmediatePropagation(); e.preventDefault(); _lpFired=false; } }, true);
   // menu hint reflects the input device
-  try{ if(matchMedia('(pointer:coarse)').matches){ const h=menu.querySelector('.ms-hint'); if(h) h.textContent='Tap to add points · double-tap to finish · long-press the button for this menu'; } }catch(_){}
+  try{ if(matchMedia('(pointer:coarse)').matches){ const h=menu.querySelector('.ms-hint'); if(h) h.textContent='Tap to add points · ✓ Done to finish · long-press the button for this menu'; } }catch(_){}
   menu.addEventListener('click',(e)=>{
     e.stopPropagation();
     const m=e.target.closest('[data-ms-mode]'); if(m){ setMode(m.dataset.msMode); if(!st.active) start(); syncBtn(); close(); return; }
