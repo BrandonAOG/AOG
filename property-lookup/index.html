@@ -2929,6 +2929,19 @@ const COUNTY_EC_LAYERS = {
   PINELLAS:  "https://services.arcgis.com/f5HgUpxURgEzTccH/arcgis/rest/services/Elevation_Certificates_New_Public/FeatureServer/0/query"
 };
 
+/* STATEWIDE elevation certificates (FDEM / Forerunner "public_elevation_certificates").
+   Verified 10 Sep 2026: 209,279 records covering every county, dense where it matters — 8,561 within
+   5 mi of Cape Coral, 4,052 Naples, 2,794 Punta Gorda, 1,790 Sarasota, 1,424 Marco Island; it also
+   reaches Ocala (117) and the Panhandle. Crucially it carries `url` — a direct link to the
+   certificate PDF on florida.withforerunner.com — so the card can link the document itself instead
+   of telling the user where to request it. hasAttachments:false; the url field IS the document.
+   Whole form transcribed: topOfBottomFloor, topOfNextHigherFloor, attachedGarage,
+   lowestAdjacentGrade, highestAdjacentGrade, baseFloodElevation, floodZone, verticalDatum,
+   buildingDiagramNumber, firmMapNumber/firmSuffix + panel dates, benchmarkUtilized, certifierName,
+   issuedAt, nfipCommunityName/Number. NOTE geometry is esriGeometryMultipoint, not point.
+   Used as the last resort so a county layer (which may hold scans the state set lacks) still wins. */
+const EC_STATEWIDE = "https://services8.arcgis.com/4L6VuYsPSGSEJ0qe/arcgis/rest/services/Public_FDEM_Elevation_Certificates/FeatureServer/0/query";
+
 /* Resolve documents config: city first (by municipality), else county. */
 function resolveDocs(cityName, countyName){
   if(cityName && DOCS_CITY[norm(cityName)]) return { cfg:DOCS_CITY[norm(cityName)], inCity:true };
@@ -12860,7 +12873,7 @@ function ecDetect(fields){
   const F=fields.map(f=>String(f).toUpperCase());
   const find=res=>{ for(const re of res){ const i=F.findIndex(f=>re.test(f)); if(i>=0) return fields[i]; } return null; };
   return {
-    date: find([/ISSUE.?DATE/,/CERT.?DATE/,/SURVEY.?DATE/,/^DATE$/,/EFF.?DATE/,/^STAMP.?DATE$/,/_DATE$/,/DATE.?ENTERED/,/^DATEENTERED$/]),
+    date: find([/^ISSUEDAT$/,/ISSUE.?DATE/,/CERT.?DATE/,/SURVEY.?DATE/,/^DATE$/,/EFF.?DATE/,/^STAMP.?DATE$/,/_DATE$/,/DATE.?ENTERED/,/^DATEENTERED$/]),
     permit: find([/PERMIT/,/RECORD.?N/,/CASE.?N/]),
     addr: find([/SITE.?ADDR/,/SITUS/,/^ADDRESS$/,/LOCATION/,/PHY.?ADDR/,/^STREETADDRESS$/,/STREET.?ADDR/,/^FULL_ADDRESS$/]),
     link: find([/URL$/,/HYPERLINK/,/DOC.?LINK/,/PDF/,/^LINK$/,/WEBLINK/,/DOC.?PATH/,/^CERTIFICATE$/,/CERT.?URL/,/^ECFILENAME$/,/EC.?FILE/,/FILE.?NAME/]),
@@ -12882,18 +12895,18 @@ function ecDetect(fields){
        Coverage measured Aug 2026 on 19,382 records: C2A 95%, C2F 92%, B9 93%, C2E 64%,
        but VERTICAL_DATUM only 8% and FILE_NAME only 19% — so this layer is values-first, and the
        datum is usually UNSTATED. See the render for how that's handled. */
-    lag:  find([/^C2F_88$/,/^C2H_88$/,/LOWEST.?ADJ/,/^LOWESTGRAD/,/^C2F_LAG_ELEV$/,/^LAG$/]),
+    lag:  find([/^C2F_88$/,/^C2H_88$/,/^LOWESTADJACENTGRADE$/,/LOWEST.?ADJ/,/^LOWESTGRAD/,/^C2F_LAG_ELEV$/,/^LAG$/]),
     mach: find([/^C2E_88$/,/LOWEST.?MACH/,/MACHINERY/,/EQUIP.*ELEV/]),
     /* ^LFE$ — City of Naples names its lowest-floor elevation exactly that, and it is the only
        surveyed value that layer publishes. Anchored, so it can't swallow an unrelated field. */
-    ffe:  find([/^C2A_88$/,/FLOOR.?ELEV/,/^FLOORELEVA/,/^C2A_TOP_BOTTOM_FLOOR_EL$/,/^FFE$/,/^LFE$/,/BOTTOM.?FLOOR/]),
+    ffe:  find([/^C2A_88$/,/^TOPOFBOTTOMFLOOR$/,/FLOOR.?ELEV/,/^FLOORELEVA/,/^C2A_TOP_BOTTOM_FLOOR_EL$/,/^FFE$/,/^LFE$/,/BOTTOM.?FLOOR/]),
     /* The matching raw (as-certified) value, so we can fall back when the _88 column is empty and
        say plainly which datum it's on — or that the record doesn't state one. */
     lagRaw:  find([/^C2F_LAG_ELEV$/,/^C2H_LOWEST_ADJACENT_GRADE$/]),
     machRaw: find([/^C2E_LOWEST_MACHINERY_EQ_EL$/]),
     ffeRaw:  find([/^C2A_TOP_BOTTOM_FLOOR_EL$/]),
-    datum:find([/^VERTICAL_DATUM$/,/^DATUM$/,/V_DATUM/,/VERT.?DATUM/,/^B11_ELEVATION_DATUM$/]),
-    panel:find([/^PANEL$/,/^PANELNUMBE/,/^B4_PANEL_NUMBER$/,/PANEL.?NUM/,/FIRM.?PAN/])
+    datum:find([/^VERTICALDATUM$/,/^VERTICAL_DATUM$/,/^DATUM$/,/V_DATUM/,/VERT.?DATUM/,/^B11_ELEVATION_DATUM$/]),
+    panel:find([/^FIRMMAPNUMBER$/,/^PANEL$/,/^PANELNUMBE/,/^B4_PANEL_NUMBER$/,/PANEL.?NUM/,/FIRM.?PAN/])
   };
 }
 async function queryEC(ecLayerUrl, lat, lng){
@@ -12923,7 +12936,13 @@ async function queryEC(ecLayerUrl, lat, lng){
     const _mPerDegLat=111320, _mPerDegLng=111320*Math.cos(lat*Math.PI/180);
     let f0=feats[0], f0d=Infinity;
     for(const f of feats){
-      const g=f.geometry; const gx=g?(g.x!=null?g.x:g.X):null, gy=g?(g.y!=null?g.y:g.Y):null;
+      /* MULTIPOINT support: the statewide FDEM elevation-certificate layer returns
+         esriGeometryMultipoint — features carry `points:[[x,y],...]` and no x/y — so without this
+         every feature was skipped: the "nearest certificate" pick degraded to features[0] (a
+         neighbour's certificate on a dense street) and the distance readout went blank. */
+      const g=f.geometry;
+      let gx=g?(g.x!=null?g.x:g.X):null, gy=g?(g.y!=null?g.y:g.Y):null;
+      if((gx==null||gy==null) && g && Array.isArray(g.points) && g.points.length){ gx=g.points[0][0]; gy=g.points[0][1]; }
       if(gx==null||gy==null) continue;
       const dx=(gx-lng)*_mPerDegLng, dy=(gy-lat)*_mPerDegLat; const d=Math.hypot(dx,dy);
       if(d<f0d){ f0d=d; f0=f; }
@@ -13003,7 +13022,9 @@ async function queryEC(ecLayerUrl, lat, lng){
                        panel:det.panel?pick(f0.attributes,det.panel):null };
     // EC point's own coordinates (WGS84, outSR=4326) — used to drop the 📝 note marker on the map.
     let ecLat=null, ecLng=null;
-    try{ const g0=f0.geometry; const gx=g0?(g0.x!=null?g0.x:g0.X):null, gy=g0?(g0.y!=null?g0.y:g0.Y):null;
+    try{ const g0=f0.geometry;
+         let gx=g0?(g0.x!=null?g0.x:g0.X):null, gy=g0?(g0.y!=null?g0.y:g0.Y):null;
+         if((gx==null||gy==null) && g0 && Array.isArray(g0.points) && g0.points.length){ gx=g0.points[0][0]; gy=g0.points[0][1]; }
          if(gx!=null && gy!=null){ ecLng=Number(gx); ecLat=Number(gy); } }catch(e){}
     return { features:feats, docs, docFileName, det, oid, date, bfe, ecAddr, ecDistM, hasAtt, ecLat, ecLng, surveyed };
   }catch(e){ clearTimeout(t); return { err:e.message }; }
@@ -19235,7 +19256,13 @@ async function refreshEcAreaNotes(){
        others (Sarasota) store only "EC1234_5678.pdf" and rely on a fixed folder. */
     const _fresh=[];
     for(const f of feats){
-      const g=f.geometry; const gx=g?(g.x!=null?g.x:g.X):null, gy=g?(g.y!=null?g.y:g.Y):null;
+      /* MULTIPOINT support: the statewide FDEM elevation-certificate layer returns
+         esriGeometryMultipoint — features carry `points:[[x,y],...]` and no x/y — so without this
+         every feature was skipped: the "nearest certificate" pick degraded to features[0] (a
+         neighbour's certificate on a dense street) and the distance readout went blank. */
+      const g=f.geometry;
+      let gx=g?(g.x!=null?g.x:g.X):null, gy=g?(g.y!=null?g.y:g.Y):null;
+      if((gx==null||gy==null) && g && Array.isArray(g.points) && g.points.length){ gx=g.points[0][0]; gy=g.points[0][1]; }
       if(gx==null||gy==null) continue;
       let pdf=null;
       if(linkField && f.attributes){
@@ -20940,11 +20967,15 @@ async function _runLookupInner(lat,lng,searchCtx){
   // covers Naples & Marco addresses too). This is what makes county ECs show for incorporated-city
   // addresses, while the city's own portal link still renders separately below.
   const _ecLayerUrl = (_docCfgEC && _docCfgEC.ecLayer) ? _docCfgEC.ecLayer
-                     : (countyName ? COUNTY_EC_LAYERS[norm(countyName)] : null);
+                     : (countyName ? COUNTY_EC_LAYERS[norm(countyName)] : null)
+                     || EC_STATEWIDE;   // every county: the FDEM/Forerunner statewide set (links the PDF itself)
   /* Primary → fallback: if a county config names an ecLayerAlt (Pinellas: new AGOL attachment
      layer first, old on-prem values layer second), retry the alt when the primary errors OR
      finds no certificate at the point — the two layers don't hold identical record sets. */
-  const _ecLayerAlt = (_docCfgEC && _docCfgEC.ecLayerAlt) ? _docCfgEC.ecLayerAlt : null;
+  /* And when a county layer IS configured, the statewide set becomes its alt — so a lot the county
+     hasn't digitised can still surface the state's copy (with a direct PDF link). */
+  const _ecLayerAlt = (_docCfgEC && _docCfgEC.ecLayerAlt) ? _docCfgEC.ecLayerAlt
+                     : (_ecLayerUrl && _ecLayerUrl!==EC_STATEWIDE ? EC_STATEWIDE : null);
   const _queryEcWithFallback = async (u1,u2,la,ln)=>{
     let r1=null;
     try{ r1=await queryEC(u1,la,ln); }catch(e){ r1={err:e.message}; }
