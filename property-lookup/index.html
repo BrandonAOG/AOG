@@ -1281,6 +1281,40 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     html.is-safari .badge{ font-size:9.5px !important; }
     html.is-safari .note.warnbox{ font-size:9.25px !important; }
   }
+  /* ---------- Measure tool ---------- */
+  .ms-lbl{ background:rgba(0,26,43,.92); color:#fff; border:1px solid rgba(244,104,0,.75); border-radius:6px;
+    padding:2px 7px; font-family:var(--mono,monospace); font-size:11px; font-weight:700; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,.35); pointer-events:none; }
+  .ms-lbl.total{ background:#F46800; color:#1A0E00; border-color:#FF9147; font-size:12px; }
+  .ms-lbl.live{ opacity:.85; border-style:dashed; pointer-events:none; }
+  .ms-lbl.area{ background:rgba(0,26,43,.94); color:#FFB27A; border-color:#F46800; font-size:12px; }
+  .ms-x,.ms-min{ pointer-events:auto; cursor:pointer; margin-left:6px; opacity:.7 } .ms-x:hover,.ms-min:hover{ opacity:1 }
+  .ms-lbl.mini{ padding:0 6px; font-size:13px; line-height:18px; cursor:pointer; pointer-events:auto; }
+  .leaflet-container.measuring{ cursor:crosshair !important; }
+  /* While measuring, hover cards (parcel / zoning / flood tooltips, point popups) would sit under the
+     crosshair; hide them until the tool is off. Measurement chips are markers, not tooltips, so they stay. */
+  .leaflet-container.measuring .leaflet-tooltip,
+  .leaflet-container.measuring .leaflet-popup{ display:none !important; }
+  .leaflet-container.measuring .leaflet-interactive{ cursor:crosshair !important; }
+  .ms-units{ display:flex; align-items:center; justify-content:center; gap:6px; padding:6px 12px 8px; flex-wrap:wrap; }
+  .ms-units .ms-u{ min-width:34px; height:24px; padding:0 7px; border:1px solid var(--line); background:transparent; color:var(--dim);
+    font-family:var(--mono,monospace); font-size:11px; font-weight:700; border-radius:5px; cursor:pointer; }
+  .ms-units .ms-u:hover{ background:rgba(244,104,0,.14); color:var(--ink); }
+  .ms-units .ms-u.active{ background:var(--signal); color:var(--signal-ink); border-color:var(--signal); }
+  .ms-hint{ font-family:var(--mono,monospace); font-size:10px; color:var(--faint); padding:4px 12px 8px; line-height:1.4; }
+  /* Elevation profile panel (Measure → Profile) */
+  #msProfile{ position:fixed; left:12px; bottom:calc(var(--tbh,52px) + 14px); z-index:1200; width:440px; max-width:calc(100vw - 24px);
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 28px var(--shadow-strong); color:var(--ink);
+    font-family:var(--mono,monospace); font-size:11px; }
+  #msProfile .mp-head{ display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--dash); }
+  #msProfile .mp-head b{ font-size:12px; letter-spacing:.04em; }
+  #msProfile .mp-src{ color:var(--dim); margin-left:auto; font-size:10px; text-align:right; line-height:1.3 }
+  #msProfile .mp-x{ background:none; border:0; color:var(--dim); font-size:16px; cursor:pointer; padding:0 2px; line-height:1 }
+  #msProfile .mp-x:hover{ color:var(--ink) }
+  #msProfile svg{ display:block; width:100%; height:170px; }
+  #msProfile .mp-stats{ display:flex; flex-wrap:wrap; gap:6px 14px; padding:6px 12px 10px; color:var(--dim); }
+  #msProfile .mp-stats b{ color:var(--ink) }
+  #msProfile .mp-read{ padding:0 12px 8px; color:var(--signal); min-height:14px }
+  @media (max-width:680px){ #msProfile{ left:8px; right:8px; width:auto; bottom:calc(var(--tbh,52px) + 8px); } }
 </style>
 </head>
 <body>
@@ -1339,6 +1373,24 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     </div>
   </div>
   <button id="btnElev" title="Sample bare-earth ground elevation on a grid across the parcel and its immediate neighbours (USGS 3DEP, NAVD88). Search an address first.">⛭ Elevation heights <span id="elevSrcCaret" class="bm-caret" style="display:none" title="Compare elevation source (which LiDAR collect)">▾</span></button>
+  <div class="measure-pick">
+    <button id="btnMeasure" title="Measure — click to turn on/off. Click points on the map; double-click to finish; right-click the map to cycle units. The ▾ (or a right-click here) opens mode & unit options.">📏 <span id="msBtnLbl">Measure</span> <span class="bm-caret" id="msCaret" title="Mode &amp; units">▾</span></button>
+    <div id="measureMenu" class="basemap-menu" hidden>
+      <button data-ms-mode="dist" class="active" title="Click points along a path; each segment and the running total are labelled">— Distance</button>
+      <button data-ms-mode="area" title="Click the corners of a shape; the area and perimeter are labelled when you finish">▭ Area</button>
+      <button data-ms-mode="profile" title="Draw a line; get a ground-elevation profile along it (1 m LiDAR, NAVD88) — grade, rise, low and high points">⟋ Elevation profile</button>
+      <div class="ms-units" title="Units — also cycles with a right-click on the map while measuring">
+        <span class="surge-cat-lbl">Units</span>
+        <button class="ms-u active" data-ms-unit="ftin" title="Feet and inches (acres for area)">ft·in</button>
+        <button class="ms-u" data-ms-unit="ft" title="Decimal feet (sq ft / acres)">ft</button>
+        <button class="ms-u" data-ms-unit="yd" title="Yards (sq yd)">yd</button>
+        <button class="ms-u" data-ms-unit="m" title="Metres (m² / hectares)">m</button>
+        <button class="ms-u" data-ms-unit="mi" title="Miles / kilometres (acres / sq mi)">mi</button>
+      </div>
+      <button id="msClear" class="zl-refresh-row" title="Remove every measurement from the map">✕ Clear measurements</button>
+      <div class="ms-hint">Click to add points · double-click to finish · right-click = next unit · Esc = cancel</div>
+    </div>
+  </div>
   <div class="layers-pick">
     <button id="btnLayers" title="Property boundary overlays (city limits, parcels, zoning)">▦ Layers <span class="bm-caret">▾</span></button>
     <div id="layersMenu" class="basemap-menu" hidden>
@@ -4987,6 +5039,7 @@ map.on('movestart zoomstart', () => { _gestureUntil = Date.now() + 4000; });
 map.on('moveend zoomend',     () => { _gestureUntil = Date.now() + 350;  });
 
 map.on('click', e => {
+  if(window.Measure && Measure.state && Measure.state.active) return;   // measuring: clicks add points, never search
   if(uiClickSuppressed()) return;          // replayed tap from an overlay pick — not a real map click
   if(Date.now() < _gestureUntil) return;   // tail end of a pan/pinch, not a tap
   if(_hasTouch){                           // touch device: the tap must have looked deliberate
@@ -6315,6 +6368,7 @@ function _buildSurgeDepthTiles(){
 }
 // Click any point → NOAA identify → surge depth in feet for the selected category
 async function surgeDepthClick(e){
+  if(window.Measure && Measure.state && Measure.state.active) return;
   const lat=e.latlng.lat, lng=e.latlng.lng, imgId=SURGE_DEPTH_IMG[_surgeDepthCat]||5;
   const pop=L.popup({maxWidth:230}).setLatLng(e.latlng)
     .setContent('<div style="font:12px/1.4 system-ui">Reading surge depth…</div>').openOn(map);
@@ -6460,6 +6514,7 @@ async function tempIdentifyAt(latlng){
   return isFinite(num) ? num : null;
 }
 async function tempClick(e){
+  if(window.Measure && Measure.state && Measure.state.active) return;
   const pop=L.popup({maxWidth:220}).setLatLng(e.latlng)
     .setContent('<div style="font:12px/1.4 system-ui">Reading forecast…</div>').openOn(map);
   const v=await tempIdentifyAt(e.latlng);
@@ -8414,6 +8469,243 @@ async function redetectZoningJurisdiction(){
 }
 map.on('zoomstart', ()=>{ if(zoningOn) zoningLayer.clearLayers(); });
 map.on('moveend zoomend', ()=>{ clearTimeout(zoningTimer); zoningTimer=setTimeout(refreshZoning,BOUNDS_DEBOUNCE); });
+
+/* ---------- Measure tool (distance / area, unit-switchable) ----------
+   Geodesic maths: segment lengths via latLng.distanceTo (great-circle), area via the spherical-
+   excess formula — no Web Mercator distortion. Accuracy is therefore your click, ~±1 ft at working
+   zooms; better than the county parcel polygon itself. Mode and units come from the menu; a right-
+   click on the map while measuring cycles units in place. Measurements persist across layer/tab
+   changes and clear on a new address search (they belong to the site). */
+const Measure = (()=>{
+  const btn=document.getElementById('btnMeasure'), menu=document.getElementById('measureMenu');
+  if(!btn||!menu||typeof map==='undefined') return null;
+  const UNITS=['ftin','ft','yd','m','mi'];
+  const st={ mode:'dist', unit:'ftin', active:false, pts:[], live:null, group:L.layerGroup().addTo(map), items:[] };
+  const R=6371008.8, d2r=Math.PI/180;
+  const geodArea = pts => { let a=0; for(let i=0,n=pts.length;i<n;i++){ const p=pts[i], q=pts[(i+1)%n];
+      a += (q.lng-p.lng)*d2r*(2+Math.sin(p.lat*d2r)+Math.sin(q.lat*d2r)); } return Math.abs(a*R*R/2); };
+  const FT=3.280839895;
+  function fmtLen(m){
+    const ft=m*FT;
+    switch(st.unit){
+      case 'ftin': { const f=Math.floor(ft), i=Math.round((ft-f)*12); const ff=i===12?f+1:f, ii=i===12?0:i;
+                     return ft>=5280 ? `${(ft/5280).toFixed(2)} mi (${Math.round(ft).toLocaleString()} ft)` : `${ff.toLocaleString()}' ${ii}"`; }
+      case 'ft':   return ft>=5280 ? `${(ft/5280).toFixed(2)} mi (${Math.round(ft).toLocaleString()} ft)` : `${ft.toFixed(ft<100?1:0)} ft`;
+      case 'yd':   return `${(ft/3).toFixed(ft/3<100?1:0)} yd`;
+      case 'm':    return m>=1000 ? `${(m/1000).toFixed(2)} km` : `${m.toFixed(m<100?1:0)} m`;
+      case 'mi':   { const mi=ft/5280, km=m/1000; const mm=mi<0.1?mi.toFixed(3):mi.toFixed(2), kk=km<0.1?km.toFixed(3):km.toFixed(2);
+                     return mi<0.1 ? `${mm} mi · ${kk} km (${Math.round(ft)} ft)` : `${mm} mi · ${kk} km`; }
+    }
+  }
+  function fmtArea(m2){
+    const sf=m2*FT*FT, ac=sf/43560;
+    switch(st.unit){
+      case 'ftin': case 'ft': return ac>=0.1 ? `${Math.round(sf).toLocaleString()} sq ft · ${ac.toFixed(ac<10?2:1)} ac` : `${Math.round(sf).toLocaleString()} sq ft`;
+      case 'yd':   return `${Math.round(sf/9).toLocaleString()} sq yd`;
+      case 'm':    return m2>=10000 ? `${Math.round(m2).toLocaleString()} m² · ${(m2/10000).toFixed(2)} ha` : `${Math.round(m2).toLocaleString()} m²`;
+      case 'mi':   return ac>=640 ? `${(ac/640).toFixed(2)} sq mi · ${Math.round(ac).toLocaleString()} ac` : `${ac.toFixed(2)} ac`;
+    }
+  }
+  /* Chips are centred on their point; `off` ([dx,dy] screen px) nudges the chip away from it. */
+  const lbl=(ll, html, cls, off, rot)=> L.marker(ll,{icon:L.divIcon({className:'', html:`<div class="ms-lbl ${cls||''}" style="position:absolute;transform:translate(calc(-50% + ${off?off[0]:0}px), calc(-50% + ${off?off[1]:0}px))${rot?` rotate(${rot.toFixed(1)}deg)`:''};transform-origin:50% 50%">${html}</div>`, iconSize:[0,0], iconAnchor:[0,0]}), interactive:/ms-x|ms-min/.test(html), keyboard:false});
+  /* Screen angle of segment a→b in degrees, folded into (-90, 90] so the text is never upside down. */
+  const angPx=(a,b)=>{ const pa=map.latLngToLayerPoint(a), pb=map.latLngToLayerPoint(b); let d=Math.atan2(pb.y-pa.y, pb.x-pa.x)*180/Math.PI; if(d>90) d-=180; if(d<=-90) d+=180; return d; };
+  /* Screen-space unit vector from a→b, for placing a chip just beyond an end point. */
+  const dirPx=(a,b)=>{ const pa=map.latLngToLayerPoint(a), pb=map.latLngToLayerPoint(b); const dx=pb.x-pa.x, dy=pb.y-pa.y, n=Math.hypot(dx,dy)||1; return [dx/n, dy/n]; };
+  const vtx=ll=> L.circleMarker(ll,{radius:4,color:'#F46800',weight:2,fillColor:'#fff',fillOpacity:1});
+  const mid=(a,b)=> L.latLng((a.lat+b.lat)/2,(a.lng+b.lng)/2);
+
+  /* A finished measurement = one item {pts, mode, layers[], hidden:Set}; re-rendered whenever units
+     change. EVERY chip carries a "–" that hides just that chip (a small "+" stays in its place to
+     bring it back); the main chip also carries "✕" to remove the whole measurement. */
+  const minBtn = (it,key) => `<span class="ms-min" data-ms-min="${it.id}" data-ms-key="${key}" title="Hide this label">–</span>`;
+  const delBtn = it => `<span class="ms-x" data-ms-del="${it.id}" title="Remove measurement">✕</span>`;
+  /* chip(): renders either the full chip or, if that chip is hidden, a tiny "+" at the same spot. */
+  function chip(it, key, ll, html, cls, off, add, rot){
+    it.hidden = it.hidden || new Set();
+    if(it.hidden.has(key)) return add(lbl(ll, `<span class="ms-min" data-ms-plus="${it.id}" data-ms-key="${key}" title="Show label" style="margin:0">+</span>`, 'mini', off));
+    return add(lbl(ll, html, cls, off, rot));
+  }
+  function renderItem(it){
+    it.layers.forEach(l=>st.group.removeLayer(l)); it.layers=[];
+    const P=it.pts, add=l=>{ st.group.addLayer(l); it.layers.push(l); return l; };
+    if(it.mode==='area' && P.length>=3){
+      add(L.polygon(P,{color:'#F46800',weight:2,fillColor:'#F46800',fillOpacity:.12}));
+      let per=0; for(let i=0;i<P.length;i++){ const a=P[i], b=P[(i+1)%P.length]; per+=a.distanceTo(b); }
+      const c=L.polygon(P).getBounds().getCenter();
+      chip(it,'area', c, `${fmtArea(geodArea(P))}<br><span style="opacity:.8;font-weight:400">perimeter ${fmtLen(per)}</span> ${minBtn(it,'area')}${delBtn(it)}`, 'area', null, add);
+    } else {
+      add(L.polyline(P,{color:'#F46800',weight:3,opacity:.95}));
+      let tot=0; for(let i=1;i<P.length;i++) tot+=P[i-1].distanceTo(P[i]);
+      if(P.length===2){
+        // one line → one chip, centred on it (the total IS the segment)
+        chip(it,'total', mid(P[0],P[1]), `${fmtLen(tot)} ${minBtn(it,'total')}${delBtn(it)}`, 'total', null, add, angPx(P[0],P[1]));
+      } else {
+        // several segments → each labelled at its midpoint, total at the end
+        for(let i=1;i<P.length;i++) chip(it,'seg'+i, mid(P[i-1],P[i]), `${fmtLen(P[i-1].distanceTo(P[i]))} ${minBtn(it,'seg'+i)}`, '', null, add, angPx(P[i-1],P[i]));
+        // total sits just past the end point, continuing the last segment's direction — outside the shape,
+        // clear of the corner and of the last segment's midpoint chip
+        const u=dirPx(P[P.length-2], P[P.length-1]);
+        chip(it,'total', P[P.length-1], `Σ ${fmtLen(tot)} ${minBtn(it,'total')}${delBtn(it)}`, 'total', [u[0]*46, u[1]*30], add);
+      }
+    }
+    P.forEach(p=>add(vtx(p)));
+  }
+  function renderAll(){ st.items.forEach(renderItem); }
+  map.on('zoomend', ()=>{ if(st.items.some(it=>it.mode!=='area')) renderAll(); });
+  function clearLive(){ if(st.live){ st.live.forEach(l=>st.group.removeLayer(l)); st.live=null; } }
+  function drawLive(cursor){
+    clearLive(); if(!st.pts.length) return;
+    const P=st.pts.concat(cursor?[cursor]:[]); const ls=[];
+    if(st.mode==='area' && P.length>=3) ls.push(L.polygon(P,{color:'#F46800',weight:2,dashArray:'6 4',fillColor:'#F46800',fillOpacity:.08}));
+    else ls.push(L.polyline(P,{color:'#F46800',weight:2,dashArray:'6 4'}));
+    let tot=0; for(let i=1;i<P.length;i++) tot+=P[i-1].distanceTo(P[i]);
+    if(cursor){
+      const seg=st.pts[st.pts.length-1].distanceTo(cursor);
+      const txt = st.mode==='area' && P.length>=3 ? `${fmtArea(geodArea(P))}` : (st.pts.length>1 ? `${fmtLen(seg)} · total ${fmtLen(tot)}` : fmtLen(seg));
+      ls.push(lbl(cursor, txt, 'live', [0, 26]));   // sits under the crosshair, never on it
+    }
+    st.pts.forEach(p=>ls.push(vtx(p)));
+    ls.forEach(l=>st.group.addLayer(l)); st.live=ls;
+  }
+  function finish(){
+    if(st.pts.length >= (st.mode==='area'?3:2)){
+      const it={id:Date.now()+''+Math.random().toString(36).slice(2,6), pts:st.pts.slice(), mode:st.mode, layers:[]};
+      st.items.push(it); renderItem(it);
+      if(st.mode==='profile') buildProfile(it);
+    }
+    st.pts=[]; clearLive();
+  }
+
+  /* ---- Elevation profile along a finished line ----
+     Densify the line to ~1 m steps (capped at 400 samples), read every step from the S3 tiles
+     (same 2022/2018 sources and labelling as the card), then draw an SVG chart with hover readout
+     and a marker that walks the line on the map. */
+  let _prof=null;   // {el, marker}
+  function closeProfile(){ if(_prof){ _prof.el.remove(); if(_prof.marker) st.group.removeLayer(_prof.marker); _prof=null; } }
+  async function buildProfile(it){
+    if(typeof S3Elev==='undefined') { mapToast('Elevation source not available', 2000); return; }
+    closeProfile();
+    const P=it.pts, cum=[0]; let total=0;
+    for(let i=1;i<P.length;i++){ total+=P[i-1].distanceTo(P[i]); cum.push(total); }
+    if(total<2){ mapToast('Line too short for a profile', 1800); return; }
+    const N=Math.min(400, Math.max(20, Math.round(total)));            // ~1 m steps
+    const samples=[];                                                  // {d, lat, lng}
+    for(let k=0;k<=N;k++){
+      const d=total*k/N; let seg=1; while(seg<cum.length-1 && cum[seg]<d) seg++;
+      const a=P[seg-1], b=P[seg], f=(cum[seg]-cum[seg-1])>0 ? (d-cum[seg-1])/(cum[seg]-cum[seg-1]) : 0;
+      samples.push({ d, lat:a.lat+(b.lat-a.lat)*f, lng:a.lng+(b.lng-a.lng)*f });
+    }
+    const el=document.createElement('div'); el.id='msProfile';
+    el.innerHTML=`<div class="mp-head"><b>ELEVATION PROFILE</b><span class="mp-src">reading ${N+1} points from 1 m LiDAR…</span><button class="mp-x" title="Close">×</button></div>
+                  <div style="padding:18px 12px;color:var(--dim)">sampling <span class="zone-spin" aria-hidden="true"></span></div>`;
+    document.body.appendChild(el); _prof={el, marker:null};
+    el.querySelector('.mp-x').onclick=closeProfile;
+    let r=null; try{ r=await S3Elev.sample(samples.map(p=>[p.lng,p.lat]), {timeoutMs:15000}); }catch(e){ r=null; }
+    if(!_prof || _prof.el!==el) return;                                // closed meanwhile
+    if(!r || !r.samples.length){
+      el.innerHTML=`<div class="mp-head"><b>ELEVATION PROFILE</b><button class="mp-x" title="Close">×</button></div><div style="padding:14px 12px;color:var(--dim)">No 1 m LiDAR tile covers this line (S3). The card&rsquo;s USGS server sources may still have coverage; the profile tool only reads the tiles.</div>`;
+      el.querySelector('.mp-x').onclick=closeProfile; return;
+    }
+    const byKey=new Map(r.samples.map(sm=>[sm.location.x+','+sm.location.y, sm.value]));
+    const pts=samples.map(p=>({ ...p, ft:(()=>{ const v=byKey.get(p.lng+','+p.lat); return v==null?null:v*3.28084; })() })).filter(p=>p.ft!=null);
+    if(pts.length<3){ el.querySelector('.mp-src').textContent='too few readings'; return; }
+    const fts=pts.map(p=>p.ft), mn=Math.min(...fts), mx=Math.max(...fts);
+    const rise=pts[pts.length-1].ft-pts[0].ft, grade=total>0 ? rise/(total*3.28084)*100 : 0;
+    let maxG=0; for(let i=1;i<pts.length;i++){ const dd=(pts[i].d-pts[i-1].d)*3.28084; if(dd>0.3) maxG=Math.max(maxG, Math.abs((pts[i].ft-pts[i-1].ft)/dd*100)); }
+    const src=r.__s3||{}; const srcLbl=`${src.year||''} ${src.src==='IAN'?'FEMA/USACE post-Ian':'USGS 3DEP'} · 1 m · NAVD88`;
+    // chart
+    const W=440,H=170,mL=46,mR=12,mT=12,mB=28, pw=W-mL-mR, ph=H-mT-mB;
+    const yPad=Math.max(0.5,(mx-mn)*0.15), y0=mn-yPad, y1=mx+yPad;
+    const X=d=>mL+pw*d/total, Y=f=>mT+ph*(1-(f-y0)/(y1-y0));
+    const path=pts.map((p,i)=>(i?'L':'M')+X(p.d).toFixed(1)+' '+Y(p.ft).toFixed(1)).join(' ');
+    const area=path+` L${X(pts[pts.length-1].d).toFixed(1)} ${(mT+ph).toFixed(1)} L${X(pts[0].d).toFixed(1)} ${(mT+ph).toFixed(1)} Z`;
+    const yTicks=[]; { const span=y1-y0, step=span>20?5:span>8?2:span>3?1:0.5; for(let v=Math.ceil(y0/step)*step; v<=y1; v+=step) yTicks.push(+v.toFixed(2)); }
+    const xTicks=[0,0.25,0.5,0.75,1].map(f=>f*total);
+    const svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      ${yTicks.map(v=>`<line x1="${mL}" x2="${W-mR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--dash)" stroke-width="1"/><text x="${mL-6}" y="${(Y(v)+3.5).toFixed(1)}" text-anchor="end" fill="var(--dim)" font-size="9">${v} ft</text>`).join('')}
+      ${xTicks.map(d=>`<text x="${X(d).toFixed(1)}" y="${H-8}" text-anchor="middle" fill="var(--dim)" font-size="9">${fmtLen(d)}</text>`).join('')}
+      <path d="${area}" fill="rgba(244,104,0,.18)"/>
+      <path d="${path}" fill="none" stroke="#F46800" stroke-width="2"/>
+      <line id="mpCursor" x1="0" x2="0" y1="${mT}" y2="${mT+ph}" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
+      <rect x="${mL}" y="${mT}" width="${pw}" height="${ph}" fill="transparent" id="mpHit"/>
+    </svg>`;
+    el.innerHTML=`<div class="mp-head"><b>ELEVATION PROFILE</b><span class="mp-src">${esc(srcLbl)}<br>${pts.length} pts · ${fmtLen(total)}</span><button class="mp-x" title="Close">×</button></div>
+      ${svg}
+      <div class="mp-stats"><span>low <b>${mn.toFixed(1)} ft</b></span><span>high <b>${mx.toFixed(1)} ft</b></span><span>rise start→end <b>${(rise>=0?'+':'')+rise.toFixed(1)} ft</b></span><span>avg grade <b>${grade.toFixed(1)}%</b></span><span>steepest <b>${maxG.toFixed(1)}%</b></span></div>
+      <div class="mp-read">hover the chart to read a point</div>`;
+    el.querySelector('.mp-x').onclick=closeProfile;
+    const hit=el.querySelector('#mpHit'), cur=el.querySelector('#mpCursor'), read=el.querySelector('.mp-read'), svgEl=el.querySelector('svg');
+    const marker=L.circleMarker(P[0],{radius:6,color:'#fff',weight:2,fillColor:'#F46800',fillOpacity:1}).addTo(st.group); _prof.marker=marker;
+    hit.addEventListener('mousemove',ev=>{
+      const rect=svgEl.getBoundingClientRect(); const fx=(ev.clientX-rect.left)/rect.width*W; const d=Math.max(0,Math.min(total,(fx-mL)/pw*total));
+      let best=pts[0]; for(const p of pts){ if(Math.abs(p.d-d)<Math.abs(best.d-d)) best=p; }
+      cur.setAttribute('x1',X(best.d)); cur.setAttribute('x2',X(best.d)); cur.setAttribute('opacity','1');
+      read.textContent=`${fmtLen(best.d)} from start · ${best.ft.toFixed(1)} ft NAVD88 · ${(best.ft-pts[0].ft>=0?'+':'')}${(best.ft-pts[0].ft).toFixed(1)} ft vs start`;
+      marker.setLatLng([best.lat,best.lng]);
+    });
+    hit.addEventListener('mouseleave',()=>{ cur.setAttribute('opacity','0'); read.textContent='hover the chart to read a point'; });
+  }
+  function onClick(e){ st.pts.push(e.latlng); drawLive(null); }
+  function onDbl(e){ L.DomEvent.stop(e); finish(); }
+  function onMove(e){ if(st.pts.length) drawLive(e.latlng); }
+  function onCtx(e){ L.DomEvent.stop(e); setUnit(UNITS[(UNITS.indexOf(st.unit)+1)%UNITS.length]); if(st.pts.length) drawLive(e.latlng); mapToast(`Units: ${menu.querySelector(`[data-ms-unit="${st.unit}"]`).textContent}`, 900); }
+  function onKey(e){ if(e.key==='Escape'){ if(st.pts.length){ st.pts=[]; clearLive(); } else stop(); } if(e.key==='Enter' && st.pts.length) finish(); }
+  function start(){
+    if(st.active) return; st.active=true;
+    map.getContainer().classList.add('measuring'); map.doubleClickZoom.disable();
+    map.on('click',onClick); map.on('dblclick',onDbl); map.on('mousemove',onMove); map.on('contextmenu',onCtx);
+    document.addEventListener('keydown',onKey); btn.classList.add('active');
+    if(typeof syncBtn==='function') syncBtn();
+    mapToast(`Measuring ${_modeWord()} — click points, double-click to finish, right-click for units, Esc to stop`, 2600);
+  }
+  function stop(){
+    if(!st.active) return; finish(); st.active=false;
+    map.getContainer().classList.remove('measuring'); map.doubleClickZoom.enable();
+    map.off('click',onClick); map.off('dblclick',onDbl); map.off('mousemove',onMove); map.off('contextmenu',onCtx);
+    document.removeEventListener('keydown',onKey); btn.classList.remove('active');
+    if(typeof syncBtn==='function') syncBtn();
+  }
+  function setMode(m){ if(st.pts.length) finish(); st.mode=m; menu.querySelectorAll('[data-ms-mode]').forEach(b=>b.classList.toggle('active', b.dataset.msMode===m)); }
+  const _modeWord = ()=> st.mode==='area'?'area':st.mode==='profile'?'profile':'distance';
+  function setUnit(u){ st.unit=u; menu.querySelectorAll('[data-ms-unit]').forEach(b=>b.classList.toggle('active', b.dataset.msUnit===u)); renderAll(); try{ localStorage.setItem('aog_measure_unit',u); }catch(e){} }
+  function clear(){ st.pts=[]; clearLive(); st.items.forEach(it=>it.layers.forEach(l=>st.group.removeLayer(l))); st.items=[]; closeProfile(); }
+  try{ const u=localStorage.getItem('aog_measure_unit'); if(u && UNITS.includes(u)) setUnit(u); }catch(e){}
+
+  /* Button = ON/OFF switch (like Elevation heights). The ▾ caret, or a right-click on the button,
+     opens the options menu (mode, units, clear). Picking a mode in the menu also turns the tool on. */
+  const open=()=>{ menu.hidden=false; positionToolbarMenu(btn, menu, 200); };
+  const close=()=>{ menu.hidden=true; };
+  const lblEl=document.getElementById('msBtnLbl');
+  const syncBtn=()=>{ btn.classList.toggle('active', st.active); if(lblEl) lblEl.textContent = st.active ? (st.mode==='area'?'Measuring area':st.mode==='profile'?'Profile line':'Measuring') : 'Measure'; };
+  btn.onclick=(e)=>{
+    e.stopPropagation();
+    if(e.target.closest('#msCaret')){ if(menu.hidden) open(); else close(); return; }
+    close(); if(st.active) stop(); else start();
+  };
+  btn.addEventListener('contextmenu',(e)=>{ e.preventDefault(); e.stopPropagation(); if(menu.hidden) open(); else close(); });
+  menu.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    const m=e.target.closest('[data-ms-mode]'); if(m){ setMode(m.dataset.msMode); if(!st.active) start(); syncBtn(); close(); return; }
+    const u=e.target.closest('[data-ms-unit]'); if(u){ setUnit(u.dataset.msUnit); return; }
+    if(e.target.closest('#msClear')){ clear(); close(); }    // clears the map; the tool stays in whatever state it was
+  });
+  document.addEventListener('click', close);
+  // ✕ on a label removes that one measurement
+  map.getContainer().addEventListener('click',(e)=>{
+    const x=e.target.closest('.ms-x'), mn=e.target.closest('[data-ms-min]'), pl=e.target.closest('[data-ms-plus]');
+    if(!x && !mn && !pl) return;
+    e.stopPropagation(); e.preventDefault();
+    if(x){ const id=x.getAttribute('data-ms-del'); const i=st.items.findIndex(it=>it.id===id); if(i<0) return;
+           st.items[i].layers.forEach(l=>st.group.removeLayer(l)); st.items.splice(i,1); return; }
+    const el=mn||pl, id=el.getAttribute(mn?'data-ms-min':'data-ms-plus'), key=el.getAttribute('data-ms-key');
+    const it=st.items.find(it=>it.id===id); if(!it) return;
+    it.hidden = it.hidden || new Set(); if(mn) it.hidden.add(key); else it.hidden.delete(key);
+    renderItem(it);
+  }, true);
+  return { start, stop, clear, setMode, setUnit, state:st };
+})();
+window.Measure = Measure;   // top-level const isn't a window property; the lookup code clears via window.Measure
 
 /* ---------- Layers popup (groups City limits / Parcels / Zoning — independent toggles) ---------- */
 const btnLayers=document.getElementById('btnLayers');
@@ -19769,6 +20061,7 @@ async function runLookup(lat,lng,searchCtx){
 }
 async function _runLookupInner(lat,lng,searchCtx){
   const myId=++runId;
+  try{ if(window.Measure){ Measure.stop(); Measure.clear(); } }catch(e){}   // measurements belong to the previous site
   // ── LOOKUP TIMING (debug) ─────────────────────────────────────────────────────────────────────
   // Each source is timed individually (they run in parallel, so these are latencies, not additive).
   // Shown in the "Sources & details" footer via renderLookupTiming() so slow feeds are easy to spot.
@@ -25630,7 +25923,7 @@ window.Sheet=Sheet;
        Re-anchoring achieves the same thing without eating taps: the menu follows its button. */
     const REPOS={ basemapMenu:'btnBasemap', hazardsMenu:'btnHazards',
                   layersMenu:'btnLayers',  weatherMenu:'btnWeather',
-                  stormPickMenu:'btnStormPick' };
+                  stormPickMenu:'btnStormPick', measureMenu:'btnMeasure' };
     let reposTimer=null;
     bar.addEventListener('scroll',()=>{
       sync();
