@@ -12950,19 +12950,30 @@ async function queryEC(ecLayerUrl, lat, lng){
     // certificate on a dense street, and taking the arbitrary first feature is what caused the wrong
     // house's EC to show. Nearest-by-distance keeps it on the searched structure.
     const _mPerDegLat=111320, _mPerDegLng=111320*Math.cos(lat*Math.PI/180);
-    let f0=feats[0], f0d=Infinity;
+    /* MULTIPOINT support. The FDEM statewide layer returns esriGeometryMultipoint: features carry
+       `points:[[x,y],…]` and no x/y. Taking points[0] was wrong twice over — it skipped every
+       feature on a point layer read (blanking the distance) and, on a multipoint holding several
+       locations, it measured a point that was NOT the one inside the search radius, so a certificate
+       for a different street could score a tiny distance and win (seen 10 Sep 2026 at 2020 Yellowfin
+       Cir: "2431 Yellowfin Cir" promoted over the neighbour's). Measure the NEAREST point within
+       each feature, and remember which point it was so the map marker lands there too. */
+    const _featPts = f => { const g=f.geometry; if(!g) return [];
+      if(g.x!=null || g.X!=null) return [[Number(g.x!=null?g.x:g.X), Number(g.y!=null?g.y:g.Y)]];
+      return Array.isArray(g.points) ? g.points.map(p=>[Number(p[0]), Number(p[1])]) : []; };
+    let f0=feats[0], f0d=Infinity, f0pt=null;
+    const _cands=[];
     for(const f of feats){
-      /* MULTIPOINT support: the statewide FDEM elevation-certificate layer returns
-         esriGeometryMultipoint — features carry `points:[[x,y],...]` and no x/y — so without this
-         every feature was skipped: the "nearest certificate" pick degraded to features[0] (a
-         neighbour's certificate on a dense street) and the distance readout went blank. */
-      const g=f.geometry;
-      let gx=g?(g.x!=null?g.x:g.X):null, gy=g?(g.y!=null?g.y:g.Y):null;
-      if((gx==null||gy==null) && g && Array.isArray(g.points) && g.points.length){ gx=g.points[0][0]; gy=g.points[0][1]; }
-      if(gx==null||gy==null) continue;
-      const dx=(gx-lng)*_mPerDegLng, dy=(gy-lat)*_mPerDegLat; const d=Math.hypot(dx,dy);
-      if(d<f0d){ f0d=d; f0=f; }
+      let best=Infinity, bestPt=null;
+      for(const [gx,gy] of _featPts(f)){
+        if(!isFinite(gx) || !isFinite(gy)) continue;
+        const dx=(gx-lng)*_mPerDegLng, dy=(gy-lat)*_mPerDegLat, d=Math.hypot(dx,dy);
+        if(d<best){ best=d; bestPt=[gx,gy]; }
+      }
+      if(bestPt==null) continue;
+      _cands.push({ d:Math.round(best), addr:(f.attributes&&(f.attributes.standardizedAddress||f.attributes.streetAddress))||null });
+      if(best<f0d){ f0d=best; f0=f; f0pt=bestPt; }
     }
+    try{ window.__ecCandidates=(window.__ecCandidates||{}); window.__ecCandidates[root]=_cands.sort((a,b)=>a.d-b.d).slice(0,8); }catch(e){}
     const ecDistM = isFinite(f0d)?Math.round(f0d):null;
     const det=ecDetect(Object.keys(f0.attributes));
     const oid=f0.attributes[oidField] ?? f0.attributes.OBJECTID ?? f0.attributes.FID;
@@ -13058,9 +13069,12 @@ async function queryEC(ecLayerUrl, lat, lng){
     }catch(e){ /* enrichment is optional */ }
     // EC point's own coordinates (WGS84, outSR=4326) — used to drop the 📝 note marker on the map.
     let ecLat=null, ecLng=null;
-    try{ const g0=f0.geometry;
-         let gx=g0?(g0.x!=null?g0.x:g0.X):null, gy=g0?(g0.y!=null?g0.y:g0.Y):null;
-         if((gx==null||gy==null) && g0 && Array.isArray(g0.points) && g0.points.length){ gx=g0.points[0][0]; gy=g0.points[0][1]; }
+    /* Use the point we actually measured as nearest (see _featPts above), not the feature's first
+       point — on a multipoint they can be far apart, which would drop the map note on the wrong lot. */
+    try{ let gx=f0pt?f0pt[0]:null, gy=f0pt?f0pt[1]:null;
+         if(gx==null||gy==null){ const g0=f0.geometry;
+           gx=g0?(g0.x!=null?g0.x:g0.X):null; gy=g0?(g0.y!=null?g0.y:g0.Y):null;
+           if((gx==null||gy==null) && g0 && Array.isArray(g0.points) && g0.points.length){ gx=g0.points[0][0]; gy=g0.points[0][1]; } }
          if(gx!=null && gy!=null){ ecLng=Number(gx); ecLat=Number(gy); } }catch(e){}
     return { features:feats, docs, docFileName, det, oid, date, bfe, ecAddr, ecDistM, hasAtt, ecLat, ecLng, surveyed };
   }catch(e){ clearTimeout(t); return { err:e.message }; }
@@ -19232,6 +19246,17 @@ function _ecMakeNote(latN, lngN, pdf){
   }
   return mk;
 }
+/* Certificate dates arrive either as a display string (county layers) or as epoch milliseconds
+   (the FDEM statewide layer's issuedAt). Normalise for display. */
+function _ecDateStr(v){
+  if(v==null || v==='') return '';
+  const n = Number(v);
+  if(isFinite(n) && n > 1e11){                       // ms epoch (any date after ~1973)
+    const d = new Date(n);
+    if(!isNaN(d)) return d.toLocaleDateString('en-US');
+  }
+  return String(v);
+}
 function addEcNoteMarker(ec){
   try{
     if(!ec || ec.err || ec.ecLat==null || ec.ecLng==null || !isFinite(ec.ecLat) || !isFinite(ec.ecLng)) return;
@@ -19254,6 +19279,7 @@ const _ecLinkFieldCache = Object.create(null);   // layer root -> PDF-link field
 async function refreshEcAreaNotes(){
   const url = window.__ecAreaUrl;
   if(!url) return;
+  const url2 = window.__ecAreaUrl2 || null;   // second layer (statewide) drawn alongside the county's
   if(map.getZoom() < EC_AREA_MINZOOM) return;   // keep the subject note; just don't add area notes
   const b=map.getBounds();
   const key=[b.getWest().toFixed(4),b.getSouth().toFixed(4),b.getEast().toFixed(4),b.getNorth().toFixed(4)].join('|');
@@ -19270,10 +19296,30 @@ async function refreshEcAreaNotes(){
     const params=`geometry=${geom}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects`+
       `&outFields=${outF}&returnGeometry=true&outSR=4326&resultRecordCount=${EC_AREA_MAX}&f=json`;
     const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
-    const j=await (await fetch(root+'/query?'+params,{signal:ctrl.signal})).json();
+    /* Both layers in parallel. The second is optional and never fatal: if it errors we still draw
+       the first, so a wobble on one host can't blank the map. */
+    const _fetchLayer = async (r, of_) => {
+      const p = params.replace(`outFields=${outF}`, `outFields=${of_}`);
+      const jj = await (await fetch(r+'/query?'+p,{signal:ctrl.signal})).json();
+      if(jj.error) throw new Error(jj.error.message||'service error');
+      return jj.features||[];
+    };
+    const root2 = url2 ? ecLayerRoot(url2) : null;
+    const cached2 = root2 ? _ecLinkFieldCache[root2] : undefined;
+    const outF2 = !root2 ? null : (cached2===undefined ? '*' : (cached2 ? encodeURIComponent(cached2) : 'OBJECTID'));
+    const [f1, f2] = await Promise.all([
+      _fetchLayer(root, outF),
+      root2 ? _fetchLayer(root2, outF2).catch(()=>[]) : Promise.resolve([])
+    ]);
     clearTimeout(t);
-    if(j.error) throw new Error(j.error.message||'service error');
+    const j = { features: f1 };
     const feats=j.features||[];
+    /* Remember the second layer's link field too, and stash its features for the build loop below. */
+    if(root2 && cached2===undefined && f2.length){
+      const d2 = ecDetect(Object.keys(f2[0].attributes));
+      _ecLinkFieldCache[root2] = (d2 && d2.link) ? d2.link : '';
+    }
+    var _feats2 = f2, _root2 = root2;
     // Detect (and remember) the PDF-link field from the first feature's attribute names.
     let linkField = cached;
     if(linkField===undefined){
@@ -19311,6 +19357,26 @@ async function refreshEcAreaNotes(){
       }
       _fresh.push(_ecMakeNote(Number(gy), Number(gx), pdf));
     }
+    /* Now the second layer's points, skipping any that sit on a point we already drew (same
+       certificate transcribed twice) — 1e-5 deg is about a metre. */
+    if(_feats2 && _feats2.length){
+      const seen=new Set(_fresh.map(mk=>{ const ll=mk.getLatLng(); return ll.lat.toFixed(5)+','+ll.lng.toFixed(5); }));
+      const lf2=_ecLinkFieldCache[_root2]||'', b2=ecDocBase(_root2);
+      for(const f of _feats2){
+        const g=f.geometry;
+        let gx=g?(g.x!=null?g.x:g.X):null, gy=g?(g.y!=null?g.y:g.Y):null;
+        if((gx==null||gy==null) && g && Array.isArray(g.points) && g.points.length){ gx=g.points[0][0]; gy=g.points[0][1]; }
+        if(gx==null||gy==null) continue;
+        const k2=Number(gy).toFixed(5)+','+Number(gx).toFixed(5);
+        if(seen.has(k2)) continue; seen.add(k2);
+        let pdf=null;
+        if(lf2 && f.attributes){ const u=f.attributes[lf2];
+          if(u){ const raw=String(u).trim();
+                 if(/^https?:/i.test(raw)) pdf=raw;
+                 else if(b2 && /\.(pdf|tif{1,2}|jpe?g|png)$/i.test(raw)) pdf=b2+encodeURIComponent(raw); } }
+        _fresh.push(_ecMakeNote(Number(gy), Number(gx), pdf));
+      }
+    }
     if(!_fresh.length){ _ecAreaKey=key; return; }   // nothing valid built — keep current notes
     ecNoteLayer.clearLayers();                        // now safe: we have replacements in hand
     _fresh.forEach(mk=>mk.addTo(ecNoteLayer));
@@ -19328,7 +19394,18 @@ async function refreshEcAreaNotes(){
    Cheap: jurisdictionsInView() is itself cached ~30s per rounded viewport. */
 let _ecAutoBusy=false;
 async function autoArmEcLayer(){
-  if(window.__ecAreaPinned) return;              // an explicit lookup owns the layer; don't override
+  /* A lookup PINS the layer to the searched county so this sweep can't stomp on it. But the pin used
+     to survive panning away, so searching Collier and then panning to Sarasota kept Collier's layer
+     armed and no certificates appeared up there. Hold the pin only while the searched lot is still
+     in view; once it's off screen, release it and re-arm for wherever we are now (which falls back
+     to the FDEM statewide set, so notes appear anywhere in Florida). */
+  if(window.__ecAreaPinned){
+    try{
+      if(lastLoc && !map.getBounds().pad(0.25).contains(L.latLng(lastLoc.lat, lastLoc.lng))){
+        window.__ecAreaPinned=false;             // panned away from the searched lot — pin released
+      } else return;
+    }catch(e){ return; }
+  }
   if(map.getZoom() < EC_AREA_MINZOOM) return;    // same gate as the sweep itself — no wasted calls
   if(_ecAutoBusy) return;
   _ecAutoBusy=true;
@@ -19339,10 +19416,13 @@ async function autoArmEcLayer(){
       const cfg = DOCS_COUNTY[norm(c)];
       if(cfg && cfg.ecLayer){ url=cfg.ecLayer; break; }
     }
-    /* No county-configured layer for anything in view → use the FDEM statewide set, so certificate
-       notes appear while panning ANYWHERE in Florida rather than only in the four counties that
-       have their own layer wired. */
+    /* The statewide FDEM set covers all of Florida and is DENSER than the county layers where both
+       exist (City of Naples, 10 Sep 2026: 2,758 statewide vs 1,657 Collier). The two are different
+       transcriptions with records the other lacks, so the sweep draws BOTH: the county layer (where
+       one is configured) plus the statewide set, deduplicated by position. */
+    window.__ecAreaUrl2 = EC_STATEWIDE;
     if(!url) url = EC_STATEWIDE;
+    if(url === EC_STATEWIDE) window.__ecAreaUrl2 = null;      // don't sweep the same layer twice
     if(url && url!==window.__ecAreaUrl){
       window.__ecAreaUrl=url; _ecAreaKey='';      // new layer → force the next sweep to actually run
       refreshEcAreaNotes();
@@ -21033,7 +21113,16 @@ async function _runLookupInner(lat,lng,searchCtx){
     if(ok(r2)){
       const key = r => { const d=(r.docs&&r.docs[0]&&r.docs[0].url)||''; const a=r.features[0].attributes||{};
                          return (d||'') + '|' + (a.id||'') + '|' + (r.date||''); };
-      if(key(r1)!==key(r2)) r1.alt = r2;                       // a genuinely different certificate
+      if(key(r1)===key(r2)) return r1;                         // same certificate — nothing to add
+      /* NEAREST WINS. Which layer answered is an accident of configuration; what matters is which
+         certificate is actually on the searched building. Seen 10 Sep 2026 at 2020 Yellowfin Cir:
+         the county layer's nearest was 54 m away (a neighbour, 2032) while the statewide layer had
+         one 19 m away — the card led with the neighbour's. Promote the closer one and keep the other
+         as the second source. 8 m of slack so a tie doesn't flip on rounding. */
+      const d1 = (r1.ecDistM==null) ? Infinity : r1.ecDistM;
+      const d2 = (r2.ecDistM==null) ? Infinity : r2.ecDistM;
+      if(d2 + 8 < d1){ r2.alt = r1; return r2; }
+      r1.alt = r2;
     }
     return r1;
   };
@@ -21049,7 +21138,7 @@ async function _runLookupInner(lat,lng,searchCtx){
     : Promise.resolve(null);
   // Neighborhood 📝 notes are wired AFTER the main cards render (see the EC card below) so their
   // extra query never competes with the search's own requests to the same GIS host.
-  window.__ecAreaUrl = null; window.__ecAreaPinned=false; _ecAreaKey=''; clearTimeout(_ecAreaTimer);
+  window.__ecAreaUrl = null; window.__ecAreaUrl2 = null; window.__ecAreaPinned=false; _ecAreaKey=''; clearTimeout(_ecAreaTimer);
   try{ clearNfhlCache(); }catch(e){}   // per-parcel flood query cache — must not survive a new lookup
 
   /* NO retry registered for Aerial. renderAerialScout() fetches nothing — it builds Google deep
@@ -23675,6 +23764,8 @@ async function _runLookupInner(lat,lng,searchCtx){
        even though the layer had them. That's exactly backwards — the neighbour sweep matters MOST
        when the subject has none, since a nearby EC is the best available read on grade in the block. */
     window.__ecAreaUrl=_ecLayerUrl; window.__ecAreaPinned=true; _ecAreaKey='';
+    /* draw the statewide set alongside the searched county's layer (see refreshEcAreaNotes) */
+    window.__ecAreaUrl2 = (_ecLayerUrl===EC_STATEWIDE) ? null : EC_STATEWIDE;
     clearTimeout(_ecAreaTimer); _ecAreaTimer=setTimeout(refreshEcAreaNotes, 2500);
     if(ec && !ec.err && ec.features && ec.features.length){
       addEcNoteMarker(ec);   // 📝 note on the map at the EC point — click opens the PDF
@@ -23690,7 +23781,7 @@ async function _runLookupInner(lat,lng,searchCtx){
         const _a=ec.alt, _ad=(_a.docs&&_a.docs[0]&&_a.docs[0].url)||null;
         const _asv=_a.surveyed||{};
         const _bits=[];
-        if(_a.date){ const _d=new Date(_a.date); if(!isNaN(_d)) _bits.push(_d.toLocaleDateString('en-US')); }
+        if(_a.date){ const _ds=_ecDateStr(_a.date); if(_ds) _bits.push(_ds); }
         if(_asv.ffe!=null)  _bits.push('floor '+_asv.ffe+' ft');
         if(_asv.mach!=null) _bits.push('machinery '+_asv.mach+' ft');
         if(_a.bfe!=null)    _bits.push('BFE '+_a.bfe+' ft');
@@ -23754,7 +23845,9 @@ async function _runLookupInner(lat,lng,searchCtx){
           if(bits.length) html += `<div class="note">Per the certificate, ${bits.join(' ')}. Item (e) is the elevation an EC records for <b>machinery and equipment servicing the building</b> — the same line a generator is measured against. These are surveyed figures, not estimates, but they describe the structure as certified: confirm nothing has been regraded since.</div>`;
         }
       }
-      if(ec.date) html += fieldRow('Cert / issue date', esc(String(ec.date)));
+      /* The statewide FDEM layer stores issuedAt as epoch MILLISECONDS, which rendered raw
+         ("1655442000000"). Format anything that looks like an epoch; leave real date strings alone. */
+      if(ec.date) html += fieldRow('Cert / issue date', esc(_ecDateStr(ec.date)));
       if(ec.docs && ec.docs.length){
         for(const d of ec.docs){
           html += `<a class="palink" href="${esc(d.url)}" target="_blank" rel="noopener" style="margin-top:8px">↗ ${esc(d.name)}</a>`;
