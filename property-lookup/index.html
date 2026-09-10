@@ -2126,7 +2126,17 @@ const COUNTY_LIVE = {
     // public layers were tested and rejected as geometry-only (no owner/value) — this is the real roll.
     "https://services.arcgis.com/f5HgUpxURgEzTccH/arcgis/rest/services/Pinellas_ParcelPropertyInfo/FeatureServer/0/query"
   ]},
-  HILLSBOROUGH : { label:"Hillsborough County (City of Tampa GIS · HCPA parcels)", urls:[
+  HILLSBOROUGH : { label:"Hillsborough County (Property Appraiser · HCPA)", urls:[
+    /* ✅ PRIMARY (added 10 Sep 2026): the Property Appraiser's OWN server, gis.hcpafl.org — reachable,
+       CORS-open, verified queryable. Preferred over the City of Tampa host below on principle: a
+       county's parcels shouldn't depend on one city's GIS.
+       LEAN layer (like Collier's and Charlotte's): Owner1/Owner2, folio, strap/DisplayStrap,
+       FullAddress/SiteCity/SiteZip, TopSaleDate/TopSalePrice, Homestead — but NO values, year built
+       or heated area, so those still splice in from the statewide roll, exactly as they do for
+       Collier and Charlotte. Verified 10 Sep 2026: the companion ParcelCentroids layer is folio-only
+       and refuses attribute queries, and the Legacy inset layer is geometry+FOLIO only, so this is
+       the fullest public layer HCPA serves. Source SR 3857; the tool sends inSR=4326. */
+    "https://gis.hcpafl.org/arcgis/rest/services/Webmaps/HillsboroughFL_WebParcels/MapServer/0/query",
     // ✅ verified queryable public layer on the City of Tampa's ArcGIS server (arcgis.tampagov.net).
     // Description: "Hillsborough County Property Appraiser Data (City & county Parcels) — updated
     // daily." Token-free, reads cross-origin. Covers the WHOLE county (city + unincorporated + Plant
@@ -2135,6 +2145,8 @@ const COUNTY_LIVE = {
     // (land LAND / bldg BLDG), assessed ASD_VAL, year built=ACT (remodel EFF), living area=HEAT_AR
     // (heated), sale=AMT/S_DATE, acreage=ACREAGE, use=DOR_C, owner mailing ADDR_1/CITY/STATE/ZIP.
     // Source SR 3857; tool sends inSR=4326 and the server reprojects. TaxParcel service, layer 0.
+    // Kept as FALLBACK only — it is a fuller roll (JUST/HEAT_AR/ACT etc.) than HCPA's own layer, so
+    // if HCPA is ever down this yields a richer record, not a poorer one.
     "https://arcgis.tampagov.net/arcgis/rest/services/Parcels/TaxParcel/FeatureServer/0/query"
   ]},
   MARION  : { label:"Marion County (City of Ocala GIS · PA parcels)", urls:[
@@ -3158,9 +3170,8 @@ const ZONING_LIVE = {
     // standard ArcGIS boilerplate for the browsable directory, not a requirement for /query calls — same
     // pattern as every other county server here). codeField/descField pinned to NZONE/NZONE_DESC.
     // CATEGORY and OVERLAY fields are also present (not yet surfaced); Status ("Active"/"Withdrawn")
-    // exists — a future refinement could filter to Status='Active' only. NOT YET LIVE-TESTED against a
-    // real point (my fetch tool couldn't execute the parameterized query) — verify with a real address
-    // before fully trusting a "no live zoning" gap here.
+    // exists — a future refinement could filter to Status='Active' only.
+    // ✅ LIVE-TESTED 10 Sep 2026 against a real Tampa address: returns the zoning district correctly.
     "https://maps.hillsboroughcounty.org/arcgis/rest/services/DSD_Viewer_Services/DSD_Viewer_Zoning_Regulatory/MapServer/0/query"
   ]},
   HERNANDO: { label:"Hernando County Zoning (LDC 2026)", codeField:"ZONING", urls:[
@@ -7349,6 +7360,14 @@ const PLAT_LAYERS_COUNTY = {
   SARASOTA:  { url:'https://ags3.scgov.net/server/rest/services/Hosted/PlatBoundary/FeatureServer/0', pick:_platSniff },
   MANATEE:   { url:'https://www.mymanatee.org/gisits/rest/services/commonoperational/parcels_pl_only/MapServer/0', pick:_platSniff },
   COLLIER:   { url:'https://services2.arcgis.com/SlIq32SqARUHIhSx/ArcGIS/rest/services/Parcels/FeatureServer/0', pick:_platSniff },
+  /* Hillsborough: same Subdivision Names layer — carries the recorded plat book/page and the date
+     it was recorded, which is exactly what the Permits card wants for easements/setback lines. */
+  HILLSBOROUGH:{ url:'https://maps.hillsboroughcounty.org/arcgis/rest/services/DSD_Viewer_Services/DSD_Viewer_Governance/MapServer/2',
+      pick:a=>{ const nm=(a.COMM_NAME&&String(a.COMM_NAME).trim())||(a.LEGAL_NAME&&String(a.LEGAL_NAME).trim());
+                if(!nm) return null;
+                let lbl=nm; if(a.BOOK) lbl += ` · Plat Book ${String(a.BOOK).trim()}${a.PAGE?`, Page ${String(a.PAGE).trim()}`:''}`;
+                if(a.DATE_RECORDED){ const d=new Date(a.DATE_RECORDED); if(!isNaN(d)) lbl += ` (recorded ${d.toLocaleDateString('en-US')})`; }
+                return { label:lbl, link:null }; } },
 };
 async function queryRecordedPlat(lat, lng, cityName, countyName, timeoutMs){
   const L = PLAT_LAYERS[norm(cityName||'')] || PLAT_LAYERS_COUNTY[norm(countyName||'')];
@@ -7395,6 +7414,20 @@ const COMMUNITY_LAYERS = {
   MANATEE: [
     { key:'cdd', url:'https://www.mymanatee.org/gisits/rest/services/opendata/Planning/FeatureServer/8',
       pick:a=>({ name:a.CDD_NAME }) },
+  ],
+  /* Hillsborough: the county's Subdivision Names layer (Development Services viewer + the CORPORATE
+     display service carry the same layer). Verified 10 Sep 2026 at a Lutz parcel: LEGAL_NAME
+     "CARROLLWOOD MEADOWS UNIT 9" plus COMM_NAME (the marketed community name — usually what the HOA
+     is registered as), CLERK_NAME, NUM_LOTS and the recorded plat BOOK/PAGE/DATE_RECORDED.
+     No PUD or CDD layer answered at that point, so planned developments aren't offered here. */
+  HILLSBOROUGH: [
+    { key:'sub', url:'https://maps.hillsboroughcounty.org/arcgis/rest/services/DSD_Viewer_Services/DSD_Viewer_Governance/MapServer/2',
+      pick:a=>{ const legal=a.LEGAL_NAME&&String(a.LEGAL_NAME).trim(), comm=a.COMM_NAME&&String(a.COMM_NAME).trim();
+                if(!legal&&!comm) return null;
+                return { name: comm || legal,
+                         type: (comm&&legal&&comm.toUpperCase()!==legal.toUpperCase()) ? ('platted as '+legal) : null,
+                         units: (Number(a.NUM_LOTS)>0) ? Number(a.NUM_LOTS) : null,
+                         book: a.BOOK||null, page: a.PAGE||null }; } },
   ],
   /* Collier publishes on ArcGIS Online (org SlIq32SqARUHIhSx), not on its own servers — which is
      why the county hosts refused directory listings. PUD fields verified 9 Sep 2026. */
@@ -12543,10 +12576,10 @@ function detectFields(fields){
   const find=(res)=>{ for(const re of res){ const m=F.find(f=>re.test(f.U)); if(m) return m.raw; } return null; };
   return {
     // /^NAME$/ (last) is Marion County's Ocala-hosted parcel layer; fully anchored so it can't false-match.
-    owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^OWN1$/,/^NAME1$/,/^ONAME$/,/^O_NAME/,/^OWNERLINE1$/,/OWN.*NAME/,/OWNER_?LINE_?1/,/^GRANTEE/,/^OWNERNAME_1$/,/^NAME$/,/^PAR_OWNER_NAME1$/]),
+    owner: find([/^OWN_?NAME$/,/^OWNER$/,/^OWNER1$/,/^OWNER_?NAME$/,/^OWNERNAME$/,/^OWNER1$/,/^OWN1$/,/^NAME1$/,/^ONAME$/,/^O_NAME/,/^OWNERLINE1$/,/OWN.*NAME/,/OWNER_?LINE_?1/,/^GRANTEE/,/^OWNERNAME_1$/,/^NAME$/,/^PAR_OWNER_NAME1$/]),
     owner2:find([/^OWNERNAME_2$/,/^OWN_?NAME2$/,/^OWNER2$/,/^OWNER_?NAME2$/,/^OWN2$/,/^NAME2$/,/^OWNERLINE2$/,/OWNER_?LINE_?2/,/OWN.*NAME2/,/^OWNER_NAME_2$/,/^PAR_OWNER_NAME2$/]),
     pid:   find([/^PARCELNO$/,/^STRAP/,/^PARCEL_?ID$/,/^PARCELID$/,/^PARID$/,/^FOLIO/,/^PIN$/,/^APN$/,/^ACCOUNT$/,/PARCEL.*(ID|NO|NUM)/,/PROP_?ID/,/^PARCEL$/,/^HPARCEL$/]),
-    site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^PROPERTY_?ADDR/,/^SITUS_ADDRESS$/]),
+    site:  find([/^SITE_?ADDR/,/^PHY_?ADDR1$/,/^PHY_?ADDR$/,/^LOCAD$/,/SITUS/,/^S_ADDR/,/^ADDR_?1$/,/SITE.*ADDR/,/^LOCATION$/,/SITEADDRESS/,/^STUBADDRESS$/,/^ADDRESS$/,/^FULLPROPERTYADDRESS$/,/^FULLADDRESS$/,/^PROPERTY_?ADDR/,/^SITUS_ADDRESS$/]),
     city:  find([/^SITE_?CITY$/,/^PHY_?CITY$/,/^S_CITY$/,/^LOCCTY$/,/SITUS.*CITY/,/^SITUS_2$/,/^STR_CITY$/,/^SITE_MAILING_CITY$/,/^SCITY$/,/^SITUS_POSTAL_CITY$/]),
     /* No zip channel existed, so SiteZipCode was fetched on every Collier lookup and thrown away —
        the Site address row showed street + city and stopped. Same for Lee's SITEZIP, Charlotte's
@@ -21204,6 +21237,124 @@ async function _runLookupInner(lat,lng,searchCtx){
       if(_bi>0 && _bs>=0){ const _f=liveRes.features.splice(_bi,1)[0]; liveRes.features.unshift(_f); }
     }
     const det=detectFields(Object.keys(liveRes.features[0].attributes));
+    /* ── HILLSBOROUGH: CAMA record from HCPA's own JSON service ──────────────────────────────────
+       WebParcels (the appraiser's public polygon layer) is lean — owner, folio, strap, address, top
+       sale — with no values, year built or heated area, so those used to come only from the dated
+       statewide roll. HCPA's own viewer reads them from a keyed JSON endpoint on the same host,
+       CORS-open and ~200 ms when tested 10 Sep 2026:
+         /commonservices/property/gis_json/?operation=single&parcelid=<strap>&searchtype=B
+       searchtype: only 'B' honours parcelid — I/L/M/S are search MODES and returned an unrelated
+       parcel in testing. 'B' carries every section, so one call suffices.
+       Column-oriented shape: data.<section>.Rows[0]. Merged onto the live feature as HCPA_* and
+       pinned into `det`, so the card, the export and the appraiser link show appraiser figures.
+       Silent on failure — the roll splice still runs, so this can only add. */
+    if(norm(countyName)==='HILLSBOROUGH'){
+      const _strap = liveRes.features[0].attributes.strap || liveRes.features[0].attributes.STRAP;
+      if(_strap){
+        try{
+          const _hj = await _timed('HCPA CAMA record (gis_json)', (async()=>{
+            const c=new AbortController(); const t=setTimeout(()=>c.abort(), 6000);
+            const r=await fetch(`https://gis.hcpafl.org/commonservices/property/gis_json/?operation=single&parcelid=${encodeURIComponent(_strap)}&searchtype=B`, {signal:c.signal});
+            clearTimeout(t); return r.json();
+          })()).catch(()=>null);
+          if(myId!==runId) return;
+          const D = _hj && _hj.data;
+          if(D){
+            const row = sec => { const S=D[sec]; return (S && S.Rows && S.Rows[0]) ? S.Rows[0] : null; };
+            const bld=row('buildingInformation'), cur=row('currentValues'), cert=row('certifiedValues'),
+                  lnd=row('landInformation'), leg=row('legalDescription'), sal=row('salesInformation');
+            const A=liveRes.features[0].attributes;
+            const num = v => { const n=Number(String(v==null?'':v).replace(/[^0-9.\-]/g,'')); return isFinite(n)&&n>0 ? n : null; };
+            const put = (key, val, chan) => { if(val==null||val==='') return; A['HCPA_'+key]=val; if(chan) det[chan]='HCPA_'+key; };
+            const pick = (o,...names)=>{ if(!o) return null; for(const n of names){ if(o[n]!=null && num(o[n])!=null) return num(o[n]); } return null; };
+            if(bld){
+              put('HeatedArea', num(bld.HeatedAreaSqFtTotal), 'liv');
+              put('GrossArea',  num(bld.GrossAreaSqFtTotal));
+              put('YearBuilt',  num(bld.YearBuilt), 'yr');
+              put('Beds',       num(bld.Bedrooms));
+              put('Baths',      num(bld.Bathrooms));
+              put('Stories',    num(bld.Stories));
+              put('BldgValue',  num(bld.BuildingValue));
+              if(bld.TypeDescription) put('Type', String(bld.TypeDescription).trim(), 'use');
+            }
+            /* currentValues is ONE wide row (53 cols) holding both the certified and the working
+               roll: Certified* are null until the roll certifies in the autumn, Current* are the
+               working figures. Verified 10 Sep 2026 on strap 1827050HA000013000090U. Prefer Current,
+               fall back to Certified. Market value = *AppraisedJust (land + buildings + extra
+               features + ag), NOT the taxable figure — which reads 0 on a homesteaded lot. */
+            const V = cur || cert;
+            const val=(...names)=>pick(V,...names);
+            put('JustValue',  val('CurrentAppraisedJust','CertifiedAppraisedJust'), 'jv');
+            put('LandValue',  val('CurrentLand','CertifiedLand'), 'land');
+            put('BldgsValue', val('CurrentBuildings','CertifiedBuildings'));
+            put('ExtraFeatures', val('CurrentExtraFeatures','CertifiedExtraFeatures'));
+            put('Assessed',   val('CurrentAssessedEstimated','CertifiedAssessedEstimated'));
+            put('Taxable',    val('CurrentTaxableEstimated','CertifiedTaxableEstimated'));
+            if(V){
+              if(V.CurrentDate||V.CertifiedDate) put('ValueAsOf', String(V.CurrentDate||V.CertifiedDate).trim());
+              if(V.LandUseDescription) put('UseDesc', String(V.LandUseDescription).trim(), 'use');
+              if(V.SubDivisionName)    put('Subdivision', String(V.SubDivisionName).trim());
+              if(V.PlatBook)           put('Plat', `Book ${String(V.PlatBook).trim()}, Page ${String(V.PlatPage||'').trim()}`);
+              if(V.TaxDistrictDescription) put('TaxDistrict', String(V.TaxDistrictDescription).trim());
+              const _tr=Number(V.TotalTaxRate); if(isFinite(_tr)&&_tr>0) put('MillageTotal', _tr);
+            }
+            /* Lot size: landInformation.Units is the lot's square footage (11,220 on a 0.26 ac lot);
+               Acreage/Acres are the roll's rounded acres. Frontage × Depth also live here. */
+            const _lu = pick(lnd,'Units');
+            const _ac = pick(lnd,'Acres') || pick(lnd,'Acreage') || pick(V,'Acreage');
+            if(_lu && _lu>200) put('LotSqFt', _lu, 'lotSqft');
+            else if(_ac) put('LotSqFt', Math.round(_ac*43560), 'lotSqft');
+            if(_ac) put('Acres', _ac);
+            if(lnd){
+              const _fr=pick(lnd,'Frontage'), _dp=pick(lnd,'Depth');
+              if(_fr&&_dp) put('LotDims', `${_fr} ft × ${_dp} ft`);
+              if(lnd.ZoneDesc||lnd.Zone) put('ZoneRoll', String(lnd.ZoneDesc||lnd.Zone).trim());   // appraiser's zoning note, NOT the live zoning layer
+            }
+            const _leg = (leg && (leg.LegalDescription||leg.Legal||leg.Description)) || (V && V.LegalDescription);
+            if(_leg) put('Legal', String(_leg).trim());
+            const _sp = pick(sal,'SalePrice','Price','SaleAmount') || pick(V,'TopSalePrice');
+            if(_sp) put('SalePrice', _sp, 'saleP');
+            const _sd = (sal && (sal.SaleDate||sal.Date)) || (V && V.TopSaleDate);
+            if(_sd) put('SaleDate', String(_sd).trim(), 'saleY');
+            /* Route into the SHARED extra-row channels (the ones Lee/Charlotte already populate), so
+               Hillsborough's card gains the same rows without touching the renderer. */
+            const _num=v=>{ const n=Number(v); return isFinite(n)&&n>0?n:null; };
+            if(A.HCPA_GrossArea) A.__underRoof   = A.HCPA_GrossArea;      // under roof vs under air
+            if(A.HCPA_Beds!=null)    A.__beds    = A.HCPA_Beds;
+            if(A.HCPA_Baths!=null)   A.__baths   = A.HCPA_Baths;
+            if(A.HCPA_Stories!=null) A.__stories = A.HCPA_Stories;
+            if(A.HCPA_Acres!=null)   A.__acres   = A.HCPA_Acres;
+            if(A.HCPA_LotDims)       A.__statedDims  = A.HCPA_LotDims;
+            if(A.HCPA_Subdivision)   A.__subdivision = A.HCPA_Subdivision;
+            if(A.HCPA_TaxDistrict)   A.__taxDist = A.HCPA_TaxDistrict;
+            if(A.HCPA_Legal)         A.__legal   = A.HCPA_Legal;
+            if(A.HCPA_ZoneRoll)      A.__zoning  = A.HCPA_ZoneRoll;       // appraiser's note; live zoning layer still rules the Zoning card
+            if(V && V.NeighborhoodCodeDescription) A.__neighborhood = String(V.NeighborhoodCodeDescription).trim();
+            if(V && V.CurrentDate) A.__maintDate = 'roll as of ' + String(V.CurrentDate).trim();
+            /* Value breakdown + the annual-tax basis, as one note each rather than four bare rows.
+               Millage here is dollars per $1,000 of taxable value; on a homesteaded lot the taxable
+               figure is far below market, which is exactly why both are shown together. */
+            const _bl=_num(A.HCPA_BldgsValue), _lv=_num(A.HCPA_LandValue), _xf=_num(A.HCPA_ExtraFeatures);
+            if(_bl||_xf){
+              const _p=[]; if(_lv) _p.push('land '+fmtMoney(_lv)); if(_bl) _p.push('buildings '+fmtMoney(_bl)); if(_xf) _p.push('extra features '+fmtMoney(_xf));
+              if(_p.length>1) A.__notes = (A.__notes? A.__notes+' · ' : '') + 'Value breakdown: ' + _p.join(' + ');
+            }
+            const _tx=_num(A.HCPA_Taxable), _mi=_num(A.HCPA_MillageTotal);
+            if(_mi){
+              const _est = _tx ? Math.round(_tx/1000*_mi) : null;
+              A.__notes = (A.__notes? A.__notes+' · ' : '')
+                + 'Millage ' + _mi.toFixed(4) + ' per $1,000'
+                + (_tx ? ' on ' + fmtMoney(_tx) + ' taxable ≈ ' + fmtMoney(_est) + '/yr'
+                       : ' · taxable $0 (exemptions cover the assessed value)');
+            }
+            if(A.HCPA_Plat) A.__notes = (A.__notes? A.__notes+' · ' : '') + 'Plat ' + A.HCPA_Plat;
+            window.__hcpaCama={ strap:_strap, sections:Object.keys(D),
+                                got:{ building:!!bld, values:!!V, land:!!lnd, legal:!!leg, sale:!!sal },
+                                merged:Object.keys(A).filter(k=>k.indexOf('HCPA_')===0) };
+          }
+        }catch(e){ /* silent — the statewide roll splice below still covers these fields */ }
+      }
+    }
     // PARCEL-ID GUARD (Hernando): the county's CAMA export carries several parcel-ish columns —
     // a short parcel number and an internal key — that can win detectFields' generic `pid` regex
     // (e.g. /^PIN$/, /^PARID$/) over the full, human-readable PARCEL_NUMBER the Property Appraiser
@@ -22476,6 +22627,15 @@ async function _runLookupInner(lat,lng,searchCtx){
      3. Legal description from live feed generic detector  */
   function _getSubdivName(){
     try {
+      /* An appraiser-published SUBDIVISION NAME beats anything parsed out of a legal description:
+         it's the platted community name as the county records it ("VILLAROSA PHASE 1A"), already
+         clean, so it's the right thing to hand Sunbiz. Hillsborough's HCPA CAMA merge supplies it as
+         HCPA_Subdivision; the generic __subdivision channel covers any county that sets it. */
+      if(liveRes && liveRes.features && liveRes.features[0]){
+        const _a=liveRes.features[0].attributes;
+        const _sn = _a.HCPA_Subdivision || _a.__subdivision;
+        if(_sn && String(_sn).trim().length>2) return String(_sn).trim().toUpperCase();
+      }
       // Statewide roll: S_LEGAL is always available when the roll answered
       let legal = null;
       if(parcel && !parcel.__err && parcel.features && parcel.features[0]){
