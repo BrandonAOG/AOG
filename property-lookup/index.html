@@ -8518,6 +8518,12 @@ function showSizeDebug(){
   }catch(e){ el.textContent='debug error '+e; } };
   tick(); setInterval(tick, 1000);
   el.onclick=()=>{ try{ map.invalidateSize({animate:false}); }catch(e){} };
+  // event trace for the Measure button and the map, so a tablet can show what actually fires
+  const log=document.createElement('pre'); log.style.cssText=el.style.cssText+';top:auto;bottom:140px;color:#ff9;max-height:32vh;overflow:auto'; document.body.appendChild(log);
+  const lines=[]; window.__msLog=(m)=>{ lines.push(new Date().toISOString().slice(11,23)+' '+m); if(lines.length>18) lines.shift(); log.textContent=lines.join('\n'); };
+  const b=document.getElementById('btnMeasure');
+  if(b){ ['pointerdown','pointerup','pointercancel','touchstart','touchend','click','contextmenu'].forEach(t=>b.addEventListener(t,(e)=>__msLog(`btn ${t}${e.pointerType?' '+e.pointerType:''} tgt=${(e.target.id||e.target.className||e.target.tagName)}`),true)); }
+  __msLog('standalone='+(navigator.standalone||matchMedia('(display-mode: standalone)').matches)+' PointerEvent='+!!window.PointerEvent+' coarse='+matchMedia('(pointer:coarse)').matches);
 }
 if(/sizedebug/i.test(location.hash+location.search)) { try{ showSizeDebug(); }catch(e){} }
 // no URL editing needed on a tablet: tap the theme (☾/☀) button 5 times quickly
@@ -8822,6 +8828,7 @@ const Measure = (()=>{
   }
   try{ new ResizeObserver(()=>placeCtl()).observe(document.getElementById('panel')); }catch(e){}
   function start(){
+    if(window.__msLog) __msLog('start() active='+st.active);
     if(st.active) return; st.active=true; showCtl();
     map.getContainer().classList.add('measuring'); map.doubleClickZoom.disable();
     map.on('click',onClick); map.on('dblclick',onDbl); map.on('mousemove',onMove); map.on('contextmenu',onCtx);
@@ -8830,6 +8837,7 @@ const Measure = (()=>{
     mapToast(`Measuring ${_modeWord()} — click points · double-click to finish · U undoes a point · right-click for units · Esc to stop`, 2800);
   }
   function stop(){
+    if(window.__msLog) __msLog('stop() active='+st.active);
     if(!st.active) return; finish(); st.active=false; hideCtl();
     map.getContainer().classList.remove('measuring'); map.doubleClickZoom.enable();
     map.off('click',onClick); map.off('dblclick',onDbl); map.off('mousemove',onMove); map.off('contextmenu',onCtx);
@@ -8850,6 +8858,7 @@ const Measure = (()=>{
   const syncBtn=()=>{ btn.classList.toggle('active', st.active); if(lblEl) lblEl.textContent = st.active ? (st.mode==='area'?'Measuring area':st.mode==='profile'?'Profile line':'Measuring') : 'Measure'; };
   btn.onclick=(e)=>{
     e.stopPropagation();
+    if(window.__msLog) __msLog('btn.onclick caret='+!!e.target.closest('#msCaret')+' lpFired='+_lpFired);
     if(e.target.closest('#msCaret')){ if(menu.hidden) open(); else close(); return; }
     close(); if(st.active) stop(); else start();
   };
@@ -8871,7 +8880,7 @@ const Measure = (()=>{
     ['touchend','touchcancel'].forEach(t=>btn.addEventListener(t,lpEnd));
   }
   // after a long-press opened the menu, swallow the click that follows so the tool doesn't toggle
-  btn.addEventListener('click',(e)=>{ if(_lpFired){ e.stopImmediatePropagation(); e.preventDefault(); _lpFired=false; } }, true);
+  btn.addEventListener('click',(e)=>{ if(_lpFired){ if(window.__msLog) __msLog('click swallowed (long-press)'); e.stopImmediatePropagation(); e.preventDefault(); _lpFired=false; } }, true);
 
   // menu hint reflects the input device
   try{ if(matchMedia('(pointer:coarse)').matches){ const h=menu.querySelector('.ms-hint'); if(h) h.textContent='Tap to add points · ✓ Done to finish · long-press the button for this menu'; } }catch(_){}
