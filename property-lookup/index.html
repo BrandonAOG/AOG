@@ -21628,7 +21628,23 @@ async function _runLookupInner(lat,lng,searchCtx){
     html += `<div class="card"><div class="ch"><span class="icn">[ HOA ]</span><h2>HOA / Community Association</h2>
       <div class="src">FL Division of<br>Corporations · Sunbiz</div></div><div class="cb">`;
 
-    if(_subdiv){
+    /* Cape Coral, Lehigh Acres, Port Charlotte, North Port, Golden Gate etc. were platted city-wide by a
+       single developer, so the legal description's "subdivision" is just the city (often with a unit
+       number). Searching Sunbiz for a "Cape Coral homeowners association" finds nothing useful and
+       implies an HOA that doesn't exist. Say so instead of offering the links. */
+    const _norm = x=>String(x||'').toUpperCase().replace(/[^A-Z ]/g,' ').replace(/\s+/g,' ').trim();
+    const _sd=_norm(_subdiv), _city=_norm(cityName), _cnty=_norm(countyName);
+    const _cityPlat = _subdiv && (
+         _sd===_city || (_city && _sd.indexOf(_city)===0 && /^(UNIT|UNITS|PT|PART|SEC|SECTION|BLK|BLOCK|PH|PHASE|ADD|ADDITION|SUB|SUBDIVISION|\d)/.test(_sd.slice(_city.length).trim()))
+      || /^(LEHIGH ACRES|PORT CHARLOTTE|NORTH PORT|GOLDEN GATE|GOLDEN GATE ESTATES|PALM BEACH GARDENS|CAPE CORAL|MARCO BEACH|NAPLES PARK|BONITA SPRINGS|ROTONDA)\b/.test(_sd)
+      || (_cnty && _sd===_cnty)
+    );
+    if(_subdiv && _cityPlat){
+      html += `<div class="freshline snap"><span class="badge unk">city plat</span> the legal description's subdivision is the municipality itself</div>`;
+      html += fieldRow('Subdivision', esc(_subdiv), 'big');
+      html += `<div class="note">&ldquo;${esc(_subdiv)}&rdquo; is the developer&rsquo;s city-wide plat, not a community. Lots platted this way typically have <b>no HOA</b> unless a later gated or deed-restricted community was carved out of it. If this address is inside one, its name will be on the deed or the county&rsquo;s recorded plat, not in this legal description.</div>`;
+      html += `<a class="palink" href="${esc(_sunbizBase)}" target="_blank" rel="noopener" style="margin-top:8px">↗ Open Sunbiz entity search (enter a community name manually)</a>`;
+    } else if(_subdiv){
       html += `<div class="freshline"><span class="badge live">● SUBDIVISION FOUND</span> extracted from property appraiser legal description</div>`;
       html += fieldRow('Subdivision', esc(_subdiv), 'big');
       html += `<a class="palink" href="${esc(_sunbizUrl(_subdiv))}" target="_blank" rel="noopener" style="margin-top:8px">↗ Search Sunbiz for &ldquo;${esc(_subdiv)}&rdquo;</a>`;
@@ -22968,6 +22984,14 @@ async function _runLookupInner(lat,lng,searchCtx){
     renderLookupTiming(_timings);                // wind is non-blocking; refresh timing once it lands
     if(!liveWind || typeof liveWind.v!=='number') return;   // no live value → keep county figure
     if(window.__exportData) window.__exportData.windVult=liveWind.v;   // keep export in sync
+    /* The header chip was built from the county planning figure (e.g. 170) before the live ASCE
+       contour read (e.g. 160) landed. Showing both at once is a contradiction on the one number
+       this page exists to get right, so the chip follows the live value. */
+    try{
+      const c=results.querySelector('.sum-chips .chip[data-k="wind"]');
+      if(c){ c.innerHTML='<b>Wind</b> '+esc(String(liveWind.v))+' mph'; c.title='Live ASCE 7-22 Risk Category II contour at this point';
+             c.classList.toggle('warn', +liveWind.v>=140); }
+    }catch(e){}
     // Find the rendered Wind card by its heading (survives tabify, which keys off the h2 text).
     let target=null;
     results.querySelectorAll('.card').forEach(c=>{
@@ -23007,7 +23031,7 @@ function buildSummaryStrip(ed, meta){
   ed = ed||{};
   const addr = (meta && meta.addr) ? esc(meta.addr)
              : (meta && meta.where) ? esc(meta.where) : 'Selected location';
-  const chip=(label,val,cls)=> val ? '<span class="chip '+(cls||'')+'"><b>'+label+'</b> '+esc(String(val))+'</span>' : '';
+  const chip=(label,val,cls)=> val ? '<span class="chip '+(cls||'')+'" data-k="'+label.toLowerCase()+'"><b>'+label+'</b> '+esc(String(val))+'</span>' : '';
   let chips='';
   if(ed.county) chips+=chip('County', ed.county+' County');
   chips+=chip('Juris', ed.municipality || 'Unincorporated');
