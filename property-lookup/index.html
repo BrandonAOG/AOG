@@ -8496,9 +8496,9 @@ map.on('moveend zoomend', ()=>{ clearTimeout(zoningTimer); zoningTimer=setTimeou
 /* ---------- Size debug overlay (add #sizedebug to the URL) ----------
    For tablets, where there is no console: shows the numbers that decide the map's size so a
    mismatch between the element, Leaflet's cached size and the viewport can be seen on-screen. */
-(function(){
-  if(!/sizedebug/i.test(location.hash)) return;
-  const el=document.createElement('pre');
+function showSizeDebug(){
+  if(document.getElementById('sizeDebugBox')) return;
+  const el=document.createElement('pre'); el.id='sizeDebugBox';
   el.style.cssText='position:fixed;top:60px;left:8px;z-index:99999;background:rgba(0,0,0,.85);color:#0f0;font:11px/1.35 monospace;padding:8px;border-radius:6px;max-width:92vw;white-space:pre-wrap;pointer-events:auto';
   document.body.appendChild(el);
   const tick=()=>{ try{
@@ -8518,7 +8518,11 @@ map.on('moveend zoomend', ()=>{ clearTimeout(zoningTimer); zoningTimer=setTimeou
   }catch(e){ el.textContent='debug error '+e; } };
   tick(); setInterval(tick, 1000);
   el.onclick=()=>{ try{ map.invalidateSize({animate:false}); }catch(e){} };
-})();
+}
+if(/sizedebug/i.test(location.hash+location.search)) { try{ showSizeDebug(); }catch(e){} }
+// no URL editing needed on a tablet: tap the theme (☾/☀) button 5 times quickly
+(function(){ let n=0,t=0; document.addEventListener('click',(e)=>{ const b=e.target.closest && e.target.closest('#themeToggle, .theme-toggle, [data-theme-toggle], button[title*="theme" i]'); if(!b) return;
+  const now=Date.now(); n = (now-t<600) ? n+1 : 1; t=now; if(n>=5){ n=0; showSizeDebug(); } }, true); })();
 
 /* ---------- Measure tool (distance / area, unit-switchable) ----------
    Geodesic maths: segment lengths via latLng.distanceTo (great-circle), area via the spherical-
@@ -8799,8 +8803,9 @@ const Measure = (()=>{
     const hits=(a,b)=> b && !(a.left+w<b.left || a.left>b.right || a.top+h<b.top || a.top>b.bottom);
     const clear=(c)=> !obstacles.some(o=>hits(c,o));
     const cands=[];
-    if(tbr){ cands.push({left:vw-w-12, top:tbr.top-h-gap});                 // above toolbar, right
-             cands.push({left:tbr.left, top:tbr.top-h-gap});                // above toolbar, left
+    const lift=gap+50;                                                       // sit well clear of the toolbar row
+    if(tbr){ cands.push({left:vw-w-12, top:tbr.top-h-lift});                // above toolbar, right
+             cands.push({left:tbr.left, top:tbr.top-h-lift});               // above toolbar, left
              cands.push({left:vw-w-12, top:tbr.bottom+gap}); }              // below toolbar, right
     if(pnr){ cands.push({left:pnr.left-w-12, top:vh-h-12});                 // left of the panel, bottom
              cands.push({left:vw-w-12, top:pnr.top-h-gap}); }               // above a bottom sheet, right
