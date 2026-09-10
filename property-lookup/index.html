@@ -8534,6 +8534,9 @@ const Measure = (()=>{
       let per=0; for(let i=0;i<P.length;i++){ const a=P[i], b=P[(i+1)%P.length]; per+=a.distanceTo(b); }
       const c=L.polygon(P).getBounds().getCenter();
       chip(it,'area', c, `${fmtArea(geodArea(P))}<br><span style="opacity:.8;font-weight:400">perimeter ${fmtLen(per)}</span> ${minBtn(it,'area')}${delBtn(it)}`, 'area', null, add);
+    } else if(it.mode==='profile'){
+      add(L.polyline(P,{color:'#F46800',weight:3,opacity:.95}));
+      add(lbl(P[P.length-1], delBtn(it), 'mini', [18, -18]));      // the profile panel carries the numbers
     } else {
       add(L.polyline(P,{color:'#F46800',weight:3,opacity:.95}));
       let tot=0; for(let i=1;i<P.length;i++) tot+=P[i-1].distanceTo(P[i]);
@@ -8560,7 +8563,7 @@ const Measure = (()=>{
     if(st.mode==='area' && P.length>=3) ls.push(L.polygon(P,{color:'#F46800',weight:2,dashArray:'6 4',fillColor:'#F46800',fillOpacity:.08}));
     else ls.push(L.polyline(P,{color:'#F46800',weight:2,dashArray:'6 4'}));
     let tot=0; for(let i=1;i<P.length;i++) tot+=P[i-1].distanceTo(P[i]);
-    if(cursor){
+    if(cursor && st.mode!=='profile'){
       const seg=st.pts[st.pts.length-1].distanceTo(cursor);
       const txt = st.mode==='area' && P.length>=3 ? `${fmtArea(geodArea(P))}` : (st.pts.length>1 ? `${fmtLen(seg)} · total ${fmtLen(tot)}` : fmtLen(seg));
       ls.push(lbl(cursor, txt, 'live', [0, 26]));   // sits under the crosshair, never on it
@@ -8697,6 +8700,7 @@ const Measure = (()=>{
     if(!x && !mn && !pl) return;
     e.stopPropagation(); e.preventDefault();
     if(x){ const id=x.getAttribute('data-ms-del'); const i=st.items.findIndex(it=>it.id===id); if(i<0) return;
+           if(st.items[i].mode==='profile') closeProfile();
            st.items[i].layers.forEach(l=>st.group.removeLayer(l)); st.items.splice(i,1); return; }
     const el=mn||pl, id=el.getAttribute(mn?'data-ms-min':'data-ms-plus'), key=el.getAttribute('data-ms-key');
     const it=st.items.find(it=>it.id===id); if(!it) return;
