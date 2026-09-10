@@ -7139,6 +7139,52 @@ async function queryGroundElevation(parcelFeature, countyName, budgetOverride, o
   return null;
 }
 
+/* ---------- RECORDED PLAT LOOKUP ----------
+   The recorded plat is where platted easements and setback lines live — the thing that actually
+   constrains a generator pad on a platted lot. Cape Coral publishes its plat-book unit boundaries
+   with a direct link to the recorded sheet (verified 9 Sep 2026: "UNIT - 45" + PB_ONBASE_LINK).
+   Charlotte's SubDivisions layer carries plat Book/Page and a record link. */
+const PLAT_LAYERS = {
+  CAPECORAL: { url:'https://capeims.capecoral.gov/arcgis/rest/services/AGOL/Plat_Book/MapServer/10',
+               pick:a=>({ label:a.ONBASE_NAME ? 'Cape Coral '+String(a.ONBASE_NAME).replace(/\s*-\s*/,' ') : null, link:a.PB_ONBASE_LINK }) },
+};
+/* Generic attribute sniffer for layers whose exact field names weren't verified: finds the
+   name / book / page / link columns by pattern. Returns null if it can't find a name. */
+function _platSniff(a){
+  const keys=Object.keys(a||{});
+  const find=re=>{ const k=keys.find(k=>re.test(k) && a[k]!=null && String(a[k]).trim()!==''); return k?String(a[k]).trim():null; };
+  const name = find(/^(plat.*name|subdiv.*name|subname|description|plat_?nm|name)$/i) || find(/subdiv|plat/i);
+  if(!name || /^\d+$/.test(name)) return null;                    // a bare code isn't a name
+  const book = find(/^(plat.?book|pb|book|or.?book)$/i) || find(/book/i);
+  const page = find(/^(plat.?page|pg|page|or.?page)$/i) || find(/page/i);
+  let link = find(/link|url|doc/i); if(link && !/^https?:/i.test(link)) link=null;
+  return { label: name + (book ? ` · Plat Book ${book}${page?`, Page ${page}`:''}` : ''), link };
+}
+const PLAT_LAYERS_COUNTY = {
+  CHARLOTTE: { url:'https://agis.charlottecountyfl.gov/arcgis/rest/services/Essentials/CCGIS_Web_Layers2022/MapServer/19',
+               pick:a=>({ label:a.SUBNAME ? String(a.SUBNAME)+(a.Book?` · Plat Book ${a.Book}, Page ${a.Page||''}`:'') : null, link:a.Link }) },
+  /* Lee: plat name county-wide (Description), but the county's RecordDoclink is a generic Clerk
+     records URL (blank instrument no.) — offered as "search", not as the sheet. */
+  LEE:       { url:'https://gismapserver.leegov.com/gisserver910/rest/services/DataExplorer/LandRecords/MapServer/3',
+               pick:a=>({ label:(a.Description && !/^\d+$/.test(a.Description)) ? String(a.Description)+(a.ConveyanceType?` (${a.ConveyanceType})`:'') : null,
+                          link:(a.RecordDoclink && /^https?:/i.test(a.RecordDoclink)) ? a.RecordDoclink : null, linkLabel:'search Lee Clerk official records' }) },
+  SARASOTA:  { url:'https://ags3.scgov.net/server/rest/services/Hosted/PlatBoundary/FeatureServer/0', pick:_platSniff },
+  MANATEE:   { url:'https://www.mymanatee.org/gisits/rest/services/commonoperational/parcels_pl_only/MapServer/0', pick:_platSniff },
+  COLLIER:   { url:'https://services2.arcgis.com/SlIq32SqARUHIhSx/ArcGIS/rest/services/Parcels/FeatureServer/0', pick:_platSniff },
+};
+async function queryRecordedPlat(lat, lng, cityName, countyName, timeoutMs){
+  const L = PLAT_LAYERS[norm(cityName||'')] || PLAT_LAYERS_COUNTY[norm(countyName||'')];
+  if(!L) return null;
+  const pt = encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}));
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeoutMs||7000);
+  try{
+    const r=await fetch(`${L.url}/query?f=json&geometry=${pt}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&resultRecordCount=1`, {signal:ctrl.signal});
+    const j=await r.json(); clearTimeout(t);
+    const f=j.features&&j.features[0]; if(!f) return null;
+    const v=L.pick(f.attributes||{}); return (v && v.label) ? v : null;
+  }catch(e){ clearTimeout(t); return null; }
+}
+
 /* ---------- COMMUNITY / HOA LOOKUP (county GIS) ----------
    There is no statewide HOA registry, but the counties map the pieces:
      Lee       Subdivisions (name, Gated Y/N, type, unit counts) + Planned Developments (PUD name)
@@ -7171,6 +7217,15 @@ const COMMUNITY_LAYERS = {
   MANATEE: [
     { key:'cdd', url:'https://www.mymanatee.org/gisits/rest/services/opendata/Planning/FeatureServer/8',
       pick:a=>({ name:a.CDD_NAME }) },
+  ],
+  /* Collier publishes on ArcGIS Online (org SlIq32SqARUHIhSx), not on its own servers — which is
+     why the county hosts refused directory listings. PUD fields verified 9 Sep 2026. */
+  COLLIER: [
+    { key:'pd',  url:'https://services2.arcgis.com/SlIq32SqARUHIhSx/ArcGIS/rest/services/PUD/FeatureServer/5',
+      pick:a=>({ name:a.NAME, category:[a.STATUS, a.AKA&&String(a.AKA).trim()?('aka '+String(a.AKA).trim()):null].filter(Boolean).join(' · ')||null,
+                 desc:a.ORD_NUM?`Ordinance ${a.ORD_NUM}${a.PETITION&&String(a.PETITION).trim()?' · '+String(a.PETITION).trim():''}`:null }) },
+    { key:'cdd', url:'https://services2.arcgis.com/SlIq32SqARUHIhSx/ArcGIS/rest/services/Community_Development_Districts_view/FeatureServer/0',
+      pick:a=>{ const k=Object.keys(a).find(k=>/name/i.test(k)&&a[k]&&String(a[k]).trim()); return { name:k?String(a[k]).trim():null }; } },
   ],
 };
 async function queryCommunity(lat, lng, countyName, timeoutMs){
@@ -7216,6 +7271,16 @@ function renderCommunityBlock(c, countyName){
     h += fieldRow('Community', esc(c.pd.name), a?'':'big');
     if(c.pd.category) h += fieldRow('PD category', esc(c.pd.category));
     if(c.pd.desc) h += fieldRow('Description', esc(c.pd.desc));
+    /* Ordinance = the county law that adopted the PUD document, i.e. this community's actual
+       zoning (setbacks, accessory structures, equipment rules). Deep links to the Clerk's ordinance
+       search aren't stable, so offer a pre-filled search plus the Clerk's PUD library. */
+    const ordM = c.pd.desc && String(c.pd.desc).match(/Ordinance\s+([\d]{2,4}-[\d]+)/i);
+    if(ordM){
+      const ord = ordM[1], cnty = titleCase(countyName||'');
+      h += `<div class="note" style="margin-top:6px">Ordinance <b>${esc(ord)}</b> is the county law that adopted this PUD&rsquo;s zoning document. Its setback and accessory-structure tables override the general district rules on the Zoning card — the reviewer checks against the PUD document, not the district.</div>`;
+      h += `<a class="palink" href="${esc('https://www.google.com/search?q='+encodeURIComponent(`"${cnty} County" ordinance ${ord} PUD "${c.pd.name}"`))}" target="_blank" rel="noopener" style="margin-top:6px">↗ Find Ordinance ${esc(ord)} (PUD document)</a>`;
+      if(norm(countyName)==='COLLIER') h += `<a class="palink" href="https://www.collierclerk.com/zoning-maps/" target="_blank" rel="noopener" style="margin-top:6px">↗ Collier Clerk PUD ordinance library (browse by community name)</a>`;
+    }
     if(!a){
       h += `<div class="note">A planned-development polygon almost always comes with a homeowners&rsquo; or master association that maintains the common areas, gates and roads. Search Sunbiz for the community name to find the registered corporation.</div>`;
       h += `<a class="palink" href="${esc(_sunbizQ(c.pd.name))}" target="_blank" rel="noopener" style="margin-top:8px">↗ Sunbiz: &ldquo;${esc(c.pd.name)}&rdquo;</a>`;
@@ -22574,7 +22639,23 @@ async function _runLookupInner(lat,lng,searchCtx){
   // Collier County (unincorporated / not resolved to a city): link the official ADOPTED zoning
   // map sheets at the Clerk of Courts — the legal map of record, for verifying the GIS read.
   if(norm(countyName)==='COLLIER' && !zr.inCity){
-    html += `<a class="palink" href="https://www.collierclerk.com/zoning-maps/" target="_blank" rel="noopener" style="margin-top:8px">↗ Official adopted zoning map sheets (Clerk of Courts)</a>`;
+    /* The county's zoning atlas is point-queryable after all (AGOL Zoning_Links_view: one polygon
+       per township-range-section with the URL of that sheet's PDF). Fill this slot with the exact
+       sheet for the parcel; the Clerk's library link below stays as the fallback. */
+    const _atlasSlot='zatlas-'+myId;
+    html += `<div id="${_atlasSlot}"></div>`;
+    (async()=>{
+      try{
+        const pt=encodeURIComponent(JSON.stringify({x:lng,y:lat,spatialReference:{wkid:4326}}));
+        const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),8000);
+        const r=await fetch(`https://services2.arcgis.com/SlIq32SqARUHIhSx/ArcGIS/rest/services/Zoning_Links_view/FeatureServer/0/query?f=json&geometry=${pt}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Zoning_url,TSS&returnGeometry=false&resultRecordCount=1`,{signal:ctrl.signal});
+        const j=await r.json(); clearTimeout(t);
+        const a=j.features&&j.features[0]&&j.features[0].attributes;
+        if(myId!==runId || !a || !a.Zoning_url) return;
+        patchSlot(_atlasSlot, `<a class="palink" href="${esc(a.Zoning_url)}" target="_blank" rel="noopener" style="margin-top:8px">↗ Zoning atlas sheet for this parcel${a.TSS?` (Twp-Rng-Sec ${esc(a.TSS)})`:''} — PDF</a>`
+          + `<div class="note">The county&rsquo;s official zoning map page covering this section: shows the district labels and any PUD boundary around the lot. Confirms the live read above.</div>`);
+      }catch(e){}
+    })();
     html += `<div class="note">Collier's legally adopted zoning map, archived as searchable map sheets. Not point-queryable, so use it to confirm the district above for any legal/permitting decision.</div>`;
   }
     return html;
@@ -22841,6 +22922,23 @@ async function _runLookupInner(lat,lng,searchCtx){
   html += `<div class="note warnbox" style="margin-top:10px"><b>Surveys &amp; site plans aren't a public map layer.</b> They live in <b>${esc(docJur)}</b>'s building-permit file and are retrieved from its permitting portal by ${docCfg&&docCfg.permitBy==='permit'?'permit record number':'address or parcel/STRAP number'}${strap?` (this parcel: <b style="color:var(--ink)">${esc(strap)}</b>)`:''}. Not every record is digitized.</div>`;
   if(portal){
     html += `<a class="palink" href="${esc(portal)}" target="_blank" rel="noopener" style="margin-top:8px">↗ ${esc(docJur)} permitting portal (survey / site plan / permits)</a>`;
+  }
+  /* Recorded plat (easements, platted setback lines) — filled in place when the city/county plat
+     layer answers; nothing rendered where no layer is wired. */
+  {
+    const _platSlot='platLive-'+myId;
+    if(PLAT_LAYERS[norm(cityName||'')] || PLAT_LAYERS_COUNTY[norm(countyName||'')]){
+      html += `<div id="${_platSlot}"></div>`;
+      queryRecordedPlat(lat, lng, cityName, countyName, 8000).then(p=>{
+        if(myId!==runId || !p) return;
+        patchSlot(_platSlot,
+          `<div class="note" style="margin-top:6px">Recorded plat: <b>${esc(p.label)}</b></div>`
+          + (p.link ? `<a class="palink" href="${esc(p.link)}" target="_blank" rel="noopener" style="margin-top:6px">↗ ${esc(p.linkLabel||'Recorded plat')}</a>` : '')
+          + `<div class="note" style="margin-top:4px">Platted utility &amp; drainage easements and any platted setback lines are on the recorded plat, not the zoning code — check it before siting the pad.</div>`);
+      }).catch(()=>{});
+    }
+  }
+  if(portal){
     // Prominent "check permits for THIS parcel" action. The CityView / permit portals are POST-search
     // pages (no reliable address-in-URL prefill), so we open the search page AND surface the parcel's
     // folio/address with a one-tap Copy so the user pastes it straight into the portal's search box.
