@@ -2941,6 +2941,15 @@ const COUNTY_EC_LAYERS = {
    issuedAt, nfipCommunityName/Number. NOTE geometry is esriGeometryMultipoint, not point.
    Used as the last resort so a county layer (which may hold scans the state set lacks) still wins. */
 const EC_STATEWIDE = "https://services8.arcgis.com/4L6VuYsPSGSEJ0qe/arcgis/rest/services/Public_FDEM_Elevation_Certificates/FeatureServer/0/query";
+/* Companion layer in the same org, richer schema but FEWER records — proven a strict SUBSET on
+   10 Sep 2026: all 100 sampled ids from it exist in EC_STATEWIDE, while only 43 of 100 going the
+   other way, and EC_STATEWIDE alone carries form years 1984/1987/1996/2026. So it is never used for
+   coverage; it is looked up BY `id` after EC_STATEWIDE finds a certificate, purely to add fields the
+   wide set lacks: lowestElevationOfMachineryOrEqu (EC item C2e — the elevation of the existing
+   mechanical equipment, which is what a generator pad has to match or beat; populated on 68,881 of
+   85,084) and bottomOfLowestHorizontalStructu (C2b, the V-zone measure). One extra request, and only
+   when there is a certificate to enrich. */
+const EC_STATEWIDE_RICH = "https://services8.arcgis.com/4L6VuYsPSGSEJ0qe/arcgis/rest/services/PUBLIC_FL_Elevation_Certificates_and_Warnings_WFL1/FeatureServer/1/query";
 
 /* Resolve documents config: city first (by municipality), else county. */
 function resolveDocs(cityName, countyName){
@@ -13027,6 +13036,26 @@ async function queryEC(ecLayerUrl, lat, lng){
                        datum: datumKnown ? rawDatum : null,
                        datumStated: datumKnown,
                        panel:det.panel?pick(f0.attributes,det.panel):null };
+    /* Supplement from the richer companion layer (see EC_STATEWIDE_RICH). Only fires when this WAS
+       the statewide set, the record has an `id`, and the machinery elevation is missing — so it
+       costs nothing on county layers or when the value is already known. Failure is silent. */
+    try{
+      const _ecId = f0.attributes && f0.attributes.id;
+      if(_ecId && surveyed.mach==null && ecLayerRoot(EC_STATEWIDE)===root){
+        const _rr = ecLayerRoot(EC_STATEWIDE_RICH);
+        const _w  = encodeURIComponent("id='" + String(_ecId).replace(/'/g,"''") + "'");
+        const _rj = await (await fetch(`${_rr}/query?where=${_w}&outFields=lowestElevationOfMachineryOrEqu,bottomOfLowestHorizontalStructu,verticalDatum&returnGeometry=false&f=json`,{signal:ctrl.signal})).json();
+        const _ra = _rj && _rj.features && _rj.features[0] && _rj.features[0].attributes;
+        if(_ra){
+          const _n = v => { if(v==null) return null; const t=String(v).trim(); if(t==='') return null;
+                            const n=Number(t); return (isFinite(n) && n!==0 && n>-100 && n<500) ? n : null; };
+          const _m = _n(_ra.lowestElevationOfMachineryOrEqu);
+          if(_m!=null){ surveyed.mach=_m; surveyed.conv.mach = /navd/i.test(String(_ra.verticalDatum||'')); }
+          const _b = _n(_ra.bottomOfLowestHorizontalStructu);
+          if(_b!=null) surveyed.lowHoriz=_b;      // EC item C2b — V-zone lowest horizontal member
+        }
+      }
+    }catch(e){ /* enrichment is optional */ }
     // EC point's own coordinates (WGS84, outSR=4326) — used to drop the 📝 note marker on the map.
     let ecLat=null, ecLng=null;
     try{ const g0=f0.geometry;
