@@ -181,6 +181,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   *{box-sizing:border-box}
   html{color-scheme:light dark}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--body)}
+  /* The toolbar strip is the only thing allowed to scroll sideways. Without this the over-wide
+     button row scrolled the DOCUMENT on iPad, dragging the absolutely-positioned panel, map and map
+     controls with it — the map appeared to lose its left edge. */
+  html,body{overflow-x:hidden;overscroll-behavior-x:none;max-width:100%}
   #map{position:absolute;inset:0;z-index:1;background:var(--map-bg)}
   .leaflet-container{background:var(--map-bg)}
 
@@ -313,7 +317,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   /* z-index sits ABOVE the lower-left weather panel (1002): on a narrower window the panel's bottom
      edge reaches into the toolbar, and it used to paint over it — which would bury the storm picker,
      the leftmost control here. A control bar wins over a readout. */
-  .layerswitch{position:absolute;z-index:1003;bottom:18px;left:600px;right:0;margin-inline:auto;width:max-content;display:flex;background:var(--search-bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;box-shadow:0 6px 20px var(--shadow-soft)}
+  .layerswitch{position:absolute;z-index:1003;bottom:18px;left:0;right:0;margin-inline:auto;width:max-content;max-width:calc(100vw - 24px);display:flex;background:var(--search-bg);border:1px solid var(--line);border-radius:8px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:none;box-shadow:0 6px 20px var(--shadow-soft)}
+  .layerswitch::-webkit-scrollbar{display:none}
+  .layerswitch > *{flex:0 0 auto}      /* never squash labels; the strip scrolls instead */
+  @media (min-width:1200px){ .layerswitch{left:600px} }   /* clear the docked panel */
   .layerswitch button{background:transparent;border:none;color:var(--dim);font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.05em;padding:9px 14px;cursor:pointer;text-transform:uppercase;white-space:nowrap}
   .layerswitch button.active{background:var(--signal);color:var(--signal-ink)}
   #tlToolbarBtn{border-right:1px solid var(--line)}
@@ -855,7 +862,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
      The floating panel becomes a fixed-width full-height left column; #map shifts right to sit
      beside it. Cards within a tab stack in a single column. Below 1080px the panel stays a floating
      box (and ≤680px the mobile bottom-sheet rules take over). */
-  @media (min-width:1080px){
+  /* Desktop docked layout starts at 1200px. Below that (notably iPads: 820 portrait / 1180
+     landscape) the floating tablet panel is used instead — a 600px dock on an 820px screen left the
+     map only 220px wide, and iPadOS's desktop mode made that the default. */
+  @media (min-width:1200px){
     #panel{
       top:var(--abh,48px); left:0; bottom:0; width:600px; max-width:600px;
       height:calc(100vh - var(--abh,48px)); max-height:none;
@@ -866,6 +876,42 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     .cardflow{ column-count:1; }   /* one category at a time — no masonry in tabbed mode */
     .zoning-legend{ right:18px; top:124px; left:auto; bottom:auto; }  /* top-right, under lat/lng + radar clock */
     .wx-legend{ left:614px; }                    /* clear the 600px sidebar */
+  }
+
+  /* ---- Hide / show the property panel on tablet & desktop ----
+     The mobile sheet can be swiped away to see the map; larger screens had no equivalent, so the
+     panel always covered its side of the screen. A LEFT SWIPE on the panel collapses it off-canvas and a tab brings
+     it back — the panel keeps its contents, so nothing is re-queried. */
+  @media (min-width:681px){
+    #panel{ transition:transform .26s cubic-bezier(.22,1,.36,1); }
+    #panel.pan-hidden{ transform:translateX(calc(-100% - 30px)); box-shadow:none; }
+    /* Visible handle on the panel's outer edge: click it, or drag it left. Sits vertically centred
+       on the edge so it never covers content (the old corner ✕ landed on FIND). */
+    #panelEdge{ position:absolute; z-index:1105; top:50%; transform:translateY(-50%);
+      width:22px; height:74px; border:1px solid var(--line); border-left:none;
+      border-radius:0 12px 12px 0; background:var(--panel2); color:var(--dim);
+      display:flex; align-items:center; justify-content:center; cursor:pointer;
+      font-family:var(--mono,monospace); font-size:13px; box-shadow:3px 0 12px var(--shadow-soft);
+      touch-action:none; user-select:none; }
+    #panelEdge:hover{ color:var(--signal-ink); background:var(--signal); border-color:var(--signal); }
+    /* bottom-left: out of the way of the action bar and the map's lat/lng readout, and it doesn't
+       collide with the hide handle's resting place */
+    #panelShow{ display:none; position:absolute; z-index:1100; bottom:calc(var(--tbh,46px) + 26px); left:12px;
+      background:var(--signal); color:var(--signal-ink); border:none; border-radius:22px;
+      font-family:var(--disp); font-weight:700; font-size:13px; letter-spacing:.04em;
+      padding:10px 16px; box-shadow:0 6px 22px var(--shadow-soft); cursor:pointer; }
+    #panelShow.show{ display:inline-flex; align-items:center; gap:7px; }
+    /* with the panel away, the map and the toolbar take the whole width */
+    body.panel-hidden #map{ inset:var(--abh,48px) 0 0 0 !important; }
+    body.panel-hidden .layerswitch{ left:12px !important; }
+    body.panel-hidden .wx-legend{ left:12px !important; }
+  }
+
+  /* ---- Tablet (681–1199px): floating panel, full-width map, full-width scrolling toolbar ---- */
+  @media (min-width:681px) and (max-width:1199px){
+    #map{ inset:var(--abh,48px) 0 0 0; }
+    .layerswitch{ left:12px; right:12px; margin-inline:0; width:auto; max-width:none; justify-content:flex-start; }
+    .wx-legend{ left:12px; }
   }
 
   /* ---- Mobile: panel becomes a snapping, draggable bottom sheet ---- */
@@ -1362,6 +1408,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   </div>
 </div>
 <button class="sheet-tab" id="sheetTab" aria-label="Show property panel">⌃ Property panel</button>
+<button id="panelEdge" type="button" title="Hide the property panel — click, or drag left (Esc)" aria-label="Hide the property panel">‹</button>
+<button id="panelShow" type="button" aria-label="Show the property panel">▸ Property panel</button>
 <div class="layerswitch">
   <!-- Storm picker: appears only while the hurricane cone is on. Chooses which active system the
        cone, track, D/S/H/M points, arrival times, past track and the scrubber all follow. -->
@@ -26043,6 +26091,76 @@ const Sheet=(function(){
   return { setState, hide, show, isUserClosed:()=>userClosed, allowAuto:()=>{ userClosed=false; } };
 })();
 window.Sheet=Sheet;
+
+/* ---------- Hide / show the property panel (tablet & desktop) ----------
+   Phones keep their sheet gestures; this is the equivalent for the docked/floating panel. The panel
+   is only translated off-canvas, never emptied, so bringing it back is instant and nothing re-runs.
+   Also frees the map and toolbar to use the full width while it's away. */
+(function(){
+  const panel=document.getElementById('panel'), showBtn=document.getElementById('panelShow'), edge=document.getElementById('panelEdge');
+  if(!panel||!showBtn) return;
+  /* Position from the panel's LAYOUT box (offsetLeft/offsetWidth), never getBoundingClientRect():
+     the rect includes the slide transform, so measuring during the hide/show animation placed the
+     handle off-canvas and it never came back. Also re-place once the transition finishes. */
+  function placeEdge(){
+    if(!edge) return;
+    if(!big() || panel.classList.contains('pan-hidden')){ edge.style.display='none'; return; }
+    const left = panel.offsetLeft + panel.offsetWidth, top = panel.offsetTop + panel.offsetHeight/2;
+    edge.style.display='flex'; edge.style.left=Math.round(left)+'px'; edge.style.top=Math.round(top)+'px';
+  }
+  window.addEventListener('resize', placeEdge);
+  window.addEventListener('orientationchange', ()=>setTimeout(placeEdge,300));
+  panel.addEventListener('transitionend', e=>{ if(e.propertyName==='transform') placeEdge(); });
+  try{ new ResizeObserver(placeEdge).observe(panel); }catch(e){}
+  setTimeout(placeEdge, 0); setTimeout(placeEdge, 600);
+  const big=()=>window.matchMedia('(min-width:681px)').matches;
+  function setHidden(v){
+    if(!big()) return;
+    panel.classList.toggle('pan-hidden', v);
+    document.body.classList.toggle('panel-hidden', v);
+    showBtn.classList.toggle('show', v);
+    placeEdge(); setTimeout(placeEdge, 320);          // again after the slide, so it lands on the settled edge
+    try{ STORE.set('aog_panel_hidden', v?'1':'0'); }catch(e){}
+    setTimeout(()=>{ try{ map.invalidateSize({animate:false}); }catch(e){} }, 300);   // map just got wider/narrower
+  }
+  showBtn.onclick=(e)=>{ e.stopPropagation(); setHidden(false); };
+  if(edge){
+    edge.onclick=(e)=>{ e.stopPropagation(); setHidden(true); };
+    // dragging the handle left also hides it
+    let ex=0, edging=false;
+    edge.addEventListener('pointerdown',e=>{ ex=e.clientX; edging=true; try{ edge.setPointerCapture(e.pointerId); }catch(_){}; });
+    edge.addEventListener('pointermove',e=>{ if(edging && e.clientX-ex < -24){ edging=false; setHidden(true); } });
+    ['pointerup','pointercancel'].forEach(t=>edge.addEventListener(t,()=>{ edging=false; }));
+  }
+  /* SWIPE LEFT anywhere on the panel to put it away (a ✕ in the corner sat on top of FIND). Only a
+     clearly horizontal, clearly leftward drag counts, so vertical scrolling through the cards and
+     taps on controls are unaffected. Works with a finger or a mouse/trackpad drag. */
+  let sx=0, sy=0, tracking=false, decided=false;
+  const start=(x,y,t)=>{ if(!big()) return; if(t && t.closest && t.closest('input,textarea,select,button,a,.suggest,.history')) return;
+                         sx=x; sy=y; tracking=true; decided=false; };
+  const move=(x,y,ev)=>{
+    if(!tracking || decided) return;
+    const dx=x-sx, dy=y-sy;
+    if(Math.abs(dx)<12 && Math.abs(dy)<12) return;        // still ambiguous
+    decided=true; tracking=false;
+    if(dx < -30 && Math.abs(dx) > Math.abs(dy)*1.4){ if(ev&&ev.cancelable) ev.preventDefault(); setHidden(true); }
+  };
+  panel.addEventListener('touchstart',e=>{ if(e.touches.length>1) return; const t=e.touches[0]; start(t.clientX,t.clientY,e.target); },{passive:true});
+  panel.addEventListener('touchmove', e=>{ const t=e.touches[0]; move(t.clientX,t.clientY,e); },{passive:false});
+  ['touchend','touchcancel'].forEach(t=>panel.addEventListener(t,()=>{ tracking=false; },{passive:true}));
+  panel.addEventListener('pointerdown',e=>{ if(e.pointerType==='touch') return; start(e.clientX,e.clientY,e.target); });
+  panel.addEventListener('pointermove',e=>{ if(e.pointerType==='touch') return; if(e.buttons) move(e.clientX,e.clientY,e); });
+  ['pointerup','pointercancel','pointerleave'].forEach(t=>panel.addEventListener(t,()=>{ tracking=false; }));
+  document.addEventListener('keydown',(e)=>{
+    if(e.key!=='Escape' || !big()) return;
+    const t=e.target; if(t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName)||t.isContentEditable)) return;
+    if(!panel.classList.contains('pan-hidden')) setHidden(true);
+  });
+  try{ if(STORE.get('aog_panel_hidden')==='1') setHidden(true); }catch(e){}
+  // dropping below the tablet breakpoint hands control back to the sheet
+  window.addEventListener('resize',()=>{ if(!big()){ panel.classList.remove('pan-hidden'); document.body.classList.remove('panel-hidden'); showBtn.classList.remove('show'); } });
+  window.PanelVis={ hide:()=>setHidden(true), show:()=>setHidden(false) };
+})();
 
 /* ---------- Theme toggle (light / dark / auto) ----------
    Cycles: Auto → Light → Dark → Auto. "Auto" follows the OS (no data-theme attr).
