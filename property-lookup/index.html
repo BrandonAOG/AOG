@@ -1305,7 +1305,9 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   #msProfile{ position:fixed; left:12px; bottom:calc(var(--tbh,52px) + 14px); z-index:1200; width:440px; max-width:calc(100vw - 24px);
     background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 28px var(--shadow-strong); color:var(--ink);
     font-family:var(--mono,monospace); font-size:11px; }
-  #msProfile .mp-head{ display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--dash); }
+  #msProfile .mp-head{ display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--dash); cursor:grab; user-select:none; touch-action:none; }
+  #msProfile.dragging .mp-head{ cursor:grabbing; }
+  #msProfile.dragging{ box-shadow:0 14px 40px var(--shadow-strong); }
   #msProfile .mp-head b{ font-size:12px; letter-spacing:.04em; }
   #msProfile .mp-src{ color:var(--dim); margin-left:auto; font-size:10px; text-align:right; line-height:1.3 }
   #msProfile .mp-x{ background:none; border:0; color:var(--dim); font-size:16px; cursor:pointer; padding:0 2px; line-height:1 }
@@ -8604,6 +8606,19 @@ const Measure = (()=>{
                   <div style="padding:18px 12px;color:var(--dim)">sampling <span class="zone-spin" aria-hidden="true"></span></div>`;
     document.body.appendChild(el); _prof={el, marker:null};
     el.querySelector('.mp-x').onclick=closeProfile;
+    /* Drag by the header (the whole strip is the handle; nothing visible). Switches the panel from
+       bottom-anchored to explicit left/top on first drag and keeps it inside the viewport. */
+    el.addEventListener('pointerdown', (ev)=>{
+      const head=ev.target.closest('.mp-head'); if(!head || ev.target.closest('.mp-x')) return;
+      ev.preventDefault();
+      const r=el.getBoundingClientRect(); const dx=ev.clientX-r.left, dy=ev.clientY-r.top;
+      el.classList.add('dragging'); el.style.bottom='auto'; el.style.left=r.left+'px'; el.style.top=r.top+'px';
+      const move=(e2)=>{ const w=el.offsetWidth, h=el.offsetHeight;
+        el.style.left=Math.max(4, Math.min(window.innerWidth-w-4, e2.clientX-dx))+'px';
+        el.style.top =Math.max(4, Math.min(window.innerHeight-h-4, e2.clientY-dy))+'px'; };
+      const up=()=>{ el.classList.remove('dragging'); window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); window.removeEventListener('pointercancel',up); };
+      window.addEventListener('pointermove',move); window.addEventListener('pointerup',up); window.addEventListener('pointercancel',up);
+    });
     let r=null; try{ r=await S3Elev.sample(samples.map(p=>[p.lng,p.lat]), {timeoutMs:15000}); }catch(e){ r=null; }
     if(!_prof || _prof.el!==el) return;                                // closed meanwhile
     if(!r || !r.samples.length){
@@ -8627,7 +8642,7 @@ const Measure = (()=>{
     const xTicks=[0,0.25,0.5,0.75,1].map(f=>f*total);
     const svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
       ${yTicks.map(v=>`<line x1="${mL}" x2="${W-mR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--dash)" stroke-width="1"/><text x="${mL-6}" y="${(Y(v)+3.5).toFixed(1)}" text-anchor="end" fill="var(--dim)" font-size="9">${v} ft</text>`).join('')}
-      ${xTicks.map(d=>`<text x="${X(d).toFixed(1)}" y="${H-8}" text-anchor="middle" fill="var(--dim)" font-size="9">${fmtLen(d)}</text>`).join('')}
+      ${xTicks.map((d,i)=>`<text x="${X(d).toFixed(1)}" y="${H-8}" text-anchor="${i===0?'start':i===xTicks.length-1?'end':'middle'}" fill="var(--dim)" font-size="9">${fmtLen(d).replace(/\s*\(.*\)$/,'').replace(/\s*·.*$/,'')}</text>`).join('')}
       <path d="${area}" fill="rgba(244,104,0,.18)"/>
       <path d="${path}" fill="none" stroke="#F46800" stroke-width="2"/>
       <line id="mpCursor" x1="0" x2="0" y1="${mT}" y2="${mT+ph}" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
