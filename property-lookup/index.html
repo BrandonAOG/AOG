@@ -12474,6 +12474,13 @@ async function diagnoseLiveFeeds(){
   const _zReg = _zCity || _zCnty;
   if(_zReg){ (_zReg.urls||(_zReg.url?[_zReg.url]:[])).forEach(u=>targets.push({label:'zoning — '+_zReg.label,url:u,isZoning:true})); }
   const manual=document.getElementById('liveUrl').value.trim();
+  /* Elevation-certificate layers were missing from this list even though a lookup queries them on
+     every search: the county-specific layer (where one exists) and the FDEM statewide set, which
+     also drives the pan-time certificate markers. Worth diagnosing for the same reason as the
+     parcel feeds — when the flood card shows no certificate, this says whether the layer answered. */
+  const _ecCnty = cn ? COUNTY_EC_LAYERS[norm(cn)] : null;
+  if(_ecCnty) targets.push({label:'elevation certificates - '+titleCase(cn||'county')+' County layer', url:_ecCnty});
+  targets.push({label:'elevation certificates - FDEM statewide (PDF links)', url:EC_STATEWIDE});
   if(manual) targets.push({label:'your pasted URL',url:manual});
   if(!targets.length){ out.innerHTML='<span style="color:var(--faint)">No pre-wired feed for '+(cn?esc(titleCase(cn))+' County':'this point')+'. Paste a candidate URL above to test it.</span>'; return; }
 
@@ -19212,7 +19219,7 @@ function addEcNoteMarker(ec){
    Active only after a lookup wired an EC layer (window.__ecAreaUrl). Debounced, capped, and keyed
    by extent so panning slightly doesn't refire identical queries. */
 const EC_AREA_MINZOOM = 15;          // below this the notes would be unreadable clutter
-const EC_AREA_MAX     = 120;         // cap features per view
+const EC_AREA_MAX     = 200;         // cap features per view (raised from 120 — 10 Sep 2026, testing)
 let _ecAreaKey='', _ecAreaBusy=false, _ecAreaTimer=null;
 const _ecLinkFieldCache = Object.create(null);   // layer root -> PDF-link field name (or '')
 async function refreshEcAreaNotes(){
