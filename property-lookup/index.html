@@ -19339,6 +19339,10 @@ async function autoArmEcLayer(){
       const cfg = DOCS_COUNTY[norm(c)];
       if(cfg && cfg.ecLayer){ url=cfg.ecLayer; break; }
     }
+    /* No county-configured layer for anything in view → use the FDEM statewide set, so certificate
+       notes appear while panning ANYWHERE in Florida rather than only in the four counties that
+       have their own layer wired. */
+    if(!url) url = EC_STATEWIDE;
     if(url && url!==window.__ecAreaUrl){
       window.__ecAreaUrl=url; _ecAreaKey='';      // new layer → force the next sweep to actually run
       refreshEcAreaNotes();
