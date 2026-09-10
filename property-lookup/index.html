@@ -191,7 +191,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   /* ---- Panel ---- */
   #panel{
     position:absolute;z-index:1000;top:calc(var(--abh,48px) + 14px);left:14px;width:380px;max-width:calc(100vw - 28px);
-    max-height:calc(100vh - var(--abh,48px) - 28px);display:flex;flex-direction:column;
+    /* Stop above the bottom toolbar. --tbh is the toolbar's measured height, so a long Site card
+       scrolls inside the panel instead of running behind the buttons (seen on iPad, where the
+       floating panel is full height). 14px top gap + 14px gap above the toolbar. */
+    max-height:calc(100vh - var(--abh,48px) - var(--tbh,46px) - 42px);display:flex;flex-direction:column;
     background:linear-gradient(180deg,var(--panel-grad1),var(--panel-grad2));
     border:1px solid var(--line);border-radius:10px;
     box-shadow:0 18px 50px var(--shadow-strong);overflow:hidden;
