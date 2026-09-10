@@ -7139,6 +7139,44 @@ async function queryGroundElevation(parcelFeature, countyName, budgetOverride, o
   return null;
 }
 
+/* ---------- PUBLIC RECORDS REQUEST (Fla. Stat. ch. 119) ----------
+   Surveys and site plans live in the building-permit file. When the permit portal shows the permit
+   but not the attachments, a records request is how you get them. Portals discovered 9 Sep 2026 by
+   probing GovQA subdomains and confirmed by hand; every other jurisdiction gets a pre-filled search
+   for its records page until a direct URL is confirmed — add it here and the search goes away.
+   Keys are norm() of the city or "<COUNTY>COUNTY". */
+const RECORDS_PORTALS = {
+  PUNTAGORDA:   'https://puntagordafl.govqa.us/WEBAPP/_rs/',
+  NORTHPORT:    'https://northportfl.govqa.us/WEBAPP/_rs/',
+  BRADENTON:    'https://cityofbradenton.govqa.us/WEBAPP/_rs/',
+  COLLIERCOUNTY:'https://www.collier.gov/Collier-County/Communications-Government-Public-Affairs/Public-Record-Requests',
+  NAPLES:       'https://naplesfl.justfoia.com/publicportal/home/newrequest',
+  MARCOISLAND:  'https://cityofmarcoislandpublicrecords.justfoia.com/publicportal/home/newrequest',
+  BONITASPRINGS:'https://www.cityofbonitasprings.org/services___departments/city_clerk/public_record_request',
+  ESTERO:       'https://estero-fl.gov/departments-services/clerk-of-the-village/public-records/',
+  /* Lee has two custodians: county GOVERNMENT (BoCC / Dept of Community Development) holds the
+     permit files → the NextRequest portal; the CLERK OF COURT holds recorded documents (deeds,
+     plats, liens) → its own request page, offered as the secondary link. */
+  LEECOUNTY:    'https://leecountyfl.nextrequest.com/',
+  LEECOUNTY_ALT:{ url:'https://www.leeclerk.org/services/public-records-request', label:'Lee County Clerk of Court — recorded documents (deeds, plats, liens)' },
+  CAPECORAL:    'https://www.capecoral.gov/departments/city_clerk/records_management.php',
+  FORTMYERS:    'https://fortmyers.gov/1211/Transparency-Portal',
+  FORTMYERSBEACH:'https://www.fortmyersbeachfl.gov/1155/Public-Record-Request',
+  SANIBEL:      'https://www.mysanibel.com/233/Public-Records-Request',
+  // CHARLOTTECOUNTY: '', SARASOTACOUNTY: '', MANATEECOUNTY: ''  ← paste confirmed URLs here
+};
+function recordsRequestUrl(jurName, cityName, countyName, inCity){
+  const key = inCity ? norm(cityName||'') : (norm(countyName||'')+'COUNTY');
+  const direct = RECORDS_PORTALS[key];
+  if(typeof direct==='string' && direct) return { url:direct, verified:true };
+  return { url:'https://www.google.com/search?q='+encodeURIComponent(`${jurName} Florida public records request portal`), verified:false };
+}
+function recordsRequestText(addr, strap, jurName){
+  return `Public records request (Fla. Stat. ch. 119): please provide copies of all documents in the building permit file(s) for the property at ${addr||'[address]'}`
+       + (strap ? `, parcel/folio ${strap}` : '')
+       + `, including the recorded or submitted survey, site plan / plot plan, permit application, approved plans and inspection records. Electronic copies (PDF) are preferred. If any portion is exempt, please provide the remainder and cite the exemption. Thank you.`;
+}
+
 /* ---------- RECORDED PLAT LOOKUP ----------
    The recorded plat is where platted easements and setback lines live — the thing that actually
    constrains a generator pad on a platted lot. Cape Coral publishes its plat-book unit boundaries
@@ -22951,7 +22989,22 @@ async function _runLookupInner(lat,lng,searchCtx){
         + `<button type="button" class="copyfolio" data-folio="${copyVal}" style="font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:5px;border:1px solid var(--unk-line);background:var(--unk-bg);color:var(--dim);cursor:pointer">Copy</button>`
         + `</span></div>`;
     }
-  } else if(countyName){
+  }
+  /* Records request: how you actually get the survey/site plan when the portal has the permit but
+     not the attachments. Direct portal where confirmed, pre-filled search otherwise, plus the
+     request wording with this parcel's address and folio ready to paste. */
+  {
+    const _rr = recordsRequestUrl(docJur, cityName, countyName, docInCity);
+    const _rrAddr = (searchCtx && searchCtx.raw) ? String(searchCtx.raw).replace(/\s+/g,' ').trim() : '';
+    const _rrText = recordsRequestText(_rrAddr, strap, docJur);
+    html += `<a class="palink" href="${esc(_rr.url)}" target="_blank" rel="noopener" style="margin-top:10px">↗ ${_rr.verified?'Request the permit file — '+esc(docJur)+' public records portal':'Find '+esc(docJur)+"'s public records request page"}</a>`;
+    html += `<div class="note" style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Survey &amp; site plan usually arrive this way when the portal shows the permit but not its attachments. Request text with this parcel filled in:</span>`
+          + `<button type="button" class="copyfolio" data-folio="${esc(_rrText)}" style="font-family:var(--mono);font-size:10px;padding:3px 10px;border-radius:5px;border:1px solid var(--unk-line);background:var(--unk-bg);color:var(--dim);cursor:pointer">Copy request text</button></div>`;
+    if(!_rr.verified) html += `<div class="note" style="opacity:.8">This jurisdiction&rsquo;s records portal isn&rsquo;t confirmed yet — the link searches for it. Once you land on the real page, its URL can be added so this becomes one click.</div>`;
+    const _rrAlt = RECORDS_PORTALS[(docInCity ? norm(cityName||'') : (norm(countyName||'')+'COUNTY'))+'_ALT'];
+    if(_rrAlt && _rrAlt.url) html += `<a class="palink" href="${esc(_rrAlt.url)}" target="_blank" rel="noopener" style="margin-top:6px">↗ ${esc(_rrAlt.label||'Alternate records custodian')}</a>`;
+  }
+  if(!portal && countyName){
     html += `<a class="palink" href="https://www.google.com/search?q=${encodeURIComponent(titleCase(countyName)+' County Florida building permit portal search by address')}" target="_blank" rel="noopener" style="margin-top:8px">↗ Find ${esc(titleCase(countyName))} County permitting portal</a>`;
   }
   html += `</div></div>`;
