@@ -8786,14 +8786,23 @@ const Measure = (()=>{
     el.querySelector('.mp-x').onclick=closeProfile;
     const hit=el.querySelector('#mpHit'), cur=el.querySelector('#mpCursor'), read=el.querySelector('.mp-read'), svgEl=el.querySelector('svg');
     const marker=L.circleMarker(P[0],{radius:6,color:'#fff',weight:2,fillColor:'#F46800',fillOpacity:1}).addTo(st.group); _prof.marker=marker;
-    hit.addEventListener('mousemove',ev=>{
+    /* Read-out follows the mouse, or a finger dragged across the chart (pointer events cover both;
+       touch-action:none keeps the page from scrolling while you scrub). The reading stays put when
+       the finger lifts, so you can look at it. */
+    svgEl.style.touchAction='none';
+    let scrubbing=false;
+    const scrub=(ev)=>{
       const rect=svgEl.getBoundingClientRect(); const fx=(ev.clientX-rect.left)/rect.width*W; const d=Math.max(0,Math.min(total,(fx-mL)/pw*total));
       let best=pts[0]; for(const p of pts){ if(Math.abs(p.d-d)<Math.abs(best.d-d)) best=p; }
       cur.setAttribute('x1',X(best.d)); cur.setAttribute('x2',X(best.d)); cur.setAttribute('opacity','1');
       read.textContent=`${fmtLen(best.d)} from start · ${best.ft.toFixed(1)} ft NAVD88 · ${(best.ft-pts[0].ft>=0?'+':'')}${(best.ft-pts[0].ft).toFixed(1)} ft vs start`;
       marker.setLatLng([best.lat,best.lng]);
-    });
-    hit.addEventListener('mouseleave',()=>{ cur.setAttribute('opacity','0'); read.textContent='hover the chart to read a point'; });
+    };
+    hit.addEventListener('pointerdown',ev=>{ scrubbing=true; try{ hit.setPointerCapture(ev.pointerId); }catch(e){} scrub(ev); ev.preventDefault(); });
+    hit.addEventListener('pointermove',ev=>{ if(ev.pointerType==='mouse' || scrubbing) scrub(ev); });
+    ['pointerup','pointercancel'].forEach(t=>hit.addEventListener(t,()=>{ scrubbing=false; }));
+    hit.addEventListener('pointerleave',ev=>{ if(ev.pointerType==='mouse' && !scrubbing){ cur.setAttribute('opacity','0'); read.textContent='hover the chart to read a point'; } });
+    if(matchMedia('(pointer:coarse)').matches) read.textContent='drag a finger across the chart to read a point';
   }
   function onClick(e){
     const t=e.originalEvent && e.originalEvent.target;
