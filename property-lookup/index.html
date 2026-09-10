@@ -8551,10 +8551,20 @@ function showSizeDebug(){
   el.onclick=()=>{ try{ map.invalidateSize({animate:false}); }catch(e){} };
   // event trace for the Measure button and the map, so a tablet can show what actually fires
   const log=document.createElement('pre'); log.style.cssText=el.style.cssText+';top:auto;bottom:140px;color:#ff9;max-height:32vh;overflow:auto'; document.body.appendChild(log);
+  const x=document.createElement('button'); x.textContent='✕ close debug';
+  x.style.cssText='position:fixed;top:60px;right:8px;z-index:100000;background:#F46800;color:#1A0E00;border:0;border-radius:6px;padding:8px 12px;font:12px monospace;font-weight:700';
+  x.onclick=()=>{ el.remove(); log.remove(); x.remove(); }; document.body.appendChild(x);
   const lines=[]; window.__msLog=(m)=>{ lines.push(new Date().toISOString().slice(11,23)+' '+m); if(lines.length>18) lines.shift(); log.textContent=lines.join('\n'); };
   const b=document.getElementById('btnMeasure');
   if(b){ ['pointerdown','pointerup','pointercancel','touchstart','touchend','click','contextmenu'].forEach(t=>b.addEventListener(t,(e)=>__msLog(`btn ${t}${e.pointerType?' '+e.pointerType:''} tgt=${(e.target.id||e.target.className||e.target.tagName)}`),true)); }
   __msLog('standalone='+(navigator.standalone||matchMedia('(display-mode: standalone)').matches)+' PointerEvent='+!!window.PointerEvent+' coarse='+matchMedia('(pointer:coarse)').matches);
+  // menu diagnostics: where the Measure menu lives, whether it is hidden, and where it lands when opened
+  const mm=document.getElementById('measureMenu');
+  const menuState=()=>{ if(!mm) return 'menu: MISSING'; const r=mm.getBoundingClientRect(); const cs=getComputedStyle(mm);
+    return `menu: parent=${mm.parentNode&&mm.parentNode.tagName} hidden=${mm.hidden} display=${cs.display} pos=${cs.position} z=${cs.zIndex} rect=${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)} top=${mm.style.top} left=${mm.style.left}`; };
+  __msLog(menuState());
+  if(mm){ new MutationObserver(()=>__msLog(menuState())).observe(mm,{attributes:true, attributeFilter:['hidden','style']}); }
+  const car=document.getElementById('msCaret'); if(car) ['pointerdown','click'].forEach(t=>car.addEventListener(t,(e)=>__msLog(`caret ${t}`),true));
 }
 if(/sizedebug/i.test(location.hash+location.search)) { try{ showSizeDebug(); }catch(e){} }
 // no URL editing needed on a tablet: tap the theme (☾/☀) button 5 times quickly
