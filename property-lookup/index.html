@@ -21016,15 +21016,26 @@ async function _runLookupInner(lat,lng,searchCtx){
      hasn't digitised can still surface the state's copy (with a direct PDF link). */
   const _ecLayerAlt = (_docCfgEC && _docCfgEC.ecLayerAlt) ? _docCfgEC.ecLayerAlt
                      : (_ecLayerUrl && _ecLayerUrl!==EC_STATEWIDE ? EC_STATEWIDE : null);
+  /* Two EC layers per county (the county's own, and the FDEM statewide ArcGIS set) are DIFFERENT
+     transcriptions of overlapping archives, not duplicates: measured 10 Sep 2026 over the City of
+     Naples, Collier's layer held 1,657 certificates and the statewide set 2,758, each with records
+     the other lacks. So run both in parallel and keep BOTH: the primary drives the card, and when
+     the second found a genuinely different certificate (different document / id / date) it is
+     attached as `.alt` and offered as a second source rather than thrown away. If the primary found
+     nothing, the second is promoted as before. */
   const _queryEcWithFallback = async (u1,u2,la,ln)=>{
-    let r1=null;
-    try{ r1=await queryEC(u1,la,ln); }catch(e){ r1={err:e.message}; }
-    const empty1 = !r1 || r1.err || !(r1.features&&r1.features.length);
-    if(!empty1 || !u2) return r1;
-    let r2=null;
-    try{ r2=await queryEC(u2,la,ln); }catch(e){ r2={err:e.message}; }
-    const good2 = r2 && !r2.err && r2.features && r2.features.length;
-    return good2 ? r2 : r1;   // fallback only replaces the result when it actually found something
+    const [r1,r2] = await Promise.all([
+      queryEC(u1,la,ln).catch(e=>({err:e.message})),
+      u2 ? queryEC(u2,la,ln).catch(e=>({err:e.message})) : Promise.resolve(null)
+    ]);
+    const ok = r => !!(r && !r.err && r.features && r.features.length);
+    if(!ok(r1)) return ok(r2) ? r2 : r1;                       // primary empty → promote the second
+    if(ok(r2)){
+      const key = r => { const d=(r.docs&&r.docs[0]&&r.docs[0].url)||''; const a=r.features[0].attributes||{};
+                         return (d||'') + '|' + (a.id||'') + '|' + (r.date||''); };
+      if(key(r1)!==key(r2)) r1.alt = r2;                       // a genuinely different certificate
+    }
+    return r1;
   };
   const pEC = _ecLayerUrl
     ? _timed('elevation certificate', _queryEcWithFallback(_ecLayerUrl,_ecLayerAlt,lat,lng).catch(e=>({err:e.message})))
@@ -23672,6 +23683,23 @@ async function _runLookupInner(lat,lng,searchCtx){
         html += `<div class="note">⚠ Nearest certificate is ~${ec.ecDistM} m away — it may belong to an adjacent property. Check the certificate address below before relying on it.</div>`;
       }
       if(ec.ecAddr) html += fieldRow('Certificate address', esc(String(ec.ecAddr)));
+      /* A SECOND certificate from the other layer (see _queryEcWithFallback). Two certificates on
+         one parcel is normal and useful — a re-survey after a renovation, or the same building
+         transcribed by two agencies — so it's offered as an extra source rather than hidden. */
+      if(ec.alt){
+        const _a=ec.alt, _ad=(_a.docs&&_a.docs[0]&&_a.docs[0].url)||null;
+        const _asv=_a.surveyed||{};
+        const _bits=[];
+        if(_a.date){ const _d=new Date(_a.date); if(!isNaN(_d)) _bits.push(_d.toLocaleDateString('en-US')); }
+        if(_asv.ffe!=null)  _bits.push('floor '+_asv.ffe+' ft');
+        if(_asv.mach!=null) _bits.push('machinery '+_asv.mach+' ft');
+        if(_a.bfe!=null)    _bits.push('BFE '+_a.bfe+' ft');
+        if(_a.ecDistM!=null) _bits.push('~'+_a.ecDistM+' m away');
+        html += fieldRow('Second certificate',
+          (_ad ? `<a class="palink" href="${esc(_ad)}" target="_blank" rel="noopener" style="margin-top:0;display:inline-flex">↗ open PDF</a> ` : '')
+          + (_bits.length ? `<span class="muted" style="font-size:11px">${esc(_bits.join(' · '))}</span>` : '')
+          + `<div class="note" style="margin-top:4px">Another agency also holds a certificate for this location. Where the two disagree, the more recent survey governs — check both dates.</div>`);
+      }
       if(ec.bfe!=null) html += fieldRow('Base flood elev. (per EC)', esc(String(ec.bfe))+' ft');
       /* SURVEYED values, where the county publishes them as attributes (Charlotte does; most
          counties only give a marker + PDF). These are sealed survey numbers — they outrank every
