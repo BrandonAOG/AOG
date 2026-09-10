@@ -5446,22 +5446,40 @@ var S3Elev = (function(){
     if(_pA&&!force) return _pA;
     _pA=(async function(){
       var c=force?null:lsGet(A_LS);
-      if(c&&c.idx&&c.projects&&c.projects.join()===PROJECTS.join()){ _idxA=c.idx; return _idxA; }
+      /* Only reuse a cached index that was built COMPLETE (every project listed without error). */
+      if(c&&c.idx&&c.complete&&c.projects&&c.projects.join()===PROJECTS.join()){
+        _idxA=c.idx; window.__s3ElevIndex={cells:Object.keys(c.idx).length, perProject:c.counts, fromCache:true}; return _idxA;
+      }
       var idx={}, counts={};
-      await Promise.all(PROJECTS.map(async function(p,pi){
-        try{
-          var keys=await listAll(A_BUCKET, A_PREFIX+p+'/TIFF/'), n=0;
-          keys.forEach(function(k){
-            var f=k.slice(k.lastIndexOf('/')+1), mm=f.match(/(?:_1M_(\d\d))?_x(\d+)y(\d+)_/i); if(!mm) return;
-            var key=(mm[1]||'17')+':'+ +mm[2]+':'+ +mm[3], cur=idx[key];
-            if(!cur||projectYear(p)>projectYear(PROJECTS[cur.p])) idx[key]={p:pi,f:f};
-            n++;
-          });
-          counts[p]=n;
-        }catch(e){ counts[p]='ERR '+e.name; }
-      }));
-      _idxA=idx; lsSet(A_LS,{projects:PROJECTS,idx:idx});
-      window.__s3ElevIndex={cells:Object.keys(idx).length, perProject:counts};
+      var ingest=function(p,pi,keys){
+        var n=0;
+        keys.forEach(function(k){
+          var f=k.slice(k.lastIndexOf('/')+1), mm=f.match(/(?:_1M_(\d\d))?_x(\d+)y(\d+)_/i); if(!mm) return;
+          var key=(mm[1]||'17')+':'+ +mm[2]+':'+ +mm[3], cur=idx[key];
+          if(!cur||projectYear(p)>projectYear(PROJECTS[cur.p])) idx[key]={p:pi,f:f};
+          n++;
+        });
+        counts[p]=n;
+      };
+      /* 31 listings at once can trip S3 throttling or the 15 s abort — so list in batches of 8, then
+         retry anything that failed one at a time. */
+      var failed=[];
+      for(var b=0;b<PROJECTS.length;b+=8){
+        await Promise.all(PROJECTS.slice(b,b+8).map(async function(p){
+          var pi=PROJECTS.indexOf(p);
+          try{ ingest(p,pi,await listAll(A_BUCKET, A_PREFIX+p+'/TIFF/')); }
+          catch(e){ failed.push(p); counts[p]='ERR '+e.name; }
+        }));
+      }
+      for(var i=0;i<failed.length;i++){
+        var p=failed[i], pi=PROJECTS.indexOf(p);
+        try{ ingest(p,pi,await listAll(A_BUCKET, A_PREFIX+p+'/TIFF/')); }catch(e){ counts[p]='ERR '+e.name; }
+      }
+      var complete=PROJECTS.every(function(p){ return typeof counts[p]==='number'; });
+      _idxA=idx;
+      if(complete) lsSet(A_LS,{projects:PROJECTS,idx:idx,counts:counts,complete:true});
+      else { try{ localStorage.removeItem(A_LS); }catch(e){} }         // partial → rebuild next load
+      window.__s3ElevIndex={cells:Object.keys(idx).length, perProject:counts, complete:complete};
       return _idxA;
     })();
     return _pA;
@@ -5642,8 +5660,9 @@ var S3Elev = (function(){
 
   try{ ready(); readyIan(); }catch(e){}
 
+  function stats(){ return { usgs: window.__s3ElevIndex, ian: window.__s3ElevIan }; }
   function covers(lat,lng){ var u=toUTM(lat,lng); return { ian: !!(_idxB && tileForB(u)), usgs: !!(_idxA && tileForA(u)) }; }
-  var api={ ready:ready, readyIan:readyIan, tileFor:tileFor, covers:covers, sample:sample, parcelStats:parcelStats, selfTest:selfTest, toUTM:toUTM, PROJECTS:PROJECTS };
+  var api={ ready:ready, readyIan:readyIan, tileFor:tileFor, covers:covers, stats:stats, sample:sample, parcelStats:parcelStats, selfTest:selfTest, toUTM:toUTM, PROJECTS:PROJECTS };
   Object.defineProperty(api,'preferNewest',{ get:function(){return preferNewest;}, set:function(v){preferNewest=!!v;} });
   return api;
 })();
