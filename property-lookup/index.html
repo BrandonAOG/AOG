@@ -5189,6 +5189,47 @@ const CITY_COLOR_PIN = { 'ESTERO':'#ff2e9c' };   // hot magenta — distinct fro
    newer incorporations like Estero). `like` is the SQL LIKE fragment; `norm` is the letters-only
    uppercase form used to dedupe against features already returned. */
 const BOUNDS_FORCE_INCLUDE = [ { like:'ESTERO', norm:'ESTERO' } ];
+/* ── IS THIS PLACE ACTUALLY A MUNICIPALITY? ───────────────────────────────────────────────────
+   The map OUTLINE layer above has always filtered CDPs out (CLASSFP LIKE 'C%'). The POINT lookup
+   that fills the Jurisdiction card's MUNICIPALITY row did not — it queried the same Census-derived
+   layer with no where clause and took feature[0]. So a lookup at 26.282319, -81.570414 hit the
+   Orangetree CDP polygon and the card read "MUNICIPALITY Orangetree", while the map drew no
+   outline there at all. Orangetree is an unincorporated community: Collier County has exactly
+   three municipalities (Naples, Marco Island, Everglades City), and everything east of Naples is
+   unincorporated county land permitted by Collier County Building Review & Permitting. Naming a
+   CDP as the municipality on a permit tool points the installer at a building department that
+   does not exist — and it's not one address, it's most of the county's population (Golden Gate,
+   Immokalee, Lely, Naples Park, Verona Walk, Ave Maria…), plus Lehigh Acres, San Carlos Park,
+   Fort Myers Shores and the rest of Lee's CDPs.
+   Census classification: CLASSFP C* = incorporated place, U1/U2 = CDP. Some FDOT vintages leave
+   the class fields blank, so fall back to LSAD's city/town/village codes, then to the
+   force-include list (newer incorporations like Estero) and an explicit name pattern. If nothing
+   identifies it as incorporated, treat it as NOT — on this tool "unincorporated county" is the
+   safe default, because the county is always a real permitting authority and a CDP never is. */
+function isIncorporatedPlace(p){
+  if(!p) return false;
+  const nm = String(p.NAME || p.name || '');
+  const c  = String(p.CLASSFP || p.classfp || '').toUpperCase();
+  const l  = String(p.LSAD    || p.lsad    || '').trim();
+  if(c) return c.charAt(0)==='C';                                                  // authoritative when present
+  if(l) return l==='25'||l==='43'||l==='47'||l==='21'||l==='53'||l==='62';         // city/town/village LSADs
+  const n = nm.toUpperCase().replace(/[^A-Z]/g,'');
+  if(BOUNDS_FORCE_INCLUDE.some(w=>n.indexOf(w.norm)!==-1)) return true;
+  /* No class fields at all — either an odd vintage or FDOT rotated the layer schema. Before
+     defaulting to unincorporated, check the municipality sets this tool already maintains for its
+     own service area, so a schema change can never silently turn Naples or Cape Coral into
+     "Unincorporated (no city)". These are the same norm()-form sets the setback renderers key on.
+     Match on the exact name AND on name+legal-suffix, because the sets store the legal name while
+     FDOT may return the bare one: FDOT "Everglades" must find COLLIER_INCORP's "EVERGLADESCITY".
+     Deliberately NOT a substring test — "North Naples" is a CDP and contains "NAPLES". */
+  try{
+    const _forms=[n, n+'CITY', n+'TOWN', n+'VILLAGE'];
+    for(const S of [COLLIER_INCORP, LEE_INCORP, CHARLOTTE_INCORP, SARASOTA_INCORP, HENDRY_INCORP])
+      if(S) for(const f of _forms) if(S.has(f)) return true;
+  }catch(_){}
+  if(ZONING_CITY[n] || DOCS_CITY[n]) return true;   // wired as a city elsewhere in this file
+  return /^\s*(city|town|village)\s+of\b/i.test(nm) || /\s(city|town|village)$/i.test(nm);
+}
 function cityColor(name){
   const s=String(name||'');
   const norm=s.toUpperCase().replace(/[^A-Z]/g,'');
@@ -8398,13 +8439,18 @@ async function jurisdictionsInView(){
   const pts=[[b.getWest(),b.getSouth()],[b.getEast(),b.getSouth()],[b.getWest(),b.getNorth()],
     [b.getEast(),b.getNorth()],[map.getCenter().lng,map.getCenter().lat]];
   const geom=encodeURIComponent(JSON.stringify({points:pts,spatialReference:{wkid:4326}}));
+  // Class fields come along so CDPs can be dropped client-side (the where clause stays 1=1 — this
+  // call has no fallback path, so it must not depend on the server supporting a filter).
   const q=`?geometry=${geom}&geometryType=esriGeometryMultipoint&inSR=4326&spatialRel=esriSpatialRelIntersects`+
-    `&where=1%3D1&outFields=NAME&returnGeometry=false&f=json`;
+    `&where=1%3D1&outFields=NAME,CLASSFP,LSAD&returnGeometry=false&f=json`;
   const get=u=>fetch(u).then(r=>r.ok?r.json():null).catch(()=>null);
   let cities=[], counties=[];
   try{
     const [cy,co]=await Promise.all([ get(EP.city+q), get(EP.county+q) ]);
-    cities  = [...new Set((cy&&cy.features||[]).map(f=>(f.attributes&&f.attributes.NAME||'').trim()).filter(Boolean))];
+    // Incorporated places only. A CDP matches no ZONING_LIVE_CITY key so it drew nothing, but it
+    // did reach the "Zoning set to …" toast, which named Orangetree as a jurisdiction.
+    cities  = [...new Set((cy&&cy.features||[]).filter(f=>isIncorporatedPlace(f&&f.attributes))
+                .map(f=>(f.attributes&&f.attributes.NAME||'').trim()).filter(Boolean))];
     counties= [...new Set((co&&co.features||[]).map(f=>(f.attributes&&f.attributes.NAME||'').trim()).filter(Boolean))];
   }catch(e){}
   _zjCache={key,cities,counties,t:Date.now()};
@@ -20737,7 +20783,9 @@ async function _runLookupInner(lat,lng,searchCtx){
      miss rate from ~40% to ~3% while the typical lookup still costs ~85 ms. growOnAbort:false
      because widening the window would only make each dead attempt more expensive. */
   const pFlood   = _timed('flood (FEMA)', arcQueryRetry(EP.flood, lat, lng, 'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, 2500, 4, true, false)).catch(e=>({__err:e.message}));
-  const pCity    = _timed('city boundary', arcQuery(EP.city,    lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
+  // NAME alone can't tell a municipality from a CDP — pull the Census class fields too, so
+  // isIncorporatedPlace() can reject unincorporated communities (see below).
+  const pCity    = _timed('city boundary', arcQuery(EP.city,    lat, lng, 'NAME,CLASSFP,LSAD', false)).catch(e=>({__err:e.message}));
   const pCounty  = _timed('county boundary', arcQuery(EP.county,  lat, lng, 'NAME', false)).catch(e=>({__err:e.message}));
   const pLive    = liveSource.url ? _timed('live parcel feed', arcQuery(liveSource.url, lat, lng, '*', true)).catch(e=>({__err:e.message})) : Promise.resolve(null);
   const _utilUrl = await resolveUtilQueryUrl();
@@ -20779,7 +20827,29 @@ async function _runLookupInner(lat,lng,searchCtx){
 
   /* ---- Location / jurisdiction ---- */
   let countyName = (!county.__err && county.features && county.features[0]) ? county.features[0].attributes.NAME : null;
-  let cityName   = (!city.__err   && city.features   && city.features[0])   ? city.features[0].attributes.NAME   : null;
+  /* ── MUNICIPALITY, NOT JUST "THE PLACE THE POINT LANDED IN" ─────────────────────────────────
+     This used to be features[0].NAME. The layer is Census place data, so features[0] is just as
+     likely to be a CDP (Orangetree, Golden Gate, Lehigh Acres) as a city, and the card printed it
+     under MUNICIPALITY either way. Take the first INCORPORATED feature instead; if the only hit is
+     a CDP, cityName stays null — the parcel really is unincorporated county land — and the
+     community name is kept aside so the card can still say where the parcel is without implying a
+     jurisdiction. Places don't overlap in Census data, so this is normally a one-feature decision.
+     Everything keyed on cityName benefits, not just the label: ZONING_CITY / ZONING_LIVE_CITY /
+     DOCS_CITY / CITY_FLOOD_LIVE / WIND_ADOPTED and the byCity sublayer maps all now see a null
+     city and resolve against the county, which is the correct authority. That also closes a live
+     mis-routing: byCity's longest-prefix scan matched the "Fort Myers Shores" CDP to the CITY of
+     Fort Myers sublayer, querying a municipal zoning layer for an unincorporated Lee parcel. */
+  let cityName = null;
+  window.__communityName = null;
+  if(!city.__err && city.features && city.features.length){
+    const _places = city.features.map(f=>f && f.attributes).filter(Boolean);
+    const _muni   = _places.find(isIncorporatedPlace);
+    if(_muni){ cityName = _muni.NAME; }
+    else {
+      const _cdp = _places.find(a=>a.NAME);
+      if(_cdp) window.__communityName = String(_cdp.NAME).replace(/\s+CDP$/i,'').trim();
+    }
+  }
   /* ── STRIP THE LSAD SUFFIX OFF FDOT'S PLACE NAME ────────────────────────────────────────────
      FDOT returns incorporated places with their legal-status suffix attached for some entities and
      not others: "Cape Coral" but "Estero village", "Fort Myers Beach town". Everything downstream
@@ -20856,7 +20926,7 @@ async function _runLookupInner(lat,lng,searchCtx){
   window.__lastCity   = cityName || '';      // so the zoning overlay can prefer the city's own layer
   prefetchCountyFile(countyName);            // SPEED: start downloading+indexing address points now,
                                              // so they're ready the moment the user zooms to label range.
-  if(window.__exportData){ window.__exportData.county=countyName?titleCase(countyName):''; window.__exportData.municipality=cityName?titleCase(cityName):''; }
+  if(window.__exportData){ window.__exportData.county=countyName?titleCase(countyName):''; window.__exportData.municipality=cityName?titleCase(cityName):''; window.__exportData.community=window.__communityName?titleCase(window.__communityName):''; }
   const paUrl = countyName ? PA[norm(countyName)] : null;
 
   // Kick off the slower enrichment lookups NOW, in parallel, so they overlap instead of
@@ -21166,6 +21236,12 @@ async function _runLookupInner(lat,lng,searchCtx){
   html += fieldRow('County', countyName?esc(titleCase(countyName))+' County':'<span class="muted">— see appraiser link —</span>','big');
   html += fieldRow('Municipality', cityName?esc(titleCase(cityName))
                     :'<span class="muted">Unincorporated (no city)</span>');
+  /* The place polygon was a CDP, so it's NOT the municipality — but it is how the county, the HOA
+     and the utility all refer to the area, and it's what the customer will say on the phone. Show
+     it on its own row: the "Community" label already distinguishes it from "Municipality" above,
+     so the long parenthetical that used to trail it here was redundant noise on the card. */
+  if(!cityName && window.__communityName)
+    html += fieldRow('Community', esc(titleCase(window.__communityName)));
   html += fieldRow('Coordinates', `${lat.toFixed(6)}, ${lng.toFixed(6)}`);
   if(paUrl){
     /* Counties whose appraiser site cannot be addressed per-parcel (see the PA switch). Saying
