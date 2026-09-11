@@ -5118,7 +5118,12 @@ function uiClickSuppressed(){ return Date.now() < _uiClickUntil; }
    Desktop is untouched: a mouse click there is always deliberate, and no touch events fire, so
    _touchOk stays true and the gate is a no-op. */
 const TAP_MAX_MOVE = 10;     // px of drift allowed
-const TAP_MAX_MS   = 300;    // ms the finger may stay down
+/* 700ms, not 300. A tap on a phone is quick, but a tap aimed at ONE HOUSE on a map is not — you
+   look, place the finger, confirm it's the right roof, lift. Measured tap durations have a long
+   tail well past 300ms for precision targets, and every one of those was being discarded in
+   silence: no lookup, no message, nothing to distinguish it from a dead app. 700ms still excludes
+   a genuine long-press, and the 10px drift limit is what actually separates a tap from a pan. */
+const TAP_MAX_MS   = 700;    // ms the finger may stay down
 const EDGE_GUARD   = 24;     // px along each vertical edge that never counts as a tap
 /* _hasTouch stays false until a real touchstart is seen. The gate below is skipped entirely while
    it's false, so a mouse-driven browser is never affected.
@@ -5144,7 +5149,15 @@ let _hasTouch = false, _touchOk = false, _tStart = null, _tMulti = false;
     const held  = Date.now() - _tStart.t;
     const nearEdge = t.clientX < EDGE_GUARD || t.clientX > (window.innerWidth - EDGE_GUARD);
     _touchOk = (moved <= TAP_MAX_MOVE) && (held <= TAP_MAX_MS) && !nearEdge;
-    window.__lastTap = { moved:Math.round(moved), held, nearEdge, accepted:_touchOk };
+    /* Why it was rejected, not just that it was. With no console on an iPad, "tapping a house does
+       nothing" is unreportable otherwise — this turns it into a readable answer (see the tap line
+       in the diagnostics panel). */
+    const why = _touchOk ? 'accepted'
+      : (moved > TAP_MAX_MOVE ? 'moved '+Math.round(moved)+'px (limit '+TAP_MAX_MOVE+')'
+      : held > TAP_MAX_MS     ? 'held '+held+'ms (limit '+TAP_MAX_MS+')'
+      : nearEdge              ? 'too close to the screen edge'
+      : 'rejected');
+    window.__lastTap = { moved:Math.round(moved), held, nearEdge, accepted:_touchOk, why, at:Date.now() };
     _tStart = null;
   }, { passive:true });
   // A cancelled touch (system gesture, notification) is never a tap.
@@ -5162,10 +5175,25 @@ map.on('moveend zoomend',     () => { _gestureUntil = Date.now() + 350;  });
 map.on('click', e => {
   if(window.Measure && Measure.state && Measure.state.active) return;   // measuring: clicks add points, never search
   if(uiClickSuppressed()) return;          // replayed tap from an overlay pick — not a real map click
-  if(Date.now() < _gestureUntil) return;   // tail end of a pan/pinch, not a tap
+  /* TOUCH FIRST, then the gesture tail — the order used to be reversed, and that cost most taps on
+     iPad. A finger landing on a map almost always nudges it a pixel or two, which is enough for
+     Leaflet to fire movestart/moveend; moveend arms a 350ms window meant to swallow the last frame
+     of a pan, and the native click from the tap arrives INSIDE that window. So the tap was
+     discarded as gesture residue and nothing happened — reliably enough to look like tapping a
+     house was simply not wired up.
+     The tap gate is the stricter test anyway: _touchOk already proves the finger moved ≤10px and
+     lifted inside the time limit, which no real pan can do. When it says yes, the gesture tail has
+     nothing left to protect against, so it's skipped. A pan still gets caught — it fails the gate
+     on drift, long before this. Mouse-driven browsers are untouched: _hasTouch stays false and the
+     gesture check runs exactly as before. */
   if(_hasTouch){                           // touch device: the tap must have looked deliberate
-    if(!_touchOk) return;
+    if(!_touchOk){
+      try{ window.__lastTapBlocked = { reason:(window.__lastTap&&window.__lastTap.why)||'no tap recorded', at:Date.now() }; }catch(_){}
+      return;
+    }
     _touchOk = false;                      // one lookup per touch; don't let a replay through
+  } else if(Date.now() < _gestureUntil){
+    return;                                // mouse: tail end of a drag, not a click
   }
   const um=document.getElementById('unitModal');
   if(um && um.classList.contains('show')) return;   // modal is open; the map is not the target
@@ -12505,6 +12533,20 @@ async function probeEndpoint(rawUrl){
 
 async function diagnoseLiveFeeds(){
   const out=document.getElementById('diagStatus');
+  /* TAP GATE READOUT. On a phone or iPad there is no console, so a rejected tap is invisible: the
+     app looks broken with nothing to report. Surface the last tap's verdict here, where someone
+     already goes when the app isn't behaving. Touch-only — on a mouse the gate never runs. */
+  try{
+    const _lt=window.__lastTap;
+    if(_lt){
+      const _ok=_lt.accepted;
+      out.innerHTML = '<div style="font-size:11.5px;margin-bottom:8px;color:'+(_ok?'var(--dim)':'var(--warn)')+'">'
+        + 'Last map tap: <b>'+esc(String(_lt.why||(_ok?'accepted':'rejected')))+'</b>'
+        + ' &middot; moved '+esc(String(_lt.moved))+'px, held '+esc(String(_lt.held))+'ms'
+        + (_ok?'':' &mdash; this tap did not start a lookup')
+        + '</div>';
+    }
+  }catch(e){}
   if(!lastLoc){ out.innerHTML='<span style="color:var(--warn)">Click a point on the map first, then diagnose.</span>'; return; }
   const cn = (window.__lastCounty||'').trim();
   const ctyName = (window.__lastCity||'').trim();
@@ -12971,6 +13013,52 @@ function ecDetect(fields){
     panel:find([/^FIRMMAPNUMBER$/,/^PANEL$/,/^PANELNUMBE/,/^B4_PANEL_NUMBER$/,/PANEL.?NUM/,/FIRM.?PAN/])
   };
 }
+/* ---------- Are these surveyed elevations internally consistent? ----------
+   num() below only gates each value on its own (-100 < n < 500), which is far too loose to catch a
+   transcription error. Seen 11 Sep 2026 on a Collier certificate: the card printed "Finished floor
+   (EC item a) 166 ft NAVD 88" in bold, beside a lowest adjacent grade of 15.5 ft off the SAME
+   record. The certificate itself reads 16.6 — whoever keyed the record into the EC database dropped
+   the decimal point. 166 passed every check we had because nothing compared it to anything.
+   A floor 150 ft above its own adjacent grade is not a building. The values on one certificate
+   describe one structure, so they cross-check each other for free: pick a reference off the record
+   (grade first, then the garage slab, then the BFE) and flag anything absurdly far from it.
+   This NEVER rewrites the number. It is a sealed survey document; the tool's job is to say "this
+   doesn't add up, go read item (a) yourself", not to quietly publish a guess as if it were
+   certified. The implied value is offered as a lead for the reader to confirm, nothing more. */
+const EC_MAX_ABOVE_REF = 30;   // ft — generous: a piling home on Captiva can sit ~20 ft over grade
+const EC_MAX_BELOW_REF = 15;   // ft — item (a) can be a crawlspace/enclosure floor below grade
+function ecPlausibility(sv, bfe){
+  const out={};
+  if(!sv) return out;
+  const n=v=>(v!=null && isFinite(Number(v))) ? Number(v) : null;
+  // Reference: whatever on this record best describes the ground at the structure. Grade beats the
+  // garage slab beats the BFE — the BFE is a modelled water surface, not a measurement of this lot,
+  // so it's the last resort rather than the first.
+  /* NOTE ON BLAME: with only two values on a record there is no way to tell WHICH of them is the
+     bad one — if the grade field is the corrupt one, the reference is wrong and the flag lands on
+     the innocent value. So the reference FIELD is recorded alongside its value and named in the
+     note, letting the reader see "floor 16.6 ft against a lowest adjacent grade of 155 ft" and
+     draw the obvious conclusion. The card asserts an inconsistency, never which side is at fault. */
+  const _cands = [['lag',n(sv.lag)], ['hag',n(sv.hag)], ['garage',n(sv.garage)], ['bfe',n(bfe)]];
+  const _ref = _cands.find(c=>c[1]!=null);
+  if(!_ref) return out;                          // nothing to compare against — leave it alone
+  const refKey=_ref[0], ref=_ref[1];
+  const hi = ref + EC_MAX_ABOVE_REF, lo = ref - EC_MAX_BELOW_REF;
+  for(const k of ['ffe','mach','lag','hag','garage','lowHoriz','lowestFloor']){
+    const v=n(sv[k]);
+    if(v==null || v===ref) continue;
+    if(v<=hi && v>=lo) continue;                 // plausible
+    const flag={ suspect:true, ref, refKey, reason:'range' };
+    /* DROPPED-DECIMAL SIGNATURE. If dividing by ten lands the value back in the plausible band,
+       that's almost certainly what happened — 166 → 16.6 against a 15.5 ft grade. Reported as a
+       likely reading, never substituted. (×10 rather than ÷10 — a spurious EXTRA decimal — is not
+       tested: it produces a value too small to trip the range check in the first place.) */
+    const d=v/10;
+    if(v>hi && d<=hi && d>=lo){ flag.reason='decimal'; flag.implied=Math.round(d*100)/100; }
+    out[k]=flag;
+  }
+  return out;
+}
 async function queryEC(ecLayerUrl, lat, lng){
   const root=ecLayerRoot(ecLayerUrl);
   const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),15000);
@@ -13113,6 +13201,9 @@ async function queryEC(ecLayerUrl, lat, lng){
         }
       }
     }catch(e){ /* enrichment is optional */ }
+    /* Cross-check AFTER the enrichment above, so a machinery elevation pulled from the companion
+       layer is checked too rather than trusted just because it arrived late. */
+    surveyed.suspect = ecPlausibility(surveyed, bfe);
     // EC point's own coordinates (WGS84, outSR=4326) — used to drop the 📝 note marker on the map.
     let ecLat=null, ecLng=null;
     /* Use the point we actually measured as nearest (see _featPts above), not the feature's first
@@ -13270,6 +13361,9 @@ async function queryForerunnerEC(lat, lng, address){
                        hag:  num(be.highestAdjacentGradeWithUnits),
                        issuedAt: cert.issuedAt||null,
                        diagram: cert.buildingDiagramNumber||null };
+            // Same cross-check as the GIS path. This record carries HAG and the garage slab too,
+            // so the reference is usually stronger here.
+            surveyed.suspect = ecPlausibility(surveyed, null);
             break;
           }
         }
@@ -20411,6 +20505,23 @@ function skeletonCard(icn, title, src, msg){
    literally "112 1st AVE N, City of Naples" — so a plain [site, city].join(', ') produced
    "112 1st AVE N, City of Naples, Naples". Compare on letters only so "City of Naples" vs "NAPLES"
    and "Naples" vs "naples" all count as already-present. */
+/* The address written into the SEARCH BOX for a parcel: street, city once, then the zip.
+   Two bugs lived in the old inline `[site, city].filter(Boolean).join(', ')`:
+     1. Collier's SITE_ADDRESS already ends in the city, so appending det.city produced
+        "55 12TH AVE S, NAPLES, NAPLES". joinSiteCity() has always known how to dedupe that — the
+        box just wasn't using it, while the Site address ROW right beside it was.
+     2. The zip was fetched on every lookup and dropped on the floor here, so the box read
+        "…, NAPLES" when it could read "…, NAPLES 34102" — which is what makes the value
+        re-searchable and unambiguous when it goes into history or back through the geocoder. */
+function siteBoxAddr(site, city, zip){
+  const base = joinSiteCity(site, city);
+  if(!base) return '';
+  const z = String(zip==null?'':zip).trim();
+  if(!z) return base;
+  // Don't double up if the site string already carries the zip.
+  if(new RegExp('\\b'+z.replace(/[^0-9-]/g,'').slice(0,5)+'\\b').test(base)) return base;
+  return base + ' ' + z;
+}
 function joinSiteCity(site, city){
   const s=String(site||'').trim(), c=String(city||'').trim();
   if(!s) return c || '';
@@ -20463,9 +20574,13 @@ function renderParcelGeneric(a, d){
   const zip     = d.zip?_zipTxt(pick(a,d.zip)):null;
   const mailZip = d.mailZip?_zipTxt(pick(a,d.mailZip)):null;
   const use   = d.use?useLabel(pick(a,d.use)):null;
-  try{ window.__parcelMeta = { owner: owner||'', site: joinSiteCity(site, city) }; }catch(e){}
+  try{ window.__parcelMeta = { owner: owner||'', site: siteBoxAddr(site, city, zip) }; }catch(e){}
   try{ if(window.__exportData){ const ed=window.__exportData;
     if(owner) ed.owner=owner; if(site) ed.address=site; if(city) ed.city=city;
+    // Zip was detected, rendered in the Site address row, and then never stored — so every
+    // consumer of __exportData (print header, breadcrumb, summary strip) rebuilt the address
+    // without it. Carry it.
+    if(zip) ed.zip=zip;
     if(liv) ed.sqft=String(liv).replace(/[^0-9.]/g,''); if(pid) ed.parcelId=String(pid); } }catch(e){}
   h += fieldRow('Owner', owner?esc(owner):'<span class="muted">field not detected</span>','big');
   if(own2) h += fieldRow('Owner 2', esc(own2));
@@ -20841,6 +20956,10 @@ async function _runLookupInner(lat,lng,searchCtx){
      Fort Myers sublayer, querying a municipal zoning layer for an unincorporated Lee parcel. */
   let cityName = null;
   window.__communityName = null;
+  /* Did the boundary service actually ANSWER? A null cityName has two completely different
+     meanings and the code below has to tell them apart: "FDOT answered and this point is in no
+     municipality" (a real, correct result) versus "FDOT never replied" (we know nothing). */
+  const _cityQueryOk = !!(city && !city.__err);
   if(!city.__err && city.features && city.features.length){
     const _places = city.features.map(f=>f && f.attributes).filter(Boolean);
     const _muni   = _places.find(isIncorporatedPlace);
@@ -20889,7 +21008,17 @@ async function _runLookupInner(lat,lng,searchCtx){
     const _rc = (searchCtx && searchCtx.countyHint) ? searchCtx.countyHint : null;
     if(_rc){ countyName = _rc; _jurDerived = 'county from the matched parcel record'; }
   }
-  if(!cityName){
+  /* ONLY when the boundary service failed. This used to be a bare `if(!cityName)`, which was
+     correct while a null city could only mean FDOT was down. It stopped being correct the moment
+     the place lookup started rejecting CDPs: an unincorporated parcel now returns null legitimately,
+     and this block would fire on every one of them — overwriting a right answer ("no municipality")
+     with a mailing city, flagging the card DERIVED, and claiming "FDOT boundary service didn't
+     respond" when it had responded perfectly. On an Orangetree lookup that means the card reads
+     "Municipality: Naples", which is the exact false-jurisdiction problem the CDP filter was added
+     to remove — arrived at by a different route, and carrying a red warning box on most of
+     Collier, Lee and Charlotte as a side effect.
+     Unincorporated is an answer. Only reach for the postal name when we have no answer at all. */
+  if(!cityName && !_cityQueryOk){
     // The parcel feed's own city field first — it's the authoritative record for this lot.
     let _pc = null;
     try{
@@ -21108,7 +21237,10 @@ async function _runLookupInner(lat,lng,searchCtx){
                   if(_folio){
                     const _byFolio=await lookupCountyParcelByFolio(countyName, _folio).catch(()=>null);
                     if(_byFolio && _byFolio.addr){
-                      _authAddr=[_byFolio.addr, _byFolio.city].filter(Boolean).join(', ');
+                      // joinSiteCity, not a bare join: Collier's parcel addr already ends in the
+                      // city, and this value becomes SITEADDR — the source the header, box and
+                      // labels all read from, so a duplicate here propagates everywhere.
+                      _authAddr=joinSiteCity(_byFolio.addr, _byFolio.city);
                       _aAttr.SITEADDR=_authAddr;
                       al.__matchedAddr=_authAddr;
                       al.__authByFolio=true;   // tells the living-area enrichment the parcel is trustworthy
@@ -21226,11 +21358,13 @@ async function _runLookupInner(lat,lng,searchCtx){
      announce itself rather than look authoritative. */
   html += window.__jurDerived
     ? `<div class="freshline"><span class="badge unk">▣ DERIVED</span> FDOT boundary service didn’t respond — ${esc(window.__jurDerived)}</div>`
+      /* One line, not four. This only appears now when the boundary service is genuinely down (see
+         the gate on the fallback), so it's rare rather than routine — but it still has to say the
+         one thing that matters: the name is postal, so no city layer was used. The Estero example
+         and the "confirm before relying on this" sentence were spelling out what "mailing city,
+         not verified" already conveys. */
       + (window.__cityIsPostal
-          ? `<div class="note warnbox">The municipality above is the <b>mailing</b> city, which is not `
-            + `always the jurisdiction — a Bonita Springs address can sit inside the Village of Estero. `
-            + `Zoning and setbacks were NOT looked up against a city layer for that reason. Confirm the `
-            + `governing jurisdiction before relying on this.</div>`
+          ? `<div class="note">Municipality is the <b>mailing</b> city, not a verified boundary — no city zoning layer was used.</div>`
           : '')
     : `<div class="freshline"><span class="badge live">● LIVE</span> queried in real time</div>`;
   html += fieldRow('County', countyName?esc(titleCase(countyName))+' County':'<span class="muted">— see appraiser link —</span>','big');
@@ -22599,15 +22733,25 @@ async function _runLookupInner(lat,lng,searchCtx){
       if(_cc && isFinite(_cc[0]) && isFinite(_cc[1]) && marker){ marker.setLatLng([_cc[1], _cc[0]]); saveLoc(_cc[1], _cc[0]); }
     }catch(e){}
     { const _a=liveRes.features[0].attributes;
-      const _siteBox = det.site?[pick(_a,det.site), (det.city?pick(_a,det.city):null)].filter(Boolean).join(', '):null;
-      // MAP-CLICK ADDRESS FILL: when the lookup came from clicking the map (no searchCtx — typed
-      // searches and suggestion clicks always pass one), reflect the clicked parcel's site address
-      // into the search box, exactly like picking it from the dropdown would.
-      if(!searchCtx && _siteBox && setAddrBox(_siteBox)) { try{ addToHistory(_siteBox); }catch(e){} }
+      const _siteBox = det.site ? siteBoxAddr(pick(_a,det.site),
+                                              det.city?pick(_a,det.city):null,
+                                              det.zip?pick(_a,det.zip):null) : null;
+      /* MAP-CLICK ADDRESS FILL: reflect the clicked parcel's site address into the search box,
+         exactly like picking it from the dropdown would.
+         The test used to be a bare `!searchCtx`, on the reasoning that only typed searches and
+         suggestion clicks pass a context. Then the map handler started passing `{viaMap:true}` so a
+         tap wouldn't yank the mobile sheet to full height — which is truthy, so `!searchCtx` went
+         false and this fill stopped running on map taps entirely. The only thing still reaching it
+         was the page-RESTORE path (which passes no context at all), so the box appeared to work on
+         reload and did nothing when you actually clicked a house. Test the two cases that should
+         fill, rather than the absence of a context. */
+      const _fillBox = !searchCtx || searchCtx.viaMap === true;
+      if(_fillBox && _siteBox && setAddrBox(_siteBox, {force: searchCtx && searchCtx.viaMap})) {
+        try{ addToHistory(_siteBox); }catch(e){} }
       drawParcel(liveRes.features[0].geometry, {
         owner: det.owner?pick(_a,det.owner):null,
         pid:   det.pid?pick(_a,det.pid):null,
-        site:  det.site?[pick(_a,det.site), (det.city?pick(_a,det.city):null)].filter(Boolean).join(', '):null
+        site:  det.site?joinSiteCity(pick(_a,det.site), det.city?pick(_a,det.city):null):null
       });
       // STRUCTURE NUDGE (cosmetic): for counties with a footprint layer, move the marker from the lot
       // CENTROID onto the main building. Runs async so it never blocks rendering; if it finds nothing
@@ -22762,12 +22906,17 @@ async function _runLookupInner(lat,lng,searchCtx){
     const ay=pick(a,'ASMNT_YR');
     const sp=fmtMoney(pick(a,'SALE_PRC1')), sy=pick(a,'SALE_YR1');
     const useTxt=useLabel(pick(a,'DOR_UC','PA_UC','LAND_USE'));
-    try{ let _siteFull=joinSiteCity(site, siteCity);
+    /* Roll branch: PHY_ZIPCD is the FDOR zip field. Same normalisation as the live branch. */
+    const _rzip=(()=>{ const v=pick(a,'PHY_ZIPCD','PHY_ZIP','SITE_ZIP');
+      const dg=String(v==null?'':v).replace(/\D/g,'');
+      return dg.length===9 ? dg.slice(0,5)+'-'+dg.slice(5) : (dg.length>=5 ? dg.slice(0,5) : null); })();
+    try{ let _siteFull=siteBoxAddr(site, siteCity, _rzip);
       if(parcel.__fileOwnerCorrected && searchCtx && searchCtx.fileUnit && _siteFull && _siteFull.indexOf('#')<0)
         _siteFull=_siteFull.replace(/,/, ' #'+searchCtx.fileUnit+',');
       window.__parcelMeta = { owner: owner||'', site:_siteFull }; }catch(e){}
     try{ if(window.__exportData){ const ed=window.__exportData;
       if(owner) ed.owner=owner; if(site) ed.address=site; if(siteCity) ed.city=siteCity;
+      if(_rzip) ed.zip=_rzip;   // roll branch: same as the live branch above
       if(liv2) ed.sqft=String(liv2).replace(/[^0-9.]/g,''); if(pid) ed.parcelId=String(pid); } }catch(e){}
 
     html += fieldRow('Owner', owner?esc(owner):'<span class="muted">not listed</span>','big');
@@ -22777,15 +22926,13 @@ async function _runLookupInner(lat,lng,searchCtx){
       try{ if(window.__livOverride){ html += `<div class="note">Living area shown is the heated/living figure (${window.__livOverride.shown.toLocaleString('en-US')} sq ft). The other source listed ${window.__livOverride.other.toLocaleString('en-US')} sq ft &mdash; an adjusted/under-roof or multi-structure total.</div>`; window.__livOverride=null; } }catch(e){}
     }
     if(lsf) html += fieldRow('Lot area', lsf+' sq ft');
-    /* Roll branch: PHY_ZIPCD is the FDOR zip field. Same normalisation as the live branch. */
-    const _rzip=(()=>{ const v=pick(a,'PHY_ZIPCD','PHY_ZIP','SITE_ZIP');
-      const dg=String(v==null?'':v).replace(/\D/g,'');
-      return dg.length===9 ? dg.slice(0,5)+'-'+dg.slice(5) : (dg.length>=5 ? dg.slice(0,5) : null); })();
     if(site)     html += fieldRow('Site address',
       esc(site) + ((siteCity||_rzip) ? '<br>'+esc([siteCity,_rzip].filter(Boolean).join(' ')) : ''));
-    // MAP-CLICK ADDRESS FILL (roll-fallback counties): same as the live branch above.
-    if(!searchCtx && site){ const _boxAddr=joinSiteCity(site, siteCity);
-      if(setAddrBox(_boxAddr)) { try{ addToHistory(_boxAddr); }catch(e){} } }
+    // MAP-CLICK ADDRESS FILL (roll-fallback counties): same as the live branch above — including
+    // the viaMap test, since this branch had the identical `!searchCtx` condition.
+    if((!searchCtx || searchCtx.viaMap===true) && site){
+      const _boxAddr=siteBoxAddr(site, siteCity, _rzip);
+      if(setAddrBox(_boxAddr, {force: searchCtx && searchCtx.viaMap})) { try{ addToHistory(_boxAddr); }catch(e){} } }
     if(mail)     html += fieldRow('Owner mailing', esc(mail)+(mailCity?'<br>'+esc(mailCity):''));
     if(sec||twn||rng) html += fieldRow('Sec-Twn-Rng', esc([sec,twn,rng].filter(Boolean).join(' - ')));
     if(jv)  html += fieldRow('Just (market) value'+(ay?' '+esc(ay):''), jv);
@@ -23858,8 +24005,11 @@ async function _runLookupInner(lat,lng,searchCtx){
         const _asv=_a.surveyed||{};
         const _bits=[];
         if(_a.date){ const _ds=_ecDateStr(_a.date); if(_ds) _bits.push(_ds); }
-        if(_asv.ffe!=null)  _bits.push('floor '+_asv.ffe+' ft');
-        if(_asv.mach!=null) _bits.push('machinery '+_asv.mach+' ft');
+        /* Mark a suspect value here too — this one-line summary is often all the reader sees of
+           the second certificate before deciding whether to open it. */
+        const _aq = _asv.suspect || {};
+        if(_asv.ffe!=null)  _bits.push('floor '+_asv.ffe+' ft'+(_aq.ffe?' (?)':''));
+        if(_asv.mach!=null) _bits.push('machinery '+_asv.mach+' ft'+(_aq.mach?' (?)':''));
         if(_a.bfe!=null)    _bits.push('BFE '+_a.bfe+' ft');
         if(_a.ecDistM!=null) _bits.push('~'+_a.ecDistM+' m away');
         html += fieldRow('Second certificate',
@@ -23892,15 +24042,50 @@ async function _runLookupInner(lat,lng,searchCtx){
               ? (_flagDatum ? ' <span style="color:var(--warn);font-weight:600">'+esc(_dRaw)+'</span>'
                             : ' <span class="muted">'+esc(_dRaw)+'</span>')
               : ' <span style="color:var(--warn);font-weight:600">datum not stated</span>');
-        if(sv.ffe!=null)  html += fieldRow('Finished floor (EC item a)', '<b>'+esc(String(sv.ffe))+' ft</b>'+tag(cv.ffe));
-        if(sv.mach!=null) html += fieldRow('Lowest machinery (EC item e)', '<b>'+esc(String(sv.mach))+' ft</b>'+tag(cv.mach));
-        if(sv.lag!=null)  html += fieldRow('Lowest adjacent grade (EC item f)', '<b>'+esc(String(sv.lag))+' ft</b>'+tag(cv.lag));
+        /* A value the cross-check rejected must not be presented as a certified figure. Show it —
+           hiding it would be worse, since the reader needs to know the record says this — but
+           strip the plain-number authority off it and say what it's inconsistent with. */
+        const _susp = sv.suspect || {};
+        const _row = (label, key, val, tagHtml) => {
+          const s=_susp[key];
+          if(!s) return fieldRow(label, '<b>'+esc(String(val))+' ft</b>'+tagHtml);
+          return fieldRow(label,
+            '<b style="color:var(--warn)">'+esc(String(val))+' ft</b>'
+            + ' <span style="color:var(--warn);font-weight:600">⚠ doesn\'t add up</span>');
+        };
+        if(sv.ffe!=null)  html += _row('Finished floor (EC item a)', 'ffe', sv.ffe, tag(cv.ffe));
+        if(sv.mach!=null) html += _row('Lowest machinery (EC item e)', 'mach', sv.mach, tag(cv.mach));
+        if(sv.lag!=null)  html += _row('Lowest adjacent grade (EC item f)', 'lag', sv.lag, tag(cv.lag));
         if(sv.panel)      html += fieldRow('FIRM panel (per EC)', esc(String(sv.panel)));
+        /* One note covering everything flagged, rather than one per row. */
+        { const _keys=Object.keys(_susp);
+          if(_keys.length){
+            const _names={ffe:'finished floor (item a)', mach:'lowest machinery (item e)',
+                          lag:'lowest adjacent grade (item f)', hag:'highest adjacent grade (item g)',
+                          garage:'attached garage slab (item d)', lowHoriz:'lowest horizontal member (item b)',
+                          bfe:'base flood elevation'};
+            const _dec=_keys.filter(k=>_susp[k].reason==='decimal');
+            let _msg='<div class="note warnbox"><b>One of these figures is inconsistent with the others on the same certificate.</b> ';
+            _msg += _keys.map(k=>esc(_names[k]||k)+' reads <b>'+esc(String(sv[k]))+' ft</b>').join(', ')
+                 +  ', against a '+esc(_names[_susp[_keys[0]].refKey]||'reference elevation')
+                 +  ' of '+esc(String(_susp[_keys[0]].ref))+' ft on the same record. ';
+            if(_dec.length){
+              _msg += 'That pattern is what a <b>dropped decimal point</b> in the source database looks like — the certificate most likely reads '
+                   +  _dec.map(k=>'<b>'+esc(String(_susp[k].implied))+' ft</b>').join(' / ')
+                   +  '. ';
+            }
+            _msg += 'This card will <b>not</b> substitute a corrected number into a sealed survey document. '
+                 +  'Open the certificate PDF and read the value off the form before it goes anywhere near a permit.</div>';
+            html += _msg;
+          }
+        }
 
         const anyVal = (sv.ffe!=null||sv.mach!=null||sv.lag!=null);
         /* A value is only safe to compare when we KNOW it's NAVD 88 — either it came from a
-           converted column, or the record states NAVD 88 outright. */
-        const comparable = (isConv) => isConv || (sv.datumStated && _isNAVD88);
+           converted column, or the record states NAVD 88 outright — AND it passed the
+           cross-check. Subtracting a figure the card has just called inconsistent would hand the
+           reader a confident clearance in feet built on a number we don't believe. */
+        const comparable = (isConv, key) => (isConv || (sv.datumStated && _isNAVD88)) && !_susp[key];
 
         if(anyVal && _flagDatum){
           html += `<div class="note warnbox"><b>This certificate is on NGVD 29.</b> The effective FIRM and the base flood elevation above are <b>NAVD 88</b> — the two are not interchangeable, and an NGVD 29 reading runs roughly a foot higher than the same ground on NAVD 88. Convert before comparing, and have a surveyor restate the figures if they're going on a permit. The comparison this card would normally show has been left out rather than subtracting values on two different references.</div>`;
@@ -23910,10 +24095,10 @@ async function _runLookupInner(lat,lng,searchCtx){
 
         if(anyVal && !_flagDatum && !_unstated && (sv.mach!=null || sv.lag!=null)){
           const bits=[];
-          if(sv.mach!=null && sv.lag!=null && comparable(cv.mach) && comparable(cv.lag))
+          if(sv.mach!=null && sv.lag!=null && comparable(cv.mach,'mach') && comparable(cv.lag,'lag'))
             bits.push(`existing equipment sits <b>${esc((Math.round((sv.mach-sv.lag)*10)/10))} ft</b> above lowest grade`);
           const refB = (ec.bfe!=null?ec.bfe:null);
-          if(refB!=null && sv.mach!=null && comparable(cv.mach)){
+          if(refB!=null && sv.mach!=null && comparable(cv.mach,'mach')){
             const d=Math.round((sv.mach-refB)*10)/10;
             bits.push(d>=0 ? `and <b>${esc(d)} ft above</b> the ${esc(refB)} ft BFE`
                            : `and <b>${esc(Math.abs(d))} ft below</b> the ${esc(refB)} ft BFE`);
@@ -23990,13 +24175,25 @@ async function _runLookupInner(lat,lng,searchCtx){
         if(sv && (sv.ffe!=null || sv.mach!=null || sv.lag!=null)){
           const dTag = sv.datum ? ` <span class="muted">${esc(/1988|88/.test(String(sv.datum))?'NAVD 88':String(sv.datum))}</span>`
                                 : ' <span style="color:var(--warn);font-weight:600">datum not stated</span>';
-          if(sv.ffe!=null)    html += fieldRow('Finished floor (EC item a, per FDEM)', '<b>'+esc(String(sv.ffe))+' ft</b>'+dTag);
-          if(sv.mach!=null)   html += fieldRow('Lowest machinery (EC item e, per FDEM)', '<b>'+esc(String(sv.mach))+' ft</b>'+dTag);
-          if(sv.garage!=null) html += fieldRow('Attached garage slab (EC item d)', '<b>'+esc(String(sv.garage))+' ft</b>'+dTag);
-          if(sv.lag!=null)    html += fieldRow('Lowest adjacent grade (EC item f)', '<b>'+esc(String(sv.lag))+' ft</b>'+dTag);
-          if(sv.hag!=null)    html += fieldRow('Highest adjacent grade (EC item g)', '<b>'+esc(String(sv.hag))+' ft</b>'+dTag);
+          /* Same suspect handling as the county-layer rows above — FDEM transcribes from the same
+             scanned forms and can carry the same keying errors. */
+          const _fs = sv.suspect || {};
+          const _fr = (label, key, val) => _fs[key]
+            ? fieldRow(label, '<b style="color:var(--warn)">'+esc(String(val))+' ft</b>'
+                + ' <span style="color:var(--warn);font-weight:600">\u26a0 doesn\'t add up</span>')
+            : fieldRow(label, '<b>'+esc(String(val))+' ft</b>'+dTag);
+          if(sv.ffe!=null)    html += _fr('Finished floor (EC item a, per FDEM)', 'ffe', sv.ffe);
+          if(sv.mach!=null)   html += _fr('Lowest machinery (EC item e, per FDEM)', 'mach', sv.mach);
+          if(sv.garage!=null) html += _fr('Attached garage slab (EC item d)', 'garage', sv.garage);
+          if(sv.lag!=null)    html += _fr('Lowest adjacent grade (EC item f)', 'lag', sv.lag);
+          if(sv.hag!=null)    html += _fr('Highest adjacent grade (EC item g)', 'hag', sv.hag);
           if(sv.diagram)      html += fieldRow('Building diagram', esc(String(sv.diagram)));
-          if(sv.mach!=null && sv.lag!=null){
+          { const _fk=Object.keys(_fs);
+            if(_fk.length) html += '<div class="note warnbox"><b>One of these FDEM figures is inconsistent with the others on the same certificate</b>'
+              + (_fk.some(k=>_fs[k].reason==='decimal') ? ' \u2014 the pattern of a dropped decimal point in the transcription' : '')
+              + '. Read the value off the certificate PDF before using it.</div>';
+          }
+          if(sv.mach!=null && sv.lag!=null && !_fs.mach && !_fs.lag){
             html += `<div class="note">Per the FDEM-filed certificate, existing equipment sits <b>${esc(String(Math.round((sv.mach-sv.lag)*10)/10))} ft</b> above lowest grade. Item (e) is the line a generator is measured against — surveyed figures, not estimates, but confirm nothing has been regraded since ${sv.issuedAt?esc(String(sv.issuedAt)):'certification'}.</div>`;
           }
         }
@@ -24300,8 +24497,13 @@ async function _runLookupInner(lat,lng,searchCtx){
   // leave the heading stuck on the previously-searched address. In that case prefer the
   // parcel's resolved site address, then fall back to the clicked coordinates.
   try{
+    /* Same duplicate-city bug the search box had: `[address, city].join(', ')` on a Collier record
+       whose site address already ends in the city produced "2028 YELLOWFIN CIR, NAPLES, NAPLES",
+       and the zip never made it in because __exportData wasn't carrying one. siteBoxAddr() dedupes
+       the city and appends the zip, so the header, the print sheet and the search box now all read
+       the same address. */
     const _parcelSite=(window.__exportData && window.__exportData.address)
-      ? [window.__exportData.address, window.__exportData.city].filter(Boolean).join(', ')
+      ? siteBoxAddr(window.__exportData.address, window.__exportData.city, window.__exportData.zip)
       : ((window.__parcelMeta && window.__parcelMeta.site) || null);
     const _coords='Pin: '+lat.toFixed(5)+', '+lng.toFixed(5);
     // Prefer the RESOLVED PARCEL's own site address (the ground truth for what actually rendered) over
