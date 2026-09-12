@@ -12931,7 +12931,7 @@ const FLOOD_TIMEOUT = (typeof IS_TOUCH_DEVICE!=='undefined' ? IS_TOUCH_DEVICE : 
 // then 5.5s). On a map CLICK the roll fires before the county is known, so in a live-feed county (Lee,
 // Collier, …) a hang stalls first paint even though the fast county feed is about to take over. Give it a
 // short leash: still well clear of a legit response (<1s) but it fails over to the county feed fast on a hang.
-const PARCEL_TIMEOUT = (typeof IS_TOUCH_DEVICE!=='undefined' ? IS_TOUCH_DEVICE : (typeof L!=='undefined' && L.Browser && L.Browser.mobile)) ? 9000 : 6000;
+const PARCEL_TIMEOUT = (typeof IS_TOUCH_DEVICE!=='undefined' ? IS_TOUCH_DEVICE : (typeof L!=='undefined' && L.Browser && L.Browser.mobile)) ? 12000 : 8000;
 
 /* Retry wrapper: ArcGIS Online services occasionally fail transiently (a 5xx/CORS blip comes back
    fast). One quick retry clears most of these. But a *timeout* means the server is just slow —
