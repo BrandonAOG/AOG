@@ -4218,7 +4218,16 @@ const map = L.map('map',{
 }).setView([27.9,-83.4],7);
 // Bigger canvas padding => the vector canvas is drawn well beyond the viewport, so short pans
 // reuse the already-rendered bitmap instead of triggering a full redraw on every frame.
-const canvasRenderer = L.canvas({ padding:2, tolerance:4 });   // shared canvas for all vector layers
+/* Touch-device flag that also catches iPadOS, which sends a Macintosh UA (L.Browser.mobile can read
+   false there). Used for the canvas size below and for every network timeout budget. */
+const IS_TOUCH_DEVICE = /iP(hone|ad|od)/.test(navigator.userAgent)
+  || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1)
+  || (typeof L!=='undefined' && L.Browser && L.Browser.mobile);
+/* iOS WebKit caps a <canvas> at ~16.7M px (4096x4096) and SILENTLY draws nothing above it. Leaflet
+   sizes the vector canvas at (1+2*padding) x the map, doubled on retina, so padding:2 = 5x map size
+   = 20-80M px on every iPad/iPhone -> parcel outlines, lot lines, zoning, flood, bounds all invisible
+   while markers/tiles (DOM) still show. Keep the big pan-reuse padding on desktop only. */
+const canvasRenderer = L.canvas({ padding: IS_TOUCH_DEVICE ? 0.25 : 2, tolerance:4 });   // shared canvas for all vector layers
 // crossOrigin:true on every basemap: loads tiles as CORS images (these servers all send
 // Access-Control-Allow-Origin:*), which is what lets the MAP PNG capture (html2canvas useCORS)
 // actually draw the basemap instead of leaving it blank. No effect on normal display speed.
@@ -7051,7 +7060,7 @@ const FEMA_PANEL_QUERY = FEMA_NFHL_MS + "/3/query";
    They run in a Promise.all, so the slowest one sets the card's render time — a single 9 s
    straggler against hazards.fema.gov used to hold the entire flood card hostage. These are all
    fail-soft extras: better to drop one row than to make the user wait. */
-const PARCEL_EXTRA_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 5000 : 3000;
+const PARCEL_EXTRA_TIMEOUT = (typeof IS_TOUCH_DEVICE!=='undefined' ? IS_TOUCH_DEVICE : (typeof L!=='undefined' && L.Browser && L.Browser.mobile)) ? 5000 : 3000;
 
 /* Evenly thin a ring to at most `max` vertices, keeping first+last so it still closes. Flood
    layers are far coarser than a parcel boundary, so this doesn't change which features intersect
@@ -12895,20 +12904,20 @@ async function arcQuery(url, lat, lng, outFields, withGeom, timeoutMs){
 // aborts and falls back to the statewide roll, showing "not live" on exactly some devices/networks
 // and not others. Give mobile the same headroom the FEMA flood layer already gets; desktop stays
 // snappy so a genuinely dead server still fails fast.
-const ENRICH_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 11000 : 6000;
-const COUNTY_FEED_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 18000 : 13000;  // primary county parcel feeds get a generous timeout (dense areas can be slow; mobile slower still)
+const ENRICH_TIMEOUT = (typeof IS_TOUCH_DEVICE!=='undefined' ? IS_TOUCH_DEVICE : (typeof L!=='undefined' && L.Browser && L.Browser.mobile)) ? 11000 : 6000;
+const COUNTY_FEED_TIMEOUT = (typeof IS_TOUCH_DEVICE!=='undefined' ? IS_TOUCH_DEVICE : (typeof L!=='undefined' && L.Browser && L.Browser.mobile)) ? 18000 : 13000;  // primary county parcel feeds get a generous timeout (dense areas can be slow; mobile slower still)
 // FEMA's NFHL server (hazards.fema.gov) is slow and strict (TLS 1.2 + cipher suites). On a phone
 // — typically a slower cell connection — the default 9s often isn't enough to complete the TLS
 // handshake + the geometry-bearing flood query, and Safari reports the aborted request as
 // "Load failed". Give mobile more headroom; desktop stays snappy.
-const FLOOD_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 14000 : 9000;
+const FLOOD_TIMEOUT = (typeof IS_TOUCH_DEVICE!=='undefined' ? IS_TOUCH_DEVICE : (typeof L!=='undefined' && L.Browser && L.Browser.mobile)) ? 14000 : 9000;
 // The statewide DOR parcel roll normally answers in well under 1s. When a lookup lands on a marginal
 // point (a clicked house near a parcel edge, or an interpolated geocode) the request can instead HANG
 // until it times out — and because the parcel gates first paint, that froze the whole result (once ~9s,
 // then 5.5s). On a map CLICK the roll fires before the county is known, so in a live-feed county (Lee,
 // Collier, …) a hang stalls first paint even though the fast county feed is about to take over. Give it a
 // short leash: still well clear of a legit response (<1s) but it fails over to the county feed fast on a hang.
-const PARCEL_TIMEOUT = (typeof L!=='undefined' && L.Browser && L.Browser.mobile) ? 9000 : 6000;
+const PARCEL_TIMEOUT = (typeof IS_TOUCH_DEVICE!=='undefined' ? IS_TOUCH_DEVICE : (typeof L!=='undefined' && L.Browser && L.Browser.mobile)) ? 9000 : 6000;
 
 /* Retry wrapper: ArcGIS Online services occasionally fail transiently (a 5xx/CORS blip comes back
    fast). One quick retry clears most of these. But a *timeout* means the server is just slow —
@@ -21175,7 +21184,10 @@ async function _runLookupInner(lat,lng,searchCtx){
           // 1) POINT-IN-POLYGON. The query point is the NG911 authoritative point when available
           //    (point-only counties), else the geocoded point. Falls inside the correct parcel —
           //    including range-addressed condo/multifamily parcels (e.g. 5127 → the 5201-5217 parcel).
-          const pr = (al) ? null : await arcQueryRetry(cu, qLat, qLng, '*', true, ENRICH_TIMEOUT).catch(e=>({__err:e.message}));
+          // Authoritative county parcel query: give it the full county-feed budget and retry once on a
+          // timeout (abortRetry=true). With the short enrich budget + no retry, one slow TLS handshake on
+          // an older iPad/iPhone dropped the whole live chain and the card fell back to the state roll.
+          const pr = (al) ? null : await arcQueryRetry(cu, qLat, qLng, '*', true, COUNTY_FEED_TIMEOUT, 2, true).catch(e=>({__err:e.message}));
           let pointFeat=null;
           if(pr && !pr.__err && pr.features && pr.features[0]){
             const sel=pickSpecificParcel(pr.features); pointFeat=sel.feature; multi=sel.count;
