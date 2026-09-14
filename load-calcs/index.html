@@ -239,6 +239,14 @@ body{font-variant-numeric:tabular-nums;font-family:'Exo 2','Inter',sans-serif;ba
 .appl-tbl .gas-cell label{display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--amber);cursor:pointer;justify-content:center;}
 .appl-tbl .gas-cell input{width:13px;height:13px;accent-color:var(--amber);}
 .appl-tbl .volt-cell select{font-size:10px;}
+/* Group bands for Step 3. Quiet by design — they are signposts for scanning,
+   not headings competing with the appliance names for attention. */
+.appl-tbl tr.appl-grp:hover td,
+.appl-tbl tr.appl-grp td{
+  background:var(--blue-lt);padding:5px 10px;border-bottom:1px solid var(--border);
+  font-family:'Orbitron',monospace;font-size:8.5px;font-weight:700;letter-spacing:1.4px;
+  text-transform:uppercase;color:var(--blue);
+}
 .appl-tbl td.volt-cell{min-width:58px;white-space:nowrap;}
 /* Replace native select up/down toggle with a single clean chevron + reserve space so text never overlaps */
 .appl-tbl select{
@@ -507,6 +515,10 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   /* The Add Load button and its colspan cell are not part of the card grid. */
   .appl-tbl #addload_row{display:block;padding:0;}
   .appl-tbl #addload_row td{display:block;grid-area:auto;}
+  /* Same for the group bands — left on the grid they inherit the four-column
+     card template and the label lands in the "name" cell at card padding. */
+  .appl-tbl tr.appl-grp{display:block;padding:0;border-bottom:none;}
+  .appl-tbl tr.appl-grp td{display:block;grid-area:auto;padding:6px 12px;font-size:9px;}
 
   /* Action bar: buttons were flex:1 with overflow:hidden, so on a phone they
      rendered as "SAVE IM(" and "NEW JO". Let the row wrap instead of shrink. */
@@ -1707,10 +1719,67 @@ function vaSelChange(selId, custId){
 }
 
 var extraApplCount=0;
+
+// Display order for Step 3, grouped by what the device IS. The APPLS array above
+// stays in its original order — that order is history, not layout, and calc()
+// doesn't care about either. Only this list decides what the tech sees.
+//
+// Anything in APPLS but missing from here is appended under "Other" rather than
+// vanishing off the tab, so adding an appliance and forgetting to file it is a
+// cosmetic slip instead of a load that never gets counted.
+var APPL_GROUPS = [
+  ['Refrigeration',               ['ref','frz','mini','wine','ice']],
+  ['Kitchen',                     ['dw','disp','rh','mw','comp']],
+  ['Water Heating & Treatment',   ['wh','soft']],
+  ['Pumps & Motors',              ['well','sept','irr','fpump','lift']],
+  ['Openers & Drives',            ['gdo','gate','shut','elev']],
+  ['Air Movement',                ['dehum','afan']],
+  ['Heated Water',                ['jac','htub']],
+  ['Charging',                    ['car','golf']],
+  ['Other',                       ['cvac','land']]
+];
+
+function applDisplayOrder(){
+  var byId={}, placed={}, out=[];
+  APPLS.forEach(function(a){ byId[a.id]=a; });
+  APPL_GROUPS.forEach(function(g){
+    var items=[];
+    g[1].forEach(function(id){
+      if(byId[id]){ items.push(byId[id]); placed[id]=1; }
+    });
+    if(items.length) out.push([g[0], items]);
+  });
+  var orphans=APPLS.filter(function(a){ return !placed[a.id]; });
+  if(orphans.length){
+    var other=null;
+    for(var i=0;i<out.length;i++) if(out[i][0]==='Other') other=out[i];
+    if(other) other[1]=other[1].concat(orphans);
+    else out.push(['Other', orphans]);
+  }
+  return out;
+}
+
+function applGroupRow(name){
+  return '<tr class="appl-grp"><td colspan="7">'+name+'</td></tr>';
+}
+
 function buildAppl(){
   var h='';
-  for(var i=0;i<APPLS.length;i++){
-    var a=APPLS[i];
+  var groups=applDisplayOrder();
+  for(var gi=0; gi<groups.length; gi++){
+    h+=applGroupRow(groups[gi][0]);
+    var list=groups[gi][1];
+    for(var li=0; li<list.length; li++){
+      h+=applRowHTML(list[li]);
+    }
+  }
+  h+=buildApplTail();
+  document.getElementById("appl_rows").innerHTML=h;
+}
+
+function applRowHTML(a){
+  var h='';
+  {
     var flagStyle='display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;';
     var gasCell='<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;">'
       +(a.canGas
@@ -1733,6 +1802,14 @@ function buildAppl(){
       +"<td></td>"
       +"</tr>";
   }
+  return h;
+}
+
+function buildApplTail(){
+  var h='';
+  // Extra loads get their own band. Without it they read as members of whatever
+  // group happens to sit last, which right now is "Other".
+  h+=applGroupRow('Added Loads');
   // Add Load button row — sits directly above the Pool Equip. Panel row
   h+='<tr id="addload_row"><td colspan="7" style="padding:8px 14px;border-top:1px solid var(--border);">'
     +'<button class="btn btn-add btn-sm" onclick="addExtraAppl()">+ Add Load</button></td></tr>';
@@ -1746,7 +1823,7 @@ function buildAppl(){
     +'<td class="tot-cell" id="tot_pool_panel" style="color:var(--blue);">—</td>'
     +'<td></td>'
     +'</tr>';
-  document.getElementById("appl_rows").innerHTML=h;
+  return h;
 }
 
 function addExtraAppl(){
