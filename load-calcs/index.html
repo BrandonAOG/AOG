@@ -280,6 +280,14 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
 .cook-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:10px;}
 .cook-item-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
 .cook-item-title{font-weight:600;font-size:13px;}
+/* The card title is typeable so a tech can say WHICH oven — "Butler Pantry
+   Oven", "Casita Range" — instead of reading "Wall Oven 2" off a report six
+   weeks later. Styled to read as a heading until you touch it. */
+.cook-item-name{font-weight:600;font-size:13px;font-family:inherit;color:var(--text);
+  background:transparent;border:1px solid transparent;border-bottom:1px dashed var(--border);
+  border-radius:4px;padding:2px 5px;min-width:0;flex:1 1 auto;max-width:280px;margin-right:8px;}
+.cook-item-name:hover{border-color:var(--border);background:var(--surface);}
+.cook-item-name:focus{outline:none;border:1px solid var(--amber);background:var(--surface);}
 .cook-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start;}
 @media(max-width:560px){.cook-fields{grid-template-columns:1fr;}}
 
@@ -530,6 +538,8 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
 <div class="action-bar" id="action-bar">
   <a class="ab-btn" href="../">🏠 HOME</a>
   <button class="ab-btn" onclick="capturePDF(this)">⎙ PDF</button>
+  <button class="ab-btn" onclick="aogLoadPick()" title="Reopen a job from a PDF this calculator exported.">⤒ LOAD</button>
+  <input type="file" id="aog_job_in" accept="application/pdf,.pdf" style="display:none;" onchange="aogLoadFromFile(this)">
   <button class="ab-btn" id="ab-capture" onclick="captureReport()">⤓ SAVE IMG</button>
   <a class="ab-btn" onclick="window.print()" style="cursor:pointer;">⎙ FULL</a>
   <a class="ab-btn" onclick="aogNewJobConfirm()" style="cursor:pointer;">↺ NEW JOB</a>
@@ -1829,8 +1839,13 @@ function addCookItem(type, isGas, va, qty){
     opts+='<option value="'+w+'"'+s+'>'+(w/1000).toFixed(1)+' kW ('+w.toLocaleString()+' VA)</option>';
   }
   opts+='<option value="custom">— type custom —</option>';
+  // id is name_<cid> on purpose: aogFieldLabel() already looks up "name_"+suffix
+  // when it has to warn about a restored field, so a renamed unit is named in
+  // that warning too instead of showing a raw element id.
   div.innerHTML='<div class="cook-item-head">'
-    +'<span class="cook-item-title">'+label+'</span>'
+    +'<input type="text" class="cook-item-name" id="name_'+cid+'" value="'+label+'" maxlength="40"'
+    +' title="Rename this unit \u2014 the name you type here is what prints on the report."'
+    +' aria-label="Appliance name">'
     +'<button class="btn btn-remove" onclick="removeCook(\''+cid+'\')">Remove</button>'
     +'</div>'
     +'<div class="cook-fields">'
@@ -3056,6 +3071,9 @@ function aogSnapshot(){
   var fields={};
   document.querySelectorAll('input,select,textarea').forEach(function(el){
     if(!el.id) return;
+    // A file input's value cannot be set from script — restoring one throws and
+    // takes the rest of the restore loop down with it.
+    if(el.type==='file') return;
     if(el.type==='checkbox') fields[el.id]={c:el.checked};
     else if(el.type==='radio'){ if(el.checked) fields[el.id]={v:el.value}; }
     else fields[el.id]={v:el.value};
@@ -3168,6 +3186,12 @@ function aogRestore(){
   if(!raw) return false;
   var data;
   try{ data=JSON.parse(raw); }catch(e){ return false; }
+  return aogApplySnapshot(data);
+}
+
+// Put a snapshot back on screen. Two callers: the autosave restore on load, and
+// a job read back out of an exported PDF.
+function aogApplySnapshot(data){
   if(!data||!data.fields) return false;
   _aogRestoring=true;
   _aogRestoreIssues=[]; _aogPendingManaged=[];
@@ -3316,6 +3340,15 @@ function esc(v){
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// Cooking cards carry a typeable name. The report uses whatever the tech typed
+// and falls back to the generated label if the box was cleared, so a blanked
+// name can never produce a nameless line on a report someone has to read.
+function cookName(cid, fallback){
+  var e=document.getElementById('name_'+cid);
+  var v=e&&e.value?e.value.trim():'';
+  return v||fallback;
+}
+
 function buildReportHTML(){
   try{
   // Ensure globals exist
@@ -3396,11 +3429,11 @@ function buildReportHTML(){
     var vael=document.getElementById('va_cooktop_'+n);
     var _mc=document.getElementById('mgd_cooktop_'+n);
     if(_mc&&_mc.checked){ var _v=parseInt(vael&&vael.value)||0;
-      managedLines.push({name:'Cooktop #'+n+(_v?' — '+_v.toLocaleString()+' VA':''), reason:'Cooking'}); continue; }
+      managedLines.push({name:esc(cookName('cooktop_'+n,'Cooktop #'+n))+(_v?' — '+_v.toLocaleString()+' VA':''), reason:'Cooking'}); continue; }
     var isgas=gasck&&gasck.checked;
     var q=parseInt((document.getElementById('qty_cooktop_'+n)||{}).value,10); if(isNaN(q)||q<0) q=0;
     var val=q*(isgas?150:(parseInt(vael&&vael.value)||0));
-    if(val){ cookLines.push({name:'Cooktop '+(isgas?'(gas 150VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
+    if(val){ cookLines.push({name:esc(cookName('cooktop_'+n,'Cooktop '+n))+' '+(isgas?'(gas 150VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
       cookMeta.push({type:'cooktop', qty:q, gas:!!isgas}); }
   }
   for(var n=1;n<=ovCount;n++){
@@ -3410,11 +3443,11 @@ function buildReportHTML(){
     var vael=document.getElementById('va_oven_'+n);
     var _mo=document.getElementById('mgd_oven_'+n);
     if(_mo&&_mo.checked){ var _v=parseInt(vael&&vael.value)||0;
-      managedLines.push({name:'Oven/Range #'+n+(_v?' — '+_v.toLocaleString()+' VA':''), reason:'Cooking'}); continue; }
+      managedLines.push({name:esc(cookName('oven_'+n,'Wall Oven #'+n))+(_v?' — '+_v.toLocaleString()+' VA':''), reason:'Cooking'}); continue; }
     var isgas=gasck&&gasck.checked;
     var q=parseInt((document.getElementById('qty_oven_'+n)||{}).value,10); if(isNaN(q)||q<0) q=0;
     var val=q*(isgas?500:(parseInt(vael&&vael.value)||0));
-    if(val){ cookLines.push({name:'Wall Oven '+(isgas?'(gas 500VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
+    if(val){ cookLines.push({name:esc(cookName('oven_'+n,'Wall Oven '+n))+' '+(isgas?'(gas 500VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
       cookMeta.push({type:'wall oven', qty:q, gas:!!isgas}); }
   }
   for(var n=1;n<=rgCount;n++){
@@ -3423,11 +3456,11 @@ function buildReportHTML(){
     var vael=document.getElementById('va_range_'+n);
     var _mr=document.getElementById('mgd_range_'+n);
     if(_mr&&_mr.checked){ var _v=parseInt(vael&&vael.value)||0;
-      managedLines.push({name:'Range #'+n+(_v?' — '+_v.toLocaleString()+' VA':''), reason:'Cooking'}); continue; }
+      managedLines.push({name:esc(cookName('range_'+n,'Range #'+n))+(_v?' — '+_v.toLocaleString()+' VA':''), reason:'Cooking'}); continue; }
     var isgas=gasrg&&gasrg.checked;
     var q=parseInt((document.getElementById('qty_range_'+n)||{}).value,10); if(isNaN(q)||q<0) q=0;
     var val=q*(isgas?500:(parseInt(vael&&vael.value)||0));
-    if(val){ cookLines.push({name:'Range '+(isgas?'(gas 500VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
+    if(val){ cookLines.push({name:esc(cookName('range_'+n,'Range '+n))+' '+(isgas?'(gas 500VA)':'electric')+(q>1?' \u00d7'+q:''), tot:val.toLocaleString()});
       cookMeta.push({type:'range', qty:q, gas:!!isgas}); }
   }
   // Group identical cooking units into one line with ×N and summed VA
@@ -3443,6 +3476,27 @@ function buildReportHTML(){
       return {name:g.name+(g.n>1?' ×'+g.n:''), tot:(g.unitVA*g.n).toLocaleString()};
     });
   })();
+
+  // Step 5 prints as a single total with a "1 range · 2 wall ovens" qualifier.
+  // That is enough for the ordinary one-range job, and the breakdown stays off
+  // so those reports keep the exact page they have always had. It earns its
+  // space once there is more than one unit to tell apart, or once a tech has
+  // renamed one — a name typed on the card is only worth typing if it comes
+  // back out on the report.
+  var cookRenamed = false;
+  [['cooktop',ctCount,'Cooktop '],['oven',ovCount,'Wall Oven '],['range',rgCount,'Range ']].forEach(function(p){
+    for(var i=1;i<=p[1];i++){
+      var e=document.getElementById('name_'+p[0]+'_'+i);
+      var v=e?e.value.trim():'';
+      if(v && v!==(p[2]+i)) cookRenamed=true;
+    }
+  });
+  var cookDetailRows = (cookLines.length>1 || cookRenamed)
+    ? cookLines.map(function(r){
+        return '<tr><td style="padding-left:12pt;color:#555;">&bull; '+r.name+'</td>'
+             + '<td class="r" style="color:#555;font-weight:400;">'+r.tot+' VA</td></tr>';
+      }).join('')
+    : '';
 
   // ── HVAC ──
   var hvacLines=[];
@@ -3720,7 +3774,7 @@ function buildReportHTML(){
     <tr class="tot"><td>Step 3 Total (raw VA)</td><td class="r">${s3} VA</td></tr></table>
 
     <div class="sh">Steps 4 &amp; 5 — Cooking &amp; Dryer</div>
-    <table class="dt"><tr><td>Cooking Load <span style="color:#8a6a3a;">220.82(B)(3)b</span>${qualCook}</td><td class="r">${s5} VA</td></tr>
+    <table class="dt"><tr><td>Cooking Load <span style="color:#8a6a3a;">220.82(B)(3)b</span>${qualCook}</td><td class="r">${s5} VA</td></tr>${cookDetailRows}
     <tr><td>Dryer Load <span style="color:#8a6a3a;">220.82(B)(3)c</span>${qualDryer}</td><td class="r">${s4} VA</td></tr></table>
   </div>
 
@@ -3938,6 +3992,93 @@ function loadJsPDF(){
   });
 }
 
+// ══ PDF ROUND-TRIP ══
+// The exported PDF carries the whole form inside it, so the job can be opened
+// again and finished later. The browser autosave only ever holds the LAST job,
+// and only on the one device that made it — file four jobs in a morning and the
+// first three are gone. The PDF is the copy that gets emailed, filed and kept,
+// so that is where the data belongs.
+//
+// It rides in the PDF's Keywords metadata field as base64, which is plain ASCII
+// and survives PDF escaping untouched. It does NOT survive a PDF that has been
+// printed to paper, scanned, flattened or re-saved by another app — those
+// rewrite the file and drop the metadata. Keep the original download.
+var AOG_PDF_TAG = 'AOGJOB1';
+
+function aogB64Encode(str){
+  var bytes = new TextEncoder().encode(str), bin = '';
+  // Chunked: one fromCharCode.apply over a big array overflows the call stack.
+  for(var i=0; i<bytes.length; i+=0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000));
+  return btoa(bin);
+}
+function aogB64Decode(b64){
+  var bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for(var i=0; i<bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+// Wrap the current form state in markers so it can be found again in the raw
+// bytes of the finished PDF.
+function aogPdfPayload(){
+  var snap = aogSnapshot();
+  snap.app = 'AOG-LoadCalc';
+  snap.job = { co: iv('j_co'), addr: iv('j_addr') };
+  return AOG_PDF_TAG + ':' + aogB64Encode(JSON.stringify(snap)) + ':ENDAOGJOB';
+}
+
+function aogLoadPick(){
+  var el = document.getElementById('aog_job_in');
+  if(el){ el.value = ''; el.click(); }
+}
+
+function aogExtractPayload(bytes){
+  var s = '';
+  for(var i=0; i<bytes.length; i+=0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000));
+  var m = s.match(/AOGJOB1:([A-Za-z0-9+/=\s]+?):ENDAOGJOB/);
+  return m ? m[1].replace(/\s+/g,'') : null;
+}
+
+function aogLoadFromFile(input){
+  var f = input && input.files && input.files[0];
+  if(!f) return;
+  var rdr = new FileReader();
+  rdr.onerror = function(){ input.value=''; alert('Could not read that file.'); };
+  rdr.onload = function(){
+    var data = null;
+    try{
+      var b64 = aogExtractPayload(new Uint8Array(rdr.result));
+      if(b64) data = JSON.parse(aogB64Decode(b64));
+    }catch(e){ console.warn('AOG load parse error', e); }
+    input.value = '';
+    if(!data || !data.fields){
+      alert('No job data found in that PDF.\n\nOnly a PDF made by this calculator\u2019s \u2318 PDF button carries the job inside it. '
+        + 'A PDF that was printed and scanned, flattened, or re-saved by another app loses it \u2014 use the original download.');
+      return;
+    }
+    var who  = (data.job && (data.job.co || data.job.addr)) || '';
+    var when = data.ts ? new Date(data.ts).toLocaleString() : 'an unknown date';
+    var msg  = 'Load ' + (who ? ('\u201c' + who + '\u201d') : 'this job') + ', saved ' + when + '?\n\n'
+             + 'Everything currently on screen is replaced.';
+    var p = window.AOGConfirm
+      ? AOGConfirm(msg, { title: '\u2912 LOAD JOB', confirmText: 'Load Job' })
+      : Promise.resolve(confirm(msg));
+    p.then(function(ok){ if(ok) aogLoadSnapshotIntoForm(data); });
+  };
+  rdr.readAsArrayBuffer(f);
+}
+
+function aogLoadSnapshotIntoForm(data){
+  if(!aogApplySnapshot(data)){ alert('That job could not be loaded.'); return; }
+  calc();
+  if(typeof aogBlankZeros==='function') aogBlankZeros();
+  if(typeof aogJobAutoCollapse==='function') aogJobAutoCollapse();
+  if(typeof aogJobWho==='function') aogJobWho();
+  aogScheduleSave();
+  aogUpdateSaveStatus('\u2713 Job loaded');
+  // Hand the status line back to the autosave clock once the tech has seen it.
+  setTimeout(function(){ aogUpdateSaveStatus(); }, 4000);
+}
+
 // Capture the report as a PDF (same rendering pipeline as SAVE IMG — no print
 // dialog). Uses the native share sheet when available, otherwise downloads.
 function capturePDF(btn){
@@ -4007,8 +4148,24 @@ function capturePDF(btn){
     var fileName = mgdPfx + ('AOG_LoadCalc_' + co + (addr?('_'+addr):'') + '_' + stamp)
                      .replace(/[^a-z0-9_\-]+/gi,'_').replace(/_+/g,'_') + '.pdf';
 
+    // Tuck the whole job inside the file before it is written out. Wrapped in
+    // its own try: a metadata failure must not cost the tech the PDF itself.
+    var embedded = false;
+    try{
+      pdf.setProperties({
+        title:   'AOG Load Calculation' + (co && co!=='AOG' ? ' \u2014 ' + co : ''),
+        subject: 'NEC 2020 Art. 220.82 optional-method residential load calculation'
+                 + ' \u2014 reopen this PDF with LOAD in the AOG Load Calc to keep editing',
+        creator: 'AOG Load Calc',
+        keywords: aogPdfPayload()
+      });
+      embedded = true;
+    }catch(e){ console.warn('Could not embed job data in PDF:', e); }
+
     var blob = pdf.output('blob');
     var file = new File([blob], fileName, { type:'application/pdf' });
+    aogUpdateSaveStatus(embedded ? '\u2713 PDF holds this job' : '\u26a0 PDF has no job data');
+    setTimeout(function(){ aogUpdateSaveStatus(); }, 5000);
 
     // Desktop always downloads directly; share sheet is mobile-only
     var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
