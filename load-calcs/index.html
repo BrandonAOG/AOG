@@ -1551,14 +1551,17 @@ var APPLS=[
   /* ── Added Aug 2026. Same caveat as the block above: these VA figures are
      typical residential values, NOT manufacturer data. Confirm against a
      nameplate on the first few jobs and correct the defaults here.
-     All ship at qty 0 so they cost nothing until a tech turns one on.
+     All ship at qty 0 so they cost nothing until a tech turns one on — except
+     the garage door opener, which is on nearly every house here and was being
+     missed. It ships at qty 1 with 720 VA selected; turn it to 0 on the rare
+     job without one.
      Garage door openers, gate operators and attic fans are deliberately NOT
      flagged isMotor. Those are sold by "HP" as a marketing number — a 1/2 HP
      opener's nameplate is about 5.5 A, while NEC 430.248 puts a real 1/2 HP
      120V motor at 9.8 A. Running them through the motor table would nearly
      double the load. 220.82(B)(3) asks for nameplate, so the lists below are
      amp-based. The boat lift IS a real motor and keeps the HP list. */
-  {id:'gdo',  name:'Garage Door Opener', qty:0, va:720,   volt:'120', canGas:false, isMotor:false,
+  {id:'gdo',  name:'Garage Door Opener', qty:1, va:720,   volt:'120', canGas:false, isMotor:false,
      vaOpts:[0, 480, 600, 720, 840, 960, 1200],
      vaLabels:['None — 0 VA','4 A — 480 VA','5 A — 600 VA','6 A — 720 VA',
                '7 A — 840 VA','8 A — 960 VA','10 A — 1,200 VA']},
