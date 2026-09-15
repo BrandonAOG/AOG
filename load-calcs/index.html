@@ -459,7 +459,13 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   .appl-tbl tbody,.appl-tbl tr,.appl-tbl td{display:block;}
   .appl-tbl tr{
     display:grid;
-    grid-template-columns:1fr 56px 56px 32px;
+    /* The last column carries the running total on row 1 and the ✕ on row 3.
+       It was pinned at 32px, which fits "4,500" but not the "GAS +100VA" the
+       total cell prints when an appliance is flagged gas — that ran off the
+       right edge of the screen. auto sizes the column to whichever is widest
+       and gives the rest back to the name; minmax(0,1fr) lets the name column
+       actually shrink, since a bare 1fr refuses to go below its content. */
+    grid-template-columns:minmax(0,1fr) 56px 56px auto;
     grid-template-areas:
       "name  name name  total"
       "va    va   va    va"
