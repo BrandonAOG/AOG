@@ -957,7 +957,7 @@ function renderRuns(){
   $('runs').innerHTML = S.svc==='one'
     ? runCard('a',f.runOne,'LOW PRESSURE',f.low)
     : S.svc==='three'
-    ? runCard('t1','① '+f.runT1,'1ST STAGE',f.high) + runCard('t2','② '+f.runT2,'2 PSI',f.mid) + runCard('t3','③ '+f.runT3,'LOW PRESSURE',f.low)
+    ? runCard('t1','① '+f.runT1,'1ST STAGE',f.high) + runCard('t2','② '+f.runT2,'2ND STAGE',f.mid) + runCard('t3','③ '+f.runT3,'LOW PRESSURE',f.low)
     : runCard('e1',f.runA,S.fuel==='lp'?'1ST STAGE':'ELEVATED',f.high) + runCard('e2',f.runB,'LOW PRESSURE',f.low);
 }
 $('runs').addEventListener('click',e=>{
