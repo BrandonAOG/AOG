@@ -748,10 +748,10 @@ const FUEL = {
       {v:'14wc', wc:14, label:'14" WC (½ PSI)'},
     ],
     high:[
-      {v:'1psi',  p1:1,  dp:0.5, label:'1 PSI (½ PSI drop)'},
-      {v:'2psi',  p1:2,  dp:1,   label:'2 PSI (1 PSI drop) — most common'},
-      {v:'5psi',  p1:5,  dp:3.5, label:'5 PSI (3.5 PSI drop)'},
-      {v:'10psi', p1:10, dp:5,   label:'10 PSI (5 PSI drop)'},
+      {v:'1psi',  p1:1,  dp:0.5, label:'1 PSI'},
+      {v:'2psi',  p1:2,  dp:1,   label:'2 PSI (most common)'},
+      {v:'5psi',  p1:5,  dp:3,   label:'5 PSI'},
+      {v:'10psi', p1:10, dp:5,   label:'10 PSI'},
     ],
     Cr:0.6094, Y:0.9992, btuCf:1000,
     svc:{
@@ -774,10 +774,10 @@ const FUEL = {
       {v:'14wc', wc:14, label:'14" WC (½ PSI)'},
     ],
     high:[
-      {v:'5psi',  p1:5,  dp:1,   label:'5 PSI (1 PSI drop)'},
-      {v:'10psi', p1:10, dp:1,   label:'10 PSI (1 PSI drop) — standard 1st stage'},
-      {v:'15psi', p1:15, dp:1.5, label:'15 PSI (1.5 PSI drop)'},
-      {v:'20psi', p1:20, dp:2,   label:'20 PSI (2 PSI drop)'},
+      {v:'5psi',  p1:5,  dp:1,   label:'5 PSI'},
+      {v:'10psi', p1:10, dp:1,   label:'10 PSI (standard 1st stage)'},
+      {v:'15psi', p1:15, dp:1,   label:'15 PSI'},
+      {v:'20psi', p1:20, dp:2,   label:'20 PSI'},
     ],
     Cr:1.2462, Y:0.9910, btuCf:2516,
     svc:{
@@ -891,6 +891,9 @@ $('svcSeg').addEventListener('click',e=>{
 });
 
 // ── Runs ──────────────────────────────────────────────────────────────
+const DROPS=[0.5,1,2,3,4,5,6,7];
+const dropTxt=d=>d===0.5?'½':String(d);
+function runDrop(r,p){ return (r.drop && r.drop<p.p1) ? r.drop : p.dp; }
 function runCard(id, title, tag, pressList){
   const r=R()[id];
   return `<div class="run" data-run="${id}">
@@ -911,7 +914,11 @@ function runCard(id, title, tag, pressList){
     <div class="field">
       <label for="p-${id}">Pressure</label>
       <select id="p-${id}">${pressList.map(p=>`<option value="${p.v}"${p.v===r.press?' selected':''}>${p.label}</option>`).join('')}</select>
-    </div>
+    </div>${(()=>{const p=pressList.find(x=>x.v===r.press)||pressList[0]; if(p.p1===undefined) return '';
+      const d=runDrop(r,p);
+      return `<div class="field"><label for="d-${id}">Allowed pressure drop</label>
+      <select id="d-${id}" data-drop="1">${DROPS.filter(x=>x<p.p1).map(x=>`<option value="${x}"${x===d?' selected':''}>${dropTxt(x)} PSI drop${x===p.dp?' (typical)':''}</option>`).join('')}</select>
+      <div class="hint">Leaves ${(p.p1-d).toFixed(1).replace('.0','')} PSI at the regulator. Make sure the regulator is rated for that inlet pressure.</div></div>`;})()}
   </div>`;
 }
 function renderRuns(){
@@ -933,7 +940,11 @@ const onField=e=>{
   const card=e.target.closest('[data-run]'); if(!card) return;
   const r=R()[card.dataset.run];
   if(e.target.tagName==='INPUT') r.len=Math.max(0,+e.target.value||0);
-  if(e.target.tagName==='SELECT') r.press=e.target.value;
+  if(e.target.tagName==='SELECT'){
+    if(e.target.dataset.drop) r.drop=+e.target.value;
+    else { r.press=e.target.value; r.drop=null; }
+    if(e.type==='change'){ const id=e.target.id; renderRuns(); const el=$(id); if(el) el.focus({preventScroll:true}); }
+  }
   update();
 };
 $('runs').addEventListener('input',onField);
@@ -978,7 +989,8 @@ $('cAdd').addEventListener('click',()=>{
 // ── Sizing engine ─────────────────────────────────────────────────────
 function colFor(len){ for(let i=0;i<PIPE_LENGTHS.length;i++) if(PIPE_LENGTHS[i]>=len) return i; return -1; } // round UP (CSST tables)
 function sizeRun(run, pressList, needCfh, m){
-  const mat=PIPE_MATERIALS[run.mat], p=pressList.find(x=>x.v===run.press)||pressList[0], f=F();
+  const mat=PIPE_MATERIALS[run.mat], f=F(); let p=pressList.find(x=>x.v===run.press)||pressList[0];
+  if(p.p1!==undefined){ const d=runDrop(run,p); p={...p, dp:d, label:p.label.replace(/\s*\(.*\)/,'')+' · '+dropTxt(d)+' PSI drop'}; }
   const L=Math.max(1,run.len);
   if(L>500) return {over:true, mat, p};
   let rows, basis;
