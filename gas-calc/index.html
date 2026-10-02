@@ -522,15 +522,15 @@ const GM = [
    desc:"Air-cooled · G-Force 1000 · 2-cyl 999cc · 3,600 RPM · 48\"L × 25\"W × 29\"H"},
 
   // ── NEW: 24kW Legacy (G007209-10 / G007210-10) ──────────────────
-  // Source: Generac spec sheet A0000937814 Rev. E — 20/22/24 kW Guardian
+  // Source: A0000937814 Rev. F (09/28/2022); fuel from Generac 24kW product page (sheet leaves the 24kW fuel column blank)
   {cooled:"air", kw_ng:21,   kw_lp:24,  label:"24kW  · G007209-10 / G007210-10", model:"Generac 24kW Guardian (Legacy)", num:"G007209-10 / G007210-10", grp:"Guardian — Legacy Series",
-   ng_cfh_f:287,  ng_cfh_h:164,  lp_gph_f:3.74, lp_gph_h:2.36,
+   ng_cfh_f:306,  ng_cfh_h:203,  lp_gph_f:3.90, lp_gph_h:2.53,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
    snd:"67 / 57 dB(A) normal / Quiet-Test", warr:"5 Year limited", der_pct:3.5, der_above:0, cb:100, weight:"455 lb",
    desc:"Air-cooled · G-Force 1000 · 2-cyl 999cc · 3,600 RPM · 48\"L × 25\"W × 29\"H"},
 
   // ── NEW: 26kW Legacy (G007290-0 / G007291-0) ────────────────────
-  // Source: Generac spec sheet A0002026894 Rev. D — 26 kW Guardian
+  // Source: Generac spec sheet A0002026894 Rev. E (02/17/2026) — 26 kW Guardian
   {cooled:"air", kw_ng:22.5, kw_lp:26,  label:"26kW  · G007290-0 / G007291-0",  model:"Generac 26kW Guardian (Legacy)", num:"G007290-0 / G007291-0",  grp:"Guardian — Legacy Series",
    ng_cfh_f:333,  ng_cfh_h:188,  lp_gph_f:3.63, lp_gph_h:2.06,
    ng_btu_cf:1000, lp_btu_gal:91500, req_ng:'3.5–7" WC', req_lp:'10–12" WC',
@@ -803,10 +803,10 @@ const FUEL = {
     svc:{
       one:{b:'Twin-stage at tank', s:'11" WC line · one run', hint:'Integral twin-stage regulator at the tank. One low-pressure run from the tank to the generator.'},
       two:{b:'Two-stage', s:'1st stage → 2nd stage → gen', hint:'First-stage regulator at the tank (≈10 PSI line), second-stage regulator near the generator (11" WC). Each side is sized separately.'},
-      three:{b:'Three-stage', s:'10 PSI → 2 PSI → 11" WC (attic)', hint:'For runs through the attic or house. 1st stage at the tank (10 PSI), a 2 PSI regulator outside before the line enters the building, then a final regulator at the generator (11" WC). All three runs are sized separately.'},
+      three:{b:'Three-stage', s:'10 PSI → 2 PSI → 11" WC (attic)', hint:'For runs through the attic or house. 1st stage at the tank (10 PSI), a second-stage PSI regulator (½–5 PSI) outside before the line enters the building, then a final regulator at the generator (11" WC). All three runs are sized separately.'},
     },
     runOne:'Tank Regulator → Generator', runA:'1st Stage → 2nd Stage Reg.', runB:'2nd Stage Reg. → Generator',
-    runT1:'1st Stage → 2 PSI Reg.', runT2:'2 PSI Reg. → Final Reg. (attic)', runT3:'Final Reg. → Generator',
+    runT1:'1st Stage → 2nd Stage PSI Reg.', runT2:'2nd Stage PSI Reg. → Final Reg. (attic)', runT3:'Final Reg. → Generator',
     defaults:()=>({a:{len:30,mat:'pe',press:'11wc'}, e1:{len:50,mat:'pe',press:'10psi'}, e2:{len:15,mat:'steel',press:'11wc'},
       t1:{len:20,mat:'pe',press:'10psi'}, t2:{len:60,mat:'csst',press:'2psi'}, t3:{len:10,mat:'steel',press:'11wc'}}),
     full:m=>m.lp_gph_f, half:m=>m.lp_gph_h, kw:m=>m.kw_lp, req:m=>m.req_lp,
@@ -839,7 +839,7 @@ function renderApps(){
   $('teeWrap').hidden = S.svc!=='one';
   $('teeSeg').querySelector('[data-tee="0"] b').textContent = S.fuel==='ng'?'Own line from meter':'Own line from tank';
   $('appHint').textContent = S.svc==='three'
-    ? `Add everything else fed from this tank. Their load is added to runs ① and ② and to the first-stage and 2 PSI regulator ratings. Run ③ to the generator is sized for the generator only.`
+    ? `Add everything else fed from this tank. Their load is added to runs ① and ② and to the first-stage and second-stage PSI regulator ratings. Run ③ to the generator is sized for the generator only.`
     : S.svc==='two'
     ? `Add everything else fed from this ${src}. Their load is added to run ① (${F().runA}) and the ${S.fuel==='ng'?'meter':'first-stage regulator'} check. Run ② to the generator is sized for the generator only.`
     : `Add everything else fed from this ${src}. It's always counted toward the ${S.fuel==='ng'?'meter':'tank regulator'} capacity. It only changes the pipe size if the generator tees into the house line.`;
@@ -1087,11 +1087,11 @@ function update(){
     const sysBtu=genBtu+S.extra;
     regs=[
       ['1st stage (tank)', sysBtu, 'tank pressure', `${p1.p1} PSI out`],
-      ['2 PSI regulator', sysBtu, `${in2} PSI in`, `${p2.p1} PSI out`],
+      ['2nd stage PSI reg.', sysBtu, `${in2} PSI in`, `${p2.p1} PSI out`],
       ['Final reg. (at gen)', genBtu, `${in3} PSI in`, `${(f.low.find(x=>x.v===r3.press)||f.low[0]).wc}" WC out`],
     ];
     warns.push(`Each regulator must be rated for its BTU/hr <b>at the inlet pressure it actually sees</b> (see Regulators above). Check the capacity chart at that inlet, not the max.`);
-    warns.push(`Keep the 2 PSI and final regulators outdoors. A regulator inside the attic must be vented outdoors or have a listed vent limiter, and must be accessible (NFPA 54 / IFGC 410).`);
+    warns.push(`Keep the second-stage PSI regulator and final regulator outdoors. A regulator inside the attic must be vented outdoors or have a listed vent limiter, and must be accessible (NFPA 54 / IFGC 410).`);
     warns.push(`Piping inside the building is limited to 5 PSI (IFGC 402.6) — never run the 10 PSI section through the attic.`);
     if(r2.mat==='csst'||r2.mat==='tracpipe') warns.push(`CSST in the attic: bond per the manufacturer (typically 6 AWG Cu to the grounding electrode system), support it, and use striker plates through framing. Use the manufacturer's ${p2.p1} PSI chart.`);
     if(r1.mat==='pe'&&r2.mat==='pe') warns.push('Run ② goes through the building — PE is not allowed there. Use CSST or galvanized.');
