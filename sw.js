@@ -1,33 +1,89 @@
 // ============================================================
 //  Always On Generators – Field Hub
-//  Service Worker  |  sw.js  |  Version: aog-forms-v2.5.0
-//  Scope: root (../)
+//  Service Worker  |  sw.js  |  Version: v2.5.1
 //
 //  ⚠ WHEN YOU UPDATE ANY TOOL:
-//    1. Bump CACHE_NAME
+//    1. Bump CACHE_VERSION
 //    2. Update CHANGELOG below with what changed
+//
+//  ⚠ THIS SAME FILE GOES ON BOTH THE PUBLIC SITE AND THE TEST SITE.
+//    Do not give them different version strings any more — the cache name
+//    now includes the scope, so /TESTAOG/ and the public root get separate
+//    caches automatically. See the note on CACHE_PREFIX below.
 // ============================================================
 
-var CACHE_NAME = 'aog-forms-v2.5.0';
-var DEV_MODE   = false;
+// The cache name now carries this build's SCOPE, not just a version string.
+// WHY: CacheStorage is per-ORIGIN, not per-scope. Both service workers live on
+// https://brandonaog.github.io, so caches.keys() in activate() returned the OTHER
+// build's cache too — and the old `if (cacheName !== CACHE_NAME) delete` line
+// therefore DELETED THE PUBLIC SITE'S ENTIRE OFFLINE CACHE every time the test
+// site activated, and vice versa. Every switch between the two forced a full
+// 52-file re-download. A literal prefix could not fix it either: 'aog-forms-v'
+// is itself a prefix of 'aog-forms-vTEST2.5.0', so public would still eat test.
+// The scope is different by construction, so this cannot collide.
+var CACHE_VERSION = 'v2.6.0';
+var CACHE_PREFIX  = 'aog-forms::' + self.registration.scope + '::';
+var CACHE_NAME    = CACHE_PREFIX + CACHE_VERSION;
+
+/* DATA CACHE — deliberately NOT versioned, and never deleted on activation.
+   The county address-point files are 4–11 MB each and are fetched on demand, then kept by
+   the cache-first rule below. They used to live in the versioned cache alongside the app,
+   which meant every single release threw them away: Brandon's own storage probe on 2026-09-26
+   showed the public build (settled on one version) holding lee 10.86 MB + collier 4.39 MB,
+   while the freshly-updated test build held neither. A tech who takes an update and then
+   drives to a job is the person who pays for that, re-downloading 15 MB on one bar of signal
+   to look up the first parcel of the day.
+   The app's own files stay versioned — those SHOULD be replaced on release. Only fetched
+   data lives here, and its filenames already carry their own version (…_v3.json.gz), so a
+   genuinely new dataset misses this cache once and refills it. */
+var DATA_CACHE    = CACHE_PREFIX + 'data';
+
+// What the UPDATE BANNER / FOOTER shows the user. CACHE_NAME is now a long
+// internal string with the site address inside it, which must never reach the
+// screen — so the display version is rebuilt in the old familiar format, with
+// the TEST marker derived from the scope. Test site shows aog-forms-vTEST2.5.1,
+// public shows aog-forms-v2.5.1, from this one identical file.
+// NOTE: this keys off the word "test" appearing in the folder name (TESTAOG).
+// If the test site ever moves to a folder without "test" in it, set this by hand.
+var IS_TEST_BUILD   = /test/i.test(self.registration.scope);
+var DISPLAY_VERSION = 'aog-forms-v' + (IS_TEST_BUILD ? 'TEST' : '') +
+                      CACHE_VERSION.replace(/^v/, '');
+
+/* ONE-TIME MIGRATION off the old flat naming ('aog-forms-v2.5.0' / 'aog-forms-vTEST2.5.0').
+   Those names do not carry the scope, so the prefix test in activate() can never match them and
+   they would sit orphaned forever — measured on the test site: 23 MB of dead cache alongside the
+   live one. This must NOT be a blanket 'aog-forms-' sweep: while one site is migrated and the
+   other is not, a blanket sweep would delete the un-migrated site's LIVE cache, which is exactly
+   the bug the scope prefix was introduced to fix. So each build only ever clears its own legacy
+   name — and the negative lookahead matters, because 'aog-forms-v' is itself a prefix of
+   'aog-forms-vTEST...', so the public build would otherwise eat the test build's legacy cache. */
+var LEGACY_CACHE_RE = IS_TEST_BUILD ? /^aog-forms-vTEST/ : /^aog-forms-v(?!TEST)/;
+
+var DEV_MODE   = false;   // ← SET TRUE during development/testing
 
 // Tracks whether this SW instance has already run a precache repair pass
 var _repairRan = false;
+/* Handles for the delayed repair pass armed in the fetch handler, so an explicit
+   "Update Now" can release it instead of waiting it out. See the note at that site. */
+var _repairTimer = null, _repairRelease = null;
 
 // Stores last known cache progress so late-loading pages can request it
-var cacheProgress = { percent: 0, label: '', done: false }; // ← SET TRUE during development/testing
+var cacheProgress = { percent: 0, label: '', done: false };
 
 // ============================================================
-//  CHANGELOG — Update this every time you bump CACHE_NAME.
+//  CHANGELOG — Update this every time you bump CACHE_VERSION.
 //  This is what shows up in the update banner on their device.
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-'🧱 NEW: CONCRETE CALCULATOR — slab, column & footing volume, bags & yardage',
-'🗺️ SITE PLAN ANNOTATOR — complete refresh, now with Adobe Acrobat support',
-'📝 ELECTRICAL INSTALL FORM footer bumped to V1.1 — check whether anyone is still on a stale copy',
+'📖 PROPERTY LOOKUP — live municipal code lookups, pulled from each city or county’s own code',
+'🗺️ PROPERTY LOOKUP — now live in 62 Florida counties',
+'⛽ GAS CALC — easier steps, propane added, code-accurate pipe sizing',
+'⛽ GAS CALC — house appliances, safety warnings, Copy for Job Notes',
+'📋 SPEC VIEWER — search by model or kW, specs + manual in one place',
+'📋 SPEC VIEWER — fixed XG 25/30kW and NextGen spec data',
 ];
-// 
+//
 // ============================================================
 
 var PRECACHE_URLS = [
@@ -127,7 +183,7 @@ self.addEventListener('install', function(event) {
         console.log('[SW] Pre-caching core files');
         var total = PRECACHE_URLS.length;
         var completed = 0;
-        var scope = self.registration.scope; // e.g. https://brandonaog.github.io/AOGTEST/
+        var scope = self.registration.scope; // e.g. https://brandonaog.github.io/TESTAOG/
 
         // Combine all URLs to cache: app pages + CDN assets + fonts
         var allUrls = PRECACHE_URLS.concat(PRECACHE_CDN).concat(PRECACHE_FONTS);
@@ -181,8 +237,17 @@ self.addEventListener('activate', function(event) {
       .then(function(cacheNames) {
         return Promise.all(
           cacheNames.map(function(cacheName) {
-            if (cacheName !== CACHE_NAME) {
+            // ONLY delete caches belonging to THIS build (same scope prefix).
+            // Without the prefix test, this deleted the other site's cache —
+            // see the CACHE_PREFIX note at the top of this file.
+            if (cacheName.indexOf(CACHE_PREFIX) === 0 &&
+                cacheName !== CACHE_NAME && cacheName !== DATA_CACHE) {
               console.log('[SW] Deleting old cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+            // ...and this build's own pre-migration cache, once. See LEGACY_CACHE_RE above.
+            if (LEGACY_CACHE_RE.test(cacheName)) {
+              console.log('[SW] Deleting legacy-named cache:', cacheName);
               return caches.delete(cacheName);
             }
           })
@@ -206,6 +271,13 @@ self.addEventListener('activate', function(event) {
 // the CDN libraries/fonts (a library that failed to cache on install is exactly
 // the "PDF export doesn't work offline" failure, so repair those too).
 // Safe to run repeatedly; only fetches what's absent.
+/* Cancel the delayed repair and settle its waitUntil right now, so it stops holding up an
+   activation the user explicitly asked for. Safe to call when nothing is pending. */
+function releasePendingRepair() {
+  if (_repairTimer) { clearTimeout(_repairTimer); _repairTimer = null; }
+  if (_repairRelease) { var r = _repairRelease; _repairRelease = null; try { r(); } catch (e) {} }
+}
+
 function ensurePrecached() {
   return caches.open(CACHE_NAME).then(function(cache) {
     var scope = self.registration.scope;
@@ -240,7 +312,10 @@ self.addEventListener('fetch', function(event) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
   // Safari fix: skip cross-origin requests that aren't in our CDN list —
-  // Safari throws on certain cross-origin fetches inside the SW
+  // Safari throws on certain cross-origin fetches inside the SW.
+  // NOTE: arcgisonline.com is deliberately NOT here, so every basemap tile and
+  // every parcel query bypasses this worker entirely and goes straight to the
+  // network. The map's tile behaviour is not affected by anything in this file.
   var isSameOrigin = url.origin === self.location.origin;
   var isAllowedCDN = url.hostname.includes('fonts.googleapis.com') ||
                      url.hostname.includes('fonts.gstatic.com')    ||
@@ -275,12 +350,29 @@ self.addEventListener('fetch', function(event) {
   var accept = request.headers.get('Accept') || '';
 
   if (accept.includes('text/html')) {
-    // Once per SW startup (the browser kills and restarts SWs constantly),
-    // piggyback a background repair pass on the first page navigation so any
-    // precache entry that failed earlier gets retried whenever there's network.
+    // Once per SW startup (the browser kills and restarts SWs constantly), run a
+    // background repair pass so any precache entry that failed earlier gets
+    // retried whenever there's network.
+    // DELAYED BY 5s: this checks 52 entries and refetches any that are missing.
+    // Firing it the instant a page navigates put that burst in direct competition
+    // with the page's own loading — and on the property-lookup page, concurrent
+    // requests are exactly what starves the map tiles. Still inside waitUntil so
+    // the browser will not kill the worker mid-repair.
+    /* The handles below let this pending waitUntil be CANCELLED. Measured 2026-09-26: a
+       pending waitUntil is an "extended lifetime promise", and the spec makes an incoming
+       worker's activation wait for the outgoing worker's to settle. So a user who tapped
+       "Update Now" inside this 5-second window sat looking at "Updating…" until the timer
+       expired — 3.7s to get the app back, versus 1.05s outside the window. The delay is
+       still worth having (see above), it just must not outrank an explicit user action. */
     if (!_repairRan) {
       _repairRan = true;
-      event.waitUntil(ensurePrecached().catch(function(){}));
+      event.waitUntil(new Promise(function(resolve) {
+        _repairRelease = resolve;
+        _repairTimer = setTimeout(function() {
+          _repairTimer = null;
+          ensurePrecached().catch(function(){}).then(resolve, resolve);
+        }, 5000);
+      }));
     }
     event.respondWith(staleWhileRevalidate(request));
     return;
@@ -330,7 +422,7 @@ self.addEventListener('fetch', function(event) {
   // they fell through to networkFirst and re-downloaded 5–11 MB per file on every
   // online visit even though a cached copy was sitting right there.
   if (url.pathname.match(/\.(json|json\.gz|geojson)$/i)) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(cacheFirst(request, DATA_CACHE));   // survives releases — see DATA_CACHE
     return;
   }
 
@@ -352,6 +444,40 @@ function _cacheable(res) {
   return !!res && (res.ok || res.type === 'opaque' || res.type === 'opaqueredirect');
 }
 
+/* ── OPAQUE PADDING ────────────────────────────────────────────────────────────────────
+   A cross-origin file fetched no-cors (which is how the browser fetches a <link rel=
+   stylesheet> or a font) comes back "opaque": the page cannot read it, so the browser pads
+   what it bills against the storage quota, to stop a site measuring a file it is not allowed
+   to see. Measured in Edge/Chromium on 2026-09-26, the same 20 KB file:
+        no-cors -> opaque -> billed 8887.2 KB        cors -> cors -> billed 20.3 KB
+   437x, for identical bytes. On this app that was 10 cached files — 409 KB of real Google
+   Fonts CSS — being billed about 87 MB, and still climbing as pages with new font families
+   were visited.
+
+   Fetching the same URL WITH cors makes it readable, so there is nothing to hide and nothing
+   to pad. All 10 hosts were checked against the live services before this was written and all
+   10 answered with Access-Control-Allow-Origin — but a host can change its mind, so a failure
+   here is not an error: the opaque copy is stored exactly as before and the only cost is one
+   wasted request. The page is never made to wait for this; it already has its response. */
+var CORS_OK_HOSTS = /^(fonts\.googleapis\.com|fonts\.gstatic\.com|cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|unpkg\.com)$/;
+
+function putUnpadded(cache, request, response) {
+  if (!response || response.type !== 'opaque') return cache.put(request, response);
+
+  var host = '';
+  try { host = new URL(request.url).hostname; } catch (e) {}
+  if (!CORS_OK_HOSTS.test(host)) return cache.put(request, response);
+
+  return fetch(request.url, { mode: 'cors', credentials: 'omit' }).then(function(corsRes) {
+    /* Only swap for a genuinely readable reply. A host that quietly answers without the
+       header yields another opaque response, which would buy nothing. */
+    if (corsRes && corsRes.ok && corsRes.type === 'cors') return cache.put(request, corsRes);
+    return cache.put(request, response);
+  }).catch(function() {
+    return cache.put(request, response);          // no CORS, or offline — keep what we had
+  });
+}
+
 function networkRace(request, timeoutMs) {
   return caches.open(CACHE_NAME).then(function(cache) {
     return cache.match(request).then(function(hit) {
@@ -359,7 +485,16 @@ function networkRace(request, timeoutMs) {
     }).then(function(cached) {
       var networkFetch = fetch(request).then(function(res) {
         if (_cacheable(res)) {
-          caches.open(CACHE_NAME).then(function(c) { c.put(request, res.clone()); });
+          /* CLONE FIRST, SYNCHRONOUSLY — fixed 2026-09-25.
+             This used to read:  caches.open(CACHE_NAME).then(c => c.put(request, res.clone()))
+             caches.open() is async, so by the time its callback ran, `res` had already been
+             returned below and its body consumed by the page — and cloning a used Response
+             throws "Response body is already used". Two files route through networkRace
+             (sounds.js and update-banner.js), which is exactly the two errors seen per load.
+             The consequence was that neither ever got refreshed in the cache by this path.
+             `cache` from the enclosing caches.open() is already in scope, so there is no need
+             to open it a second time and no async gap in which the body can be consumed. */
+          cache.put(request, res.clone());
         }
         return res;
       });
@@ -386,7 +521,7 @@ function networkFirst(request) {
         var responseClone = networkResponse.clone();
         caches.open(CACHE_NAME).then(function(cache) {
           cache.put(request, responseClone);
-        });
+        }).catch(function(){});   // storage full / evicted mid-write — the response still went out
       }
       return networkResponse;
     })
@@ -441,7 +576,7 @@ function staleWhileRevalidate(request) {
     }).then(function(cachedResponse) {
       var networkFetch = fetch(request).then(function(networkResponse) {
         if (_cacheable(networkResponse)) {
-          cache.put(request, networkResponse.clone());
+          putUnpadded(cache, request, networkResponse.clone());
         }
         return networkResponse;
       }).catch(function(err) {
@@ -465,15 +600,18 @@ function staleWhileRevalidate(request) {
 // ============================================================
 //  STRATEGY: Cache First
 // ============================================================
-function cacheFirst(request) {
+/* cacheName is optional and defaults to this build's versioned cache. The lookup still uses
+   caches.match() with no name, which searches EVERY cache on the origin — so a file already
+   sitting in an older versioned cache is still served, and only the write location changes. */
+function cacheFirst(request, cacheName) {
   return caches.match(request).then(function(cachedResponse) {
     if (cachedResponse) return cachedResponse;
     return fetch(request).then(function(networkResponse) {
       if (_cacheable(networkResponse)) {
         var responseClone = networkResponse.clone();
-        caches.open(CACHE_NAME).then(function(cache) {
-          cache.put(request, responseClone);
-        });
+        caches.open(cacheName || CACHE_NAME).then(function(cache) {
+          putUnpadded(cache, request, responseClone);
+        }).catch(function(){});   // same: caching is best-effort, the fetch already succeeded
       }
       return networkResponse;
     }).catch(function() {
@@ -490,20 +628,76 @@ self.addEventListener('message', function(event) {
   // User tapped "Update Now" — activate and let page reload
   if (event.data && event.data.action === 'SKIP_WAITING') {
     console.log('[SW] User approved update — activating now');
+    releasePendingRepair();          // in case this worker is also the one holding one
     self.skipWaiting();
   }
 
+  /* Sent to the CONTROLLING (outgoing) worker the moment the user taps "Update Now".
+     SKIP_WAITING goes to the waiting worker, which is a different global — it cannot reach
+     the timer this one is holding. Without this message the outgoing worker keeps the page
+     on "Updating…" for the remainder of its 5-second repair delay.
+     Nothing is lost by cancelling: the incoming worker runs ensurePrecached() in its own
+     activate handler moments later. */
+  if (event.data && event.data.action === 'RELEASE_FOR_UPDATE') {
+    releasePendingRepair();
+  }
+
+  /* How complete is the offline install? Counts the precache list against what is
+     actually in the cache — ~52 cache.match calls, no network, so it is cheap enough to
+     ask on every page load. The POINT is that a tech learns their offline copy is
+     incomplete WHILE THEY STILL HAVE SIGNAL, instead of finding out in a yard.
+     ensurePrecached() already repairs this silently, but only when there is a connection
+     at that moment, and nobody was ever told there had been a problem. */
+  if (event.data && event.data.action === 'GET_CACHE_HEALTH') {
+    (function () {
+      var port = event.ports[0];
+      if (!port) return;
+      caches.open(CACHE_NAME).then(function (cache) {
+        var scope = self.registration.scope;
+        var all = PRECACHE_URLS.concat(PRECACHE_CDN).concat(PRECACHE_FONTS);
+        return Promise.all(all.map(function (url) {
+          var absUrl = url.startsWith('http') ? url : new URL(url, scope).href;
+          return cache.match(absUrl).then(function (hit) { return hit ? 0 : 1; })
+                      .catch(function () { return 0; });   // unreadable != missing
+        })).then(function (misses) {
+          var missing = misses.reduce(function (a, b) { return a + b; }, 0);
+          port.postMessage({ action: 'CACHE_HEALTH', total: all.length,
+                             missing: missing, version: DISPLAY_VERSION });
+        });
+      }).catch(function () {
+        // Never leave the page hanging on a reply it is awaiting.
+        try { port.postMessage({ action: 'CACHE_HEALTH', total: 0, missing: 0, error: true }); } catch (e) {}
+      });
+    })();
+  }
+
+  /* Repair on demand — the same pass activate() runs, triggered by the user. */
+  if (event.data && event.data.action === 'REPAIR_CACHE') {
+    (function () {
+      var port = event.ports[0];
+      ensurePrecached().then(function () {
+        if (port) port.postMessage({ action: 'REPAIR_DONE', ok: true });
+      }).catch(function () {
+        if (port) port.postMessage({ action: 'REPAIR_DONE', ok: false });
+      });
+    })();
+  }
+
   if (event.data && event.data.action === 'CLEAR_CACHE') {
+    // Same origin-wide hazard as activate(): without the prefix test this wiped
+    // the OTHER site's offline cache as well as this one's.
     caches.keys().then(function(keys) {
-      keys.forEach(function(key) { caches.delete(key); });
-    });
+      keys.forEach(function(key) {
+        if (key.indexOf(CACHE_PREFIX) === 0) caches.delete(key);
+      });
+    }).catch(function(){});
     event.ports[0].postMessage({ result: 'Cache cleared' });
   }
 
   // Page asks new waiting SW what changed — reply with fresh changelog
   if (event.data && event.data.action === 'GET_CHANGELOG') {
     event.ports[0].postMessage({
-      version:   CACHE_NAME,
+      version:   DISPLAY_VERSION,   // NOT CACHE_NAME — that is internal now
       changelog: CHANGELOG
     });
   }
