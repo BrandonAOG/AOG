@@ -63,6 +63,15 @@ button{font:inherit;color:inherit}
 .models .chip b{font-size:1.1rem}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .seg .chip{text-align:center}
+.seg.three{grid-template-columns:1fr 1fr}
+.seg.three .chip:last-child{grid-column:1/-1}
+@media(min-width:620px){.seg.three{grid-template-columns:1fr 1fr 1fr}.seg.three .chip:last-child{grid-column:auto}}
+.regs{margin:12px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.regs-h{padding:8px 12px;font-family:var(--disp);font-size:.72rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent,#FBBF24);border-bottom:1px solid var(--line)}
+.regs table{width:100%;border-collapse:collapse;font-size:.86rem}
+.regs th,.regs td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)}
+.regs th{font-size:.7rem;letter-spacing:1px;text-transform:uppercase;opacity:.7}
+.regs tr:last-child td{border-bottom:none}
 .seg .chip b{display:block;font-size:1rem}
 
 /* runs */
@@ -78,7 +87,9 @@ button{font:inherit;color:inherit}
 .stepper input{flex:1;min-width:0;min-height:48px;border:2px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:inherit;font-size:1.3rem;font-weight:700;text-align:center}
 .stepper input:focus,select:focus{outline:none;border-color:var(--accent)}
 .quick{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-.quick .chip{min-height:36px;padding:4px 12px;font-size:.85rem}
+.quick .chip{min-height:38px;min-width:48px;padding:4px 10px;font-size:.85rem;text-align:center}
+.quick{display:grid;grid-template-columns:repeat(8,minmax(0,64px))}
+@media(max-width:480px){.quick{display:grid;grid-template-columns:repeat(6,1fr)}.quick .chip{min-width:0;padding:4px 2px}}
 select{width:100%;min-height:48px;padding:0 12px;border:2px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:inherit;font-size:1rem;font-weight:600}
 
 /* more */
@@ -124,7 +135,8 @@ tr.rec td{background:var(--chipOn)}
 /* sticky mini answer (mobile) */
 .mini{position:fixed;left:0;right:0;bottom:0;z-index:60;padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom));background:var(--card);border-top:2px solid var(--accent);display:flex;align-items:center;gap:12px;transform:translateY(110%);transition:transform .2s}
 .mini.show{transform:none}
-.mini .t{flex:1;font-weight:700;font-size:.95rem;min-width:0}
+.mini .t{flex:1;font-weight:700;font-size:.95rem;min-width:0;text-align:center}
+@media(min-width:600px){.mini::before{content:"";flex:0 0 76px}.mini button{min-width:76px}}
 .mini .t small{display:block;font-weight:500;color:var(--dim);font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mini button{min-height:44px;padding:0 14px;border-radius:10px;border:none;background:var(--accent);color:#111;font-weight:700;cursor:pointer}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ok);color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;opacity:0;transition:opacity .2s;pointer-events:none;z-index:70}
@@ -779,13 +791,24 @@ const FUEL = {
       {v:'15psi', p1:15, dp:1,   label:'15 PSI'},
       {v:'20psi', p1:20, dp:2,   label:'20 PSI'},
     ],
+    mid:[
+      {v:'0.5psi', p1:0.5, dp:0.1, label:'½ PSI'},
+      {v:'1psi',   p1:1,   dp:0.5, label:'1 PSI'},
+      {v:'2psi',   p1:2,   dp:1,   label:'2 PSI (most common)'},
+      {v:'3psi',   p1:3,   dp:1,   label:'3 PSI'},
+      {v:'4psi',   p1:4,   dp:2,   label:'4 PSI'},
+      {v:'5psi',   p1:5,   dp:3,   label:'5 PSI (max inside a building)'},
+    ],
     Cr:1.2462, Y:0.9910, btuCf:2516,
     svc:{
       one:{b:'Twin-stage at tank', s:'11" WC line · one run', hint:'Integral twin-stage regulator at the tank. One low-pressure run from the tank to the generator.'},
       two:{b:'Two-stage', s:'1st stage → 2nd stage → gen', hint:'First-stage regulator at the tank (≈10 PSI line), second-stage regulator near the generator (11" WC). Each side is sized separately.'},
+      three:{b:'Three-stage', s:'10 PSI → 2 PSI → 11" WC (attic)', hint:'For runs through the attic or house. 1st stage at the tank (10 PSI), a 2 PSI regulator outside before the line enters the building, then a final regulator at the generator (11" WC). All three runs are sized separately.'},
     },
     runOne:'Tank Regulator → Generator', runA:'1st Stage → 2nd Stage Reg.', runB:'2nd Stage Reg. → Generator',
-    defaults:()=>({a:{len:30,mat:'pe',press:'11wc'}, e1:{len:50,mat:'pe',press:'10psi'}, e2:{len:15,mat:'steel',press:'11wc'}}),
+    runT1:'1st Stage → 2 PSI Reg.', runT2:'2 PSI Reg. → Final Reg. (attic)', runT3:'Final Reg. → Generator',
+    defaults:()=>({a:{len:30,mat:'pe',press:'11wc'}, e1:{len:50,mat:'pe',press:'10psi'}, e2:{len:15,mat:'steel',press:'11wc'},
+      t1:{len:20,mat:'pe',press:'10psi'}, t2:{len:60,mat:'csst',press:'2psi'}, t3:{len:10,mat:'steel',press:'11wc'}}),
     full:m=>m.lp_gph_f, half:m=>m.lp_gph_h, kw:m=>m.kw_lp, req:m=>m.req_lp,
     needCfh:m=>m.lp_gph_f*m.lp_btu_gal/2516,  // GPH → ft³/hr of LP vapor
     cfhToUnit:(c,m)=>c*2516/m.lp_btu_gal, extraCfh:b=>b/2516,
@@ -815,7 +838,9 @@ function renderApps(){
   const src=S.fuel==='ng'?'meter':'tank';
   $('teeWrap').hidden = S.svc!=='one';
   $('teeSeg').querySelector('[data-tee="0"] b').textContent = S.fuel==='ng'?'Own line from meter':'Own line from tank';
-  $('appHint').textContent = S.svc==='two'
+  $('appHint').textContent = S.svc==='three'
+    ? `Add everything else fed from this tank. Their load is added to runs ① and ② and to the first-stage and 2 PSI regulator ratings. Run ③ to the generator is sized for the generator only.`
+    : S.svc==='two'
     ? `Add everything else fed from this ${src}. Their load is added to run ① (${F().runA}) and the ${S.fuel==='ng'?'meter':'first-stage regulator'} check. Run ② to the generator is sized for the generator only.`
     : `Add everything else fed from this ${src}. It's always counted toward the ${S.fuel==='ng'?'meter':'tank regulator'} capacity. It only changes the pipe size if the generator tees into the house line.`;
   $('appList').innerHTML = S.apps.map((a,i)=>`
@@ -845,12 +870,14 @@ const matName = k => MATS.find(x=>x.k===k).short;
 $('fuelSeg').addEventListener('click',e=>{
   const b=e.target.closest('[data-fuel]'); if(!b) return;
   S.fuel=b.dataset.fuel;
+  if(!F().svc[S.svc]) S.svc='two';
   $('fuelSeg').querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c===b));
   document.body.classList.toggle('fuel-lp',S.fuel==='lp');
   renderFuel(); renderApps(); update();
 });
 function renderFuel(){
-  $('svcSeg').innerHTML = ['one','two'].map(k=>`<button class="chip" data-svc="${k}" aria-pressed="${S.svc===k}"><b>${F().svc[k].b}</b><small>${F().svc[k].s}</small></button>`).join('');
+  $('svcSeg').innerHTML = Object.keys(F().svc).map(k=>`<button class="chip" data-svc="${k}" aria-pressed="${S.svc===k}"><b>${F().svc[k].b}</b><small>${F().svc[k].s}</small></button>`).join('');
+  $('svcSeg').classList.toggle('three',Object.keys(F().svc).length>2);
   $('svcHint').textContent = F().svc[S.svc].hint;
   renderRuns();
 }
@@ -891,9 +918,13 @@ $('svcSeg').addEventListener('click',e=>{
 });
 
 // ── Runs ──────────────────────────────────────────────────────────────
-const DROPS=[0.5,1,2,3,4,5,6,7];
-const dropTxt=d=>d===0.5?'½':String(d);
-function runDrop(r,p){ return (r.drop && r.drop<p.p1) ? r.drop : p.dp; }
+const QUICK=[5,10,15,20,25,30,40,50,60,75,100,125,150,200,250,300];
+const markQuick=(card,len)=>card.querySelectorAll('[data-len]').forEach(c=>c.setAttribute('aria-pressed',+c.dataset.len===len));
+const DROPS=[0.1,0.25,0.5,1,2,3,4,5,6,7];
+const dropTxt=d=>d===0.5?'½':d===0.25?'¼':String(d);
+const psiTxt=v=>String(+v.toFixed(2));
+const dropOpts=p=>DROPS.filter(x=>x<p.p1 && (x>=0.5 || p.p1<=1));
+function runDrop(r,p){ return (r.drop && r.drop<p.p1 && (r.drop>=0.5||p.p1<=1)) ? r.drop : p.dp; }
 function runCard(id, title, tag, pressList){
   const r=R()[id];
   return `<div class="run" data-run="${id}">
@@ -905,7 +936,7 @@ function runCard(id, title, tag, pressList){
         <input id="len-${id}" type="number" inputmode="numeric" min="1" max="500" value="${r.len}">
         <button data-d="5" aria-label="Plus 5 feet">+</button>
       </div>
-      <div class="quick">${[10,25,50,75,100,150].map(v=>`<button class="chip" data-len="${v}">${v}</button>`).join('')}</div>
+      <div class="quick">${QUICK.map(v=>`<button class="chip" data-len="${v}" aria-pressed="${r.len===v}">${v}</button>`).join('')}</div>
     </div>
     <div class="field">
       <label>Pipe material</label>
@@ -917,14 +948,16 @@ function runCard(id, title, tag, pressList){
     </div>${(()=>{const p=pressList.find(x=>x.v===r.press)||pressList[0]; if(p.p1===undefined) return '';
       const d=runDrop(r,p);
       return `<div class="field"><label for="d-${id}">Allowed pressure drop</label>
-      <select id="d-${id}" data-drop="1">${DROPS.filter(x=>x<p.p1).map(x=>`<option value="${x}"${x===d?' selected':''}>${dropTxt(x)} PSI drop${x===p.dp?' (typical)':''}</option>`).join('')}</select>
-      <div class="hint">Leaves ${(p.p1-d).toFixed(1).replace('.0','')} PSI at the regulator. Make sure the regulator is rated for that inlet pressure.</div></div>`;})()}
+      <select id="d-${id}" data-drop="1">${dropOpts(p).map(x=>`<option value="${x}"${x===d?' selected':''}>${dropTxt(x)} PSI drop${x===p.dp?' (typical)':''}</option>`).join('')}</select>
+      <div class="hint">Leaves ${psiTxt(p.p1-d)} PSI (≈${Math.round((p.p1-d)*27.7)}" WC) at the regulator. Make sure the regulator is rated for that inlet pressure.</div></div>`;})()}
   </div>`;
 }
 function renderRuns(){
   const f=F();
   $('runs').innerHTML = S.svc==='one'
     ? runCard('a',f.runOne,'LOW PRESSURE',f.low)
+    : S.svc==='three'
+    ? runCard('t1','① '+f.runT1,'1ST STAGE',f.high) + runCard('t2','② '+f.runT2,'2 PSI',f.mid) + runCard('t3','③ '+f.runT3,'LOW PRESSURE',f.low)
     : runCard('e1',f.runA,S.fuel==='lp'?'1ST STAGE':'ELEVATED',f.high) + runCard('e2',f.runB,'LOW PRESSURE',f.low);
 }
 $('runs').addEventListener('click',e=>{
@@ -933,13 +966,14 @@ $('runs').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   if(b.dataset.d){ r.len=Math.max(1,Math.min(500,(+inp.value||0)+ +b.dataset.d)); inp.value=r.len; }
   else if(b.dataset.len){ r.len=+b.dataset.len; inp.value=r.len; }
-  else if(b.dataset.mat){ r.mat=b.dataset.mat; card.querySelectorAll('[data-mat]').forEach(c=>c.setAttribute('aria-pressed',c===b)); }
+  if(b.dataset.d||b.dataset.len) markQuick(card,r.len);
+  if(b.dataset.mat){ r.mat=b.dataset.mat; card.querySelectorAll('[data-mat]').forEach(c=>c.setAttribute('aria-pressed',c===b)); }
   update();
 });
 const onField=e=>{
   const card=e.target.closest('[data-run]'); if(!card) return;
   const r=R()[card.dataset.run];
-  if(e.target.tagName==='INPUT') r.len=Math.max(0,+e.target.value||0);
+  if(e.target.tagName==='INPUT'){ r.len=Math.max(0,+e.target.value||0); markQuick(card,r.len); }
   if(e.target.tagName==='SELECT'){
     if(e.target.dataset.drop) r.drop=+e.target.value;
     else { r.press=e.target.value; r.drop=null; }
@@ -1031,7 +1065,7 @@ function update(){
   if(!m){ $('ansBody').innerHTML='<div class="empty">Pick a generator in Step 2 to see the pipe size.</div>'; $('mini').classList.remove('show'); return; }
 
   const genCfh=f.needCfh(m), extraCfh=f.extraCfh(S.extra), genBtu=S.fuel==='ng'?m.ng_cfh_f*m.ng_btu_cf:m.lp_gph_f*m.lp_btu_gal;
-  const warns=[], lines=[], miniParts=[]; let blocks='';
+  const warns=[], lines=[], miniParts=[]; let blocks='', regs=null;
   const line=(lbl,res,r)=>`${lbl}: ${res.pick?res.pick.sz:'N/A'} ${matName(r.mat)}, ${r.len} ft @ ${res.p?res.p.label:''}`;
 
   if(S.svc==='one'){
@@ -1039,6 +1073,28 @@ function update(){
     blocks+=pickBlock(f.runOne,res,r);
     lines.push(line(f.runOne,res,r)); miniParts.push(res.pick?res.pick.sz:'—');
     checkInlet(m, f.low.find(x=>x.v===r.press), warns);
+  } else if(S.svc==='three'){
+    const r1=runs.t1, r2=runs.t2, r3=runs.t3, all=genCfh+extraCfh;
+    const a=sizeRun(r1,f.high,all,m), b=sizeRun(r2,f.mid,all,m), c=sizeRun(r3,f.low,genCfh,m);
+    blocks+=pickBlock('① '+f.runT1,a,r1)+pickBlock('② '+f.runT2,b,r2)+pickBlock('③ '+f.runT3,c,r3);
+    lines.push(line(f.runT1,a,r1), line(f.runT2,b,r2), line(f.runT3,c,r3));
+    miniParts.push([a,b,c].map(x=>x.pick?x.pick.sz:'—').join(' → '));
+    checkInlet(m, f.low.find(x=>x.v===r3.press), warns);
+    const p1=f.high.find(x=>x.v===r1.press)||f.high[0], p2=f.mid.find(x=>x.v===r2.press)||f.mid[0];
+    const in2=+(p1.p1-runDrop(r1,p1)).toFixed(2), in3=+(p2.p1-runDrop(r2,p2)).toFixed(2);
+    const outWc=(f.low.find(x=>x.v===r3.press)||f.low[0]).wc, in3wc=Math.round(in3*27.7);
+    if(in3wc<outWc+3) warns.push(`Only ${in3} PSI (≈${in3wc}" WC) reaches the final regulator — not enough to hold ${outWc}" WC under full load. Raise the run ② pressure or allow less drop.`);
+    const sysBtu=genBtu+S.extra;
+    regs=[
+      ['1st stage (tank)', sysBtu, 'tank pressure', `${p1.p1} PSI out`],
+      ['2 PSI regulator', sysBtu, `${in2} PSI in`, `${p2.p1} PSI out`],
+      ['Final reg. (at gen)', genBtu, `${in3} PSI in`, `${(f.low.find(x=>x.v===r3.press)||f.low[0]).wc}" WC out`],
+    ];
+    warns.push(`Each regulator must be rated for its BTU/hr <b>at the inlet pressure it actually sees</b> (see Regulators above). Check the capacity chart at that inlet, not the max.`);
+    warns.push(`Keep the 2 PSI and final regulators outdoors. A regulator inside the attic must be vented outdoors or have a listed vent limiter, and must be accessible (NFPA 54 / IFGC 410).`);
+    warns.push(`Piping inside the building is limited to 5 PSI (IFGC 402.6) — never run the 10 PSI section through the attic.`);
+    if(r2.mat==='csst'||r2.mat==='tracpipe') warns.push(`CSST in the attic: bond per the manufacturer (typically 6 AWG Cu to the grounding electrode system), support it, and use striker plates through framing. Use the manufacturer's ${p2.p1} PSI chart.`);
+    if(r1.mat==='pe'&&r2.mat==='pe') warns.push('Run ② goes through the building — PE is not allowed there. Use CSST or galvanized.');
   } else {
     const r1=runs.e1, r2=runs.e2;
     const a=sizeRun(r1,f.high,genCfh+extraCfh,m), b=sizeRun(r2,f.low,genCfh,m);
@@ -1051,18 +1107,19 @@ function update(){
       : `Second-stage regulator must be rated for at least ${fmt(genBtu)} BTU/hr.`);
   }
   if(S.extra>0){
-    const where = S.svc==='two' ? `Run ① sized for generator + ${fmt(S.extra)} BTU/hr house load. Run ② is generator only.`
+    const where = S.svc==='three' ? `Runs ① and ② sized for generator + ${fmt(S.extra)} BTU/hr house load. Run ③ is generator only.`
+      : S.svc==='two' ? `Run ① sized for generator + ${fmt(S.extra)} BTU/hr house load. Run ② is generator only.`
       : S.tee ? `Shared pipe sized for generator + ${fmt(S.extra)} BTU/hr house load. Size any separate branch to the generator for the generator alone.`
       : `Pipe sized for the generator only (own line from the ${S.fuel==='ng'?'meter':'tank'}).`;
-    warns.push(`${where} Total system load ${fmt(genBtu+S.extra)} BTU/hr — the ${S.fuel==='ng'?'gas meter':(S.svc==='two'?'first-stage regulator':'tank regulator')} must be rated for it${S.fuel==='ng'?` (≈${fmt(m.ng_cfh_f+S.extra/1000)} CFH)`:''}.`);
+    warns.push(`${where} Total system load ${fmt(genBtu+S.extra)} BTU/hr — the ${S.fuel==='ng'?'gas meter':(S.svc!=='one'?'first-stage regulator':'tank regulator')} must be rated for it${S.fuel==='ng'?` (≈${fmt(m.ng_cfh_f+S.extra/1000)} CFH)`:''}.`);
   }
   if(S.fuel==='ng' && !S.extra && m.ng_cfh_f>250) warns.push(`Generator alone uses ${fmt(m.ng_cfh_f)} CFH — more than a standard 250 CFH residential meter. Check the meter size with the utility.`);
   if(S.shared && S.extra===0) warns.push('House appliances selected but none added yet (Step 5).');
   if(m.grp.includes('Legacy')) warns.push('Legacy model — confirm fuel numbers on the spec sheet.');
-  const used = S.svc==='one'?[runs.a]:[runs.e1,runs.e2];
+  const used = S.svc==='one'?[runs.a]:S.svc==='three'?[runs.t1,runs.t2,runs.t3]:[runs.e1,runs.e2];
   if(used.some(r=>r.mat==='csst'||r.mat==='tracpipe')) warns.push('CSST / TracPipe sizes are approximate — confirm with the manufacturer\'s EHD chart for the exact product.');
   if(S.drop===3 && used.some(r=>{const p=f.low.find(x=>x.v===r.press);return p&&p.wc<8;})) warns.push('3" WC drop needs at least 8" WC supply — use 0.5" or raise the pressure.');
-  if(used.some(r=>r.mat==='pe')) warns.push('PE is underground only — transition to galvanized/CSST before it comes above grade.');
+  if(S.svc==='three'? (runs.t1.mat==='pe'||runs.t3.mat==='pe') : used.some(r=>r.mat==='pe')) warns.push('PE is underground only — transition to galvanized/CSST before it comes above grade.');
   if(S.fuel==='lp' && m.kw_lp!==m.kw_ng) {} // LP is the nameplate rating — nothing to flag
   if(S.fuel==='ng' && m.kw_ng<m.kw_lp) warns.push(`On natural gas this unit makes ${m.kw_ng} kW (nameplate ${m.kw_lp} kW is the LP rating).`);
 
@@ -1078,6 +1135,10 @@ function update(){
 
   $('ansBody').innerHTML = `
     ${blocks}
+    ${regs?`<div class="regs"><div class="regs-h">Regulators — minimum rating</div>
+      <table><thead><tr><th>Regulator</th><th>BTU/hr</th><th>Inlet</th><th>Outlet</th></tr></thead><tbody>
+      ${regs.map(r=>`<tr><td>${r[0]}</td><td><b>${fmt(r[1])}</b></td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}
+      </tbody></table></div>`:''}
     ${warns.map(w=>`<div class="warn">⚠ ${w}</div>`).join('')}
     <div class="facts">
       <div><span>Gen full load</span><b>${f.fmtU(f.full(m))} ${u}</b></div>
@@ -1096,6 +1157,7 @@ function update(){
     `AOG ${f.short} pipe sizing — ${m.model} (${m.num})`,
     `Gen load: ${f.fmtU(f.full(m))} ${u} full / ${f.fmtU(f.half(m))} ${u} half · ${fmt(btuReal)} BTU/hr · inlet ${f.req(m)}`,
     ...lines,
+    ...(regs?regs.map(r=>`Regulator — ${r[0]}: ≥ ${fmt(r[1])} BTU/hr @ ${r[2]}, ${r[3]}`):[]),
     S.extra?`Other appliances on system${S.svc==='one'?(S.tee?' (gen tees into house line)':' (gen on own line)'):''}: ${S.apps.filter(a=>a.qty).map(a=>`${a.qty>1?a.qty+'× ':''}${a.name} ${fmt(a.btu/1000)}k`).join(', ')} = ${fmt(S.extra)} BTU/hr · total system ${fmt(genBtu+S.extra)} BTU/hr`:'Generator only on this system',
     S.fuel==='lp'?`500 gal tank (80% fill) at half load: ~${fmt(400/m.lp_gph_h)} hrs`:'',
     derate?`Elevation ${fmt(S.elev)} ft → ${derate} ${f.short} output`:'',
