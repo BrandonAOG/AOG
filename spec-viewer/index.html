@@ -405,6 +405,17 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(circle 
 .man-table td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--dim);vertical-align:top}
 .man-table td:first-child{color:var(--text);font-weight:600;white-space:nowrap}
 .man-table tr:last-child td{border-bottom:none}
+@media(max-width:640px){
+.man-table,.man-table tbody,.man-table tr,.man-table td{display:block;width:100%}
+.man-table thead{display:none}
+.man-table tr{border:1px solid var(--border,rgba(255,255,255,.08));border-radius:8px;margin-bottom:8px;padding:6px 0;display:grid;grid-template-columns:1fr 1fr;row-gap:4px;background:rgba(255,255,255,.02)}
+.man-table td:first-child,.man-table td:nth-child(2):last-child,.man-table td:nth-child(3):last-child:nth-child(odd){grid-column:1/-1}
+.man-table td{border-bottom:none;padding:4px 12px;white-space:normal!important}
+.man-table td:first-child{font-size:.95em;padding-top:6px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.06)}
+.man-table td:not(:first-child)::before{content:attr(data-l);display:block;font-size:.72em;letter-spacing:1px;text-transform:uppercase;color:var(--be);margin-bottom:1px}
+.man-table td:not(:first-child)[data-l=""]::before{display:none}
+[data-theme="light"] .man-table tr{background:#fff;border-color:#E4DED1}
+}
 .man-danger{background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.4);border-radius:4px;padding:10px 14px;font-family:var(--fm);font-size:.68rem;color:#fca5a5;margin-bottom:12px;line-height:1.5}
 .man-caution{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:4px;padding:10px 14px;font-family:var(--fm);font-size:.68rem;color:var(--yb);margin-bottom:12px;line-height:1.5}
 .man-note{background:rgba(0,212,255,.06);border-left:3px solid var(--be);padding:8px 12px;font-family:var(--fm);font-size:.67rem;color:var(--dim);margin-bottom:10px;line-height:1.5}
@@ -508,6 +519,40 @@ html,body{overflow-x:clip!important;overflow-y:visible!important}
 [data-theme="light"] .sv-wide .sv-chip .pn{color:#1D5F99}
 [data-theme="light"] .sv-jump{background:#EDF2FF;box-shadow:0 8px 12px -10px rgba(31,41,51,.25)}
 @media (prefers-reduced-motion:reduce){body{animation:none!important}}
+
+/* ── Phone readability pass ── */
+@media(max-width:640px){
+  .mlbl{font-size:.72rem;letter-spacing:2px}
+  .mnum,.fnote,.fuel-est-note,.man-partno{font-size:.78rem}
+  .b,.se-badge,.tg{font-size:.7rem;letter-spacing:1px}
+  *:has(> .b){flex-wrap:wrap;gap:6px}
+  .dl,.dl strong{font-size:.7rem;letter-spacing:1px}
+  .ft{font-size:.72rem;letter-spacing:2px}.fv{font-size:.72rem}
+  .ab-btn{font-size:.75rem!important}
+  .b{white-space:normal}
+  .pi,.pi strong{font-size:.8rem!important}
+  th,.lc,.nc{font-size:.72rem!important}
+  .man-table h4,.man-body h4,h4{font-size:.95rem}
+  /* timing table: let the label column wrap */
+  .timing-table{min-width:0}
+  .timing-table td:first-child{white-space:normal;min-width:0;width:44%}
+  /* dims + accessories tables → stacked cards */
+  .dims-table,.dims-table tbody,.dims-table tr,.at,.at tbody,.at tr{display:block;width:100%;min-width:0}
+  .dims-table thead,.at thead{display:none}
+  .dims-table tr,.at tr{border:1px solid rgba(255,255,255,.08);border-radius:8px;margin-bottom:8px;padding:6px 0;background:rgba(255,255,255,.02)}
+  .dims-table tr{display:grid;grid-template-columns:1fr 1fr}
+  .dims-table td,.at td{display:block;border-bottom:none!important;padding:4px 12px!important;white-space:normal!important;text-align:left!important}
+  .dims-table td:first-child,.at td:first-child{grid-column:1/-1;border-bottom:1px solid rgba(255,255,255,.06)!important;padding:6px 12px!important}
+  .dims-table td:not(:first-child)::before,.at td:not(:first-child)::before{display:block;font-size:.68rem;letter-spacing:1px;text-transform:uppercase;color:var(--be);font-family:var(--fm)}
+  .dims-table td:nth-child(2)::before{content:'Height H2'}
+  .dims-table td:nth-child(3)::before{content:'Width W2'}
+  .dims-table td:nth-child(4)::before{content:'Depth'}
+  .dims-table td:nth-child(5)::before{content:'Weight'}
+  .at td:nth-child(2)::before{content:'Accessory'}
+  .at td:nth-child(3)::before{content:'Description'}
+  .at td{font-size:.82rem}
+  [data-theme="light"] .dims-table tr,[data-theme="light"] .at tr{background:#fff;border-color:#E4DED1}
+}
 </style>
 <script src="../update-banner.js"></script>
 </head>
@@ -1768,7 +1813,7 @@ function buildOM_Shutdown(){
 function mt(headers, rows) {
   var h = headers.map(function(x){return '<th>'+x+'</th>';}).join('');
   var r = rows.map(function(row){
-    return '<tr>'+row.map(function(c){return '<td>'+c+'</td>';}).join('')+'</tr>';
+    return '<tr>'+row.map(function(c,i){return '<td data-l="'+String(headers[i]||'').replace(/<[^>]*>/g,'').replace(/"/g,'&quot;')+'">'+c+'</td>';}).join('')+'</tr>';
   }).join('');
   return '<table class="man-table"><thead><tr>'+h+'</tr></thead><tbody>'+r+'</tbody></table>';
 }
