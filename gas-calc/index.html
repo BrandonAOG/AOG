@@ -59,6 +59,16 @@ button{font:inherit;color:inherit}
 .chip small{display:block;font-weight:500;font-size:.72rem;color:var(--dim)}
 .grp-label{font-size:.78rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);margin:14px 0 8px}
 .grp-label:first-child{margin-top:0}
+.mchk{margin:12px 16px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--chip)}
+.mchk .mh{display:flex;justify-content:space-between;gap:8px;font-size:.78rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--dim)}
+.mchk .mv{font-size:1.15rem;font-weight:800;margin:4px 0 2px}
+.mchk .mbar{height:10px;border-radius:6px;background:rgba(127,127,127,.18);overflow:hidden;margin:8px 0 6px}
+.mchk .mbar i{display:block;height:100%;border-radius:6px}
+.mchk .cap{font-size:.86rem;color:var(--dim);line-height:1.45}
+.mchk.ok{border-color:rgba(16,185,129,.55)}.mchk.ok .mv{color:#10B981}.mchk.ok .mbar i{background:#10B981}
+.mchk.tight{border-color:rgba(245,158,11,.7)}.mchk.tight .mv{color:#F59E0B}.mchk.tight .mbar i{background:#F59E0B}
+.mchk.bad{border-color:rgba(239,68,68,.7);background:rgba(239,68,68,.08)}.mchk.bad .mv{color:#EF4444}.mchk.bad .mbar i{background:#EF4444}
+body.light .mchk.ok .mv{color:#047857}body.light .mchk.tight .mv{color:#B45309}body.light .mchk.bad .mv{color:#B91C1C}
 .models .chip{min-width:92px}
 .models .chip b{font-size:1.1rem}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -368,6 +378,11 @@ body{padding-top:calc(61px + env(safe-area-inset-top))}
     <h2><span class="n">3</span>How is the gas delivered?</h2>
     <div class="seg" id="svcSeg"></div>
     <div class="hint" id="svcHint">Most homes. Pipe goes straight from the meter to the generator.</div>
+    <div id="meterWrap">
+      <div class="grp-label">Gas meter size (CFH)</div>
+      <div class="chips" id="meterSeg"></div>
+      <div class="hint">Usually on the meter nameplate, or ask the utility. Everything on the meter counts — generator plus any house appliances in step 05.</div>
+    </div>
   </section>
 
   <!-- 3. Runs -->
@@ -827,7 +842,8 @@ const FUEL = {
 };
 
 // ── State ─────────────────────────────────────────────────────────────
-const S = { fuel:'ng', line:'air', num:null, svc:'one', runs:{ng:FUEL.ng.defaults(), lp:FUEL.lp.defaults()}, extra:0, elev:0, drop:0.5, shared:false, tee:false, apps:defaultApps() };
+const METERS=[250,275,425,630,800,1000];
+const S = { meter:250, fuel:'ng', line:'air', num:null, svc:'one', runs:{ng:FUEL.ng.defaults(), lp:FUEL.lp.defaults()}, extra:0, elev:0, drop:0.5, shared:false, tee:false, apps:defaultApps() };
 const F = () => FUEL[S.fuel];
 function defaultApps(){ return [
   {name:'Furnace',               note:'60–120k typical', btu:80000,  qty:0},
@@ -888,6 +904,8 @@ $('fuelSeg').addEventListener('click',e=>{
 function renderFuel(){
   $('svcSeg').innerHTML = Object.keys(F().svc).map(k=>`<button class="chip" data-svc="${k}" aria-pressed="${S.svc===k}"><b>${F().svc[k].b}</b><small>${F().svc[k].s}</small></button>`).join('');
   $('svcSeg').classList.toggle('three',Object.keys(F().svc).length>2);
+  $('meterWrap').hidden = S.fuel!=='ng';
+  $('meterSeg').innerHTML = METERS.map(v=>`<button class="chip" data-meter="${v}" aria-pressed="${S.meter===v}">${v}</button>`).join('');
   $('svcHint').textContent = F().svc[S.svc].hint;
   renderRuns();
 }
@@ -916,6 +934,14 @@ $('models').addEventListener('click',e=>{
   $('models').querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c===b));
   update();
   if(window.innerWidth<700) $('s2').scrollIntoView({behavior:'smooth',block:'start'});
+});
+
+// ── Meter ─────────────────────────────────────────────────────────────
+$('meterSeg').addEventListener('click',e=>{
+  const b=e.target.closest('[data-meter]'); if(!b) return;
+  S.meter=+b.dataset.meter;
+  $('meterSeg').querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c===b));
+  update();
 });
 
 // ── Service ───────────────────────────────────────────────────────────
@@ -1123,7 +1149,6 @@ function update(){
       : `Pipe sized for the generator only (own line from the ${S.fuel==='ng'?'meter':'tank'}).`;
     warns.push(`${where} Total system load ${fmt(genBtu+S.extra)} BTU/hr — the ${S.fuel==='ng'?'gas meter':(S.svc!=='one'?'first-stage regulator':'tank regulator')} must be rated for it${S.fuel==='ng'?` (≈${fmt(m.ng_cfh_f+S.extra/1000)} CFH)`:''}.`);
   }
-  if(S.fuel==='ng' && !S.extra && m.ng_cfh_f>250) warns.push(`Generator alone uses ${fmt(m.ng_cfh_f)} CFH — more than a standard 250 CFH residential meter. Check the meter size with the utility.`);
   if(S.shared && S.extra===0) warns.push('House appliances selected but none added yet (Step 5).');
   if(m.grp.includes('Legacy')) warns.push('Legacy model — confirm fuel numbers on the spec sheet.');
   const used = S.svc==='one'?[runs.a]:S.svc==='three'?[runs.t1,runs.t2,runs.t3]:[runs.e1,runs.e2];
@@ -1133,6 +1158,19 @@ function update(){
   if(S.fuel==='lp' && m.kw_lp!==m.kw_ng) {} // LP is the nameplate rating — nothing to flag
   if(S.fuel==='ng' && m.kw_ng<m.kw_lp) warns.push(`On natural gas this unit makes ${m.kw_ng} kW (nameplate ${m.kw_lp} kW is the LP rating).`);
 
+  let meterBlock='', meterLine='';
+  if(S.fuel==='ng'){
+    const house=S.shared?S.extra/1000:0, tot=m.ng_cfh_f+house, pct=tot/S.meter*100;
+    const next=METERS.find(v=>v>=tot);
+    const cls=pct>100?'bad':pct>80?'tight':'ok';
+    const verdict=pct>100?(next?`${Math.round(pct)}% — upsize to ${next} CFH`:`${Math.round(pct)}% — over 1,000 CFH: commercial meter or elevated pressure`)
+      : pct>80?`${Math.round(pct)}% — tight, little room for more load`:`${Math.round(pct)}% — OK`;
+    meterBlock=`<div class="mchk ${cls}"><div class="mh"><span>Gas meter check</span><span>${S.meter} CFH meter</span></div>
+      <div class="mv">Meter at ${verdict}</div>
+      <div class="mbar"><i style="width:${Math.min(100,pct).toFixed(0)}%"></i></div>
+      <div class="cap">Total load <b>${fmt(tot)} CFH</b> = generator ${fmt(m.ng_cfh_f)}${house?` + house ${fmt(house)}`:''}. ${pct>100?'The utility must upsize the meter (or go to an elevated-pressure service) — pipe size alone won\'t fix it.':'Pipe size doesn\'t depend on the meter; this only checks capacity.'}</div></div>`;
+    meterLine=`Meter: ${S.meter} CFH · total load ${fmt(tot)} CFH (${Math.round(pct)}%)${pct>100&&next?` — upsize to ${next} CFH`:''}`;
+  }
   let derate='';
   if(S.elev>m.der_above){
     const k=Math.max(1-((S.elev-m.der_above)/1000)*(m.der_pct/100),0.55);
@@ -1149,6 +1187,7 @@ function update(){
       <table><thead><tr><th>Regulator</th><th>BTU/hr</th><th>Inlet</th><th>Outlet</th></tr></thead><tbody>
       ${regs.map(r=>`<tr><td>${r[0]}</td><td><b>${fmt(r[1])}</b></td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}
       </tbody></table></div>`:''}
+    ${meterBlock}
     ${warns.map(w=>`<div class="warn">⚠ ${w}</div>`).join('')}
     <div class="facts">
       <div><span>Gen full load</span><b>${f.fmtU(f.full(m))} ${u}</b></div>
@@ -1167,6 +1206,7 @@ function update(){
     `AOG ${f.short} pipe sizing — ${m.model} (${m.num})`,
     `Gen load: ${f.fmtU(f.full(m))} ${u} full / ${f.fmtU(f.half(m))} ${u} half · ${fmt(btuReal)} BTU/hr · inlet ${f.req(m)}`,
     ...lines,
+    meterLine,
     ...(regs?regs.map(r=>`Regulator — ${r[0]}: ≥ ${fmt(r[1])} BTU/hr @ ${r[2]}, ${r[3]}`):[]),
     S.extra?`Other appliances on system${S.svc==='one'?(S.tee?' (gen tees into house line)':' (gen on own line)'):''}: ${S.apps.filter(a=>a.qty).map(a=>`${a.qty>1?a.qty+'× ':''}${a.name} ${fmt(a.btu/1000)}k`).join(', ')} = ${fmt(S.extra)} BTU/hr · total system ${fmt(genBtu+S.extra)} BTU/hr`:'Generator only on this system',
     S.fuel==='lp'?`500 gal tank (80% fill) at half load: ~${fmt(400/m.lp_gph_h)} hrs`:'',
