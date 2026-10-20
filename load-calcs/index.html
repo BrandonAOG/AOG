@@ -3323,22 +3323,84 @@ function aogNewJobConfirm() {
     : Promise.resolve(confirm(msg));
   p.then(function (ok) {
     if (!ok) return;
-    aogClearSaved();
-    setTimeout(function () {
-      // Not location.reload(): a reload can come out of the back/forward cache,
-      // and some browsers (iOS Safari especially) restore typed form values
-      // across one — so the page returns looking like the old job even though
-      // storage was cleared. Navigating to a fresh URL sidesteps both. The
-      // query is stripped again on load so the address stays clean.
-      var base = location.href.split('?')[0].split('#')[0];
-      location.replace(base + '?nj=' + Date.now());
-    }, 350);
+    aogResetJob();
   });
 }
+
+// New Job resets the form IN PLACE — no page reload.
+// The old version cleared storage and then navigated to a fresh URL. On iOS,
+// running as a home-screen app, that reload was not dependable: the service
+// worker, the back/forward cache and WebKit's lazy localStorage flush could
+// each hand back the old job, which is why it sometimes took a force-quit to
+// clear. Rebuilding the form from defaults on the spot sidesteps all three,
+// and the fresh defaults are then written over the saved slot, so even a stale
+// copy left in storage is overwritten rather than restored later.
+function aogResetJob(){
+  aogClearSaved();                       // blocks autosave + removes the key
+  if(document.activeElement && document.activeElement.blur){
+    try{ document.activeElement.blur(); }catch(e){}
+  }
+  _aogRestoring=true;
+  try{
+    // Static fields (job banner, Step 1, configuration, electrodes) go back to
+    // the values written in the HTML.
+    document.querySelectorAll('input,select,textarea').forEach(function(el){
+      if(el.type==='file') return;
+      if(el.type==='checkbox'||el.type==='radio'){ el.checked=el.defaultChecked; return; }
+      if(el.tagName==='SELECT'){
+        var any=false;
+        for(var i=0;i<el.options.length;i++){
+          el.options[i].selected=el.options[i].defaultSelected;
+          if(el.options[i].defaultSelected) any=true;
+        }
+        if(!any) el.selectedIndex=0;
+        return;
+      }
+      el.value=el.defaultValue;
+    });
+    // Generated rows (AHUs, appliances, pool, dryers, cooking) are rebuilt.
+    aogBuildDefaults();
+  }catch(e){ console.warn('AOG reset error',e); }
+  _aogRestoring=false;
+  _aogRestoreIssues=[]; _aogPendingManaged=[];
+  var rw=document.getElementById('aog-restore-warn'); if(rw) rw.style.display='none';
+  if(typeof showPoolTab==='function') showPoolTab('loads');
+  var sumTab=document.querySelector('.tab[data-tab="summary"]'); if(sumTab) sumTab.click();
+  if(typeof aogJobToggle==='function') aogJobToggle(false);   // reopen job info for the new customer
+  calc();
+  aogBlankZeros();
+  // Allow saving again and write the blank job straight over the old slot.
+  _aogSaveBlocked=false;
+  try{ localStorage.setItem(AOG_SAVE_KEY, JSON.stringify(aogSnapshot())); }catch(e){}
+  aogUpdateSaveStatus('\u2713 New job');
+  setTimeout(function(){ aogUpdateSaveStatus(); }, 3000);
+  window.scrollTo(0,0);
+}
+
 function aogClearSaved(){
   _aogSaveBlocked=true;
   if(_aogSaveTimer){ clearTimeout(_aogSaveTimer); _aogSaveTimer=null; }
   try{ localStorage.removeItem(AOG_SAVE_KEY); }catch(e){}
+}
+
+// The default form — used on first load and again by New Job, so both always
+// start from exactly the same job.
+function aogBuildDefaults(){
+  aogClearDyn();
+  buildAHU();
+  buildAppl();
+  buildPool();
+  addPoolPump();  // default: 1 pool pump
+  // Set pool pump to 1.5 HP = 2300 VA (NEC 430.248 at 230V)
+  var ppva1=document.getElementById('ppva_1');
+  if(ppva1){
+    ppva1.value='2300';
+    for(var _o=0;_o<ppva1.options.length;_o++){
+      if(ppva1.options[_o].value==='2300'){ppva1.options[_o].selected=true;break;}
+    }
+  }
+  addDryer(false,5000,1);
+  addCookItem('range',false,8500);
 }
 
 // Show blank instead of 0 in the typeable VA boxes (skips the field being edited)
@@ -3378,21 +3440,7 @@ window.addEventListener('load',function(){
   if(/[?&]nj=/.test(location.search)){
     try{ history.replaceState({}, '', location.href.split('?')[0]); }catch(e){}
   }
-  buildAHU();
-  buildAppl();
-  buildPool();
-  addPoolPump();  // default: 1 pool pump
-  // Set pool pump to 1.5 HP = 2300 VA (NEC 430.248 at 230V)
-  var ppva1=document.getElementById('ppva_1');
-  if(ppva1){
-    ppva1.value='2300';
-    // Select the matching option
-    for(var _o=0;_o<ppva1.options.length;_o++){
-      if(ppva1.options[_o].value==='2300'){ppva1.options[_o].selected=true;break;}
-    }
-  }
-  addDryer(false,5000,1);
-  addCookItem('range',false,8500);
+  aogBuildDefaults();
 
   // Restore any autosaved job from this device, then begin autosaving
   aogRestore();
