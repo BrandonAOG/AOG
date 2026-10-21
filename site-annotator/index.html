@@ -3296,8 +3296,8 @@ if(hlBytes){chain=chain.then(function(){return pdf.embedPng(hlBytes)}).then(func
 var _AOGRES_CATS=["XObject","ExtGState","Font","Shading","Pattern","ColorSpace","Properties"];
 function _aogResDict(doc,page,cat){try{var N=PDFLib.PDFName,res=null;try{res=page.node.Resources()}catch(e){}if(!res){try{res=doc.context.lookup(page.node.get(N.of("Resources")))}catch(e){}}if(!res||!res.get)return null;var d=res.get(N.of(cat));if(d instanceof PDFLib.PDFRef)d=doc.context.lookup(d);return(d&&d.keys)?d:null}catch(e){return null}}
 function _aogResKeys(doc,page){var out={};_AOGRES_CATS.forEach(function(cat){var d=_aogResDict(doc,page,cat),k=[];try{if(d)d.keys().forEach(function(n){k.push(String(n).replace(/^\//,""))})}catch(e){}out[cat]=k});return out}
-function _aogFlatSnapshot(pdf,page){try{var N=PDFLib.PDFName,c=null;try{c=page.node.get(N.of("Contents"))}catch(_e){}var snap=[];if(c){if(c instanceof PDFLib.PDFArray){c.asArray().forEach(function(r){snap.push(String(r))})}else snap.push(String(c))}window._AOGFLAT={snap:snap,skip:[],merged:false,allowSwap:false,res:_aogResKeys(pdf,page)};try{dbg("export","flat-layer snapshot: "+snap.length+" original content stream(s)")}catch(_d){}}catch(e){window._AOGFLAT=null}}
-function _aogContentRefs(pdf,page){var out=[];try{var N=PDFLib.PDFName,c=page.node.get(N.of("Contents"));if(!c)return out;if(c instanceof PDFLib.PDFArray){c.asArray().forEach(function(r){out.push(r)})}else out.push(c)}catch(e){}return out}
+function _aogFlatSnapshot(pdf,page){try{var N=PDFLib.PDFName,c=null;try{c=page.node.get(N.of("Contents"))}catch(_e){}/* AOG_INDIRECT_CONTENTS: /Contents may be a reference to an array of streams. Without resolving it the snapshot held only the array's own ref, so every ORIGINAL plan stream was tagged /AOGFLAT and re-import erased the site plan. */try{if(c instanceof PDFLib.PDFRef){var _lc=pdf.context.lookup(c);if(_lc instanceof PDFLib.PDFArray)c=_lc}}catch(_le){}var snap=[];if(c){if(c instanceof PDFLib.PDFArray){c.asArray().forEach(function(r){snap.push(String(r))})}else snap.push(String(c))}window._AOGFLAT={snap:snap,skip:[],merged:false,allowSwap:false,res:_aogResKeys(pdf,page)};try{dbg("export","flat-layer snapshot: "+snap.length+" original content stream(s)")}catch(_d){}}catch(e){window._AOGFLAT=null}}
+function _aogContentRefs(pdf,page){var out=[];try{var N=PDFLib.PDFName,c=page.node.get(N.of("Contents"));if(!c)return out;try{if(c instanceof PDFLib.PDFRef){var _lc=pdf.context.lookup(c);if(_lc instanceof PDFLib.PDFArray)c=_lc}}catch(_le){}if(c instanceof PDFLib.PDFArray){c.asArray().forEach(function(r){out.push(r)})}else out.push(c)}catch(e){}return out}
 function _aogTagFlatStreams(pdf,page){var F=window._AOGFLAT;window._AOGFLAT=null;if(!F||typeof window.PDFLib==="undefined")return 0;if(F.merged){try{dbg("export","flat-layer NOT tagged - the page content was rewritten in place (moved page image / redacted text), so re-importing this file can still duplicate markings")}catch(_d){}return 0}var N=PDFLib.PDFName,n=0;_aogContentRefs(pdf,page).forEach(function(r){var key=String(r);if(F.snap.indexOf(key)!==-1)return;if(F.skip.indexOf(key)!==-1)return;var st=null;try{st=(r instanceof PDFLib.PDFRef)?pdf.context.lookup(r):r}catch(e){}var d=null;try{d=st&&(st.dict||st)}catch(e){}if(!d||!d.set)return;try{d.set(N.of("AOGFLAT"),PDFLib.PDFBool.True);n++}catch(e){}});var _rAdd={},_rN=0;try{_AOGRES_CATS.forEach(function(cat){var d=_aogResDict(pdf,page,cat);if(!d)return;var before=(F.res&&F.res[cat])||[],list=[];try{d.keys().forEach(function(k){var key=String(k).replace(/^\//,"");if(key==="AOGbg")return;if(before.indexOf(key)!==-1)return;list.push(key)})}catch(_rk){}if(list.length){_rAdd[cat]=list;_rN+=list.length}})}catch(_re){}if(_rN){try{page.node.set(N.of("AOGFLATRES"),pdf.context.obj(_rAdd))}catch(_rs){}}try{dbg("export","flattened markup tagged removable: "+n+" stream(s), "+_rN+" resource(s)")}catch(_d){}return n}
 /* AOG_WM_GHOSTS — before the import fix, re-opening an export turned the stamp annotations into plain pink text boxes, and those were then saved into the embedded record (R1 carries two: the address and "Always On Generators"). The live stamp is rebuilt from the fields, so drop those copies on restore. Match is strict: bold, the stamp pink, and text equal to a stamp row. */function _aogDropWmGhosts(list,tb){try{if(!list||!list.filter)return list;tb=tb||{};var bEl=document.getElementById("wm-brand");var cand=[tb.cust,tb.addr,bEl&&bEl.value,"Always On Generators","Always On"].map(function(s){return String(s||"").trim().toLowerCase()}).filter(Boolean);var n0=list.length;var out=list.filter(function(o){if(!o||typeof o.text!=="string")return true;var c=String(o.color||"").toLowerCase();if(!o.bold||c!=="#ff4fa3")return true;return cand.indexOf(o.text.trim().toLowerCase())===-1});if(out.length!==n0){try{dbg("import","dropped "+(n0-out.length)+" stamp copy text box(es) saved by an older build")}catch(_d){}}return out}catch(e){return list}}
 function _aogStripFlatLayer(file){return new Promise(function(res){
@@ -3310,6 +3310,7 @@ function _aogStripFlatLayer(file){return new Promise(function(res){
         doc.getPages().forEach(function(pg){
           /* 1. content streams the export appended, tagged /AOGFLAT true */
           var c=null;try{c=pg.node.get(N.of("Contents"))}catch(e){}
+          try{if(c instanceof PDFLib.PDFRef){var _lc=doc.context.lookup(c);if(_lc instanceof PDFLib.PDFArray)c=_lc}}catch(_le){}
           if(c){
             var refs=[];if(c instanceof PDFLib.PDFArray){c.asArray().forEach(function(r){refs.push(r)})}else refs.push(c);
             var keep=[],drop=0,dead=[];
@@ -3319,6 +3320,27 @@ function _aogStripFlatLayer(file){return new Promise(function(res){
               if(flag!=null){drop++;dead.push(r);return}
               keep.push(r)
             });
+            /* AOG_PLAN_RESCUE — files exported before the AOG_INDIRECT_CONTENTS fix have EVERY stream
+               tagged, the site plan included. A real export always leaves at least one untagged
+               original stream, so "all tagged" means the plan was mis-tagged. Keep every stream that
+               does not use a resource the export added (/AOGFLATRES): the plan, the q/Q wrappers and
+               any original stamps stay; only our baked markup goes. The tag is removed from what is
+               kept so the next export of this file is correct. */
+            if(!keep.length&&dead.length){
+              var _flatNames={};
+              try{var _fr0=pg.node.get(N.of("AOGFLATRES"));if(_fr0 instanceof PDFLib.PDFRef)_fr0=doc.context.lookup(_fr0);
+                if(_fr0&&_fr0.keys)_fr0.keys().forEach(function(ck){var l=_fr0.get(ck);if(l instanceof PDFLib.PDFRef)l=doc.context.lookup(l);if(l&&l.asArray)l.asArray().forEach(function(n){_flatNames[String(n).replace(/^\//,"")]=1})})}catch(_fe){}
+              var _keep2=[],_dead2=[];
+              dead.forEach(function(r){
+                var st=null;try{st=(r instanceof PDFLib.PDFRef)?doc.context.lookup(r):r}catch(e){}
+                var txt="";try{var b=(st instanceof PDFLib.PDFRawStream)?PDFLib.decodePDFRawStream(st).decode():(st&&st.getContents?st.getContents():null);if(b){for(var i=0;i<b.length;i+=8192)txt+=String.fromCharCode.apply(null,b.subarray(i,Math.min(i+8192,b.length)))}}catch(e){txt=null}
+                var usesFlat=false;
+                if(txt===null){usesFlat=true}else{var m=txt.match(/\/[A-Za-z0-9_.+-]+/g)||[];for(var k=0;k<m.length;k++){if(_flatNames[m[k].slice(1)]){usesFlat=true;break}}}
+                if(usesFlat){_dead2.push(r)}else{_keep2.push(r);try{st.dict.delete(N.of("AOGFLAT"))}catch(e){}}
+              });
+              if(_keep2.length){keep=_keep2;dead=_dead2;drop=_dead2.length;info.rescued=(info.rescued||0)+_keep2.length;
+                try{console.warn("[AOG import] plan rescue: every content stream was tagged removable (older export bug) - kept "+_keep2.length+" original stream(s), removed "+_dead2.length+" baked-markup stream(s)")}catch(_c){}}
+            }
             if(drop){info.streams+=drop;try{pg.node.set(N.of("Contents"),doc.context.obj(keep))}catch(e){}dead.forEach(function(r){try{if(r instanceof PDFLib.PDFRef)doc.context.delete(r)}catch(e){}})}
           }
           /* 2. Resources the export added for that content (the raster overlay image,
