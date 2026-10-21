@@ -24641,11 +24641,11 @@ function drawParcel(g, info){
         let center=null, clat=null, clng=null;
         try{ if(marker){ const ll=marker.getLatLng(); center=ll; clat=ll.lat; clng=ll.lng; } }catch(e){}
         if(!center){ try{ center=parcelLayer.getBounds().getCenter(); clat=center.lat; clng=center.lng; }catch(e){} }
-        if(center){ const z=Math.max(map.getZoom(), 18); map.setView(center, z); }
+        if(center && _autoFitAllowed()){ const z=Math.max(map.getZoom(), 18); map.setView(center, z); }
         // Now find the INDIVIDUAL home parcel inside the shared tract and outline it in blue.
         if(isFinite(clat)&&isFinite(clng)) drawHomeWithinTract(clat, clng, acres, info);
       } else {
-        map.fitBounds(parcelLayer.getBounds(),{maxZoom:19,padding:[60,60]});
+        if(_autoFitAllowed()) map.fitBounds(parcelLayer.getBounds(),{maxZoom:19,padding:[60,60]});
         // MARKER SNAP (cosmetic): the orange dot starts at the raw geocode point, which for some
         // addresses (interpolated, or coastal lots on Estero Blvd etc.) lands off the actual lot —
         // even on a neighbour. The PARCEL is matched by address, not by the dot, so the data is
@@ -25221,7 +25221,7 @@ function _nbrRenderParcelLabels(labels, subjIdx){
         suppressUiClick(900);   // block the replayed tap landing on the map underneath
         // Use the parcel's REAL coordinates (exact) rather than re-geocoding the bare street, which
         // can resolve "123 Main St" to the wrong town. Fall back to address only if coords missing.
-        _nbrSetAddrBox(L0.txt);
+        _nbrSetAddrBox(L0.txt); _markUserSearch();
         if(isFinite(L0.lat) && isFinite(L0.lng)) runLookup(L0.lat, L0.lng, _nbrClickCtx(L0.txt, L0.feat&&L0.feat.attributes));
         else searchForAddress(L0.txt);
       });
@@ -25336,7 +25336,7 @@ function _nbrRenderPoints(ptLabels, ptSubjIdx){
             if(isSubj) _nbrSubjDrawn=true;
             mk.on('click', (ev)=>{ try{ L.DomEvent.stop(ev); }catch(e){}
               suppressUiClick(900);
-              _nbrSetAddrBox(_addr);
+              _nbrSetAddrBox(_addr); _markUserSearch();
               if(isFinite(P.lat) && isFinite(P.lng)) runLookup(P.lat, P.lng, _nbrClickCtx(_addr, P.a));
               else searchForAddress(_addr);
             });
@@ -26837,7 +26837,31 @@ let runId=0;
    old, still-loading search from finishing late and hijacking the map/results with the OLD
    address after the user has already typed and launched a NEW one. */
 let searchSeq=0;
-function newSearch(){ return ++searchSeq; }
+function newSearch(){ _markUserSearch(); return ++searchSeq; }
+/* 🩹 "On a reload, when I start zooming out it snaps back to the property 2–3 times."
+   After a reload the restored lookup is followed by one or more BACKGROUND re-runs (territory / gas
+   files and the county address-point files land and call rerunLastLookup()). Every run ends in
+   drawParcel(), which did an unconditional fitBounds/setView — so each re-run yanked the map back
+   to the lot while the user was already zooming out.
+   Rule now: the map only auto-frames the parcel if the user has NOT moved the map themselves since
+   the last search they actually started (address search, suggestion/history pick, map tap, label
+   tap). Only real view gestures count — wheel, pinch, drag, double-click, zoom buttons, keyboard,
+   box-zoom — so a plain tap on the map (which starts a new search) never blocks its own framing. */
+var _lastUserSearchAt=0, _lastUserViewAt=-1;
+function _markUserSearch(){ _lastUserSearchAt=Date.now(); }
+function _autoFitAllowed(){ return _lastUserViewAt < _lastUserSearchAt || _lastUserViewAt<0; }
+(function(){
+  try{
+    const mark=()=>{ _lastUserViewAt=Date.now(); };
+    const c=map.getContainer();
+    c.addEventListener('wheel', mark, {passive:true, capture:true});
+    c.addEventListener('dblclick', mark, true);
+    c.addEventListener('touchstart', e=>{ if(e.touches && e.touches.length>1) mark(); }, {passive:true, capture:true});
+    c.addEventListener('keydown', e=>{ if(/^(\+|-|=|_|Arrow\w+)$/.test(e.key)) mark(); }, true);
+    c.addEventListener('click', e=>{ if(e.target && e.target.closest && e.target.closest('.leaflet-control-zoom')) mark(); }, true);
+    map.on('dragstart boxzoomstart', mark);
+  }catch(e){}
+})();
 /* Render the per-source lookup timing breakdown into the "Sources & details" footer. Sources are
    listed slowest-first (so the bottleneck is at the top), errored sources marked, the single slowest
    source highlighted, and the milestones (first paint / total) shown below a divider. */
@@ -34218,6 +34242,20 @@ document.getElementById('go').onclick=doSearch;
 
 /* ---------- Address autocomplete (suggest as you type) ---------- */
 const addrEl=document.getElementById('addr');
+/* 🩹 "Sometimes on a reload the search bar has a bunch of space between the house number, street…"
+   setAddrBox() collapsed padding, but about ten other code paths write addrEl.value / fl_addr
+   directly (suggestion pick, history pick, unit pick, label tap, resolver label, restore). A site
+   address built from fixed-width county fields ("24330      MATIAS LN") went in raw, got saved to
+   fl_addr, and came back on every reload. Fix it at the element: every PROGRAMMATIC write to the
+   box is cleaned. Typing doesn't go through this setter, so the user's own keystrokes are untouched. */
+function _cleanAddr(v){ return String(v==null?'':v).replace(/[\t  -​ 　]+/g,' ').replace(/\s+/g,' ').replace(/\s+,/g,',').trim(); }
+try{
+  const _vd=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+  Object.defineProperty(addrEl,'value',{ configurable:true,
+    get(){ return _vd.get.call(this); },
+    set(v){ _vd.set.call(this, _cleanAddr(v)); } });
+}catch(e){}
+try{ const _ss=STORE.set; STORE.set=function(k,v){ return _ss.call(STORE, k, k==='fl_addr'?_cleanAddr(v):v); }; }catch(e){}
 /* 🩹 "I start typing and it refreshes with what was already loading."
    restore() ends with `await runLookup(saved lat/lng)`, but that sits BEHIND
    `await Promise.all([autoLoadTerritories(), autoLoadGas()])` — two large geojson downloads. On a
@@ -34645,10 +34683,11 @@ const histEl = document.getElementById('historyDrop');
 const HIST_KEY = 'fl_search_history';
 const HIST_MAX = 8;
 
-function getHistory(){ try{ return JSON.parse(STORE.get(HIST_KEY)||'[]'); }catch(e){ return []; } }
+function getHistory(){ try{ const h=JSON.parse(STORE.get(HIST_KEY)||'[]'); return Array.isArray(h)?[...new Set(h.map(_cleanAddr).filter(Boolean))]:[]; }catch(e){ return []; } }
 function saveHistory(arr){ STORE.set(HIST_KEY, JSON.stringify(arr)); }
 
 function addToHistory(label){
+  label=_cleanAddr(label);
   if(!label || label.length < 5) return;
   let h = getHistory().filter(x => x !== label);
   h.unshift(label);
@@ -35445,7 +35484,7 @@ window.Sheet=Sheet;
 })();
 
 (async function restore(){
-  const a=STORE.get('fl_addr'); if(a){ document.getElementById('addr').value=a; updateClearBtn(); }
+  const a=STORE.get('fl_addr'); if(a){ document.getElementById('addr').value=a; STORE.set('fl_addr',a); updateClearBtn(); }
   // WARM THE COLLIER FILE EARLY: Collier's sqft (and per-unit condo data) comes from the ~4.6MB
   // compact file, unlike Lee/Sarasota/Charlotte which read sqft straight from their live layers. On a
   // cold session the first Collier search raced that download and painted a lean card (no sqft) until
