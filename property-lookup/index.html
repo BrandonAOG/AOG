@@ -5758,7 +5758,9 @@ const ZONING_CITY = {
   PUNTAGORDA:{code:"https://library.municode.com/fl/punta_gorda/codes/code_of_ordinances", permit:"https://www.pgorda.us/151/Urban-Design"},
   SARASOTA:{code:"https://library.municode.com/fl/sarasota/codes/code_of_ordinances", permit:"https://www.sarasotafl.gov/government/development-services"},  // City of Sarasota (was wrongly keyed SARASOTACITY)
   VENICE:{code:"https://library.municode.com/fl/venice/codes/code_of_ordinances", permit:"https://www.venicegov.com/government/development-services"},
-  NORTHPORT:{code:"https://library.municode.com/fl/north_port/codes/code_of_ordinances", permit:"https://www.northportfl.gov/government/neighborhood-development-services"},
+  // North Port's own Accela Citizen Access portal (supplied by AOG 20 Oct 2026) — deep-linked to the
+  // Building Permits record search, which takes site address or parcel number. Verified loading.
+  NORTHPORT:{code:"https://library.municode.com/fl/north_port/codes/code_of_ordinances", permit:"https://aca-prod.accela.com/NORTHPORT/Cap/CapHome.aspx?module=Building&TabName=Building"},
   BRADENTON:{code:"https://library.municode.com/fl/bradenton/codes/code_of_ordinances", permit:"https://www.cityofbradenton.com/162/Planning-Community-Development"},
   PALMETTO:{code:"https://library.municode.com/fl/palmetto/codes/code_of_ordinances", permit:"https://www.palmettofl.org/152/Planning-Zoning"},
   MOOREHAVEN:{code:"https://library.municode.com/fl/moore_haven/codes/code_of_ordinances", permit:"https://moorehaven.org/zoning-building-code-enforcement/"},
@@ -32072,8 +32074,17 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
   html += `</div></div>`;   // ---- close the Elevation Certificate card ----
 
   /* ---- Permits & Documents: survey / site plan / permit history ---- */
+  /* 🩹 WHOSE PERMITS. The card used to name the jurisdiction from the DOCUMENTS config, which only
+     knows a city when the city has its own DOCS_CITY entry. North Port has none (its Elevation
+     Certificates come from Sarasota County's layer), so a North Port lot was labelled "Sarasota County
+     permitting portal" and sent to the COUNTY's records request — even though the link itself went to
+     North Port's portal and North Port's own GovQA records portal is in RECORDS_PORTALS. North Port
+     issues its own permits. Now: when the parcel is in a city whose zoning config carries a permit
+     portal, the Permits card — label, portal and records request — is that city's. */
+  const _permInCity = docInCity || !!(zr && zr.inCity && z && z.permit && cityName);
+  const permJur = (_permInCity && !docInCity) ? titleCase(cityName) : docJur;
   html += `<div class="card noprint"><div class="ch"><span class="icn">[ DOC ]</span><h2>Permits &amp; Documents</h2>
-    <div class="src">${esc(docJur)}<br>permits</div></div><div class="cb">`;
+    <div class="src">${esc(permJur)}<br>permits</div></div><div class="cb">`;
 
   // --- Survey / Site Plan / permit history: deep link to the permitting portal (no public data feed exists) ---
   // City portal wins when the parcel is in a city; else county; else the zoning-config portal.
@@ -32083,7 +32094,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
   const portal = (docInCity && docCfg && docCfg.permit) ? docCfg.permit
                : (zr.inCity && z && z.permit) ? z.permit
                : ((docCfg && docCfg.permit) || (z && z.permit) || null);
-  html += `<div class="lc-meta" style="margin-top:9px">Surveys and site plans aren't a public map layer &mdash; they live in <b>${esc(docJur)}</b>'s building-permit file, retrieved by ${docCfg&&docCfg.permitBy==='permit'?'permit record number':'address or parcel/STRAP number'}.</div>`;
+  html += `<div class="lc-meta" style="margin-top:9px">Surveys and site plans aren't a public map layer &mdash; they live in <b>${esc(permJur)}</b>'s building-permit file, retrieved by ${docCfg&&docCfg.permitBy==='permit'?'permit record number':'address or parcel/STRAP number'}.</div>`;
   /* ── BS&A ONLINE, PER-PARCEL (added 19 Sep 2026) ────────────────────────────────────────────
      Grant-Valkaria is one of the towns with NO zoning layer anywhere (see ZONING_LIVE_CITY's
      not-found notes), so anything that reaches its records is worth having. The town runs BS&A
@@ -32368,7 +32379,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
 
      Nothing new is fetched here. Same portal, same folio, same records-request URL and text. */
   {
-    const _rr   = recordsRequestUrl(docJur, cityName, countyName, docInCity);
+    const _rr   = recordsRequestUrl(permJur, cityName, countyName, _permInCity);
     /* The request used to carry searchCtx.raw — whatever was typed in the box. Empty on a map
        click, and wrong whenever the lookup started from a folio, an owner name or a half-spelled
        street, so the text went out reading "[address]" with the right parcel number beside it.
@@ -32393,14 +32404,14 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
       p += `<div class="pstep"><div class="n">${strap?2:1}</div><div class="b">`
         +  `<div class="t">Search the permitting portal</div>`
         +  `<div class="s">${strap ? 'Paste the folio above into the portal’s <i>Search for a Property</i> box.' : 'Search by address — no folio was read for this parcel.'} Not every record is digitized.</div>`
-        +  `<a class="palink" href="${esc(portal)}" target="_blank" rel="noopener">↗ ${esc(docJur)} permitting portal (survey / site plan / permits)</a>`
+        +  `<a class="palink" href="${esc(portal)}" target="_blank" rel="noopener">↗ ${esc(permJur)} permitting portal (survey / site plan / permits)</a>`
         +  `</div></div>`;
     }
 
     p += `<div class="pstep"><div class="n">${(strap?1:0)+(portal?1:0)+1}</div><div class="b">`
       +  `<div class="t">No attachment on the permit? Request the file</div>`
       +  `<div class="s">A survey and site plan usually arrive this way — the portal shows the permit, but not what was filed with it.</div>`
-      +  `<a class="palink" href="${esc(_rr.url)}" target="_blank" rel="noopener">↗ ${_rr.verified ? 'Request the permit file — '+esc(docJur)+' public records portal' : 'Find '+esc(docJur)+'’s public records request page'}</a>`
+      +  `<a class="palink" href="${esc(_rr.url)}" target="_blank" rel="noopener">↗ ${_rr.verified ? 'Request the permit file — '+esc(permJur)+' public records portal' : 'Find '+esc(permJur)+'’s public records request page'}</a>`
       +  `<div class="copyrow"><span class="lc-meta">Request text, this parcel filled in</span>`
       +  `<button type="button" class="copyfolio" data-rr="plain" data-strap="${_strapAttr}">Copy request text</button></div>`
       /* The formal, statute-citing version sits behind a chevron rather than beside the main
@@ -32414,7 +32425,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
       +  (_rr.verified ? '' : `<div class="lc-meta" style="margin-top:4px">This jurisdiction’s records portal isn’t confirmed yet — the link searches for it. Once you land on the real page, its URL can be added so this becomes one click.</div>`)
       +  `</div></div>`;
 
-    const _rrAlt = RECORDS_PORTALS[(docInCity ? norm(cityName||'') : (norm(countyName||'')+'COUNTY'))+'_ALT'];
+    const _rrAlt = RECORDS_PORTALS[(_permInCity ? norm(cityName||'') : (norm(countyName||'')+'COUNTY'))+'_ALT'];
     if(_rrAlt && _rrAlt.url){
       p += `<a class="palink" href="${esc(_rrAlt.url)}" target="_blank" rel="noopener" style="margin-top:8px">↗ ${esc(_rrAlt.label||'Alternate records custodian')}</a>`;
     }
