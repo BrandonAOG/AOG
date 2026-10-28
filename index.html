@@ -367,7 +367,7 @@ body { font-family: var(--font-body); background: var(--bg-dark); color: var(--t
 
   <div class="status-bar">
     <div class="status-item"><span class="status-dot"></span><span>System Ready</span></div>
-    <div class="status-item"><span class="status-dot yellow"></span><span>16 Tools Active</span></div>
+    <div class="status-item"><span class="status-dot yellow"></span><span id="tools-active-count">18 Tools Active</span></div>
     <div class="status-item"><span class="status-dot orange"></span><span>Field Ready</span></div>
     <div class="status-item" id="sw-status-item"><span class="status-dot blue" id="sw-status-dot"></span><span id="sw-status-label">Sync Enabled</span></div>
   </div>
@@ -422,10 +422,10 @@ body { font-family: var(--font-body); background: var(--bg-dark); color: var(--t
       <a href="#" class="form-card" data-form="conduit-fill"><div class="form-card-accent"></div><div class="glow-strip"></div><div class="form-card-content"><div class="form-icon-wrap"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><path d="M7 7h10v10H7z"/><circle cx="12" cy="12" r="2"/></svg></div><div class="form-text"><div class="form-title">Conduit Fill</div><div class="form-desc">NEC Chapter 9 conduit sizing &amp; fill calculations</div></div></div><div class="form-arrow">OPEN &rsaquo;</div></a>
       <a href="#" class="form-card" data-form="box-fill"><div class="form-card-accent"></div><div class="glow-strip"></div><div class="form-card-content"><div class="form-icon-wrap"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="1.6"/><circle cx="15" cy="9" r="1.6"/><circle cx="9" cy="15" r="1.6"/><circle cx="15" cy="15" r="1.6"/></svg></div><div class="form-text"><div class="form-title">Box Fill</div><div class="form-desc">NEC 314.16 device &amp; outlet box fill calculations</div></div></div><div class="form-arrow">OPEN &rsaquo;</div></a>
       <a href="#" class="form-card" data-form="pull-box"><div class="form-card-accent"></div><div class="glow-strip"></div><div class="form-card-content"><div class="form-icon-wrap"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="13" height="13" rx="1.5"/><path d="M2 11h5M2 16h5M11 2v5M16 2v5"/><path d="M7 13.5a6.5 6.5 0 0 1 6.5-6.5"/></svg></div><div class="form-text"><div class="form-title">Pull &amp; Junction Box</div><div class="form-desc">NEC 314.28 pull box sizing, bends &amp; knockout layout</div></div></div><div class="form-arrow">OPEN &rsaquo;</div></a>
-      <div class="tool-subhead"><span>Gas &amp; Site</span></div>
-      <a href="#" class="form-card" data-form="gas-calc"><div class="form-card-accent"></div><div class="glow-strip"></div><div class="form-card-content"><div class="form-icon-wrap"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="18" cy="5" r="2"/><path d="M20 3v4M18 5h4"/></svg></div><div class="form-text"><div class="form-title">Gas Calculator</div><div class="form-desc">BTU sizing, pipe sizing &amp; Generac model selection</div></div></div><div class="form-arrow">OPEN &rsaquo;</div></a>
-      <a href="#" class="form-card" data-form="concrete-calc"><div class="form-card-accent"></div><div class="glow-strip"></div><div class="form-card-content"><div class="form-icon-wrap"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg></div><div class="form-text"><div class="form-title">Concrete Calculator</div><div class="form-desc">Slab, column &amp; footing volume, bags &amp; yardage</div></div></div><div class="form-arrow">OPEN &rsaquo;</div></a>
+      <div class="tool-subhead"><span>Install Planning</span></div>
       <a href="#" class="form-card" data-form="site-annotator"><div class="form-card-accent"></div><div class="glow-strip"></div><div class="form-card-content"><div class="form-icon-wrap"><svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z" stroke-width="1.5"/><path d="M3 9h18M9 3v18"/><path d="M14 14l3 3M17 14l-3 3"/></svg></div><div class="form-text"><div class="form-title">Site Plan / Annotator</div><div class="form-desc">Draw, annotate &amp; mark up site plans &amp; diagrams</div></div></div><div class="form-arrow">OPEN &rsaquo;</div></a>
+      <a href="#" class="form-card" data-form="concrete-calc"><div class="form-card-accent"></div><div class="glow-strip"></div><div class="form-card-content"><div class="form-icon-wrap"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg></div><div class="form-text"><div class="form-title">Concrete Calculator</div><div class="form-desc">Slab, column &amp; footing volume, bags &amp; yardage</div></div></div><div class="form-arrow">OPEN &rsaquo;</div></a>
+      <a href="#" class="form-card" data-form="gas-calc"><div class="form-card-accent"></div><div class="glow-strip"></div><div class="form-card-content"><div class="form-icon-wrap"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="18" cy="5" r="2"/><path d="M20 3v4M18 5h4"/></svg></div><div class="form-text"><div class="form-title">Gas Calculator</div><div class="form-desc">BTU sizing, pipe sizing &amp; Generac model selection</div></div></div><div class="form-arrow">OPEN &rsaquo;</div></a>
     </div>
   </div>
 
@@ -4316,6 +4316,8 @@ document.querySelectorAll('.cat-btn').forEach(function(btn) {
 })();
 
 var FORM_URLS = { 'pre-checklist':'./pre-checklist/','install':'./elect-install/','gas-install':'./gas-install/','gas-calc':'./gas-calc/','estimate':'./estimate/','maintenance':'./maintenance/','site-visits':'./site-visit/','property-lookup':'./property-lookup/','conduit-fill':'./conduit-fill/','box-fill':'./box-fill/','pull-box':'./pull-box/','load-calc':'./load-calcs/','breaker-sizing':'./breaker-conductor/','spec-viewer':'./spec-viewer/','qc-checklist':'./qc-checklist/','service-work':'./service-work/','site-annotator':'./site-annotator/','concrete-calc':'./concrete-calc/' };
+/* Status bar count follows the tool list — add a tool to FORM_URLS and this updates itself. */
+(function(){ var el=document.getElementById('tools-active-count'); if(el) el.textContent=Object.keys(FORM_URLS).length+' Tools Active'; })();
 document.querySelectorAll('.form-card').forEach(function(card) {
   var key=card.getAttribute('data-form'), url=FORM_URLS[key];
   if(url) card.setAttribute('href',url);
