@@ -27055,6 +27055,42 @@ async function _runLookupInner(lat,lng,searchCtx){
   clearNeighborNumbers(); _nbrCtx=null;
   clearEcNote();   // remove any 📝 EC note from a previous property
   _subjRings=null;   // reset per lookup; drawParcel re-sets it only for a normal home lot
+  /* ── THE SITE POINT: ALWAYS ON THE LOT (28 Oct 2026) ─────────────────────────────────────────
+     lat/lng here are wherever the SEARCH landed — a geocoder hit or an address point. On waterfront
+     lots that is often in the CANAL behind the house or in the road in front of it (2370 Snook Dr:
+     pin in the canal, so Zoning came back blank). The map marker was already being snapped onto the
+     lot once the parcel resolved, but every point query below kept using the raw search point, so the
+     card could describe the water/road instead of the property: no zoning, the canal's flood zone,
+     the wrong utility/fire/plat polygon, and so on.
+     _site() returns a point that is guaranteed to be ON the subject lot:
+       · the search point itself, if it is already inside the lot (the normal case — nothing changes,
+         no extra requests), else
+       · labelPoint() of the lot — the most-interior point, never the centroid, which can fall outside
+         an L-shaped or curved canal lot.
+     It reads _subjRings lazily, so it only knows the lot after drawParcel() has run; before that (or
+     for an oversized tract, where drawParcel leaves _subjRings null on purpose) it returns the search
+     point unchanged. `moved` says whether a re-anchor happened, so early queries that were already
+     fired at the search point (zoning, FEMA flood, county flood) can re-ask at the lot and prefer it.
+     Deliberately NOT moved: wind (ASCE contours are miles apart), easements (already polygon-based),
+     neighbour numbers (address-driven), and the print metadata (records what was searched). */
+  let _siteRingsSeen, _sitePt=null;
+  const _site = ()=>{
+    const r=_subjRings;
+    if(r!==_siteRingsSeen){
+      _siteRingsSeen=r; _sitePt=null;
+      try{
+        const good = Array.isArray(r) ? r.filter(x=>Array.isArray(x) && x.length>2) : [];   // a 1-2 vertex ring is not a lot
+        if(good.length && isFinite(lat) && isFinite(lng)){
+          const inLot = good.some(x=>pointInRing(lng, lat, x));
+          if(!inLot){
+            const lp = labelPoint({ geometry:{ rings:good } });   // [lng,lat]
+            if(lp && isFinite(lp[0]) && isFinite(lp[1])) _sitePt = { lat:lp[1], lng:lp[0], moved:true };
+          }
+        }
+      }catch(e){ _sitePt=null; }
+    }
+    return _sitePt || { lat, lng, moved:false };
+  };
   _subjTractRings=null;   // ditto: re-set only when an oversized shared tract is drawn
   saveLoc(lat,lng);
   const _coordReadout=document.getElementById('coordReadout');
@@ -30523,14 +30559,14 @@ async function _runLookupInner(lat,lng,searchCtx){
       // blocks render; if the layer is down or the point misses, nothing is added. Guarded to Citrus.
       if(norm(countyName)==='CITRUS'){
         const _myIdSB=myId;
-        citrusLDCInfo(lat,lng).then(sb=>{ if(_myIdSB!==runId) return; injectCitrusSetbacks(sb); }).catch(()=>{});
+        citrusLDCInfo(_site().lat,_site().lng).then(sb=>{ if(_myIdSB!==runId) return; injectCitrusSetbacks(sb); }).catch(()=>{});
       }
       // SEPTIC vs PUBLIC SEWER (informational): for counties with wired sources, ask every one of them
       // at the resolved point and show what they say. Async, dupe-guarded, silent on any miss — the
       // single most useful thing here is a drainfield warning before someone picks a pad location.
       if(SEPTIC_SEWER[norm(countyName)]){
         const _myIdSS=myId; clearSepticPoints(); const _spMine=_spRun;
-        septicSewerAtPoint(countyName, lat, lng).then(ss=>{ if(_myIdSS!==runId) return;
+        septicSewerAtPoint(countyName, _site().lat, _site().lng).then(ss=>{ if(_myIdSS!==runId) return;
           injectSepticSewer(ss);
           try{ drawSepticPoints(ss && ss.points, _spMine); }catch(e){}
         }).catch(()=>{});
@@ -30540,7 +30576,7 @@ async function _runLookupInner(lat,lng,searchCtx){
          miss — because it answers the same class of question: what is already in the ground here. */
       if(WELLFIELD[norm(countyName)] || WELLS_PERMITTED[norm(countyName)]){
         const _myIdWL=myId; clearWellPoints(); const _wlMine=_wlRun;
-        wellsAtPoint(countyName, lat, lng).then(wl=>{ if(_myIdWL!==runId) return;
+        wellsAtPoint(countyName, _site().lat, _site().lng).then(wl=>{ if(_myIdWL!==runId) return;
           injectWells(wl);
           try{ drawWellPoints(wl && wl.points, _wlMine); }catch(e){}
         }).catch(()=>{});
@@ -30752,13 +30788,13 @@ async function _runLookupInner(lat,lng,searchCtx){
     // setback query is independent of the parcel source. Async, dupe-guarded, Citrus-only.
     if(norm(countyName)==='CITRUS'){
       const _myIdSB2=myId;
-      citrusLDCInfo(lat,lng).then(sb=>{ if(_myIdSB2!==runId) return; injectCitrusSetbacks(sb); }).catch(()=>{});
+      citrusLDCInfo(_site().lat,_site().lng).then(sb=>{ if(_myIdSB2!==runId) return; injectCitrusSetbacks(sb); }).catch(()=>{});
     }
     // Septic/sewer on the roll path too — it is a point query against county utility layers and does
     // not depend on which parcel source answered. Async, dupe-guarded.
     if(SEPTIC_SEWER[norm(countyName)]){
       const _myIdSS2=myId; clearSepticPoints(); const _spMine2=_spRun;
-      septicSewerAtPoint(countyName, lat, lng).then(ss=>{ if(_myIdSS2!==runId) return;
+      septicSewerAtPoint(countyName, _site().lat, _site().lng).then(ss=>{ if(_myIdSS2!==runId) return;
         injectSepticSewer(ss);
         try{ drawSepticPoints(ss && ss.points, _spMine2); }catch(e){}
       }).catch(()=>{});
@@ -30766,7 +30802,7 @@ async function _runLookupInner(lat,lng,searchCtx){
     // Wells on the roll path too — a point query, independent of which parcel source answered.
     if(WELLFIELD[norm(countyName)] || WELLS_PERMITTED[norm(countyName)]){
       const _myIdWL2=myId; clearWellPoints(); const _wlMine2=_wlRun;
-      wellsAtPoint(countyName, lat, lng).then(wl=>{ if(_myIdWL2!==runId) return;
+      wellsAtPoint(countyName, _site().lat, _site().lng).then(wl=>{ if(_myIdWL2!==runId) return;
         injectWells(wl);
         try{ drawWellPoints(wl && wl.points, _wlMine2); }catch(e){}
       }).catch(()=>{});
@@ -30887,7 +30923,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
     const _hoaSlotId='hoaLive-'+myId;
     if(COMMUNITY_LAYERS[norm(countyName||'')]){
       html += `<div id="${_hoaSlotId}"><div class="freshline"><span class="badge live">● CHECKING</span> ${esc(titleCase(countyName))} County community layers… <span class="zone-spin" aria-hidden="true"></span></div></div>`;
-      queryCommunity(lat, lng, countyName, 8000).then(c=>{
+      queryCommunity(_site().lat, _site().lng, countyName, 8000).then(c=>{
         if(myId!==runId) return;
         patchSlot(_hoaSlotId, renderCommunityBlock(c, countyName,
           (liveRes && liveRes.features && liveRes.features[0]) ? liveRes.features[0].attributes : null)
@@ -30946,7 +30982,18 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
   }
 
   /* ---- Flood ---- */
+  /* Pin off the lot → ask FEMA at the on-lot point too (in parallel with the pin query already in
+     flight) and prefer that answer. A canal pin otherwise reports the canal's zone (often AE/VE)
+     for a lot that may be X, or the reverse. See _site(). */
+  const _sFl = _site();
+  const pFloodLot = _sFl.moved
+    ? _timed('flood (FEMA, inside lot)', arcQueryRetry(EP.flood, _sFl.lat, _sFl.lng, 'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, 2500, 4, true, false)).catch(e=>({__err:e.message}))
+    : null;
   flood = await pFlood; if(myId!==runId) return;   // deferred: awaited here, not in the fast-core batch
+  if(pFloodLot){
+    const _fl = await pFloodLot; if(myId!==runId) return;
+    if(_fl && !_fl.__err && _fl.features && _fl.features.length){ _fl.__fromLot = true; flood = _fl; }
+  }
   /* Both the FEMA Flood Hazard card and the Elevation Certificate card now live in the Flood tab,
      and for some cities (Naples) the resident portal and the EC lookup are the SAME URL. Record
      whatever portal this card links so the EC card below can reference it instead of re-linking. */
@@ -30957,6 +31004,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
   html += `<div class="card"><div class="ch"><span class="icn">[ FLD ]</span><h2>FEMA Flood Hazard</h2>
     <div class="src">FEMA National<br>Flood Hazard Layer</div></div><div class="cb">`;
   html += `<div class="freshline"><span class="badge live">● LIVE</span> effective NFHL, queried in real time</div>`;
+  if(flood && flood.__fromLot) html += `<div class="note">The address pin fell outside the lot (canal, road or easement), so the zone was read at a point <b>inside the parcel</b>.</div>`;
   let nfhlZone=null;   // captured for the county cross-check below
   if(flood.__err){
     /* 🩹 SAME PATTERN AS THE GROUND-ELEVATION ROW (see _geSlotId below).
@@ -31033,7 +31081,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
         + `<span class="zone-spin" aria-hidden="true"></span></div>`;
       let f2=null;
       // 25 s. The card is up, nothing is blocked, and NFHL is frequently just slow rather than down.
-      try{ f2 = await arcQueryRetry(EP.flood, lat, lng,
+      try{ f2 = await arcQueryRetry(EP.flood, _site().lat, _site().lng,
              'FLD_ZONE,ZONE_SUBTY,STATIC_BFE,DEPTH,SFHA_TF', false, 25000, 2); }catch(_){}
       if(myId!==runId) return;
       const slot=document.getElementById(_fldSlot); if(!slot) return;
@@ -31454,7 +31502,13 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
     const _nfhlForCheck = nfhlZone;   // capture: the patch runs long after this scope has moved on
     (async () => {
       let cf = null;
-      try { cf = await pCountyFlood; } catch (e) {}
+      try {
+        const _sc = _site();
+        if (_sc.moved) {
+          const _cl = await queryCountyFlood(_sc.lat, _sc.lng, countyName, cityName).catch(() => null);
+          cf = (_cl && _cl.zone != null && String(_cl.zone).trim() !== '') ? _cl : await pCountyFlood;
+        } else cf = await pCountyFlood;
+      } catch (e) {}
       // A superseded lookup has already repainted the panel, so the slot is gone and so is the point.
       // Do NOT require the slot to exist yet — an early answer arrives before the paint that puts
       // it in the DOM. patchSlot() records it either way and the next paint applies it.
@@ -31582,7 +31636,29 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
   // ZONING_MAX removed — the background patch is uncapped now (see RENDER CONTRACT). pZoning's own
   // request timeout is the only bound, which is where a bound belongs.
   const _zoneSlotId = 'zoningLive-' + runId;
-  let zhit = await Promise.race([ pZoning,
+  /* ── ZONING IS READ INSIDE THE LOT, NOT AT THE PIN (28 Oct 2026) ─────────────────────────────
+     pZoning was fired at the very top of runLookup with the raw search coordinate, before the parcel
+     was known. On waterfront lots the geocoder/address point can land in the CANAL or the road
+     right-of-way behind/in front of the lot. Zoning polygons usually stop at the lot line, so the
+     point-in-polygon found nothing and the card read "no live district" even though the parcel
+     itself resolved fine. Reported on 2370 Snook Dr (pin sits in the canal).
+     Worse than blank: where a jurisdiction DOES zone its canals/ROW as their own polygon, the pin
+     would have returned that polygon's district for the house.
+     Fix: _site() (defined at the top of this function) gives a point inside the lot once drawParcel()
+     has run. If it had to move off the search point, query zoning again there and PREFER that answer. The pin-point result (already in flight, nothing wasted) is only the
+     fallback when the interior query also returns nothing. A pin that is already inside the lot
+     takes the old path untouched, so normal lookups cost no extra request. */
+  const pZoningLot = (()=>{
+    const st = _site();
+    if(!st.moved) return pZoning;
+    return (async()=>{
+      let inHit = null;
+      try{ inHit = await _timed('zoning (inside lot — pin off-parcel)', queryZoning(st.lat, st.lng, cityName, countyName)); }catch(e){ inHit = null; }
+      if(inHit){ inHit.__fromLot = true; return inHit; }
+      return pZoning;
+    })();
+  })();
+  let zhit = await Promise.race([ pZoningLot,
     new Promise(res=>setTimeout(()=>res({__slow:true}), ZONING_FAST)) ]);
   if(myId!==runId) return;
   const _zoneSlow = !!(zhit && zhit.__slow);
@@ -31600,7 +31676,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
        so this can't hang forever. */
     (async()=>{
       let late=null;
-      try{ late = await pZoning; }catch(e){}
+      try{ late = await pZoningLot; }catch(e){}
       if(myId!==runId) return;                          // a newer lookup superseded this one — drop it
       const slot=document.getElementById(_zoneSlotId);
       if(!slot) return;
@@ -31627,6 +31703,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
   } else
   if(zhit && ((zhit.code!=null&&String(zhit.code).trim()!=='') || (zhit.desc!=null&&String(zhit.desc).trim()!=='') || (zhit.extras&&zhit.extras.length))){
     html += `<div class="freshline snap" style="margin-top:10px"><span class="badge live">● LIVE</span> zoning polygon at this point${zhit.layerName?' · '+esc(zhit.layerName):''}</div>`;
+    if(zhit.__fromLot) html += `<div class="note">The address pin fell outside the lot (canal, road or easement), so the district was read at a point <b>inside the parcel</b> instead.</div>`;
     if(zhit.code!=null && String(zhit.code).trim()!==''){ html += fieldRow('Zoning district', esc(String(zhit.code)), 'big'); if(window.__exportData) window.__exportData.zoning=String(zhit.code).trim(); }
     if(zhit.extras) for(const ex of zhit.extras) html += fieldRow(ex.label, esc(ex.value));
     if(zhit.desc!=null && String(zhit.desc).trim()!=='' && norm(zhit.desc)!==norm(zhit.code)) html += fieldRow('District name', esc(String(zhit.desc)));
@@ -32434,7 +32511,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
   // Fire district (who reviews the LP / generator clearances and inspects) — county GIS where published
   if(FIRE_DISTRICT_LAYERS[norm(countyName||'')]){
     html += `<div id="fireDist-${myId}"></div>`;
-    queryFireDistrict(lat, lng, countyName).then(fd=>{ if(myId!==runId || !fd) return; patchSlot('fireDist-'+myId,
+    queryFireDistrict(_site().lat, _site().lng, countyName).then(fd=>{ if(myId!==runId || !fd) return; patchSlot('fireDist-'+myId,
       `<div class="note" style="margin-top:6px"><b>Fire district:</b> ${esc(fd.name)}${fd.contact?` — <a href="${esc(fd.contact.url)}" target="_blank" rel="noopener">${esc(fd.contact.name)} ↗</a>`:''}${fd.phone?` · <a href="tel:${esc(fd.phone.replace(/[^0-9+]/g,''))}">${esc(fd.phone)}</a>`:''}${fd.addr?`<div class="lc-meta">${esc(fd.addr)}</div>`:''}<div class="lc-meta">This district's fire marshal reviews the LP tank and generator clearances (NFPA 58 / NFPA 37) and does the final inspection.</div></div>`); }).catch(()=>{});
   }
   // Fire prevention code adoption (NFPA editions → NFPA 37 clearances, NFPA 58 tank distances) — live from Municode
@@ -32449,8 +32526,8 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
       html += `<div id="${_platSlot}"></div>`;
       if(!window.__parcelPlatName && window.__platNameFn){ try{ window.__parcelPlatName = window.__platNameFn(); }catch(e){} }
       const _platQ = (PLAT_LAYERS[norm(cityName||'')] || PLAT_LAYERS_COUNTY[norm(countyName||'')])
-        ? queryRecordedPlat(lat, lng, cityName, countyName, 8000)
-        : arcQuery(_subPlat.url.replace(/\/query$/,'')+'/query', lat, lng, '*', false, 8000).then(r=>{ const a=r&&r.features&&r.features[0]&&r.features[0].attributes; if(!a) return null; const x=_subPlat.pick(a); if(!x||!x.name) return null; return { label: x.name + (x.book?` · Plat Book ${x.book}${x.page?`, Page ${x.page}`:''}`:''), link:x.link||null }; }).catch(()=>null);
+        ? queryRecordedPlat(_site().lat, _site().lng, cityName, countyName, 8000)
+        : arcQuery(_subPlat.url.replace(/\/query$/,'')+'/query', _site().lat, _site().lng, '*', false, 8000).then(r=>{ const a=r&&r.features&&r.features[0]&&r.features[0].attributes; if(!a) return null; const x=_subPlat.pick(a); if(!x||!x.name) return null; return { label: x.name + (x.book?` · Plat Book ${x.book}${x.page?`, Page ${x.page}`:''}`:''), link:x.link||null }; }).catch(()=>null);
       _platQ.then(p=>{
         if(myId!==runId || !p) return;
         patchSlot(_platSlot,
@@ -32481,7 +32558,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
   /* ---- Electric Utility ----
      Source order: (1) local territory GeoJSON via in-browser point-in-polygon, (2) a live REST
      /query override the user supplies. Real provider, or an honest "no data" + a loader. */
-  const localProps = findUtilityAt(lat,lng);                       // local data first (offline, reliable)
+  const localProps = findUtilityAt(_site().lat,_site().lng);                       // local data first (offline, reliable)
   util = await pUtil; if(myId!==runId) return;                     // deferred: awaited here, not in the fast-core batch
   // ── Electric provider resolution, in PRIORITY order ───────────────────────────────────────────────
   // (1) local territory file  (2) authoritative LCEC polygon (SW FL)  (3) HIFLD statewide (approximate)
@@ -32493,7 +32570,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
   // Collier. Host gismapserver.leegov.com is CORS-proven here (Lee zoning uses it). Gated to LCEC counties.
   if(!localProps && countyName && ['LEE','COLLIER','CHARLOTTE','HENDRY'].includes(norm(countyName))){
     try{
-      const _l = await arcQuery("https://gismapserver.leegov.com/gisserver910/rest/services/Layers/Boundaries/MapServer/21/query", lat, lng, "NAME_R", false);
+      const _l = await arcQuery("https://gismapserver.leegov.com/gisserver910/rest/services/Layers/Boundaries/MapServer/21/query", _site().lat, _site().lng, "NAME_R", false);
       if(myId!==runId) return;
       if(_l && !_l.__err && _l.features && _l.features[0]){
         restHit = { NAME:"Lee County Electric Cooperative (LCEC)", TYPE:"COOPERATIVE", TELEPHONE:"(239) 656-2300", WEBSITE:"https://www.lcec.net" };
@@ -32596,7 +32673,7 @@ const cut=u.search(/\b(BLK\b|BLOCK\b|LOTS?\b|TRACT\b|TR\s+\d|PB\s+\d|OR\s+\d|SEC
   /* ---- Fuel: Natural Gas vs Propane ----
      Based on the gas LDC service-territory polygon. Inside → gas may be available (confirm a
      main with the utility); outside all territories → propane required. No data → loader. */
-  const gasHit = findGasAt(lat,lng);
+  const gasHit = findGasAt(_site().lat,_site().lng);
   html += `<div class="card noprint"><div class="ch"><span class="icn">[ FUEL ]</span><h2>Natural Gas / Propane</h2>
     <div class="src">gas LDC service<br>territory</div></div><div class="cb">`;
   if(gasHit){
