@@ -330,7 +330,13 @@ body.light .mini .t{color:#92400E}
 body.light .mini .t small{color:#64748B}
 
 body{padding-top:calc(61px + env(safe-area-inset-top))}
+
+/* Shared update banner (../update-banner.js) reads these names — map them to this page's colors */
+:root{--panel:#0f1535;--text-muted:var(--dim);--amber:var(--accent);--font-body:var(--font)}
+body.light{--panel:#FFFFFF;--text-muted:var(--dim);--amber:var(--accent)}
 </style>
+<script src="../sounds.js" defer></script>
+<script src="../update-banner.js"></script>
 </head>
 <body>
 
