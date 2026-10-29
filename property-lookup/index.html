@@ -25125,6 +25125,7 @@ function searchForAddress(addrStr){
 function _nbrSetAddrBox(txt){
   const v=String(txt||'').replace(/\s+/g,' ').trim();
   if(!v) return;
+  if(_addrUserTyped) return;   // user is typing a new address — see the value-setter guard
   try{
     addrEl.value=v; STORE.set('fl_addr',v); addToHistory(v);
     if(typeof updateClearBtn==='function') updateClearBtn();
@@ -25277,7 +25278,7 @@ function _nbrRenderParcelLabels(labels, subjIdx){
         suppressUiClick(900);   // block the replayed tap landing on the map underneath
         // Use the parcel's REAL coordinates (exact) rather than re-geocoding the bare street, which
         // can resolve "123 Main St" to the wrong town. Fall back to address only if coords missing.
-        _nbrSetAddrBox(L0.txt); _markUserSearch();
+        _addrUserTyped=false; _nbrSetAddrBox(L0.txt); _markUserSearch();
         if(isFinite(L0.lat) && isFinite(L0.lng)) runLookup(L0.lat, L0.lng, _nbrClickCtx(L0.txt, L0.feat&&L0.feat.attributes));
         else searchForAddress(L0.txt);
       });
@@ -25392,7 +25393,7 @@ function _nbrRenderPoints(ptLabels, ptSubjIdx){
             if(isSubj) _nbrSubjDrawn=true;
             mk.on('click', (ev)=>{ try{ L.DomEvent.stop(ev); }catch(e){}
               suppressUiClick(900);
-              _nbrSetAddrBox(_addr); _markUserSearch();
+              _addrUserTyped=false; _nbrSetAddrBox(_addr); _markUserSearch();
               if(isFinite(P.lat) && isFinite(P.lng)) runLookup(P.lat, P.lng, _nbrClickCtx(_addr, P.a));
               else searchForAddress(_addr);
             });
@@ -26896,7 +26897,7 @@ let runId=0;
    old, still-loading search from finishing late and hijacking the map/results with the OLD
    address after the user has already typed and launched a NEW one. */
 let searchSeq=0;
-function newSearch(){ _markUserSearch(); _cancelSuggest(); return ++searchSeq; }
+function newSearch(){ _addrUserTyped=false; _markUserSearch(); _cancelSuggest(); return ++searchSeq; }   // explicit search: box released (see the value-setter guard)
 /* 🩹 A search started while an autocomplete request was still in flight: the request finished a
    moment later and painted "no matches — try adding a city or ZIP" under the box, where it sat over
    the result banner for the rest of the session. Starting a search now cancels the pending request
@@ -33981,6 +33982,7 @@ function _pcPick(i){
     parts[0] = (parts[0]||'').trim() + ' ' + (c.unitType||'Unit') + ' ' + c.unit;
     lbl = parts.map(s=>s.trim()).filter(Boolean).join(', ');
   }
+  _addrUserTyped=false;   // explicit pick — see the value-setter guard
   try{ if(lbl){ addrEl.value=lbl; STORE.set('fl_addr',lbl); addToHistory(lbl); } }catch(e){}
   const ctx = makeSearchCtx(lbl);
   // PIN BY FOLIO. Condo units all sit inside (or share) one polygon, so a coordinate lookup on the
@@ -34405,6 +34407,7 @@ async function doSearch(){
      once, here, and write the clean version back so the box shows what was actually searched. */
   const _rawBox=document.getElementById('addr').value;
   const q=_rawBox.replace(/[\t\u00a0\u2000-\u200b]+/g,' ').replace(/\s+/g,' ').trim();
+  _addrUserTyped=false;   // release first: the normalising write below goes through the guarded setter
   if(q && q!==_rawBox.trim()){ try{ document.getElementById('addr').value=q; }catch(e){} }
   /* The typed text has now been consumed by this search, so release the box: a subsequent MAP CLICK
      should still be able to fill it with the clicked parcel's address, which is how it behaved
@@ -34606,11 +34609,33 @@ const addrEl=document.getElementById('addr');
    fl_addr, and came back on every reload. Fix it at the element: every PROGRAMMATIC write to the
    box is cleaned. Typing doesn't go through this setter, so the user's own keystrokes are untouched. */
 function _cleanAddr(v){ return String(v==null?'':v).replace(/[\t  -​ 　]+/g,' ').replace(/\s+/g,' ').replace(/\s+,/g,',').trim(); }
+/* ── THE USER OWNS THE BOX WHILE THEY ARE TYPING (29 Oct 2026) ───────────────────────────────
+   Reported: "sometimes it starts typing after the address that's already in it after I highlight
+   and start typing." Cause: a search is still resolving in the background (suggestion pick, Find,
+   map tap, the parcel resolver's clean-label upgrade) and, when it lands, writes the resolved
+   address into the box. You had already selected-all and typed your first characters of the NEXT
+   address; the late write replaced them with the old address and dropped the caret at the END, so
+   everything you typed after that was appended to the old address.
+   _addrUserTyped existed, but only setAddrBox() honoured it — and even that let `force` through —
+   while about ten other paths wrote addrEl.value directly after their awaits.
+   So the guard now lives in the element's value setter, the one place every programmatic write
+   passes through: once the user has typed (a real `input` event — programmatic writes never fire
+   one), NO background write lands until an explicit action hands the box back. Explicit actions
+   (Find/Enter, picking a suggestion or history row, the ×, a unit pick, tapping a map label or the
+   map) clear the flag FIRST and then write, so they still work. newSearch() clears it too, since
+   every explicit search goes through it. */
+let _addrUserTyped=false;
 try{
   const _vd=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
   Object.defineProperty(addrEl,'value',{ configurable:true,
     get(){ return _vd.get.call(this); },
-    set(v){ _vd.set.call(this, _cleanAddr(v)); } });
+    set(v){
+      if(_addrUserTyped){
+        try{ console.info('[addr] background write skipped — the user is typing:', v); }catch(e){}
+        return;
+      }
+      _vd.set.call(this, _cleanAddr(v));
+    } });
 }catch(e){}
 try{ const _ss=STORE.set; STORE.set=function(k,v){ return _ss.call(STORE, k, k==='fl_addr'?_cleanAddr(v):v); }; }catch(e){}
 /* 🩹 "I start typing and it refreshes with what was already loading."
@@ -34624,7 +34649,6 @@ try{ const _ss=STORE.set; STORE.set=function(k,v){ return _ss.call(STORE, k, k==
    This flag makes the box's ownership explicit: once the user has typed in it, nothing background
    is allowed to overwrite it. Set on real input only — not focus, since tapping the field and
    deciding not to type shouldn't block a legitimate restore. */
-let _addrUserTyped=false;
 addrEl.addEventListener('input',()=>{ _addrUserTyped=true; });
 /* Every automated write to the box goes through here. Returns false when the user owns the field. */
 function setAddrBox(v, opts){
@@ -34632,7 +34656,11 @@ function setAddrBox(v, opts){
   // it, and this value gets persisted to fl_addr.
   v = String(v==null?'':v).replace(/[\t\u00a0\u2000-\u200b]+/g,' ').replace(/\s+/g,' ').trim();
   if(!v) return false;
-  if(_addrUserTyped && !(opts && opts.force)) return false;
+  /* `force` (map taps) no longer overrides a user who typed AFTER the tap: the tap itself clears the
+     flag via newSearch(), so force only mattered for exactly the case it got wrong. The value setter
+     enforces the same rule; returning false here keeps callers from adding to history a value that
+     never reached the box. */
+  if(_addrUserTyped) return false;
   try{ addrEl.value=v; STORE.set('fl_addr',v); if(typeof updateClearBtn==='function') updateClearBtn(); }catch(e){}
   return true;
 }
@@ -34852,8 +34880,10 @@ async function chooseSuggestion(it){
       return;
     }
     if(pr && isFinite(pr.lat) && isFinite(pr.lng)){
-      addrEl.value = pr.label || basis;            // show the clean authoritative address, not the OSM blob
-      STORE.set('fl_addr',addrEl.value); addToHistory(addrEl.value);
+      if(!_addrUserTyped){   // typed again since the pick? leave their text alone (value-setter guard)
+        addrEl.value = pr.label || basis;            // show the clean authoritative address, not the OSM blob
+        STORE.set('fl_addr',addrEl.value); addToHistory(addrEl.value);
+      }
       setSearchStatus('busy','Pinpointing the parcel…');
       map.setView([pr.lat,pr.lng], 18);
       // The resolver already isolated the CORRECT unit (owner + label + unique folio). Pass that folio
@@ -35018,8 +35048,8 @@ addrEl.addEventListener('input', () => {
    fires no focus event. The only way back was to click somewhere else and return.
    Clearing now shows Recent, which is what an empty search box is for. */
 const _clearAddrBox = () => {
+  _addrUserTyped = false;      // box is being emptied — nothing left to protect (must precede the write)
   addrEl.value = '';
-  _addrUserTyped = false;      // box is empty — nothing left to protect
   updateClearBtn();
   hideSuggest();
   addrEl.focus();
@@ -35126,6 +35156,7 @@ histEl.addEventListener('mousedown', e => {
   const h = getHistory();
   const addr = h[+row.dataset.i];
   if(!addr) return;
+  _addrUserTyped = false;      // explicit pick — see the value-setter guard
   addrEl.value = addr;
   updateClearBtn();
   STORE.set('fl_addr', addr);
@@ -35144,6 +35175,49 @@ addrEl.addEventListener('click', () => {
   if(!addrEl.value.trim() && !histEl.classList.contains('show')) showHistory();
 });
 addrEl.addEventListener('blur', () => setTimeout(hideHistory, 150));
+/* ── DON'T LET BACKGROUND WORK TAKE THE CURSOR OUT OF THE BOX (29 Oct 2026) ──────────────────
+   Reported: "when I type in an address sometimes my cursor will leave the box." Something in a
+   still-running lookup (a panel that opens and focuses its own field, a re-render, a map update)
+   can take focus while you are mid-word, and the next keystrokes go nowhere.
+   Rule: if the box loses focus WITHOUT a user gesture — no tap/click anywhere and no Tab/Escape in
+   the last 400 ms — while you typed in it within the last 3 s, put focus straight back with the
+   caret/selection where it was. Anything the user actually does (tapping the map, a result card,
+   another field, tabbing away) is a gesture, so it is never fought. The unit picker is exempt: it
+   opens on purpose and owns its own filter field. Each refocus logs which element took focus, so
+   if this ever fires the culprit is named in the console rather than guessed at. */
+(function(){
+  let _lastGesture=0, _lastType=0, _sel=null;
+  const _g=()=>{ _lastGesture=Date.now(); };
+  document.addEventListener('pointerdown', _g, true);
+  document.addEventListener('mousedown',  _g, true);
+  document.addEventListener('touchstart', _g, {capture:true, passive:true});
+  document.addEventListener('keydown', e=>{ if(e.key==='Tab'||e.key==='Escape') _g(); }, true);
+  const _remember=()=>{ try{ _sel=[addrEl.selectionStart, addrEl.selectionEnd]; }catch(e){ _sel=null; } };
+  addrEl.addEventListener('input', ()=>{ _lastType=Date.now(); _remember(); });
+  addrEl.addEventListener('keyup', _remember);
+  addrEl.addEventListener('select', _remember);
+  addrEl.addEventListener('blur', ()=>{
+    const now=Date.now();
+    if(now-_lastType > 3000) return;          // not mid-typing
+    if(now-_lastGesture < 400) return;        // the user moved focus themselves
+    setTimeout(()=>{
+      const ae=document.activeElement;
+      if(ae===addrEl) return;
+      /* Only when another ELEMENT took focus. Focus falling to <body> is what the iPhone keyboard's
+         "Done" key (and hiding the keyboard) does — that's the user leaving on purpose, and pulling
+         the keyboard back up would be maddening. A thief, by contrast, focuses something specific. */
+      if(!ae || ae===document.body || ae===document.documentElement) return;
+      if(Date.now()-_lastGesture < 400) return;
+      const um=document.getElementById('unitModal');
+      if(um && um.classList.contains('show')) return;   // the unit picker opened on purpose
+      try{ console.info('[addr] focus taken by', ae, '— returning it to the address box'); }catch(e){}
+      try{
+        addrEl.focus({preventScroll:true});
+        if(_sel && _sel[0]!=null){ const n=addrEl.value.length; addrEl.setSelectionRange(Math.min(_sel[0],n), Math.min(_sel[1],n)); }
+      }catch(e){}
+    },0);
+  });
+})();
 document.getElementById('liveTest').onclick=()=>{ testLiveSource(); showLiveDiagnostic(); };
 document.getElementById('diagBtn').onclick=diagnoseLiveFeeds;
 document.getElementById('liveUrl').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();testLiveSource();}});
