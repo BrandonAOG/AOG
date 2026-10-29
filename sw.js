@@ -1,6 +1,6 @@
 // ============================================================
 //  Always On Generators – Field Hub
-//  Service Worker  |  sw.js  |  Version: v2.8.0
+//  Service Worker  |  sw.js  |  Version: v2.8.1
 //
 //  ⚠ WHEN YOU UPDATE ANY TOOL:
 //    1. Bump CACHE_VERSION
@@ -21,7 +21,7 @@
 // 52-file re-download. A literal prefix could not fix it either: 'aog-forms-v'
 // is itself a prefix of 'aog-forms-vTEST2.5.0', so public would still eat test.
 // The scope is different by construction, so this cannot collide.
-var CACHE_VERSION = 'v2.8.0';
+var CACHE_VERSION = 'v2.8.1';
 var CACHE_PREFIX  = 'aog-forms::' + self.registration.scope + '::';
 var CACHE_NAME    = CACHE_PREFIX + CACHE_VERSION;
 
@@ -76,11 +76,12 @@ var cacheProgress = { percent: 0, label: '', done: false };
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-'🧮 ELECTRICAL FORMULAS — new: kW/amps, voltage drop, gen load, motor FLA, Ohm\'s law & conversions',
-'⛏️ TRENCH DEPTH — new: NEC 300.5 & NFPA 54/58 burial depth with trench drawing',
-'🔗 GAS BONDING — new: NFPA 54 7.12 CSST & pipe bonding with job drawing',
-'🔥 GAS CALC — NFPA 54 tables & code reference added',
-'⚡ BREAKER & CONDUCTOR — NEC tables & code reference added',
+'🌓 DARK MODE — your dark/light choice now carries across every tool',
+'⚡ LOAD CALC — now labeled NEC 2023 (parallel-wire warning cites 310.10(G))',
+'🐞 REPORT A BUG / SUGGESTIONS — all 21 tools now in the list',
+'🗺️ PROPERTY LOOKUP — intro now shows all 62 live counties',
+'🧹 Behind the scenes — holiday themes & offline setup now shared by all tools (lighter, more consistent)',
+'🔊 SOUNDS — every tool now uses the same tap sounds (no more double sounds on calculators)',
 ];
 //
 // ============================================================
@@ -94,6 +95,8 @@ var PRECACHE_URLS = [
   './sw.js',
   './update-banner.js',
   './sounds.js',
+  './clean-capture.js',
+  './seasonal.js',
   './estimate/',
   './maintenance/',
   './site-visit/',

@@ -1,5 +1,8 @@
 /* ============================================================
-   AOG Sound Engine v1.0.8 — drop-in UI + ambient sounds (no files)
+   AOG Sound Engine v1.0.9 — drop-in UI + ambient sounds (no files)
+   Pages only include this file. Taps, checkboxes, selects and number inputs are
+   sounded automatically; a button can pick its own sound with data-sound="name".
+   Never call AOGSound.play() for a tap — only for non-tap events (fireworks etc.)
    <script src="./sounds.js"></script>  (../sounds.js from sub-pages)
 
    - Synthesized with Web Audio API → 100% offline in the PWA
@@ -13,8 +16,14 @@
 (function () {
   'use strict';
 
+  // Storage can THROW (Safari with all cookies blocked, private/locked-down
+  // modes). Every read/write goes through these so a blocked store only means
+  // settings don't persist — it must never stop the sound engine from loading.
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
   var ctx = null;
-  var muted = localStorage.getItem('aog-sound-muted') === '1';
+  var muted = lsGet('aog-sound-muted') === '1';
   // Ambient state must exist BEFORE the startup retry loop runs: on desktop
   // revisits the browser grants audio instantly, so goLive() -> applyScene()
   // -> stopAmbient() fires synchronously at load. Defining amb later crashed
@@ -51,10 +60,10 @@
   // Per-category sound preferences (controlled by the hub Sound Panel)
   var DEFAULT_PREFS = { taps: true, animations: true, seasonal: true, forms: true, alerts: true };
   var prefs;
-  try { prefs = JSON.parse(localStorage.getItem('aog-sound-prefs')) || {}; } catch (e) { prefs = {}; }
+  try { prefs = JSON.parse(lsGet('aog-sound-prefs')) || {}; } catch (e) { prefs = {}; }
   for (var pk in DEFAULT_PREFS) if (typeof prefs[pk] !== 'boolean') prefs[pk] = DEFAULT_PREFS[pk];
   // Output mode: 'sound' | 'vibrate' | 'both'
-  var mode = localStorage.getItem('aog-sound-mode') || 'sound';
+  var mode = lsGet('aog-sound-mode') || 'sound';
   if (mode !== 'sound' && mode !== 'vibrate' && mode !== 'both') mode = 'sound';
   var preview = false; // true while the Sound Settings panel is open
   function allowed(cat) {
@@ -66,7 +75,7 @@
   // Selectable tone styles for the most audible sounds (hub Sound Panel)
   var DEFAULT_TONES = { click: 'thock', toast: 'slide', pop: 'bubblepop', success: 'tada', explosion: 'deep', notify: 'gentlealarm', fanfare: 'victory', thunder: 'random' };
   var toneChoice;
-  try { toneChoice = JSON.parse(localStorage.getItem('aog-sound-tones-v4')) || {}; } catch (e) { toneChoice = {}; }
+  try { toneChoice = JSON.parse(lsGet('aog-sound-tones-v4')) || {}; } catch (e) { toneChoice = {}; }
   for (var tk in DEFAULT_TONES) if (!toneChoice[tk]) toneChoice[tk] = DEFAULT_TONES[tk];
 
   // preset name → category
@@ -80,32 +89,21 @@
     ignite:'animations', trip:'animations',
     explosion:'seasonal', launch:'seasonal', jingle:'seasonal', bell:'seasonal',
     chirp:'seasonal', harp:'seasonal', wind:'seasonal',
+    owl:'seasonal', moan:'seasonal', toll:'seasonal', creak:'seasonal', howl:'seasonal',
+    sleigh:'seasonal', chimes:'seasonal', musicbox:'seasonal', snowsteps:'seasonal', hohoho:'seasonal',
     pop:'forms', fanfare:'forms', result:'forms', shutter:'forms',
     trash:'forms', copied:'forms', sweep:'forms', clunk:'taps', tink:'taps'
   };
 
   function getCtx() {
-    // iOS 17+ Audio Session API — HYBRID strategy (see setSession below):
-    // 'playback' is the only type that reliably ACTIVATES the audio session
-    // on a cold standalone-PWA launch (with 'ambient' the whole session —
-    // WebAudio AND <audio> elements — stays frozen until an app-switcher
-    // round-trip). But 'playback' bypasses the ringer/silent switch. So we
-    // use 'playback' only while kick-starting the session, then flip to
-    // 'ambient' the moment the clock is confirmed ticking.
-    // MUSIC-FRIENDLY ESCALATION: default to 'ambient', which MIXES with
-    // whatever the user is already playing (Music, podcasts). 'playback'
-    // is non-mixable — the moment we touch it, iOS PAUSES the user's music
-    // and never resumes it. So 'playback' is now a last resort: only used
-    // (sessionForce=true) after a gesture-driven kick left the clock
-    // frozen, and handed back to 'ambient' the moment the clock ticks.
-    // AMBIENT ONLY — 'playback' escalation removed entirely. 'playback' is
-    // non-mixable and was pausing the user's music (Music/Spotify/Pandora).
-    // 'ambient' mixes with everything and respects the ringer switch. Cost:
-    // on the buggy iOS cold-launch dead-session case, sound may need an
-    // app-switcher round-trip to wake up — acceptable; music is sacred.
+    // iOS 17+ Audio Session: AMBIENT ONLY. 'ambient' mixes with the user's
+    // music/podcasts and respects the ringer switch. 'playback' was tried and
+    // removed — it is non-mixable and paused Music/Spotify/Pandora. Cost: on
+    // the buggy iOS cold-launch case, sound may need an app-switcher
+    // round-trip to wake up. Acceptable; music is sacred.
     if (IS_IOS) setSession('ambient'); // no-op elsewhere — skip the work on desktop/Android
     if (ctx && ctx.state === 'closed') ctx = null; // rebuilt after zombie teardown
-    if (!ctx && !hadGesture) {  return null; }
+    if (!ctx && !hadGesture && IS_IOS) return null; // iOS only — see hadGesture note
     if (!ctx) {
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
@@ -175,11 +173,13 @@
       }
     }, 300);
   }
-  // DO NOT create a context at load. On some iOS builds, creating an
+  // iOS: DO NOT create a context at load. On some iOS builds, creating an
   // AudioContext before ANY user touch wedges the app's entire audio system
   // for its lifetime — every context (even later gesture-born ones) stays
-  // frozen at 0.00 until the app is backgrounded. Creation is deferred to
-  // the first gesture.
+  // frozen at 0.00 until the app is backgrounded. So on iOS creation waits
+  // for the first tap. Android / desktop have no such bug: there we create
+  // at load, so sound starts on open whenever the browser allows autoplay
+  // (installed PWAs and frequently used sites), and otherwise on first tap.
   var hadGesture = false;
   function ready() { return !muted && ctx && ctx.state === 'running'; }
 
@@ -793,6 +793,87 @@
     noiseBurst({ dur: 1.8 + Math.random(), vol: 0.045, filter: 'bandpass', from: 200, to: 600, q: 0.6, curve: 1 });
   }
 
+  /* ── HALLOWEEN: spooky one-shots (all quiet, all distant) ───────────── */
+  // A soft-attack voice: tone() snaps in over 10ms, which reads as a beep.
+  // Owls, moans and bells need a slow swell, a pitch path and a long tail.
+  function voice(o) {
+    if (muted) return;
+    var c = getCtx(); if (!c) return;
+    var t = c.currentTime + (o.delay || 0), dur = o.dur || 1;
+    var osc = c.createOscillator(), g = c.createGain(), f = c.createBiquadFilter();
+    g.gain.value = 0.0001;
+    osc.type = o.type || 'sine';
+    var path = o.path || [o.from];
+    osc.frequency.setValueAtTime(path[0], t);
+    for (var i = 1; i < path.length; i++)
+      osc.frequency.linearRampToValueAtTime(path[i], t + dur * i / (path.length - 1));
+    if (o.vib) { // vibrato
+      var lfo = c.createOscillator(), lg = c.createGain();
+      lfo.frequency.value = o.vib; lg.gain.value = o.vibDepth || 6;
+      lfo.connect(lg).connect(osc.frequency); lfo.start(t); lfo.stop(t + dur + 0.1);
+    }
+    f.type = 'lowpass'; f.frequency.value = o.lp || 2200;
+    var atk = o.atk || 0.3;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(o.vol || 0.03, t + atk);
+    if (o.hold) g.gain.setValueAtTime(o.vol || 0.03, t + dur * o.hold); // sustain, then fade
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(f).connect(g).connect(out(c));
+    osc.start(t); osc.stop(t + dur + 0.1);
+  }
+  function owlHoot() { // "hoo ... hoo-hoo" from somewhere out in the trees
+    var f = 330 + Math.random() * 40;
+    voice({ path: [f, f * 1.02, f * 0.96], dur: 0.7, vol: 0.06, atk: 0.12, lp: 900 });
+    voice({ path: [f * 0.98, f * 0.94],    dur: 0.4, vol: 0.05, atk: 0.06, lp: 900, delay: 1.0 });
+    voice({ path: [f * 0.98, f * 0.92],    dur: 0.6, vol: 0.055, atk: 0.06, lp: 900, delay: 1.45 });
+  }
+  function ghostMoan() { // a slow, wavering "ooooOOOooo"
+    var b = 260 + Math.random() * 60;
+    voice({ type: 'triangle', path: [b, b * 1.45, b * 1.3, b * 0.85], dur: 3.2, vol: 0.045,
+            atk: 0.9, vib: 5, vibDepth: 7, lp: 1100 });
+    voice({ type: 'sine', path: [b * 2, b * 2.9, b * 2.6, b * 1.7], dur: 3.2, vol: 0.015,
+            atk: 1.0, vib: 5.3, vibDepth: 10, lp: 1600 }); // airy upper "breath"
+  }
+  function wolfHowl() { // long rising howl, then a fainter wolf answers from further off
+    var b = 330 + Math.random() * 50;
+    var path = [b, b * 1.55, b * 1.95, b * 2.0, b * 1.98, b * 1.9, b * 1.5, b * 1.15];
+    voice({ type: 'triangle', path: path, dur: 3.6, vol: 0.05, atk: 0.5, hold: 0.7, vib: 4.5, vibDepth: 5, lp: 1500 });
+    voice({ type: 'sine', path: path.map(function (f) { return f * 2; }), dur: 3.6, vol: 0.012,
+            atk: 0.6, hold: 0.7, vib: 4.5, vibDepth: 9, lp: 2600 }); // breathy upper harmonic
+    var a = b * 1.12; // the answer: higher, shorter, more distant (lower + darker)
+    voice({ type: 'triangle', path: [a, a * 1.6, a * 1.85, a * 1.8, a * 1.3], dur: 2.6, vol: 0.022,
+            atk: 0.5, hold: 0.65, vib: 5, vibDepth: 5, lp: 1000, delay: 3.0 });
+  }
+  function churchToll() { // distant bell: inharmonic partials, long ringing tail
+    var f = 196;
+    [[1, 0.03], [2.0, 0.016], [2.4, 0.013], [3.0, 0.009], [4.2, 0.006]].forEach(function (p) {
+      voice({ path: [f * p[0], f * p[0] * 0.998], dur: 4.5, vol: p[1], atk: 0.01, lp: 1500 });
+    });
+  }
+  function doorCreak() { // stick-slip friction: a train of clicks whose rate drifts
+    if (muted) return;
+    var c = getCtx(); if (!c) return;
+    var dur = 1.1 + Math.random() * 0.8, sr = c.sampleRate;
+    var len = Math.floor(sr * dur), buf = c.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    var next = 0, k = 0;
+    for (var i = 0; i < len; i++) {
+      var p = i / len;
+      if (i >= next) { // one "slip"
+        k = 1;
+        var rate = 38 + 50 * Math.sin(p * 3.1 + 0.4) + Math.random() * 14; // 25–100 slips/sec
+        next = i + Math.floor(sr / Math.max(22, rate));
+      }
+      var env = Math.sin(Math.PI * p);        // swell in, fade out
+      d[i] = k * env * (Math.random() * 0.6 + 0.4);
+      k *= 0.993;                            // each slip rings briefly
+    }
+    var src = c.createBufferSource(); src.buffer = buf;
+    var f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 620; f.Q.value = 6;
+    var g = c.createGain(); g.gain.value = 0.09;
+    src.connect(f).connect(g).connect(out(c));
+    src.start();
+  }
+
   function shutter() { // camera: two fast clicks
     noiseBurst({ dur: 0.03, vol: 0.14, filter: 'highpass', from: 1500, curve: 4 });
     noiseBurst({ dur: 0.04, vol: 0.1, filter: 'highpass', from: 1200, curve: 4, delay: 0.07 });
@@ -1126,6 +1207,260 @@
     noiseBurst({ dur: 0.012, vol: 0.06, filter: 'highpass', from: 3000, curve: 3 });
   }
 
+  /* ── CHRISTMAS: cozy one-shots ─────────────────────────────────────── */
+  // Small shared room reverb (generated, no files) so voices/bells sound like
+  // they're IN a space instead of coming straight out of the speaker.
+  function roomVerb(c, secs) {
+    var key = '_verb' + secs;
+    if (c[key]) return c[key];
+    var len = Math.floor(c.sampleRate * secs), buf = c.createBuffer(2, len, c.sampleRate);
+    for (var ch = 0; ch < 2; ch++) {
+      var d = buf.getChannelData(ch);
+      for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    }
+    var cv = c.createConvolver(); cv.buffer = buf;
+    var wet = c.createGain(); wet.gain.value = 0.35;
+    cv.connect(wet).connect(out(c));
+    c[key] = cv;
+    return cv;
+  }
+  function bellHit(c, t, f, vol, decay, dest) { // one small metal bell: inharmonic partials
+    [[1, 1], [2.76, 0.45], [5.4, 0.2]].forEach(function (p) {
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.value = f * p[0];
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol * p[1], t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decay / p[0] * 1.6);
+      o.connect(g).connect(dest); o.start(t); o.stop(t + decay * 1.7);
+    });
+  }
+  function sleighPass() { // a sleigh trots by: bells shake on every hoof-beat, swell, fade away
+    if (muted) return;
+    var c = getCtx(); if (!c) return;
+    var t0 = c.currentTime + 0.05, len = 4.5 + Math.random() * 1.5;
+    var bus = c.createGain(); bus.gain.value = 1;
+    var lp = c.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3500, t0); lp.frequency.linearRampToValueAtTime(9000, t0 + len * 0.5);
+    lp.frequency.linearRampToValueAtTime(3000, t0 + len);
+    bus.connect(lp).connect(out(c)); lp.connect(roomVerb(c, 1.2));
+    for (var tb = 0; tb < len; tb += 0.42 + Math.random() * 0.04) {
+      var env = Math.pow(Math.sin(Math.PI * tb / len), 1.5);
+      var n = 4 + Math.floor(Math.random() * 4);
+      for (var k = 0; k < n; k++)
+        bellHit(c, t0 + tb + Math.random() * 0.11, 2600 + Math.random() * 2200, 0.028 * env + 0.001, 0.12, bus);
+    }
+    setTimeout(function () { try { bus.disconnect(); lp.disconnect(); } catch (e) {} }, (len + 2) * 1000);
+  }
+  function churchChimes() { // distant tower bells ringing down a scale
+    if (muted) return;
+    var c = getCtx(); if (!c) return;
+    var t0 = c.currentTime + 0.05;
+    var notes = [784, 698.5, 659.3, 587.3, 523.3]; // G5 F5 E5 D5 C5
+    var rounds = 2;
+    var bus = c.createGain(); bus.gain.value = 1;
+    var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
+    bus.connect(lp).connect(out(c)); lp.connect(roomVerb(c, 2.5));
+    for (var r = 0; r < rounds; r++) notes.forEach(function (f, i) {
+      var t = t0 + (r * notes.length + i) * 0.55;
+      [[1, 0.02], [2.0, 0.009], [2.4, 0.008], [3.0, 0.005], [0.5, 0.008]].forEach(function (p) {
+        var o = c.createOscillator(), g = c.createGain();
+        o.frequency.value = f * p[0];
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(p[1], t + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+        o.connect(g).connect(bus); o.start(t); o.stop(t + 2.7);
+      });
+    });
+    setTimeout(function () { try { bus.disconnect(); lp.disconnect(); } catch (e) {} }, 12000);
+  }
+  function musicBox() { // short ORIGINAL winter tune on a music box (3/4 waltz feel)
+    if (muted) return;
+    var c = getCtx(); if (!c) return;
+    // MIDI notes + beats. Written for this app — not an existing song.
+    var tune = [[76,1],[79,1],[81,1],[79,2],[76,1],[74,1],[76,1],[72,3],
+                [74,1],[76,1],[79,1],[77,2],[74,1],[72,3]];
+    var beat = 0.36, t = c.currentTime + 0.05;
+    var bus = c.createGain(); bus.gain.value = 1; bus.connect(out(c)); bus.connect(roomVerb(c, 1.2));
+    tune.forEach(function (n) {
+      var f = 440 * Math.pow(2, (n[0] + 12 - 69) / 12); // up an octave: tiny comb, bright
+      [[1, 0.03, 1.4], [3.9, 0.006, 0.25], [6.3, 0.003, 0.12]].forEach(function (p) {
+        var o = c.createOscillator(), g = c.createGain();
+        o.frequency.value = f * p[0];
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(p[1], t + 0.003);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + p[2]);
+        o.connect(g).connect(bus); o.start(t); o.stop(t + p[2] + 0.05);
+      });
+      t += n[1] * beat * (0.97 + Math.random() * 0.06); // a little wind-up wobble
+    });
+    setTimeout(function () { try { bus.disconnect(); } catch (e) {} }, 14000);
+  }
+  function snowSteps() { // someone crunches past through fresh snow
+    if (muted) return;
+    var c = getCtx(); if (!c) return;
+    var steps = 6 + Math.floor(Math.random() * 3), sr = c.sampleRate;
+    for (var s = 0; s < steps; s++) {
+      var env = Math.sin(Math.PI * (s + 0.5) / steps);
+      var dur = 0.22, len = Math.floor(sr * dur), buf = c.createBuffer(1, len, sr), d = buf.getChannelData(0);
+      for (var i = 0; i < len; i++) { // dense random grains = compressed-snow crunch
+        var p = i / len, a = Math.pow(Math.sin(Math.PI * Math.pow(p, 0.6)), 2);
+        d[i] = (Math.random() < 0.18 ? (Math.random() * 2 - 1) : 0) * a;
+      }
+      var src = c.createBufferSource(); src.buffer = buf;
+      var f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800 + Math.random() * 600; f.Q.value = 0.9;
+      var g = c.createGain(); g.gain.value = 0.22 * env + 0.01;
+      src.connect(f).connect(g).connect(out(c));
+      src.start(c.currentTime + 0.05 + s * 0.58 + Math.random() * 0.05);
+    }
+  }
+  function hoHoHo() { // Santa's laugh — formant (vocal-tract) synthesis, three falling "HO"s in a room
+    if (muted) return;
+    var c = getCtx(); if (!c) return;
+    var t0 = c.currentTime + 0.08, sr = c.sampleRate;
+    // Vocal tract for "oh": F1..F4 of a big adult male voice, gliding toward "oo"
+    var FORM = [[540, 420, 6, 1.0], [860, 760, 8, 0.32], [2450, 2350, 14, 0.07], [3300, 3250, 16, 0.03]];
+    var bus = c.createGain(); bus.gain.value = 0.8;
+    var warm = c.createBiquadFilter(); warm.type = 'lowshelf'; warm.frequency.value = 220; warm.gain.value = 6; // chest
+    bus.connect(warm).connect(out(c)); warm.connect(roomVerb(c, 0.9));
+    // breath noise buffer for the "H" and the breathiness under the vowel
+    var nb = c.createBuffer(1, sr, sr), nd = nb.getChannelData(0);
+    for (var i = 0; i < sr; i++) nd[i] = Math.random() * 2 - 1;
+    // Quick, bouncy rhythm (~0.27s apart) like a real belly laugh; last one held.
+    var hos = [{ at: 0.00, p: [118, 128, 100], dur: 0.24, v: 1.0 },
+               { at: 0.27, p: [114, 122, 96],  dur: 0.24, v: 0.92 },
+               { at: 0.54, p: [108, 114, 84],  dur: 0.42, v: 0.88 }];
+    hos.forEach(function (h) {
+      var t = t0 + h.at, end = t + h.dur;
+      // glottal source: bright sawtooth, softened like real vocal folds
+      var src = c.createOscillator(); src.type = 'sawtooth';
+      src.frequency.setValueAtTime(h.p[0], t);
+      src.frequency.linearRampToValueAtTime(h.p[1], t + h.dur * 0.25);
+      src.frequency.exponentialRampToValueAtTime(h.p[2], end);
+      var jit = c.createOscillator(), jg = c.createGain(); // natural wobble
+      jit.frequency.value = 5.5 + Math.random(); jg.gain.value = 2.2;
+      jit.connect(jg).connect(src.frequency);
+      var soft = c.createBiquadFilter(); soft.type = 'lowpass'; soft.frequency.value = 1800; soft.Q.value = 0.5;
+      var vg = c.createGain(); vg.gain.value = 0.0001; // voice envelope: voicing starts after the "h"
+      vg.gain.setValueAtTime(0.0001, t);
+      vg.gain.setValueAtTime(0.0001, t + 0.04);
+      vg.gain.exponentialRampToValueAtTime(0.11 * h.v, t + 0.08);
+      vg.gain.setValueAtTime(0.11 * h.v, end - Math.min(0.14, h.dur * 0.4));
+      vg.gain.exponentialRampToValueAtTime(0.0001, end);
+      src.connect(soft).connect(vg);
+      // breath: strong at the start ("H"), faint underneath the vowel
+      var br = c.createBufferSource(); br.buffer = nb;
+      var bg = c.createGain(); bg.gain.value = 0.0001; // start silent: a default gain of 1 let the
+      bg.gain.setValueAtTime(0.0001, t);                // first noise sample through as a click
+      bg.gain.exponentialRampToValueAtTime(0.06 * h.v, t + 0.025);
+      bg.gain.exponentialRampToValueAtTime(0.006 * h.v, t + 0.09);
+      bg.gain.exponentialRampToValueAtTime(0.0001, end);
+      br.connect(bg);
+      FORM.forEach(function (F) { // parallel formant resonators shape both sources into "HO"
+        var bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = F[2];
+        bp.frequency.setValueAtTime(F[0], t); bp.frequency.linearRampToValueAtTime(F[1], end);
+        var fg = c.createGain(); fg.gain.value = F[3] * 5;
+        vg.connect(bp); bg.connect(bp); bp.connect(fg).connect(bus);
+      });
+      var body = c.createBiquadFilter(); body.type = 'lowpass'; body.frequency.value = 190; // chest buzz (below F1 so they don't cancel)
+      var bodyG = c.createGain(); bodyG.gain.value = 0.5;
+      vg.connect(body).connect(bodyG).connect(bus);
+      src.start(t); jit.start(t); br.start(t);
+      src.stop(end + 0.05); jit.stop(end + 0.05); br.stop(end + 0.05);
+    });
+    setTimeout(function () { try { bus.disconnect(); warm.disconnect(); } catch (e) {} }, 4000);
+  }
+  /* Fireplace — rendered once into looping buffers (no timers, no files).
+     A real fire is three things layered: a low breathing ROAR, a soft
+     HISS of steam, and CRACKLES — sub-millisecond snaps of wildly varying
+     loudness that arrive in clusters, plus the odd big POP with a thump.
+     Two loops of different lengths (9s / 11.3s) play together so the
+     combined crackle pattern only repeats every ~100 seconds. */
+  // Built in small slices between frames (never one long block), then handed
+  // to done(buffer). Cached on the audio context, so it's only built once.
+  function fireBuffer(c, secs, withRoar, done) {
+    var key = '_fire' + secs + (withRoar ? 'r' : '');
+    if (c[key]) { done(c[key]); return; }
+    // Built at 22.05kHz (fire has nothing worth keeping above 11kHz) — half the
+    // work, so it's ready in a blink even on older phones. R rescales per-sample constants.
+    var sr = 22050, R = 44100 / sr, N = Math.floor(sr * secs), F = Math.floor(sr * 0.5);
+    var g = new Float32Array(N + F);
+    var brown = 0, lp = 0, slow = 0, slow2 = 0, env = 0.8, envT = 0.8, hissEnv = 0.5, hissT = 0.5, hp = 0, prevW = 0;
+    var halfSec = Math.floor(sr * 0.5), hissStep = Math.floor(sr * 0.4);
+    var nextCrack = 0, inCluster = 0, nextPop = Math.floor(sr * (1 + Math.random() * 2));
+    var i = 0;
+    function slice() {
+    for (var end = Math.min(N + F, i + 30000); i < end; i++) {
+      var w = Math.random() * 2 - 1, v = 0;
+      if (withRoar) {
+        if (i % halfSec === 0) envT = 0.55 + Math.random() * 0.45; // flames breathe (slowly)
+        env += (envT - env) * 0.00008 * R;
+        brown = brown * (1 - 0.015 * R) + w * 0.06 * Math.sqrt(R); // deep rumble
+        lp += (brown - lp) * 0.08 * R;
+        slow += (lp - slow) * 0.025 * R;                                // cut the sub-rumble (<~175Hz)
+        var hr = lp - slow; slow2 += (hr - slow2) * 0.025 * R; hr -= slow2; // second stage: steeper cut
+        // hiss level drifts SMOOTHLY — it used to jump ~11 times a second,
+        // which chopped the sound and made the fire seem to skip
+        if (i % hissStep === 0) hissT = 0.25 + Math.random() * 0.75;
+        hissEnv += (hissT - hissEnv) * 0.0003 * R;
+        hp = w - prevW; prevW = w;                                  // bright steam hiss
+        v += hr * 0.5 * env + hp * 0.012 * hissEnv;               // soft whoosh, not a rumble
+      }
+      if (i >= nextCrack) {                                         // crackle event
+        var amp = 0.08 + 0.92 * Math.pow(Math.random(), 3);         // mostly small, some loud
+        // a snap: a sharp tick that rings briefly in the wood at a random pitch
+        var len = Math.floor((80 + Math.random() * 260) / R);
+        var wf = 2 * Math.PI * (1200 + Math.random() * 3800) / sr, r = 0.88 + Math.random() * 0.09;
+        var c1 = 2 * r * Math.cos(wf), c2 = r * r, y1 = 0, y2 = 0;
+        for (var k = 0; k < len && i + k < N + F; k++) {
+          var x = (k < 2 ? (Math.random() * 2 - 1) : (Math.random() * 2 - 1) * 0.15 * Math.exp(-k * R / 20)) * amp;
+          var y = x + c1 * y1 - c2 * y2; y2 = y1; y1 = y;
+          g[i + k] += y * 0.35 + (k < 3 ? x * 0.6 : 0);
+        }
+        if (inCluster > 0) { inCluster--; nextCrack = i + Math.floor(sr * (0.004 + Math.random() * 0.03)); }
+        else {
+          inCluster = Math.random() < 0.35 ? 2 + Math.floor(Math.random() * 6) : 0; // bursts of snaps
+          nextCrack = i + Math.floor(sr * (0.03 + Math.random() * 0.35));
+        }
+      }
+      if (!withRoar && i >= nextPop) {                              // big pop: a loud wood CRACK
+        // (No low thump — a short thud + click is exactly what a skipping CD
+        //  sounds like. A real log pop is a bright, ringing snap.)
+        var pa = 0.7 + Math.random() * 0.3, pw = 2 * Math.PI * (700 + Math.random() * 1100) / sr;
+        var pr = 0.965, p1 = 2 * pr * Math.cos(pw), p2 = pr * pr, q1 = 0, q2 = 0, plen = Math.floor(sr * 0.05);
+        for (var q = 0; q < plen && i + q < N + F; q++) {
+          var px = (q < 3 ? (Math.random() * 2 - 1) : (Math.random() * 2 - 1) * 0.2 * Math.exp(-q / (sr * 0.004))) * pa;
+          var py = px + p1 * q1 - p2 * q2; q2 = q1; q1 = py;
+          g[i + q] += py * 0.25 + (q < 3 ? px * 0.8 : 0);
+        }
+        inCluster = 3 + Math.floor(Math.random() * 5);               // embers fizz right after
+        nextCrack = i + Math.floor(sr * 0.02);
+        nextPop = i + Math.floor(sr * (2 + Math.random() * 5));
+      }
+      g[i] += v;
+    }
+    if (i < N + F) { setTimeout(slice, 0); return; }
+    var buf = c.createBuffer(1, N, sr), d = buf.getChannelData(0), pk = 0;
+    for (var j = 0; j < N; j++) {                                   // seamless loop: fade tail into head
+      d[j] = j < F ? g[j] * Math.sqrt(j / F) + g[N + j] * Math.sqrt(1 - j / F) : g[j];
+      if (Math.abs(d[j]) > pk) pk = Math.abs(d[j]);
+    }
+    for (j = 0; j < N; j++) d[j] /= (pk || 1);
+    c[key] = buf;
+    done(buf);
+    }
+    slice();
+  }
+  function fireLoop(buf, vol, lpHz) {
+    var c = ctx;
+    var src = c.createBufferSource(); src.buffer = buf; src.loop = true;
+    var f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lpHz;
+    var g = c.createGain(), t = c.currentTime;
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 1.5); // ease the fire in
+    src.connect(f).connect(g).connect(out(c)); src.start();
+    amb.nodes.push(src, f, g);
+  }
+
+
   /* ================= PRESETS ================= */
 
   var RAW = {
@@ -1154,6 +1489,16 @@
     chirp:   chirp,
     harp:    harp,
     wind:    windGust,
+    owl:     owlHoot,
+    moan:    ghostMoan,
+    toll:    churchToll,
+    creak:   doorCreak,
+    howl:    wolfHowl,
+    sleigh:  sleighPass,
+    chimes:  churchChimes,
+    musicbox: musicBox,
+    snowsteps: snowSteps,
+    hohoho:  hoHoHo,
     shutter: shutter,
     pop:     function () { pick('pop'); },
     fanfare: function () { pick('fanfare'); },
@@ -1190,7 +1535,10 @@
     zap: 10, zapBig: 35, trip: [30, 30, 50], trash: [15, 40, 30], sweep: 25,
     shutter: [12, 30, 12], clunk: 30, tink: 10, welcome: [15, 40, 25],
     arcflash: [20, 20, 80], grb: [20, 30, 200], powerDown: [80, 60, 40], surge: 40,
-    ignite: 15, ping: 12, pulse: 30
+    ignite: 15, ping: 12, pulse: 30,
+    // Background ambience never vibrates the phone
+    wind: 0, owl: 0, moan: 0, toll: 0, creak: 0, howl: 0,
+    sleigh: 0, chimes: 0, musicbox: 0, snowsteps: 0, hohoho: 0, jingle: 0
   };
   function buzz(k) {
     if (!navigator.vibrate) return;
@@ -1412,7 +1760,28 @@
     },
     fire:   function () { noiseLoopNode('lowpass', 1100, 0.6, 0.045); noiseLoopNode('highpass', 3200, 1, 0.016); },
     arcbuzz:function () { oscLoopNode('sawtooth', 110, 0.011); noiseLoopNode('highpass', 3000, 1, 0.009); },
-    fan:    fanLoopNode
+    fan:    fanLoopNode,
+    // Halloween bed: two notes a half-step apart BEAT against each other (the
+    // classic horror-film unease), an octave up so phone speakers can play it,
+    // under a low wobbling night wind. Kept just above silence.
+    haunt:  function () {
+      oscLoopNode('sine', 110, 0.010); oscLoopNode('sine', 116.5, 0.009);
+      oscLoopNode('sine', 220, 0.007); oscLoopNode('sine', 233.1, 0.006);
+      noiseLoopNode('bandpass', 280, 0.7, 0.018, true);
+    },
+    // Winter bed: a soft, cold wind under the window — quieter than Halloween's
+    winterwind: function () { noiseLoopNode('bandpass', 520, 0.6, 0.010, true); noiseLoopNode('bandpass', 1400, 0.9, 0.003, true); },
+    // Christmas bed: a fire in the hearth (low roar + crackle pops) with a soft
+    // winter wind outside the window.
+    hearth: function () {
+      noiseLoopNode('bandpass', 420, 0.6, 0.004, true);  // faint wind outside (starts at once)
+      var key = amb.playingKey, c = ctx;                  // fire joins a moment later, once built —
+      function add(vol, lp) {                             // unless the scene changed meanwhile
+        return function (buf) { if (amb.playingKey === key && ctx === c) fireLoop(buf, vol, lp); };
+      }
+      fireBuffer(c, 9, true, add(0.16, 10000));           // whoosh + hiss + crackle
+      fireBuffer(c, 11.3, false, add(0.15, 8000));        // more crackle + the odd pop
+    }
   };
 
   function scheduleOccasional(name, minMs, maxMs) {
@@ -1480,10 +1849,14 @@
   /* ---- Seasonal form-page themes → sound profile ---- */
   var SEASONS = {
     fourthofjuly: {},                                        // engine calls explosion/launch itself
-    halloween:    { occ: [['wind', 6000, 14000], ['thunder', 20000, 45000]] },
-    christmas:    { occ: [['jingle', 8000, 18000]] },
+    halloween:    { loop: 'haunt', occ: [['wind', 9000, 18000], ['creak', 22000, 45000], ['owl', 28000, 55000],
+                                       ['moan', 35000, 70000], ['toll', 60000, 120000], ['thunder', 45000, 90000],
+                                       ['howl', 50000, 110000]] },
+    christmas:    { loop: 'hearth', occ: [['sleigh', 25000, 50000], ['snowsteps', 40000, 80000], ['musicbox', 45000, 90000],
+                                        ['chimes', 60000, 120000], ['hohoho', 70000, 150000]] },
     newyear:      { occ: [['explosion', 9000, 20000], ['fanfare', 30000, 70000]] },
     fall:         { occ: [['wind', 8000, 18000]] },
+    winter:       { loop: 'winterwind', occ: [['wind', 12000, 24000], ['snowsteps', 50000, 100000]] },
     thanksgiving: { occ: [['wind', 10000, 20000]] },
     spring:       { occ: [['chirp', 5000, 12000]] },
     easter:       { occ: [['chirp', 6000, 14000]] },
@@ -1561,6 +1934,15 @@
   document.addEventListener('pointerdown', function (e) {
     var el = e.target.closest('button, a, [role="button"], select');
     if (!el) return;
+    // Per-button sound: <button data-sound="tink"> (or data-sound on a container
+    // to cover every button inside it). Pages never call AOGSound.play() for taps —
+    // they label the button and this one handler plays it. data-sound="none" = silent.
+    var tagged = el.closest('[data-sound]');
+    if (tagged) {
+      var nm = tagged.getAttribute('data-sound');
+      if (nm !== 'none' && S[nm]) S[nm]();
+      return;
+    }
     S.click();
     var sig = (el.id + ' ' + el.className + ' ' + (el.textContent || '').slice(0, 60)).toLowerCase();
     // Is this button inside a confirmation popup? (custom modals like the
@@ -1575,6 +1957,7 @@
     else if (/delete|remove|trash|\ud83d\uddd1/.test(sig)) S.trash();
     else if (/\bok\b|\byes\b/.test(sig) && inDialog) S.trash();
     else if (/copy|clipboard/.test(sig)) S.copied();
+    else if (/\bcalculate\b|\bcalc-btn\b/.test(sig)) S.clunk();
     else if (/pdf|export|download|save|print|submit|send/.test(sig)) S.result();
   }, { passive: true });
 
@@ -1663,7 +2046,7 @@
         flair = ({ fourthofjuly: '\uD83C\uDF86 ', halloween: '\uD83C\uDF83 ', christmas: '\uD83C\uDF84 ',
                    newyear: '\uD83C\uDF89 ', valentines: '\uD83D\uDC96 ', stpatricks: '\uD83C\uDF40 ',
                    spring: '\uD83C\uDF38 ', easter: '\uD83D\uDC23 ', summer: '\u2600\uFE0F ',
-                   fall: '\uD83C\uDF42 ', thanksgiving: '\uD83E\uDD83 ', backtoschool: '\uD83D\uDCDA ' })[m[1]] || '';
+                   fall: '\uD83C\uDF42 ', winter: '\u2744\uFE0F ', thanksgiving: '\uD83E\uDD83 ', backtoschool: '\uD83D\uDCDA ' })[m[1]] || '';
       }
 
       var back = document.createElement('div');
@@ -1712,22 +2095,6 @@
 
   /* ================= PUBLIC API ================= */
 
-
-
-  /* ================= DEBUG OVERLAY v2 ================= */
-  // Goal: pinpoint WHY cold-launch audio is silent until an app-switcher
-  // round-trip. Key diagnostics:
-  //   graphRMS  — analyser on the master bus. >0 means WebAudio IS rendering
-  //               samples. If graphRMS>0 during a beep but you HEAR nothing,
-  //               the block is the OS audio session, not WebAudio.
-  //   EL BEEP   — audible beep via an HTML <audio> element (a totally
-  //               separate audio path). If EL BEEP is audible while TEST
-  //               BEEP is silent, WebAudio specifically is blocked. If BOTH
-  //               are silent, the whole app audio session is dead.
-  //   COPY LOG  — copies the FULL event history to the clipboard so you can
-  //               paste it back for analysis.
-  
-
   // Scene queued by the hub's inline theme script (which runs before this
   // deferred file): MUST be picked up BEFORE the retry loop starts. On
   // desktop with autoplay granted, goLive() fires immediately — grabbing the
@@ -1737,7 +2104,7 @@
   startRetryLoop(); // zero-tap start attempt — everything above is now defined
 
   window.AOGSound = {
-    version: 'v1.0.8',
+    version: 'v1.0.9',
     play: function (name) { if (S[name]) S[name](); },
     // Force-play for the Sound Settings panel: taps must always be audible,
     // even for 'animations' sounds (fireworks/thunder) that preview mode
@@ -1750,7 +2117,7 @@
     scene: function (name) { amb.scene = name; sceneStarted = false; tryStart(); },
     toggleMute: function () {
       muted = !muted;
-      localStorage.setItem('aog-sound-muted', muted ? '1' : '0');
+      lsSet('aog-sound-muted', muted ? '1' : '0');
       if (muted) stopAmbient();
       else { sceneStarted = false; tryStart(); }
       return muted;
@@ -1765,7 +2132,7 @@
     setMode: function (m) {
       if (m !== 'sound' && m !== 'vibrate' && m !== 'both') return;
       mode = m;
-      localStorage.setItem('aog-sound-mode', mode);
+      lsSet('aog-sound-mode', mode);
       stopAmbient(); sceneStarted = false; tryStart();
     },
     canVibrate: function () { return !!navigator.vibrate; },
@@ -1773,7 +2140,7 @@
     setTone: function (name, variant) {
       if (VARIANTS[name] && VARIANTS[name][variant]) {
         toneChoice[name] = variant;
-        localStorage.setItem('aog-sound-tones-v4', JSON.stringify(toneChoice));
+        lsSet('aog-sound-tones-v4', JSON.stringify(toneChoice));
       }
     },
     getPrefs: function () { var o = { master: !muted }; for (var k in prefs) o[k] = prefs[k]; return o; },
@@ -1781,12 +2148,12 @@
       if (key === 'master') {
         if (!!on === !muted) return;
         muted = !on;
-        localStorage.setItem('aog-sound-muted', muted ? '1' : '0');
+        lsSet('aog-sound-muted', muted ? '1' : '0');
         if (muted) stopAmbient(); else { sceneStarted = false; tryStart(); }
         return;
       }
       prefs[key] = !!on;
-      localStorage.setItem('aog-sound-prefs', JSON.stringify(prefs));
+      lsSet('aog-sound-prefs', JSON.stringify(prefs));
       // restart or stop ambience to reflect animation/seasonal changes
       stopAmbient(); sceneStarted = false; tryStart();
     },

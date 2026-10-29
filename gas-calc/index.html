@@ -1401,15 +1401,13 @@ function resetAll(){
 // ── Theme ─────────────────────────────────────────────────────────────
 (function(){
   let t='dark';
-  try{ t=localStorage.getItem('aog_gas_theme') || (matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'); }catch(e){}
-  const apply=v=>{document.body.classList.toggle('light',v==='light');$('themeBtn').textContent=v==='light'?'☾':'☀︎';try{localStorage.setItem('aog_gas_theme',v);}catch(e){}};
+  try{ t=localStorage.getItem('aog-theme') || (matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'); }catch(e){}
+  const apply=v=>{document.body.classList.toggle('light',v==='light');$('themeBtn').textContent=v==='light'?'☾':'☀︎';try{localStorage.setItem('aog-theme',v);}catch(e){}};
   apply(t);
   $('themeBtn').addEventListener('click',()=>apply(document.body.classList.contains('light')?'dark':'light'));
 })();
 
-if('serviceWorker' in navigator && location.protocol.startsWith('http')){
-  navigator.serviceWorker.register('../sw.js',{scope:'../'}).catch(()=>{});
-}
+
 
 let ansVisible=false;
 if('IntersectionObserver' in window){new IntersectionObserver(es=>{ansVisible=es[0].isIntersecting;$('mini').style.visibility=ansVisible?'hidden':'visible';}).observe($('answer'));}
@@ -1427,7 +1425,7 @@ renderModels(); renderFuel(); renderApps(); update();
   const short=s=>s.replace(' in. w.c.','" WC').replace('Less than 2 psi','< 2 psi');
   function chips(el,items,on,fn){
     el.innerHTML=items.map(([v,l,s])=>`<button type="button" class="gr-c${v===on?' on':''}" data-v="${v}">${l}${s?`<small>${s}</small>`:''}</button>`).join('');
-    el.onclick=e=>{const b=e.target.closest('.gr-c'); if(b){fn(b.dataset.v); if(window.AOGSound) AOGSound.play('tink');}};
+    el.onclick=e=>{const b=e.target.closest('.gr-c'); if(b){fn(b.dataset.v);}};
   }
   function render(){
     chips(g('grFuel'),[['ng','Natural Gas'],['lp','Propane (LP)']],st.f,v=>{st.f=v;st.id=DEF[st.f][st.m];render();});
@@ -1463,7 +1461,6 @@ renderModels(); renderFuel(); renderApps(); update();
   window.grOpen=function(tab){
     try{ if(typeof S!=='undefined' && S.fuel && S.fuel!==st.f){ st.f=S.fuel; st.id=DEF[st.f][st.m]; } }catch(e){}
     render(); grTab(tab||'t'); g('grModal').classList.add('open'); document.body.classList.add('gr-open');
-    if(window.AOGSound) AOGSound.play('tink');
   };
   window.grClose=function(){ g('grModal').classList.remove('open'); document.body.classList.remove('gr-open'); };
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') grClose(); });

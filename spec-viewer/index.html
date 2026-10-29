@@ -714,7 +714,7 @@ function toggleTheme(){
   html.setAttribute('data-theme',dark?'light':'dark');
   const btn=document.getElementById('themeBtn');
   if(btn) btn.textContent=dark?'☀️':'🌙';
-  try{localStorage.setItem('aog_spec_theme',dark?'light':'dark');}catch(e){}
+  try{localStorage.setItem('aog-theme',dark?'light':'dark');}catch(e){}
 }
 // init button emoji on load
 (function(){
@@ -1213,21 +1213,7 @@ const ATS_DATA={
 <div id="offline-banner">No network connection · Spec Viewer available offline</div>
 
 <script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('../sw.js', { scope: '../' })
-    .then(function(reg) {
-      console.log('[Spec Viewer] SW registered, scope:', reg.scope);
-      reg.addEventListener('updatefound', function() {
-        var newWorker = reg.installing;
-        newWorker.addEventListener('statechange', function() {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('[Spec Viewer] Update available');
-          }
-        });
-      });
-    })
-    .catch(function(err) { console.warn('[Spec Viewer] SW registration failed:', err); });
-}
+
 
 (function() {
   var banner = document.getElementById('offline-banner');
@@ -1242,7 +1228,7 @@ if ('serviceWorker' in navigator) {
 <script>
 (function(){
   try {
-    var t = localStorage.getItem('aog_spec_theme');
+    var t = localStorage.getItem('aog-theme');
     if (t) document.documentElement.setAttribute('data-theme', t);
     var btn = document.getElementById('themeBtn');
     if (btn) btn.textContent = (document.documentElement.getAttribute('data-theme') === 'dark') ? '🌙' : '☀️';

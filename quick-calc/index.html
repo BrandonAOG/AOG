@@ -1292,7 +1292,6 @@ function fmt(n, d = 2) {
   const dec = a >= 1000 ? 0 : a >= 100 ? Math.min(d, 1) : a >= 1 ? d : Math.max(d, 3);
   return (+n.toFixed(dec)).toLocaleString('en-US', { maximumFractionDigits: dec });
 }
-const play = s => { if (window.AOGSound) AOGSound.play(s); };
 
 // ── THEME ──────────────────────────────────────────────────
 let darkMode = false;
@@ -1319,7 +1318,7 @@ document.querySelectorAll('[data-tog]').forEach(row => {
   row.addEventListener('click', e => {
     const b = e.target.closest('.toggle-opt'); if (!b) return;
     row.querySelectorAll('.toggle-opt').forEach(x => x.classList.toggle('active', x === b));
-    TOG[key] = b.dataset.v; play('tink');
+    TOG[key] = b.dataset.v;
     onToggle(key);
   });
 });
@@ -1327,7 +1326,6 @@ function showPane(p, silent) {
   document.querySelectorAll('#calcTabs .toggle-opt').forEach(b => b.classList.toggle('active', b.dataset.pane === p));
   document.querySelectorAll('.calc-pane').forEach(x => x.classList.toggle('active', x.id === 'pane-' + p));
   try { localStorage.setItem('aog-qcalc-tab', p); } catch (e) {}
-  if (!silent) play('tink');
 }
 $('calcTabs').addEventListener('click', e => { const b = e.target.closest('.toggle-opt'); if (b) showPane(b.dataset.pane); });
 
@@ -1481,9 +1479,9 @@ function genConns(sys) {
 function genAdd(silent) {
   const sys = $('genSys').value;
   genRows.push({ id: ++genId, name: '', amt: '', unit: 'A', conn: GSYS[sys].three ? '3P' : 'L1-L2' });
-  genRender(); if (!silent) play('tink');
+  genRender();
 }
-function genDel(id) { genRows = genRows.filter(r => r.id !== id); genRender(); calcGen(); play('tink'); }
+function genDel(id) { genRows = genRows.filter(r => r.id !== id); genRender(); calcGen(); }
 function genRender() {
   const conns = genConns($('genSys').value);
   $('genList').innerHTML = genRows.map((r, n) => `
@@ -1677,7 +1675,7 @@ function calcOhm_() {
   OHM.forEach(k => { if (!has(k)) { const v = out[k]; $('ohm' + k).value = isFinite(v) ? +v.toPrecision(5) : ''; $('ohm' + k).classList.add('is-out'); } });
   $('ohmFormula').textContent = f;
 }
-function ohmClear() { showMath('math-ohm', null); ohmSrc = []; OHM.forEach(k => { $('ohm' + k).value = ''; $('ohm' + k).classList.remove('is-out'); }); $('ohmFormula').textContent = ''; play('tink'); }
+function ohmClear() { showMath('math-ohm', null); ohmSrc = []; OHM.forEach(k => { $('ohm' + k).value = ''; $('ohm' + k).classList.remove('is-out'); }); $('ohmFormula').textContent = ''; }
 
 // ── CONVERSIONS ────────────────────────────────────────────
 const CV = { hp: ['cvHp', 0.745699872], kw: ['cvKw', 1], btu: ['cvBtu', 1 / 3412.14163], ton: ['cvTon', 12000 / 3412.14163] }; // factor → kW
@@ -1915,7 +1913,7 @@ function openRef(t) {
   buildRef();
   const cur = (document.querySelector('.calc-pane.active') || {}).id || '';
   refTab(t || ({ 'pane-vd': 'r', 'pane-motor': 'm', 'pane-brk': 'b' }[cur] || 'f'));
-  $('refModal').classList.add('open'); document.body.classList.add('modal-open'); play('tink');
+  $('refModal').classList.add('open'); document.body.classList.add('modal-open');
 }
 function closeRef() { $('refModal').classList.remove('open'); document.body.classList.remove('modal-open'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRef(); });
@@ -1928,29 +1926,6 @@ try { const t = localStorage.getItem('aog-qcalc-tab'); if (t && $('pane-' + t)) 
 showPane(startTab, true);
 ready = true;
 recalc();
-</script>
-
-<!-- SERVICE WORKER — single registration pointing to ../sw.js -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function() {
-    navigator.serviceWorker.register('../sw.js', { scope: '../' })
-      .then(function(reg) {
-        console.log('[SW] Registered, scope:', reg.scope);
-        reg.addEventListener('updatefound', function() {
-          var nw = reg.installing;
-          nw.addEventListener('statechange', function() {
-            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[AOG SW] Update available — reload to apply.');
-            }
-          });
-        });
-      })
-      .catch(function(err) {
-        console.warn('[SW] Registration failed:', err);
-      });
-  });
-}
 </script>
 
 <script>

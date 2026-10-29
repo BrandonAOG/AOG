@@ -1396,7 +1396,6 @@ function toggleTheme() {
 
 // ── FILL MODE ──────────────────────────────────────────────
 function setFillMode(mode) {
-  if (mode !== fillMode && window.AOGSound) AOGSound.play(mode === 'raceway' ? 'clunk' : 'tink');
   fillMode = mode;
   document.getElementById('tog-raceway').classList.toggle('active', mode === 'raceway');
   document.getElementById('tog-nipple').classList.toggle('active', mode === 'nipple');
@@ -1923,7 +1922,6 @@ function cfOpenRef(t) {
   cfRefTab(t || 't1');
   document.getElementById('cfRefModal').classList.add('open');
   document.body.classList.add('modal-open');
-  if (window.AOGSound) AOGSound.play('tink');
 }
 function cfCloseRef() {
   document.getElementById('cfRefModal').classList.remove('open');
@@ -1931,29 +1929,6 @@ function cfCloseRef() {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cfCloseRef(); });
 </script>
-<!-- SERVICE WORKER — single registration pointing to ../sw.js -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function() {
-    navigator.serviceWorker.register('../sw.js', { scope: '../' })
-      .then(function(reg) {
-        console.log('[SW] Registered, scope:', reg.scope);
-        reg.addEventListener('updatefound', function() {
-          var nw = reg.installing;
-          nw.addEventListener('statechange', function() {
-            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[AOG SW] Update available — reload to apply.');
-            }
-          });
-        });
-      })
-      .catch(function(err) {
-        console.warn('[SW] Registration failed:', err);
-      });
-  });
-}
-</script>
-
 <script>
 function adjustTopPadding() {
   var bar = document.getElementById('action-bar');
