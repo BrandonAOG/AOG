@@ -8,8 +8,6 @@ A mobile-first Progressive Web App (PWA) built for Always On Generators field te
 
 **[brandonaog.github.io/AOG](https://brandonaog.github.io/AOG)** — public site used by the team
 
-**brandonaog.github.io/TESTAOG** — test site. Upload changes here first, check them on a phone, then copy the identical files to the public site. The two sites share the same `sw.js` but keep separate offline copies; the test site shows its version as `vTEST…`.
-
 ---
 
 ## Features
@@ -479,7 +477,7 @@ AOG/
 - **Libraries from cdnjs / jsDelivr** (saved for offline use) — html2canvas, jsPDF, pdf-lib, PDF.js, Leaflet, SheetJS
 - **Service worker** — saved-copy-first with background refresh, a permanent data store for county files, and a user-approved update flow
 - **Web App Manifest** — home-screen install, full-screen display, per-tool shortcuts
-- **GitHub Pages** — static hosting from the `main` branch root (public `AOG` and test `TESTAOG`)
+- **GitHub Pages** — static hosting from the `main` branch root
 
 ---
 
