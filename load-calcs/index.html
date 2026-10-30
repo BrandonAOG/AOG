@@ -548,6 +548,36 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   .jb-toggle .jb-who{text-transform:none;letter-spacing:0;font-weight:600;
     color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 }
+
+/* ── DARK MODE (body.dark) — same palette and shared 'aog-theme' setting as the other tools.
+   Screen only: print and the PDF / image exports always stay light. ── */
+.action-bar .theme-toggle-ab{width:36px;height:36px;padding:6px;flex-shrink:0;border:1px solid rgba(217,119,6,0.4);background:rgba(217,119,6,0.07);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#D97706;font-size:16px;transition:all .2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+.action-bar .theme-toggle-ab:hover{border-color:#D97706;box-shadow:0 0 8px rgba(217,119,6,0.3);}
+@media screen{
+body.dark{
+  --bg:#0A0E27;--surface:#0f1535;--surface2:#141a3a;--border:#1e2a4a;--border2:#2a3a60;
+  --text:#E0F7FF;--text2:#94a3b8;--text3:#64748b;
+  --blue:#00FFC8;--blue-lt:rgba(0,255,200,.08);--blue-dk:#06B6D4;
+  --aog:#F59E0B;--aog-lt:rgba(217,119,6,.12);
+  --green:#10b981;--green-lt:rgba(16,185,129,.12);
+  --amber:#f59e0b;--amber-lt:rgba(245,158,11,.12);
+  --red:#ef4444;--red-lt:rgba(239,68,68,.12);
+  --shadow:0 2px 8px rgba(0,255,200,.06);
+  background:var(--bg);color:var(--text);color-scheme:dark;
+}
+/* form controls: many carry inline background:#fff, so these need !important */
+body.dark input:not([type=checkbox]):not([type=radio]):not([type=range]),body.dark select,body.dark textarea{
+  background:var(--surface2)!important;color:var(--text)!important;border-color:var(--border2)!important;}
+body.dark select option{background:#0f1535;color:#E0F7FF;}
+body.dark input::placeholder,body.dark textarea::placeholder{color:#64748b;}
+body.dark .appl-tbl td:nth-child(1) input:not(:focus){background:transparent!important;border-color:transparent!important;}
+body.dark .calc-show{background:var(--surface2);}
+body.dark .sum-panel{background:linear-gradient(135deg,#0f1535 0%,#16224a 50%,#0f1535 100%);border-color:rgba(0,255,200,.22);}
+body.dark .sc:not(.big){background:rgba(0,255,200,.04);border-color:rgba(148,163,184,.18);}
+/* yellow warning callouts written inline (#fff3cd) */
+body.dark [style*="#fff3cd"]{background:rgba(245,158,11,.12)!important;color:#FCD34D!important;}
+body.dark [style*="#fff3cd"] *{color:inherit;}
+}
 </style>
 <script src="../update-banner.js"></script>
 </head>
@@ -559,8 +589,8 @@ input[type=number][id^="pexva_"]::-webkit-inner-spin-button{-webkit-appearance:n
   <button class="ab-btn" onclick="aogLoadPick()" title="Reopen a job from a PDF this calculator exported.">⤒ LOAD</button>
   <input type="file" id="aog_job_in" accept="application/pdf,.pdf" style="display:none;" onchange="aogLoadFromFile(this)">
   <button class="ab-btn" id="ab-capture" onclick="captureReport()">⤓ SAVE IMG</button>
-  <a class="ab-btn" onclick="window.print()" style="cursor:pointer;">⎙ FULL</a>
   <a class="ab-btn" onclick="aogNewJobConfirm()" style="cursor:pointer;">↺ NEW JOB</a>
+  <button class="theme-toggle-ab" id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
   <span id="aog-save-status" style="font-family:'Inter',Arial,Helvetica,sans-serif;font-size:9px;color:rgba(255,255,255,0.45);letter-spacing:.5px;align-self:center;white-space:nowrap;padding:0 4px;"></span>
 </div>
 
@@ -4585,6 +4615,24 @@ document.addEventListener('DOMContentLoaded', adjustTopPadding);
 setTimeout(adjustTopPadding, 0);
 setTimeout(adjustTopPadding, 100);
 setTimeout(adjustTopPadding, 500);
+
+// ── THEME — shared 'aog-theme' key (same as every other tool) ──
+var darkMode = false;
+function toggleTheme(){
+  darkMode = !darkMode;
+  document.body.classList.toggle('dark', darkMode);
+  var b = document.getElementById('themeBtn'); if (b) b.textContent = darkMode ? '\u2600\ufe0f' : '\ud83c\udf19';
+  try { localStorage.setItem('aog-theme', darkMode ? 'dark' : 'light'); } catch (e) {}
+}
+(function initTheme(){
+  var saved = null;
+  try { saved = localStorage.getItem('aog-theme'); } catch (e) {}
+  var prefer = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (saved === 'dark' || (!saved && prefer)) {
+    darkMode = true; document.body.classList.add('dark');
+    var b = document.getElementById('themeBtn'); if (b) b.textContent = '\u2600\ufe0f';
+  }
+})();
 </script>
 </body>
 </html>

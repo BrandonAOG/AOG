@@ -16,7 +16,7 @@ A mobile-first Progressive Web App (PWA) built for Always On Generators field te
 - **Works offline** after the first load — and tells you (with a one-tap **Fix Now**) if any offline files are missing
 - **Installable** on iPhone, iPad, Android and computers, with long-press shortcuts to every tool (Android / desktop)
 - **Update prompt with a "what's new" list** — nothing changes until the tech taps **Update Now**
-- **One dark / light setting** shared by every tool (Load Calc has a single fixed look)
+- **One dark / light setting** shared by every tool
 - **Forms export a resumable PDF and an image** — and reload from that PDF later; holiday themes never appear in exports
 - **Auto-saved drafts** on every form — close the app mid-job and pick up where you left off
 - **Holiday themes** on the 8 forms (falling snow, bats, fireworks…) all year round and **50 animated hub backgrounds**
@@ -136,7 +136,7 @@ A residential load calculation using the **NEC 2023 Art. 220.82 Optional Method*
 - **Neutral** per 220.61 with Tables 220.54 / 220.55; **EGC** per 250.122; **GEC** per 250.66 with electrode checkboxes and a 250.64(F) arrangement picker.
 - **Jobs** — collapsible customer banner, auto-save on the device, ↺ NEW JOB.
 
-**Exports:** ⎙ PDF (the job is embedded, so ⤒ LOAD reopens it) · ⤓ SAVE IMG · ⎙ FULL print · share sheet where supported.
+**Exports:** ⎙ PDF (the job is embedded, so ⤒ LOAD reopens it) · ⤓ SAVE IMG · share sheet where supported.
 
 ### Installs
 
