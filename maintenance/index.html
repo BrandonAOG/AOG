@@ -14,7 +14,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Always On Generators - Maintenance Report</title>
+<script src="../battery-saver.js"></script>
+<script src="../scroll-lock.js" defer></script>
 <script src="../sounds.js" defer></script>
+<script src="../address-lookup.js"></script>
 <script src="../clean-capture.js"></script>
 <script src="../seasonal.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -1393,6 +1396,18 @@ body.dark-mode .action-bar {
 @media (max-width: 480px) { .action-bar { padding: 4px 4px; padding-top: calc(4px + env(safe-area-inset-top, 0px)); gap: 3px; } }
 
 @media print { .action-bar { display: none !important; } }
+
+/* Phone toolbar: tighten the buttons so HOME … CLEAR and the theme button all fit on one
+   row on a normal-size iPhone (same rule on every form). */
+@media (max-width: 430px) {
+  .action-bar { gap: 2px !important; padding-left: 3px !important; padding-right: 3px !important; }
+  .action-bar .btn, .action-bar .ab-btn { padding: 6px 4px !important; letter-spacing: 0 !important; }
+}
+@media (max-width: 380px) {
+  .action-bar { gap: 2px !important; padding-left: 2px !important; padding-right: 2px !important; }
+  .action-bar .btn, .action-bar .ab-btn { font-size: 8.5px !important; padding: 6px 3px !important; letter-spacing: 0 !important; }
+  .action-bar .theme-toggle-btn { width: 32px !important; height: 32px !important; }
+}
 </style>
 <style id="pdf-btn-toggle">
 /* === TEMP: hide the regular PDF button. To restore, delete this rule AND remove the 'pdf-btn-hidden' class from the PDF button(s). === */
@@ -1527,7 +1542,7 @@ body.dark-mode .action-bar {
         </div>
         <div class="field-row field-row-nowrap" id="address-tech-row">
           <label for="address">Address</label>
-          <input type="text" id="address" class="long" placeholder="Address" style="flex:0 0 50%;width:50%;min-width:0;">
+          <input type="text" id="address" data-aog-address class="long" placeholder="Address" style="flex:0 0 50%;width:50%;min-width:0;">
           <label for="tech">Tech</label>
           <input type="text" id="tech" class="med" placeholder="Tech" style="flex:1 1 0;width:auto;min-width:0;">
         </div>
@@ -1945,7 +1960,8 @@ body.dark-mode .action-bar {
 
   <div class="footer">
     <span class="footer-text">GENERATOR MAINTENANCE REPORT · CONFIDENTIAL</span>
-    <span id="ver-tag" style="font-family:var(--font-mono);font-size:0.7rem;color:var(--text-dim);">Ver 1.1A</span>
+    <span class="aog-copy" style="font-family:var(--font-mono);font-size:0.7rem;color:var(--text-dim);letter-spacing:1px;">&copy; <span data-aog-year>2026</span> Always On Generators</span>
+    <span id="ver-tag" data-aog-version style="font-family:var(--font-mono);font-size:0.7rem;color:var(--text-dim);"></span>
   </div>
   <div class="page-corner-bl"></div>
   <div class="page-corner-br"></div>
@@ -4459,5 +4475,6 @@ if (document.fonts && document.fonts.ready) { document.fonts.ready.then(adjustTo
   apply(0);
 })();
 </script>
+<script src="../aog-footer.js"></script>
 </body>
 </html>

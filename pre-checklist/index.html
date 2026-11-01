@@ -14,7 +14,10 @@ Unauthorized copying, reproduction, or distribution is prohibited.
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="AOG Pre-Install">
 <title>Always On Generators – Pre-Install Checklist</title>
+<script src="../battery-saver.js"></script>
+<script src="../scroll-lock.js" defer></script>
 <script src="../sounds.js" defer></script>
+<script src="../address-lookup.js"></script>
 <script src="../clean-capture.js"></script>
 <script src="../seasonal.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -424,6 +427,27 @@ body.dark-mode input::placeholder, body.dark-mode textarea::placeholder { color:
   .form-page::before, body.dark-mode .form-page::before { display: none !important; }
   .form-page, body.dark-mode .form-page { outline: 2px solid #D35E13 !important; outline-offset: -5px !important; }
 }
+
+/* Phone toolbar: tighten the buttons so HOME … CLEAR and the theme button all fit on one
+   row on a normal-size iPhone (same rule on every form). */
+@media (max-width: 430px) {
+  .action-bar { gap: 2px !important; padding-left: 3px !important; padding-right: 3px !important; }
+  .action-bar .btn, .action-bar .ab-btn { padding: 6px 4px !important; letter-spacing: 0 !important; }
+}
+@media (max-width: 380px) {
+  .action-bar { gap: 2px !important; padding-left: 2px !important; padding-right: 2px !important; }
+  .action-bar .btn, .action-bar .ab-btn { font-size: 8.5px !important; padding: 6px 3px !important; letter-spacing: 0 !important; }
+  .action-bar .theme-toggle-btn { width: 32px !important; height: 32px !important; }
+}
+
+/* PRINTED FORM FOOTER (v3.0.0) — prints at the bottom of every page of the form, on PDF✎, CAPTURE and
+   paper: form name · Always On Generators · Confidential · page number · app version (filled in from
+   sw.js by update-banner.js). Same look on Site Visit, Pre-Install, Elect Install and Gas Install. */
+.aog-printfoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; padding: 5px 2px 0;
+  border-top: 1px solid rgba(211,94,19,0.35); font-family: Arial, Helvetica, sans-serif; font-size: 9px; line-height: 1.4;
+  letter-spacing: 1.5px; text-transform: uppercase; color: #9CA3AF; }
+.aog-printfoot .aog-pf-num { white-space: nowrap; letter-spacing: 0.5px; }
+.aog-printfoot .aog-pf-copy { white-space: nowrap; letter-spacing: 0.5px; text-transform: none; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
@@ -437,7 +461,7 @@ body.dark-mode input::placeholder, body.dark-mode textarea::placeholder { color:
   <button class="btn" onclick="window.print()" style="display:none">📄 PDF</button>
   <button class="btn" onclick="saveEditablePdf()">📝 PDF✎</button>
   <button class="btn" onclick="saveSmart()">📸 CAPTURE</button>
-  <button class="btn" onclick="document.getElementById('import-data-input').click()">📂 IMPORT</button>
+  <button class="btn" onclick="document.getElementById('import-data-input').click()">📂 LOAD</button>
   <input type="file" id="import-data-input" accept=".pdf,application/pdf,.json,application/json" style="display:none" onchange="importFormData(this)">
   <button class="btn" onclick="clearForm()">🗑 CLEAR</button>
   <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle dark mode" onclick="toggleTheme()">
@@ -474,7 +498,7 @@ body.dark-mode input::placeholder, body.dark-mode textarea::placeholder { color:
   <div class="top-fields">
     <div class="field-row"><label>Customer's Name:</label><input type="text" autocapitalize="words" autocomplete="name" placeholder=""></div>
     <div class="field-row"><label>Date:</label><input type="date"></div>
-    <div class="field-row"><label>Address:</label><input type="text" autocapitalize="words" autocomplete="street-address" style="width:200px;"></div>
+    <div class="field-row"><label>Address:</label><input type="text" autocapitalize="words" autocomplete="off" style="width:200px;" data-aog-address></div>
     <div class="field-row"><label>Install Truck:</label><input type="text"></div>
     <div class="field-row"><label>Job:</label><input type="text" style="width:200px;"></div>
     <div class="field-row"><label>Lead:</label><input type="text"></div>
@@ -652,7 +676,9 @@ body.dark-mode input::placeholder, body.dark-mode textarea::placeholder { color:
     <textarea class="notes-field" rows="4" placeholder=""></textarea>
   </div>
 
-</div><!-- /form-page -->
+
+  <div class="aog-printfoot"><span>PRE-INSTALL CHECKLIST · CONFIDENTIAL</span><span class="aog-pf-copy">&copy; <span data-aog-year>2026</span> Always On Generators</span><span class="aog-pf-num">Page 1 of 1 · <span data-aog-version></span></span></div>
+  </div><!-- /form-page -->
 </div><!-- /page-wrapper -->
 
 <script>
@@ -1481,5 +1507,6 @@ function injectSeasonalStyles() {
 })();
 </script>
 
+<script src="../aog-footer.js"></script>
 </body>
 </html>

@@ -12,6 +12,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>AOG Trench &amp; Burial Depth — NEC 300.5</title>
+<script src="../battery-saver.js"></script>
+<script src="../scroll-lock.js" defer></script>
 <script src="../sounds.js" defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="manifest" href="../manifest.json">
@@ -509,7 +511,7 @@ select:focus, input:focus {
   background: var(--bg2); border: 2px solid var(--accent);
   border-radius: var(--radius); width: 100%; max-width: 820px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-  margin: auto 0;
+  margin: 0 0 auto;   /* always at the top — was centred, so short tables sat mid-screen and long ones at the top */
 }
 .modal-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -1013,10 +1015,6 @@ select:disabled { cursor: not-allowed; }
   </div>
 </div>
 
-<div class="footer">
-  AOG FIELD OPERATIONS HUB — TRENCH &amp; BURIAL DEPTH<br>
-  NEC 2023 300.5 · NFPA 54 (2024) 7.1 · NFPA 58 (2024) 6.11 — BUILT BY BRANDON @BrandonAOG
-</div>
 
 <script>
 // ============================================================
@@ -1368,6 +1366,7 @@ function buildRefTable() {
   $('refT').innerHTML = LOCS.map(l => `<tr><td class="wrap-m" style="white-space:normal;">${l.label}${l.raceway ? ' *' : ''}${l.id === 'bldg' ? ' *' : ''}</td>${l.v.map((v, i) => `<td class="num">${v}${l.id === 'all' && i === 4 ? '<sup>1,2</sup>' : ''}</td>`).join('')}</tr>`).join('');
 }
 function refTab(t) {
+  document.querySelectorAll('.modal-bg').forEach(b => { b.scrollTop = 0; });   // every table opens at its top, same spot every time
   document.querySelectorAll('.modal-tab').forEach(x => x.classList.toggle('active', x.dataset.tab === t));
   document.querySelectorAll('.modal-pane').forEach(x => x.classList.toggle('active', x.id === 'pane-' + t));
 }
@@ -1389,5 +1388,6 @@ window.addEventListener('resize', adjustTopPadding);
 window.addEventListener('load', adjustTopPadding);
 setTimeout(adjustTopPadding, 100);
 </script>
+<script src="../aog-footer.js"></script>
 </body>
 </html>

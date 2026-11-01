@@ -1,6 +1,6 @@
 // ============================================================
 //  Always On Generators – Field Hub
-//  Service Worker  |  sw.js  |  Version: v2.8.1
+//  Service Worker  |  sw.js  |  Version: v2.8.12
 //
 //  ⚠ WHEN YOU UPDATE ANY TOOL:
 //    1. Bump CACHE_VERSION
@@ -21,7 +21,7 @@
 // 52-file re-download. A literal prefix could not fix it either: 'aog-forms-v'
 // is itself a prefix of 'aog-forms-vTEST2.5.0', so public would still eat test.
 // The scope is different by construction, so this cannot collide.
-var CACHE_VERSION = 'v2.8.1';
+var CACHE_VERSION = 'v3.0.0';
 var CACHE_PREFIX  = 'aog-forms::' + self.registration.scope + '::';
 var CACHE_NAME    = CACHE_PREFIX + CACHE_VERSION;
 
@@ -76,12 +76,16 @@ var cacheProgress = { percent: 0, label: '', done: false };
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-'🌓 DARK MODE — your dark/light choice now carries across every tool',
-'⚡ LOAD CALC — now labeled NEC 2023 (parallel-wire warning cites 310.10(G))',
-'🐞 REPORT A BUG / SUGGESTIONS — all 21 tools now in the list',
-'🗺️ PROPERTY LOOKUP — intro now shows all 62 live counties',
-'🧹 Behind the scenes — holiday themes & offline setup now shared by all tools (lighter, more consistent)',
-'🔊 SOUNDS — every tool now uses the same tap sounds (no more double sounds on calculators)',
+  '🎉 VERSION 3.0 — here is what is new',
+  '📍 ADDRESSES — address suggestions on every job form, with better house numbers and units; 📍 GPS button in every address box fills in where you are standing',
+  '🧭 FORMS — same buttons on every form (HOME · PDF✎ · CAPTURE · LOAD · CLEAR), all on one row on iPhone; Site Visit and Elect Install PDF / CAPTURE fixed when YES/NO boxes are checked',
+  '🔌 ELECT INSTALL / SITE VISIT — page 2: fittings now read Weatherproof Rings and Weatherproof K.O.; empty length boxes no longer show a dash; Elect Install page 2 now prints exactly like Site Visit, and CAPTURE matches PDF✎',
+  '✅ QC CHECKLIST — page 2 customer name and date fill in from page 1',
+  '🏠 PROPERTY LOOKUP — faster first search after opening the app',
+  '🔥 GAS CALC — CSST sized from the Gastite / FlashShield and TracPipe CounterStrike charts, both charts in Code Reference; LP altitude derate on Protector XG 25/30kW',
+  '📐 ELECTRICAL — voltage drop by conduit type (AC impedance), small-wire breaker limits, 10 A breaker; Conduit Fill USE-2 / MTW sizes corrected; Trench Depth: cathodic protection note for propane steel pipe',
+  '🧱 CONCRETE — 20 kg / 30 kg bag counts corrected',
+  '✏️ SITE ANNOTATOR — Undo / Redo fixed: one tap undoes one change',
 ];
 //
 // ============================================================
@@ -96,6 +100,10 @@ var PRECACHE_URLS = [
   './update-banner.js',
   './sounds.js',
   './clean-capture.js',
+  './address-lookup.js',
+  './battery-saver.js',
+  './scroll-lock.js',
+  './aog-footer.js',
   './seasonal.js',
   './estimate/',
   './maintenance/',

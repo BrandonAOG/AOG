@@ -14,7 +14,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Service Work</title>
+<script src="../battery-saver.js"></script>
+<script src="../scroll-lock.js" defer></script>
 <script src="../sounds.js" defer></script>
+<script src="../address-lookup.js"></script>
 <script src="../clean-capture.js"></script>
 <script src="../seasonal.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -273,6 +276,18 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
   --h-print-desktop-field:      60px;  /* textarea height in desktop PDF — reduce if font size increased to prevent extra pages */
   --h-print-desktop-emergency:  16px;
 }
+
+/* Phone toolbar: tighten the buttons so HOME … CLEAR and the theme button all fit on one
+   row on a normal-size iPhone (same rule on every form). */
+@media (max-width: 430px) {
+  .action-bar { gap: 2px !important; padding-left: 3px !important; padding-right: 3px !important; }
+  .action-bar .btn, .action-bar .ab-btn { padding: 6px 4px !important; letter-spacing: 0 !important; }
+}
+@media (max-width: 380px) {
+  .action-bar { gap: 2px !important; padding-left: 2px !important; padding-right: 2px !important; }
+  .action-bar .btn, .action-bar .ab-btn { font-size: 8.5px !important; padding: 6px 3px !important; letter-spacing: 0 !important; }
+  .action-bar .theme-toggle-btn { width: 32px !important; height: 32px !important; }
+}
 </style>
 <style id="dark-mode-style">
 @media screen {
@@ -355,7 +370,7 @@ body { font-family: var(--font-body); background: var(--bg3); color: var(--text)
   padding: 6px 8px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
   border: 1px solid rgba(217,119,6,0.4); background: rgba(217,119,6,0.05);
   cursor: pointer; color: var(--cyan); text-transform: uppercase;
-  font-family: var(--font-display); white-space: nowrap; flex: 1;
+  font-family: var(--font-display); white-space: nowrap; flex: 0 0 auto;   /* same compact, centered buttons as the other forms */
   text-align: center; text-decoration: none; display: inline-flex;
   align-items: center; justify-content: center;
   clip-path: polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
@@ -598,7 +613,6 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
 
 <div class="action-bar">
   <a class="ab-btn" href="../">🏠 HOME</a>
-  <a class="ab-btn" onclick="printForm()" style="cursor:pointer;">📄 PDF</a>
   <a class="ab-btn" onclick="saveEditablePdf()" style="cursor:pointer;">📝 PDF✎</a>
   <a class="ab-btn" onclick="saveSmart()" style="cursor:pointer;">📸 CAPTURE</a>
   <a class="ab-btn" onclick="document.getElementById('import-data-input').click()" style="cursor:pointer;">📂 LOAD</a>
@@ -662,7 +676,7 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
       </div>
       <div class="info-row full">
         <span class="info-label">Address:</span>
-        <input class="info-input" type="text" id="cust_addr" name="cust_addr" autocomplete="off">
+        <input class="info-input" type="text" id="cust_addr" name="cust_addr" autocomplete="off" data-aog-address>
       </div>
       <div class="info-row">
         <span class="info-label">Generator Model:</span>
@@ -719,8 +733,8 @@ body.mobile-safari { -webkit-print-color-adjust: exact; }
     </div>
 
     <div class="page-footer">
-      <span class="footer-text">SERVICE WORK · ALWAYS ON GENERATORS · CONFIDENTIAL</span>
-      <span class="page-num">Page 1 of 1</span>
+      <span class="footer-text">SERVICE WORK · CONFIDENTIAL</span><span class="page-num aog-copy">&copy; <span data-aog-year>2026</span> Always On Generators</span>
+      <span class="page-num">Page 1 of 1 · <span data-aog-version></span></span>
     </div>
 
   </div><!-- /page1 -->
@@ -1635,5 +1649,6 @@ function injectSeasonalStyles() {
 })();
 </script>
 
+<script src="../aog-footer.js"></script>
 </body>
 </html>

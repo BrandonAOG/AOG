@@ -12,7 +12,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>Always On Generators – Permitting Info Request</title>
+<script src="../battery-saver.js"></script>
+<script src="../scroll-lock.js" defer></script>
 <script src="../sounds.js" defer></script>
+<script src="../address-lookup.js"></script>
 <script src="../clean-capture.js"></script>
 <script src="../seasonal.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -1926,6 +1929,30 @@ body.mobile-printing .tbl-clear-btn { display: none !important; }
 body.printing #themed-confirm-overlay,
 body.mobile-printing #themed-confirm-overlay { display: none !important; }
 @media print { #themed-confirm-overlay { display: none !important; } }
+
+/* Phone toolbar: tighten the buttons so HOME … CLEAR and the theme button all fit on one
+   row on a normal-size iPhone (same rule on every form). */
+@media (max-width: 430px) {
+  .action-bar { gap: 2px !important; padding-left: 3px !important; padding-right: 3px !important; }
+  .action-bar .btn, .action-bar .ab-btn { padding: 6px 4px !important; letter-spacing: 0 !important; }
+}
+@media (max-width: 380px) {
+  .action-bar { gap: 2px !important; padding-left: 2px !important; padding-right: 2px !important; }
+  .action-bar .btn, .action-bar .ab-btn { font-size: 8.5px !important; padding: 6px 3px !important; letter-spacing: 0 !important; }
+  .action-bar .theme-toggle-btn { width: 32px !important; height: 32px !important; }
+}
+  /* Page 2 length boxes: no "—" showing in empty boxes. The dash placeholder stays in the markup
+     because the :placeholder-shown rules use it to highlight a filled box — it's just invisible. */
+  input[placeholder="—"]::placeholder, body.dark-mode input[placeholder="—"]::placeholder{color:transparent!important;opacity:0!important}   /* dark mode too */
+
+/* PRINTED FORM FOOTER (v3.0.0) — prints at the bottom of every page of the form, on PDF✎, CAPTURE and
+   paper: form name · Always On Generators · Confidential · page number · app version (filled in from
+   sw.js by update-banner.js). Same look on Site Visit, Pre-Install, Elect Install and Gas Install. */
+.aog-printfoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; padding: 5px 2px 0;
+  border-top: 1px solid rgba(211,94,19,0.35); font-family: Arial, Helvetica, sans-serif; font-size: 9px; line-height: 1.4;
+  letter-spacing: 1.5px; text-transform: uppercase; color: #9CA3AF; }
+.aog-printfoot .aog-pf-num { white-space: nowrap; letter-spacing: 0.5px; }
+.aog-printfoot .aog-pf-copy { white-space: nowrap; letter-spacing: 0.5px; text-transform: none; }
 </style>
 <script src="../update-banner.js"></script>
 </head>
@@ -1949,9 +1976,9 @@ body.mobile-printing #themed-confirm-overlay { display: none !important; }
   <button class="btn" id="btn-pdf" onclick="openPrintPreview()" style="display:none;">📄 PDF</button>
   <button class="btn" id="btn-pdf-edit" onclick="saveFillablePdf()">📝 PDF✎</button>
   <button class="btn" id="btn-capture" onclick="saveSmart()">📸 CAPTURE</button>
-  <button class="btn" onclick="clearForm()">🗑 CLEAR</button>
   <button class="btn" onclick="document.getElementById('load-draft-input').click()">📂 LOAD</button>
   <input type="file" id="load-draft-input" accept=".pdf" style="display:none;" onchange="loadDraftFile(this)">
+  <button class="btn" onclick="clearForm()">🗑 CLEAR</button>
   <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
     <svg class="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="5"/>
@@ -1993,7 +2020,7 @@ body.mobile-printing #themed-confirm-overlay { display: none !important; }
       </div>
       <div class="permit-row">
         <label>Job Address:</label>
-        <input class="permit-input flex-grow" type="text" data-field="job-address">
+        <input class="permit-input flex-grow" type="text" data-field="job-address" data-aog-address>
       </div>
     </div>
 
@@ -2154,6 +2181,8 @@ body.mobile-printing #themed-confirm-overlay { display: none !important; }
         <textarea class="permit-textarea other-special-notes" rows="5"></textarea>
       </div>
     </div>
+  
+  <div class="aog-printfoot"><span>SITE VISIT · CONFIDENTIAL</span><span class="aog-pf-copy">&copy; <span data-aog-year>2026</span> Always On Generators</span><span class="aog-pf-num">Page 1 of 2 · <span data-aog-version></span></span></div>
   </div><!-- end page1 -->
 
   <!-- PAGE 2 -->
@@ -2282,6 +2311,8 @@ body.mobile-printing #themed-confirm-overlay { display: none !important; }
     </div>
 
     </div><!-- end #page2-inner -->
+  
+  <div class="aog-printfoot"><span>SITE VISIT · CONFIDENTIAL</span><span class="aog-pf-copy">&copy; <span data-aog-year>2026</span> Always On Generators</span><span class="aog-pf-num">Page 2 of 2 · <span data-aog-version></span></span></div>
   </div>
 </div>
 
@@ -2344,11 +2375,11 @@ function makeNumericOnly(inp) {
 }
 
 const fittings = [
-  "PVC Pipe","Weatherproof Seals","Weatherproof Lock Rings","Fiber Bushings",
+  "PVC Pipe","Weatherproof Rings","Weatherproof Lock Rings","Fiber Bushings",
   "Lock Rings","Male Adapters","Female Adapters","Couplings","Box Adapters",
   "LB PVC","LL PVC","LR PVC","Sch40 90s","Sch40 45s","Seal Tight Straights",
   "Seal Tight 90s","Seal Tight Car-Flex Hose","Myers Hubs","PVC Offset",
-  "Mini's","Strut Clamps","Two Hole Straps PVC","K.O. Seals","Weatherproof Seals"
+  "Mini's","Strut Clamps","Two Hole Straps PVC","K.O. Seals","Weatherproof K.O."
 ];
 const fittingSizes = ['5"','4"','3-1/2"','3"','2-1/2"','2"','1-1/2"','1-1/4"','1"','¾"','½"'];
 
@@ -3426,47 +3457,22 @@ function saveSmart() {
 
   setStatus('Rendering pages, please wait…');
   _showRenderOverlay('Rendering your form…');
-  const pages = document.querySelectorAll('.form-page');
-  const wasDark = document.body.classList.contains('dark-mode');
-  if (wasDark) document.body.classList.remove('dark-mode');
+  /* CAPTURE uses the SAME page render as 📝 PDF✎ (pdfRenderPageCanvases + fillSheet), so the saved
+     picture and the PDF look identical — they used to differ on page 2 (shading and spacing). */
+  function cleanup() { _hideRenderOverlay(); }
+  const jobs = [pdfRenderPageCanvases().then(function (raws) {
+    return raws.map(function (rawCanvas, idx) {
+      var canvas = fillSheet(rawCanvas)  /* every page = full 8.5x11 letter sheet w/ 0.15in margins */;
+      var fname = raws.length === 1
+        ? 'AlwaysOn_Generators_Form.jpg'
+        : 'AlwaysOn_Generators_Form_Page' + (idx + 1) + '.jpg';
+      var dataURL = canvas.toDataURL('image/jpeg', 0.85);
+      return { file: dataURLtoFile(dataURL, fname), dataURL: dataURL, fname: fname };
+    });
+  })];
 
-  var restoreLayout = function(){};
-  try {
-    showRealTablesForCapture();
-    restoreLayout = forceDesktopLayout();
-  } catch (setupErr) {
-    // If either of these throws synchronously, the overlay would otherwise
-    // stay up forever with zero indication anything went wrong.
-    _hideRenderOverlay();
-    if (wasDark) document.body.classList.add('dark-mode');
-    setStatus('⚠ Render setup failed: ' + (setupErr && setupErr.message ? setupErr.message : setupErr));
-    setTimeout(() => setStatus(''), 6000);
-    return;
-  }
-
-  function cleanup() {
-    _hideRenderOverlay();
-    hideRealTablesAfterCapture(); restoreLayout();
-    if (wasDark) document.body.classList.add('dark-mode');
-  }
-
-  _updateRenderOverlay('Rendering ' + pages.length + ' page(s)…');
-  var captureScale = _isDesktopDevice() ? 1.5 : 2;
-  const jobs = Array.prototype.map.call(pages, function (page, idx) {
-    return _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } }), 45000, 'Page ' + (idx + 1) + ' render')
-      .then(function (rawCanvas) {
-        _updateRenderOverlay('Page ' + (idx + 1) + ' of ' + pages.length + ' rendered…');
-        // Same tuned output as the other capture paths.
-        var canvas = fillSheet(rawCanvas)  /* every page = full 8.5x11 letter sheet w/ 0.15in margins */;
-        var fname = pages.length === 1
-          ? 'AlwaysOn_Generators_Form.jpg'
-          : 'AlwaysOn_Generators_Form_Page' + (idx + 1) + '.jpg';
-        var dataURL = canvas.toDataURL('image/jpeg', 0.85);
-        return { file: dataURLtoFile(dataURL, fname), dataURL: dataURL, fname: fname };
-      });
-  });
-
-  Promise.all(jobs).then(function (results) {
+  Promise.all(jobs).then(function (pagesOut) {
+    var results = pagesOut[0];
     cleanup();
     var files = results.map(function (r) { return r.file; });
     // Android: save all pages straight to Downloads, then offer to share.
@@ -3574,47 +3580,23 @@ function saveForIPhone() {
 function saveForAndroid() {
   setStatus('Rendering pages, please wait…');
   _showRenderOverlay('Rendering your form…');
-  const pages = document.querySelectorAll('.form-page');
-  const wasDark = document.body.classList.contains('dark-mode');
-  if (wasDark) document.body.classList.remove('dark-mode');
-
-  let restoreLayout = function(){};
-  try {
-    showRealTablesForCapture();
-    restoreLayout = forceDesktopLayout();
-  } catch (setupErr) {
-    _hideRenderOverlay();
-    if (wasDark) document.body.classList.add('dark-mode');
-    setStatus('⚠ Render setup failed: ' + (setupErr && setupErr.message ? setupErr.message : setupErr));
-    setTimeout(() => setStatus(''), 6000);
-    return;
-  }
-
-  let completed = 0, failed = false;
-  _updateRenderOverlay('Rendering ' + pages.length + ' page(s)…');
-  var captureScale = _isDesktopDevice() ? 1.5 : 2;
   function finish(msg) {
-    _hideRenderOverlay(); hideRealTablesAfterCapture(); restoreLayout();
+    _hideRenderOverlay();
     setStatus(msg);
     setTimeout(() => setStatus(''), msg.indexOf('⚠') === 0 ? 5000 : 4000);
-    if (wasDark) document.body.classList.add('dark-mode');
   }
-  pages.forEach((page, idx) => {
-    _withTimeout(html2canvas(page, { scale: captureScale, useCORS: true, backgroundColor: '#fff', logging: false, width: 1050, windowWidth: 1050, ignoreElements: function(el){ return !!(el.classList && el.classList.contains('tbl-clear-btn')); } }), 45000, 'Page ' + (idx + 1) + ' render').then(rawCanvas => {
-      _updateRenderOverlay('Page ' + (idx + 1) + ' of ' + pages.length + ' rendered…');
+  // Same page render as 📝 PDF✎ (see saveSmart), so the saved picture matches the PDF.
+  pdfRenderPageCanvases().then(raws => {
+    raws.forEach((rawCanvas, idx) => {
       const canvas = fillSheet(rawCanvas)  /* every page = full 8.5x11 letter sheet w/ 0.15in margins */;
       const link = document.createElement('a');
-      link.download = pages.length === 1
+      link.download = raws.length === 1
         ? 'AlwaysOn_Generators_Form.jpg'
         : `AlwaysOn_Generators_Form_Page${idx+1}.jpg`;
       link.href = canvas.toDataURL('image/jpeg', 0.85); link.click();
-      completed++;
-      if (completed === pages.length) finish(`${pages.length} image(s) sent to your Downloads folder.`);
-    }).catch(err => {
-      completed++;
-      if (!failed) { failed = true; finish('⚠ Could not render page ' + (idx + 1) + ' — try again.'); }
     });
-  });
+    finish(`${raws.length} image(s) sent to your Downloads folder.`);
+  }).catch(() => finish('⚠ Could not render the pages — try again.'));
 }
 
 function setStatus(msg) {
@@ -4490,5 +4472,6 @@ function injectSeasonalStyles() {
 })();
 </script>
 
+<script src="../aog-footer.js"></script>
 </body>
 </html>

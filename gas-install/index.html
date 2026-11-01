@@ -22,7 +22,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 
 
 <title>Always On Generators – Gas Installation Checklist</title>
+<script src="../battery-saver.js"></script>
+<script src="../scroll-lock.js" defer></script>
 <script src="../sounds.js" defer></script>
+<script src="../address-lookup.js"></script>
 <script src="../clean-capture.js"></script>
 <script src="../seasonal.js"></script>
 <style>
@@ -1777,6 +1780,27 @@ body.dark-mode .miscues-textarea {
 
 }
 
+
+/* Phone toolbar: tighten the buttons so HOME … CLEAR and the theme button all fit on one
+   row on a normal-size iPhone (same rule on every form). */
+@media (max-width: 430px) {
+  .action-bar { gap: 2px !important; padding-left: 3px !important; padding-right: 3px !important; }
+  .action-bar .btn, .action-bar .ab-btn { padding: 6px 4px !important; letter-spacing: 0 !important; }
+}
+@media (max-width: 380px) {
+  .action-bar { gap: 2px !important; padding-left: 2px !important; padding-right: 2px !important; }
+  .action-bar .btn, .action-bar .ab-btn { font-size: 8.5px !important; padding: 6px 3px !important; letter-spacing: 0 !important; }
+  .action-bar .theme-toggle-btn { width: 32px !important; height: 32px !important; }
+}
+
+/* PRINTED FORM FOOTER (v3.0.0) — prints at the bottom of every page of the form, on PDF✎, CAPTURE and
+   paper: form name · Always On Generators · Confidential · page number · app version (filled in from
+   sw.js by update-banner.js). Same look on Site Visit, Pre-Install, Elect Install and Gas Install. */
+.aog-printfoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; padding: 5px 2px 0;
+  border-top: 1px solid rgba(211,94,19,0.35); font-family: Arial, Helvetica, sans-serif; font-size: 9px; line-height: 1.4;
+  letter-spacing: 1.5px; text-transform: uppercase; color: #9CA3AF; }
+.aog-printfoot .aog-pf-num { white-space: nowrap; letter-spacing: 0.5px; }
+.aog-printfoot .aog-pf-copy { white-space: nowrap; letter-spacing: 0.5px; text-transform: none; }
 </style>
 <style id="pdf-btn-toggle">
 /* === TEMP: hide the regular PDF button. To restore, delete this rule AND remove the 'pdf-btn-hidden' class from the PDF button(s). === */
@@ -1835,7 +1859,7 @@ body.dark-mode .miscues-textarea {
         <div class="field-row"><label>Date:</label><input type="date" id="f-date"></div>
       </div>
       <div class="top-fields-row">
-        <div class="field-row"><label>Address:</label><input type="text" placeholder="Job address"></div>
+        <div class="field-row"><label>Address:</label><input type="text" placeholder="Job address" data-aog-address></div>
         <div class="field-row"><label>Gas Truck:</label><input type="text" placeholder="Truck #"></div>
       </div>
       <div class="top-fields-row">
@@ -1911,6 +1935,8 @@ body.dark-mode .miscues-textarea {
       </div>
     </div>
 
+  
+  <div class="aog-printfoot"><span>GAS INSTALLATION · CONFIDENTIAL</span><span class="aog-pf-copy">&copy; <span data-aog-year>2026</span> Always On Generators</span><span class="aog-pf-num">Page 1 of 2 · <span data-aog-version></span></span></div>
   </div><!-- end page1 -->
 
   <!-- ══════════════ PAGE 2 ══════════════ -->
@@ -1980,14 +2006,12 @@ body.dark-mode .miscues-textarea {
       <textarea class="multiline" rows="5" placeholder="Enter other notes here…" style="width:100%;resize:none;min-height:90px;"></textarea><div class="print-proxy"></div>
     </div>
 
+  
+  <div class="aog-printfoot"><span>GAS INSTALLATION · CONFIDENTIAL</span><span class="aog-pf-copy">&copy; <span data-aog-year>2026</span> Always On Generators</span><span class="aog-pf-num">Page 2 of 2 · <span data-aog-version></span></span></div>
   </div><!-- end page2 -->
 
 </div><!-- end page-wrapper -->
 
-<div class="app-footer" style="text-align:center;font-family:Arial,sans-serif;font-size:11px;color:var(--text-muted);margin:18px 16px 40px;line-height:1.6;">
-  <span class="footer-text" title="">© 2026 Always On Generators · CONFIDENTIAL</span><br>
-  <span id="ver-span" title="">v1.0</span>
-</div>
 
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
@@ -3769,7 +3793,7 @@ setTimeout(adjustTopPadding, 100);
     var touch = ('ontouchstart' in window);
     var standaloneMM  = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || false;
     var standaloneNav = (navigator.standalone === true);
-    var ver = (document.getElementById('ver-span') && document.getElementById('ver-span').textContent || '?').trim();
+    var ver = (document.querySelector('.aog-foot-by') ? 'shared footer' : '?');   // the old v1.x tag left with the old footer
 
     var isCriOS  = /CriOS/.test(ua);
     var isIOS    = /iP(hone|od|ad)/.test(ua) && /WebKit/.test(ua);
@@ -3887,7 +3911,7 @@ setTimeout(adjustTopPadding, 100);
   window.__showDebug = show;
 
   function wireTrigger() {
-    var tag = document.getElementById('ver-span');
+    var tag = document.querySelector('footer.aog-foot .aog-foot-by');   // triple-tap BUILT BY BRANDON → debug report
     if (!tag) return;
     tag.style.cursor = 'pointer';
     var taps = 0, t;
@@ -3949,7 +3973,7 @@ setTimeout(adjustTopPadding, 100);
 
   // Reveal: triple-tap (or long-press) the "· CONFIDENTIAL" footer text.
   (function(){
-    var hit = document.querySelector('.footer-text');
+    var hit = document.querySelector('footer.aog-foot .aog-foot-hub');   // triple-tap the footer's first line → layout tuner
     if (!hit) return;
     hit.style.cursor = 'pointer';
     function toggle(){
@@ -4243,5 +4267,6 @@ function injectSeasonalStyles() {
 })();
 </script>
 
+<script src="../aog-footer.js"></script>
 </body>
 </html>

@@ -13,7 +13,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Generator Installation Estimate</title>
+<script src="../battery-saver.js"></script>
+<script src="../scroll-lock.js" defer></script>
 <script src="../sounds.js" defer></script>
+<script src="../address-lookup.js"></script>
 <script src="../clean-capture.js"></script>
 <script src="../seasonal.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -1151,6 +1154,10 @@ body.dark-mode .flood-item { border-color: rgba(0,255,200,0.08); background: tra
 #address-suggestions { position: absolute; top: 100%; left: 0; right: 0; z-index: 99999; background: var(--panel); border: 1px solid var(--border-bright); border-top: none; margin: 0; padding: 0; list-style: none; max-height: 220px; overflow-y: auto; box-shadow: 0 8px 24px rgba(250,103,0,0.12); display: none; }
 body.dark-mode #address-suggestions { background: rgba(10,14,39,0.95); border-color: rgba(0,255,200,0.2); box-shadow: 0 8px 24px rgba(0,255,200,0.15); }
 #address-suggestions.open { display: block; }
+/* Florida suggestions: bold in the accent color. In DARK MODE the whole list is teal on every theme
+   (seasonal colors are for light mode) — same as every other form's list. */
+#address-suggestions li.fl { font-weight: bold; color: var(--cyan); }
+body.dark-mode #address-suggestions li.fl { color: #00FFC8; }
 #address-suggestions li { padding: 9px 12px; cursor: pointer; font-size: var(--fs-phone-address-suggestion); color: var(--text); border-bottom: 1px solid rgba(250,103,0,0.08); font-family: var(--font-mono); min-height: 40px; display: flex; align-items: center; -webkit-tap-highlight-color: transparent; transition: background 0.1s; }
 body.dark-mode #address-suggestions li { color: #E0F7FF; border-bottom-color: rgba(0,255,200,0.08); }
 #address-suggestions li:hover, #address-suggestions li.active { background: rgba(250,103,0,0.08); color: var(--cyan); }
@@ -1632,6 +1639,18 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
      .dark-mode-pending / seasonal-* classes are still present. The unscoped variants
      below catch that case. Placed LAST so it wins the cascade over every dark rule.
    ============================================================================ */
+
+/* Phone toolbar: tighten the buttons so HOME … CLEAR and the theme button all fit on one
+   row on a normal-size iPhone (same rule on every form). */
+@media (max-width: 430px) {
+  .action-bar { gap: 2px !important; padding-left: 3px !important; padding-right: 3px !important; }
+  .action-bar .btn, .action-bar .ab-btn { padding: 6px 4px !important; letter-spacing: 0 !important; }
+}
+@media (max-width: 380px) {
+  .action-bar { gap: 2px !important; padding-left: 2px !important; padding-right: 2px !important; }
+  .action-bar .btn, .action-bar .ab-btn { font-size: 8.5px !important; padding: 6px 3px !important; letter-spacing: 0 !important; }
+  .action-bar .theme-toggle-btn { width: 32px !important; height: 32px !important; }
+}
 </style>
 <script src="../update-banner.js"></script>
 </head>
@@ -1679,9 +1698,9 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
   <a class="ab-btn" onclick="printForm()" style="cursor:pointer; display:none;">📄 PDF</a>
   <a class="ab-btn" onclick="saveFillablePdf()" style="cursor:pointer;">📝 PDF✎</a>
   <a class="ab-btn" id="btn-capture" onclick="saveSmart()" style="cursor:pointer;">📸 CAPTURE</a>
-  <a class="ab-btn" onclick="confirmClear()" style="cursor:pointer;">🗑 CLEAR</a>
   <a class="ab-btn" onclick="document.getElementById('load-draft-input').click()" style="cursor:pointer;">📂 LOAD</a>
   <input type="file" id="load-draft-input" accept=".json,.pdf,.xlsx" style="display:none;" onchange="loadDraftFile(this)">
+  <a class="ab-btn" onclick="confirmClear()" style="cursor:pointer;">🗑 CLEAR</a>
   <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
     <svg class="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
@@ -1992,8 +2011,8 @@ body.dark-mode .action-bar .theme-toggle-btn { background: rgba(0,255,200,0.08);
 
   <div class="footer">
     <span class="footer-text">GENERATOR INSTALLATION ESTIMATE · CONFIDENTIAL</span>
-    <span id="copyright-span" style="font-family:'Share Tech Mono',monospace;font-size:var(--fs-phone-ver-span);color:var(--text-dim);letter-spacing:1px;">&copy; 2026 Always On Generators</span>
-    <span id="ver-span" style="font-family:'Share Tech Mono',monospace;">Ver. 1.2A</span>
+    <span id="copyright-span" style="font-family:'Share Tech Mono',monospace;font-size:var(--fs-phone-ver-span);color:var(--text-dim);letter-spacing:1px;">&copy; <span data-aog-year>2026</span> Always On Generators</span>
+    <span id="ver-span" data-aog-version style="font-family:'Share Tech Mono',monospace;"></span>
   </div>
   <div class="page-corner-bl"></div>
   <div class="page-corner-br"></div>
@@ -4414,62 +4433,39 @@ function doClearForm() {
 }
 
 // ── ADDRESS AUTOCOMPLETE ──
-var MAPBOX_TOKEN = 'pk.eyJ1IjoicHJvamVjdHdyYXBwZXIiLCJhIjoiY201d2k1eHU3MDAwajJrbzU2a2c5dW40NSJ9.WJlNJ4o5CqBhWpHKMKOzIQ';
-var SW_FLORIDA_BBOX   = '-82.2,26.0,-81.2,27.0';
-var SW_FLORIDA_CENTER = '-81.76,26.14';
 
-function isFloridaAddress(pn, addr) {
-  if (addr && addr.state) { var s=addr.state.toLowerCase(); if(s==='florida'||s==='fl') return true; }
-  if (!pn) return false;
-  var p = pn.toLowerCase();
-  return p.includes('florida') || /,\s*fl\b/.test(p) || /\bfl\s+\d{5}/.test(p);
+// One way to put a looked-up address in the form (typed suggestion or 📍 GPS):
+// street in the Address box, "City, ST ZIP" in the City/State/ZIP box.
+function fillAddr(it) {
+  var ai = document.getElementById('address'), a2 = document.getElementById('address2');
+  if (ai) ai.value = it.street || it.value;
+  if (a2) a2.value = [it.city, [it.state, it.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 }
 
 function setupAddressAutocomplete() {
   var input = document.getElementById('address');
   var list  = document.getElementById('address-suggestions');
   if (!input || !list) return;
-  var debounce;
+  var debounce, seq = 0;
 
   function updateAriaExpanded(open) {
     input.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
-  function renderResults(results, source) {
+  function renderResults(results) {
     list.innerHTML = '';
     if (results.length === 0) { list.classList.remove('open'); updateAriaExpanded(false); return; }
     results.forEach(function(item) {
       var li = document.createElement('li');
       li.setAttribute('role','option');
-      var isFlorida, handler;
-      if (source === 'mapbox') {
-        li.textContent = item.place_name;
-        isFlorida = isFloridaAddress(item.place_name, null);
-        handler = function(e) {
-          e.preventDefault();
-          var parts = item.place_name.split(',').map(function(p) { return p.trim(); });
-          input.value = parts[0] || '';
-          var a2 = document.getElementById('address2'); if (a2) a2.value = parts.slice(1).join(', ') || '';
-          list.classList.remove('open'); updateAriaExpanded(false); list.innerHTML = '';
-          saveDraft();
-        };
-      } else {
-        li.textContent = item.display_name;
-        isFlorida = isFloridaAddress(item.display_name, item.address);
-        handler = function(e) {
-          e.preventDefault();
-          var a = item.address || {};
-          var street = ((a.house_number||'') + ' ' + (a.road||'')).trim() || item.display_name.split(',')[0];
-          var city   = a.city || a.town || a.village || a.county || '';
-          var state  = a.state || '';
-          var zip    = a.postcode || '';
-          input.value = street;
-          var a2 = document.getElementById('address2'); if (a2) a2.value = [city,state,zip].filter(Boolean).join(', ');
-          list.classList.remove('open'); updateAriaExpanded(false); list.innerHTML = '';
-          saveDraft();
-        };
-      }
-      if (isFlorida) { li.style.fontWeight='bold'; li.style.color='var(--cyan)'; }
+      li.textContent = item.label;
+      var handler = function(e) {
+        e.preventDefault();
+        fillAddr(item);
+        list.classList.remove('open'); updateAriaExpanded(false); list.innerHTML = '';
+        saveDraft();
+      };
+      if (item.fl) li.classList.add('fl');   // bold, accent color — teal in dark mode (CSS below)
       li.addEventListener('mousedown', handler);
       li.addEventListener('mouseenter', function() { this.classList.add('active'); });
       li.addEventListener('mouseleave', function() { this.classList.remove('active'); });
@@ -4478,33 +4474,15 @@ function setupAddressAutocomplete() {
     list.classList.add('open'); updateAriaExpanded(true);
   }
 
-  function tryNominatim(q) {
-    fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=20&countrycodes=us&viewbox=-82.2,27.0,-81.2,26.0&bounded=1&q=' + encodeURIComponent(q), { headers: { 'Accept-Language':'en', 'User-Agent':'AOG-Estimate-Form' } })
-      .then(function(r) { return r.json(); })
-      .then(function(results) {
-        if (!results || results.length === 0) { list.classList.remove('open'); updateAriaExpanded(false); list.innerHTML=''; return; }
-        var fl = results.filter(function(r) { return isFloridaAddress(r.display_name,r.address); });
-        var ot = results.filter(function(r) { return !isFloridaAddress(r.display_name,r.address); });
-        renderResults(fl.concat(ot).slice(0,8), 'nominatim');
-      })
-      .catch(function() { list.classList.remove('open'); updateAriaExpanded(false); list.innerHTML=''; });
-  }
-
   input.addEventListener('input', function() {
     clearTimeout(debounce);
     var q = input.value.trim();
-    if (q.length < 1) { list.classList.remove('open'); updateAriaExpanded(false); return; }
+    if (q.length < 3) { list.classList.remove('open'); updateAriaExpanded(false); return; }
     debounce = setTimeout(function() {
-      fetch('https://api.mapbox.com/geocoding/v5/mapbox.places/' + encodeURIComponent(q) + '.json?access_token=' + MAPBOX_TOKEN + '&country=US&types=address&autocomplete=true&limit=20&proximity=' + SW_FLORIDA_CENTER + '&bbox=' + SW_FLORIDA_BBOX)
-        .then(function(r) { if(!r.ok) throw new Error('err'); return r.json(); })
-        .then(function(data) {
-          if (!data.features || data.features.length===0) { tryNominatim(q); return; }
-          var fl=[], ot=[];
-          data.features.forEach(function(f) { (isFloridaAddress(f.place_name,null) ? fl : ot).push(f); });
-          renderResults(fl.concat(ot).slice(0,8), 'mapbox');
-        })
-        .catch(function() { tryNominatim(q); });
-    }, 150);
+      var mine = ++seq;
+      // Shared lookup in ../address-lookup.js: Mapbox Geocoding v6, US Census check as the backup
+      AOGAddress.search(q).then(function(res) { if (mine === seq) renderResults(res); });
+    }, 200);
   });
 
   document.addEventListener('click', function(e) {
@@ -4542,22 +4520,13 @@ function setupGpsButton() {
     announce('Getting your location…');
     navigator.geolocation.getCurrentPosition(
       function(pos) {
-        fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + pos.coords.latitude + '&lon=' + pos.coords.longitude + '&addressdetails=1', { headers:{'Accept-Language':'en','User-Agent':'AOG-Estimate-Form'} })
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
+        AOGAddress.reverse(pos.coords.latitude, pos.coords.longitude)
+          .then(function(it) {
             btn.disabled = false;
-            if (data && data.address) {
-              var a = data.address;
-              var street = (a.house_number && a.road) ? a.house_number+' '+a.road : (a.road || data.display_name.split(',')[0]);
-              var city   = (a.city||a.town||a.village||a.county||'') + (a.state?', '+a.state:'') + (a.postcode?' '+a.postcode:'');
-              var ai = document.getElementById('address');
-              var a2 = document.getElementById('address2');
-              if (ai) ai.value = street;
-              if (a2) a2.value = city;
-              announce('✓ Location found');
-              saveDraft();
-              setTimeout(function() { if (status) status.style.display='none'; }, 3000);
-            }
+            fillAddr(it);
+            announce('✓ Location found');
+            saveDraft();
+            setTimeout(function() { if (status) status.style.display='none'; }, 3000);
           })
           .catch(function() { btn.disabled=false; announce('Location lookup failed — please enter address manually'); });
       },
@@ -5481,5 +5450,6 @@ setTimeout(adjustTopPadding, 600);
   apply(0);
 })();
 </script>
+<script src="../aog-footer.js"></script>
 </body>
 </html>
