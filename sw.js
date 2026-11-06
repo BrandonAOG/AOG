@@ -21,7 +21,7 @@
 // 52-file re-download. A literal prefix could not fix it either: 'aog-forms-v'
 // is itself a prefix of 'aog-forms-vTEST2.5.0', so public would still eat test.
 // The scope is different by construction, so this cannot collide.
-var CACHE_VERSION = 'v3.0.0';
+var CACHE_VERSION = 'v3.0.1';
 var CACHE_PREFIX  = 'aog-forms::' + self.registration.scope + '::';
 var CACHE_NAME    = CACHE_PREFIX + CACHE_VERSION;
 
@@ -76,27 +76,31 @@ var cacheProgress = { percent: 0, label: '', done: false };
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '🎉 VERSION 3.0 — here is what is new',
-  '📍 ADDRESSES — address suggestions on every job form, with better house numbers and units; 📍 GPS button in every address box fills in where you are standing',
-  '🧭 FORMS — same buttons on every form (HOME · PDF✎ · CAPTURE · LOAD · CLEAR), all on one row on iPhone; Site Visit and Elect Install PDF / CAPTURE fixed when YES/NO boxes are checked',
-  '🔌 ELECT INSTALL / SITE VISIT — page 2: fittings now read Weatherproof Rings and Weatherproof K.O.; empty length boxes no longer show a dash; Elect Install page 2 now prints exactly like Site Visit, and CAPTURE matches PDF✎',
-  '✅ QC CHECKLIST — page 2 customer name and date fill in from page 1',
-  '🏠 PROPERTY LOOKUP — faster first search after opening the app',
-  '🔥 GAS CALC — CSST sized from the Gastite / FlashShield and TracPipe CounterStrike charts, both charts in Code Reference; LP altitude derate on Protector XG 25/30kW',
-  '📐 ELECTRICAL — voltage drop by conduit type (AC impedance), small-wire breaker limits, 10 A breaker; Conduit Fill USE-2 / MTW sizes corrected; Trench Depth: cathodic protection note for propane steel pipe',
-  '🧱 CONCRETE — 20 kg / 30 kg bag counts corrected',
-  '✏️ SITE ANNOTATOR — Undo / Redo fixed: one tap undoes one change',
-];
+  '🔒 SECURITY — hardened how imported PDFs, Excel files and outside links are handled',
+  '🗺️ SITE ANNOTATOR — fixed a PDF export that could come out blank-white with only your markups; site plans built from scanned/printed image strips now always keep their background',
+  '🔧 OFFLINE FILES — "Fix Now" now re-downloads anything that didn\'t finish caching (even on a flaky connection), and the message names exactly which files are missing',
+  '🔺 SITE ANNOTATOR — the ATS equipment symbol is now a point-down triangle with "ATS" upright, so it reads right when you drop it on the plan',
+  '📐 SITE ANNOTATOR — the scale box now has a dropdown of the common engineer\'s scales (1"=10ft through 1"=100ft); you can still type any odd scale by hand',
+  '🏠 HOME SCREEN — tightened up so your tools show without scrolling, calmer background, and you can now hold-and-drag your favorites to reorder them',
+  '📦 PULL BOX — U-pulls now size the box WIDTH for the 6× same-conductor spacing (314.28(A)(2)); before, that spacing was only drawn, so the width could read "—" and pass too small',
+  '⚡ VOLTAGE DROP — single-phase, three-phase and DC are now three separate modes; DC uses Table 8 resistance only (no power factor or reactance), and power factor stays available on the AC modes',
+  '💡 QUICK CALC — added plain-English hints under the fields for beginners (Voltage Drop and Generator Load), a fuller nominal-voltage dropdown per mode, power factor now defaults to 1, and the Ohm\'s-law wheel key now spells out Amps / Volts / Ohms / Watts in full',
+]
 //
 // ============================================================
 
 var PRECACHE_URLS = [
+  './xlsx.full.min.js',   // vendored SheetJS 0.20.3 (CVE-2023-30533 / CVE-2024-22363 fixed; not on cdnjs)
   './',
   './index.html',
   './offline.html',
   './manifest.json',
   './logo.png',
-  './sw.js',
+  // NOTE: the service worker's own script is deliberately NOT precached. The browser
+  // keeps and runs the active sw.js offline on its own, so caching it adds nothing — and
+  // the Cache API treats the SW script specially (revalidation/redirect handling), so it
+  // could persistently read back as "missing" in the health check and never repair. That
+  // was the stuck "1 offline file missing: sw.js" report. Leaving it out fixes it for good.
   './update-banner.js',
   './sounds.js',
   './clean-capture.js',
@@ -135,7 +139,6 @@ var PRECACHE_CDN = [
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
@@ -302,7 +305,11 @@ function ensurePrecached() {
       return cache.match(absUrl).then(function(hit) {
         if (hit) return;
         console.log('[SW] Repairing missing precache entry:', absUrl);
-        return cache.add(absUrl).catch(function(err) {
+        // {cache:'reload'} forces a fresh network fetch, bypassing a stale 404 the browser
+        // may have cached for this URL (e.g. the file was fetched before GitHub Pages finished
+        // deploying it). Without this, "Fix Now" can keep re-storing the same stale miss and
+        // never recover — which is exactly the "Fix does nothing on wifi" symptom.
+        return cache.add(new Request(absUrl, { cache: 'reload' })).catch(function(err) {
           console.warn('[SW] Repair failed (will retry next activation):', absUrl, err);
         });
       });
@@ -672,12 +679,15 @@ self.addEventListener('message', function(event) {
         var all = PRECACHE_URLS.concat(PRECACHE_CDN).concat(PRECACHE_FONTS);
         return Promise.all(all.map(function (url) {
           var absUrl = url.startsWith('http') ? url : new URL(url, scope).href;
-          return cache.match(absUrl).then(function (hit) { return hit ? 0 : 1; })
-                      .catch(function () { return 0; });   // unreadable != missing
-        })).then(function (misses) {
-          var missing = misses.reduce(function (a, b) { return a + b; }, 0);
+          return cache.match(absUrl).then(function (hit) { return hit ? null : absUrl; })
+                      .catch(function () { return null; });   // unreadable != missing
+        })).then(function (results) {
+          // Report WHICH files are missing, not just how many — so the page (and the tech)
+          // can see exactly what to re-upload instead of guessing.
+          var missingList = results.filter(function (u) { return u; });
           port.postMessage({ action: 'CACHE_HEALTH', total: all.length,
-                             missing: missing, version: DISPLAY_VERSION });
+                             missing: missingList.length, missingList: missingList,
+                             version: DISPLAY_VERSION });
         });
       }).catch(function () {
         // Never leave the page hanging on a reply it is awaiting.
