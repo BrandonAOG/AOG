@@ -241,6 +241,14 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     font-size:13px;letter-spacing:.04em;padding:0 15px;border-radius:7px;cursor:pointer;text-transform:uppercase;
   }
   .search #go:hover{background:var(--signal-hover)}
+  /* GPS lives INSIDE the field (shares the spot with the × clear button), so the search row keeps
+     its baseline height — no extra element in the flow that could nudge the mobile sheet layout. */
+  .search #gps{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;
+    padding:0;margin:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+    font-size:17px;line-height:1;cursor:pointer;opacity:.75}
+  .search #gps:hover{opacity:1}
+  .search #gps.locating{opacity:.4;pointer-events:none}
+  .search #gps.hidden{display:none}
   .hint{margin-top:8px;font-size:10.5px;color:var(--faint);font-family:var(--mono);line-height:1.5}
   .hint b{color:var(--dim)}
 
@@ -1283,7 +1291,10 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
          two rows, which is why it looked fine at first and then "got wide".
          --tbh is the measured toolbar height (see the --abh sync block). */
       height:var(--sheet-h, 50vh);
-      max-height:calc(100vh - var(--abh,48px) - var(--tbh,40px) - 14px);
+      /* Sheet sits ABOVE the map toolbar on phones: its top reaches just under the action bar and
+         the toolbar (z-index lowered below the panel, see .layerswitch) tucks behind it while you
+         search. Drag the sheet down when you want the toolbar for map work. No --tbh math needed. */
+      max-height:calc(100vh - var(--abh,48px) - 8px);
       border-radius:18px 18px 0 0;border-left:none;border-right:none;border-bottom:none;
       box-shadow:0 -10px 40px var(--shadow-strong);
       transition:height .28s cubic-bezier(.22,1,.36,1),transform .28s cubic-bezier(.22,1,.36,1);
@@ -1323,7 +1334,8 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
     .searchrow{flex-direction:column;gap:8px}
     .search input,.search button{font-size:16px}   /* 16px stops iOS zoom-on-focus */
     .search button{padding:13px 18px;width:100%}
-    .search input{padding:13px}
+    .search #gps{width:24px;padding:0}   /* in-field icon stays compact even where buttons go full-width */
+    .search input{padding:13px;padding-right:34px}   /* room for the in-field icon */
     .hint{font-size:11px}
     /* keep body scrolling inside the sheet only */
     .body{-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
@@ -1340,6 +1352,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
        nothing needs reordering. Safe because .basemap-menu is position:fixed and therefore escapes
        this container's overflow — an absolutely-positioned dropdown would have been clipped. */
     .layerswitch{bottom:auto;top:calc(var(--abh,48px) + 8px);left:12px;right:12px;margin-inline:0;
+      z-index:999;   /* below #panel (1000): toolbar shows over the map when the sheet is down, tucks behind the sheet when it's up */
       width:auto;overflow-x:auto;overflow-y:hidden;justify-content:flex-start;
       /* ⚠️ NO -webkit-overflow-scrolling:touch HERE. On iOS that promotes the scroller to its own
          hardware-composited layer, and a composited scroller acts as the CONTAINING BLOCK for
@@ -2001,6 +2014,7 @@ for willful infringement under 17 U.S.C. § 504, plus attorney's fees.
       <div class="searchrow">
         <div class="inputwrap">
           <input id="addr" type="text" placeholder="Enter a Florida address…" autocomplete="off" autocapitalize="words" inputmode="text">
+          <button id="gps" type="button" aria-label="Use my current location" title="Use my current location">📍</button>
           <button class="clearbtn" id="clearBtn" aria-label="Clear search" tabindex="-1">×</button>
         </div>
         <button id="go">Find</button>
@@ -35162,7 +35176,10 @@ addrEl.addEventListener('blur',()=>setTimeout(()=>{
 /* ---------- Clear button ---------- */
 const clearBtn = document.getElementById('clearBtn');
 function updateClearBtn(){
-  clearBtn.classList.toggle('visible', addrEl.value.trim().length > 0);   // was untrimmed: a single space showed the ×
+  const has = addrEl.value.trim().length > 0;
+  clearBtn.classList.toggle('visible', has);   // was untrimmed: a single space showed the ×
+  const g = document.getElementById('gps');    // GPS icon shares the slot: show it only when the box is empty
+  if (g) g.classList.toggle('hidden', has);
 }
 /* An empty box means "show me Recent" — whatever emptied it. Backspacing the last character used
    to leave the field empty with nothing offered, because the only thing that ever opened Recent was
@@ -35205,6 +35222,48 @@ const _onClear = e => {
 };
 clearBtn.addEventListener('touchstart', _onClear, { passive:false });
 clearBtn.addEventListener('mousedown',  _onClear);
+
+/* ---------- GPS: use my current location ----------
+   Reuses the map-tap path (runLookup with viaMap:true) — the most reliable way to land on the right
+   parcel — so "where I'm standing" behaves exactly like tapping that spot on the map. No geocoding
+   and no map token needed: the browser supplies the coordinates, the existing point lookup does the
+   rest. */
+const gpsBtn = document.getElementById('gps');
+if (gpsBtn) {
+  gpsBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      setSearchStatus('err', 'This device can’t share its location — type the address instead.');
+      return;
+    }
+    gpsBtn.classList.add('locating');
+    const done = () => gpsBtn.classList.remove('locating');
+    setSearchStatus('busy', 'Getting your location…');
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        done();
+        const { latitude, longitude } = pos.coords || {};
+        if (!isFinite(latitude) || !isFinite(longitude)) {
+          setSearchStatus('err', 'Couldn’t read your location — type the address instead.');
+          return;
+        }
+        try { addrEl.value = ''; updateClearBtn(); hideSuggest(); hideHistory(); } catch (e) {}
+        try { map.setView([latitude, longitude], 19); } catch (e) {}
+        newSearch();
+        runLookup(latitude, longitude, { viaMap: true });   // same path as a map tap
+      },
+      err => {
+        done();
+        const msg = (err && err.code === 1)
+            ? 'Location permission denied — allow it in your browser, or type the address.'
+          : (err && err.code === 3)
+            ? 'Location timed out — try again, or type the address.'
+            : 'Couldn’t get your location — type the address instead.';
+        setSearchStatus('err', msg);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+}
 
 /* ---------- Search history ---------- */
 const histEl = document.getElementById('historyDrop');
