@@ -21,7 +21,7 @@
 // 52-file re-download. A literal prefix could not fix it either: 'aog-forms-v'
 // is itself a prefix of 'aog-forms-vTEST2.5.0', so public would still eat test.
 // The scope is different by construction, so this cannot collide.
-var CACHE_VERSION = 'v3.0.1';
+var CACHE_VERSION = 'v3.1.0';
 var CACHE_PREFIX  = 'aog-forms::' + self.registration.scope + '::';
 var CACHE_NAME    = CACHE_PREFIX + CACHE_VERSION;
 
@@ -76,15 +76,12 @@ var cacheProgress = { percent: 0, label: '', done: false };
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '🔒 SECURITY — hardened how imported PDFs, Excel files and outside links are handled',
-  '🗺️ SITE ANNOTATOR — fixed a PDF export that could come out blank-white with only your markups; site plans built from scanned/printed image strips now always keep their background',
-  '🔧 OFFLINE FILES — "Fix Now" now re-downloads anything that didn\'t finish caching (even on a flaky connection), and the message names exactly which files are missing',
-  '🔺 SITE ANNOTATOR — the ATS equipment symbol is now a point-down triangle with "ATS" upright, so it reads right when you drop it on the plan',
-  '📐 SITE ANNOTATOR — the scale box now has a dropdown of the common engineer\'s scales (1"=10ft through 1"=100ft); you can still type any odd scale by hand',
-  '🏠 HOME SCREEN — tightened up so your tools show without scrolling, calmer background, and you can now hold-and-drag your favorites to reorder them',
-  '📦 PULL BOX — U-pulls now size the box WIDTH for the 6× same-conductor spacing (314.28(A)(2)); before, that spacing was only drawn, so the width could read "—" and pass too small',
-  '⚡ VOLTAGE DROP — single-phase, three-phase and DC are now three separate modes; DC uses Table 8 resistance only (no power factor or reactance), and power factor stays available on the AC modes',
-  '💡 QUICK CALC — added plain-English hints under the fields for beginners (Voltage Drop and Generator Load), a fuller nominal-voltage dropdown per mode, power factor now defaults to 1, and the Ohm\'s-law wheel key now spells out Amps / Volts / Ohms / Watts in full',
+  '⚡ NEW — ELECTRICAL THEORY (Tools tab): a live panel one-line that shows current flow and fault paths. Tap a wire or load to fault it, break an EGC, swap breaker types, and add a generator, transformer, pool or dock panel, or solar + battery — with a 400 A service and code notes for every setup.',
+  '🧮 LOAD CALC — choose the Standard method (NEC 220 Part III) or the Optional method (220.82).',
+  '⚙️ ESTIMATE — new generator Brand line in front of Size: Generac by default, ⇄ switches to Kohler or Generac/Kohler, or type any brand.',
+  '📝 ESTIMATE + MAINTENANCE — PDF✎ now saves real, editable text instead of a flat picture.',
+  // hidden for now (card hidden on the hub) — put this line back when the walkthrough is shown again:
+  // '✨ NEW — WALKTHROUGH → ESTIMATE (beta, under the Estimate tab): snap a few photos on the job, add notes, and Claude drafts the equipment, electrical + gas materials and a scope to start the estimate. Needs internet and a one-time API-key setup on the device — try it and tell us what you think.',
 ]
 //
 // ============================================================
@@ -110,6 +107,7 @@ var PRECACHE_URLS = [
   './aog-footer.js',
   './seasonal.js',
   './estimate/',
+  './walkthrough/',
   './maintenance/',
   './site-visit/',
   './gas-install/',
@@ -131,7 +129,8 @@ var PRECACHE_URLS = [
   './concrete-calc/',
   './quick-calc/',
   './trench-depth/',
-  './gas-bonding/'
+  './gas-bonding/',
+  './electrical-theory/'
 ];
 
 // CDN assets that must be cached on install for 100% offline support
