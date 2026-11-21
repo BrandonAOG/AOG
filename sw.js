@@ -21,7 +21,7 @@
 // 52-file re-download. A literal prefix could not fix it either: 'aog-forms-v'
 // is itself a prefix of 'aog-forms-vTEST2.5.0', so public would still eat test.
 // The scope is different by construction, so this cannot collide.
-var CACHE_VERSION = 'v3.1.0';
+var CACHE_VERSION = 'v3.1.2';
 var CACHE_PREFIX  = 'aog-forms::' + self.registration.scope + '::';
 var CACHE_NAME    = CACHE_PREFIX + CACHE_VERSION;
 
@@ -76,12 +76,10 @@ var cacheProgress = { percent: 0, label: '', done: false };
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '⚡ NEW — ELECTRICAL THEORY (Tools tab): a live panel one-line that shows current flow and fault paths. Tap a wire or load to fault it, break an EGC, swap breaker types, and add a generator, transformer, pool or dock panel, or solar + battery — with a 400 A service and code notes for every setup.',
-  '🧮 LOAD CALC — choose the Standard method (NEC 220 Part III) or the Optional method (220.82).',
-  '⚙️ ESTIMATE — new generator Brand line in front of Size: Generac by default, ⇄ switches to Kohler or Generac/Kohler, or type any brand.',
-  '📝 ESTIMATE + MAINTENANCE — PDF✎ now saves real, editable text instead of a flat picture.',
-  // hidden for now (card hidden on the hub) — put this line back when the walkthrough is shown again:
-  // '✨ NEW — WALKTHROUGH → ESTIMATE (beta, under the Estimate tab): snap a few photos on the job, add notes, and Claude drafts the equipment, electrical + gas materials and a scope to start the estimate. Needs internet and a one-time API-key setup on the device — try it and tell us what you think.',
+  '🗺️ PROPERTY LOOKUP — Collier address labels sit on their own lot; townhomes and villas show unit numbers like Collier GIS.',
+  '👤 PROPERTY LOOKUP — current Collier owners: live from the county\'s Parcels Join, plus a data file rebuilt from the appraiser\'s 11/19 records.',
+  '🏢 PROPERTY LOOKUP — tapping a Collier condo building asks WHICH UNIT? again, with each owner.',
+  '🛠️ PROPERTY LOOKUP — fixed Collier "bad path" data sources and the 📝 certificate opening a blank page on iPhone.',
 ]
 //
 // ============================================================
@@ -632,6 +630,18 @@ function cacheFirst(request, cacheName) {
         var responseClone = networkResponse.clone();
         caches.open(cacheName || CACHE_NAME).then(function(cache) {
           putUnpadded(cache, request, responseClone);
+          // A data file saved under a NEW ?v= replaces the old one: drop every other copy of the same
+          // file so a rebuilt county file (collier_compact 2026-08-24c → 2026-11-19) doesn't leave
+          // the previous 4-11 MB sitting in storage forever.
+          if (cacheName === DATA_CACHE) {
+            var want = new URL(request.url);
+            cache.keys().then(function(keys) {
+              keys.forEach(function(k) {
+                var u = new URL(k.url);
+                if (u.pathname === want.pathname && u.search !== want.search) cache.delete(k);
+              });
+            }).catch(function(){});
+          }
         }).catch(function(){});   // same: caching is best-effort, the fetch already succeeded
       }
       return networkResponse;
