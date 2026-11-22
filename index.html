@@ -343,6 +343,181 @@ body.fav-dragging-active, body.fav-dragging-active * { cursor: grabbing !importa
   window.addEventListener('unhandledrejection',function(e){ var r=e.reason; log('Unhandled promise rejection: '+(r&&r.message?r.message:r), r&&r.stack?String(r.stack).split('\n')[1]:''); });
 })();
 </script>
+<style>
+/* ═══ LAUNCH INTRO (v3.1.3) — gold glitter swirls into the logo as it spins up, the name, the Keilholz signature,
+   the tagline, then an arc blast that blows the hub open. Once per app launch; a tap skips it at any point. ═══ */
+@font-face{font-family:"AOG Sig";src:url(data:font/woff2;base64,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) format("woff2");font-display:block}  /* Allura (SIL Open Font License), cut down to the letters of "Keilholz" — 2 KB */
+#aog-intro{position:fixed;inset:0;z-index:100002;overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:opacity .45s ease;--u:min(1vw,.5625vh)}
+#aog-intro.out{opacity:0}   /* keeps catching taps while it fades, so the skip tap can't land on a hub card underneath */
+#aog-intro .ai-bg{position:absolute;inset:0;background:radial-gradient(ellipse 90% 60% at 50% 45%,#0d1430 0%,#060913 70%)}   /* this layer gets the hole the blast blows open */
+#aog-intro canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#aog-intro .ai-l{position:absolute;left:50%;top:38%;width:calc(var(--u)*36);height:calc(var(--u)*36);margin:calc(var(--u)*-18) 0 0 calc(var(--u)*-18)}
+#aog-intro .ai-logo{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 50%;border-radius:50%;opacity:0}
+#aog-intro .ai-w{position:absolute;left:0;right:0;top:61%;text-align:center;font:900 calc(var(--u)*10.6)/1.06 "Arial Black","Segoe UI Black",system-ui,-apple-system,sans-serif;color:#FCD34D;letter-spacing:.03em;text-shadow:0 0 calc(var(--u)*2.2) rgba(251,191,36,.55);opacity:0;transform:translateY(-50%)}
+#aog-intro .ai-w span{display:block;white-space:nowrap}
+#aog-intro .ai-by{position:absolute;left:0;right:0;top:calc(73% + var(--u)*2.2);text-align:center;padding-left:.42em;font:600 calc(var(--u)*2.3)/1 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:.42em;color:#8892ad;opacity:0}   /* maker's credit over the signature */
+#aog-intro .ai-sig{position:absolute;left:0;right:0;top:73%;height:calc(var(--u)*16);pointer-events:none}
+#aog-intro .ai-sig svg{width:100%;height:100%;overflow:visible}
+#aog-intro .ai-tag{position:absolute;left:0;right:0;top:85%;text-align:center;font:700 calc(var(--u)*3.3)/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.28em;color:#7fd8ff;white-space:pre}
+#aog-intro .ai-ring{position:absolute;left:50%;top:58%;width:0;height:0;border-radius:50%;transform:translate(-50%,-50%);border:calc(var(--u)*1.6) solid #e6f4ff;box-shadow:0 0 calc(var(--u)*6) calc(var(--u)*3) rgba(120,200,255,.85),inset 0 0 calc(var(--u)*6) calc(var(--u)*2) rgba(120,200,255,.7);pointer-events:none;opacity:0}
+#aog-intro .ai-skip{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);text-align:center;font:600 12px system-ui,-apple-system,sans-serif;letter-spacing:.12em;color:rgba(203,213,240,.45);opacity:0;animation:aiSkip .4s ease 1.2s forwards}
+@keyframes aiSkip{to{opacity:1}}
+</style>
+<script>
+(function(){
+  'use strict';
+  // Once per launch: sessionStorage is wiped when the app (or browser tab) is closed, so coming back to the
+  // hub from a tool doesn't replay it. Skipped when Battery Saver is on (low battery / Reduce Motion).
+  // Add ?intro to the hub's address to replay it any time. Automated test browsers skip it (they'd be clicking
+  // the intro instead of the hub) unless ?intro is there.
+  var KEY='aog-intro-shown', force=/[?&]intro\b/.test(location.search);
+  if(!force){
+    if(navigator.webdriver) return;
+    try{ if(sessionStorage.getItem(KEY)) return; sessionStorage.setItem(KEY,'1'); }catch(e){ return; }
+    if(window.AOGSaver&&window.AOGSaver.on) return;
+    if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  }
+  // While the intro is up, the rest of the hub holds back: sounds.js plays only the intro's own sounds (no
+  // background bed, no bolt/zap effects) and the hub's "update ready" card waits until it has finished.
+  var waiting=[];
+  window.AOGIntro={ active:true, onDone:function(fn){ if(window.AOGIntro.active) waiting.push(fn); else fn(); } };
+
+  // ── timing (seconds from launch) — "version 6" ──
+  var T={ swirl:.8, spin:.5, spinDur:1.6, name:1.8, sign:2.7, signDur:1.3, tag:4.1, tagStep:.04, hold:.35, charge:1.2, open:1.4 };
+  var TAG='// POWER WHEN YOU NEED IT //';
+  var tagEnd=T.tag+TAG.length*T.tagStep, blastAt=Math.max(T.sign+T.signDur+.5,tagEnd)+T.hold, flashAt=blastAt+T.charge, END=flashAt+.3+T.open;
+
+  // The signature's pen strokes: the centre line of each letter of "Keilholz" (traced from the Allura script), in
+  // writing order — gold ink is laid down along these, then the finished script fades in over them.
+  var SIG_INK=["M160.8 92.2C160.8 92.7 160.8 93.9 161.2 94.8C161.8 95.6 162.9 96.7 163.8 97.2C164.6 97.8 165.2 97.9 166.2 98.0C167.3 98.1 168.8 98.2 170.0 98.0C171.2 97.8 172.5 97.4 173.8 96.8C175.0 96.1 176.1 95.5 177.5 94.2C178.9 93.0 180.6 91.5 182.2 89.5C183.9 87.5 185.5 85.2 187.2 82.5C189.0 79.8 192.0 74.8 193.0 73.2", "M188.8 51.0C189.5 50.8 191.5 50.8 193.2 50.0C195.0 49.2 197.8 46.9 199.2 46.2C200.7 45.6 201.3 46.0 201.8 46.0", "M202.0 46.2C201.9 47.0 202.7 46.4 201.2 50.5C199.8 54.6 194.8 67.4 193.5 70.8", "M195.8 71.8C196.4 71.0 198.8 68.1 199.8 67.0C200.8 65.9 201.2 65.4 201.8 65.0C202.3 64.6 202.8 64.6 203.0 64.5", "M202.0 45.8C202.5 44.8 203.9 41.2 204.8 40.0C205.6 38.8 206.6 38.5 207.0 38.2", "M203.2 64.5C203.8 66.1 205.4 71.6 206.2 74.0C207.1 76.4 207.7 77.2 208.5 78.8C209.3 80.2 210.2 81.7 211.2 83.0C212.3 84.3 213.4 85.7 214.8 86.8C216.1 87.8 217.9 88.9 219.5 89.2C221.1 89.6 223.2 89.1 224.2 88.8C225.3 88.4 225.5 87.6 225.8 87.0C226.0 86.4 226.2 86.1 226.0 85.2C225.8 84.4 225.1 82.7 224.8 82.0C224.4 81.3 223.9 81.2 223.8 81.0", "M203.5 62.0C206.5 59.6 216.5 51.3 221.5 47.5C226.5 43.7 230.9 40.9 233.5 39.2C236.1 37.6 236.6 38.0 237.2 37.8", "M238.8 77.2C238.9 77.3 238.7 77.7 239.5 77.5C240.3 77.3 242.2 77.0 243.8 76.2C245.3 75.5 247.6 74.2 249.0 73.2C250.4 72.3 251.4 71.4 252.2 70.5C253.1 69.6 253.7 68.7 254.0 67.8C254.3 66.8 254.2 65.5 254.0 64.8C253.8 64.0 253.4 63.8 252.8 63.5C252.1 63.2 251.7 62.7 250.0 63.2C248.3 63.8 245.2 65.2 242.8 67.0C240.3 68.8 237.0 72.3 235.2 74.2C233.5 76.2 233.1 77.5 232.5 78.8C231.9 80.0 231.8 80.8 231.8 81.8C231.7 82.7 232.0 83.5 232.2 84.2C232.5 85.0 232.7 85.7 233.2 86.2C233.8 86.8 234.8 87.4 235.5 87.8C236.2 88.1 236.9 88.2 237.8 88.2C238.6 88.3 239.2 88.5 240.5 88.2C241.8 88.0 243.5 87.7 245.2 87.0C247.0 86.3 249.2 85.0 250.8 84.0C252.3 83.0 253.1 82.3 254.5 81.0C255.9 79.7 257.9 77.2 259.0 76.2C260.1 75.3 260.9 75.6 261.2 75.5", "M261.5 75.8C261.2 77.1 260.2 82.1 260.0 83.8C259.8 85.4 260.0 85.1 260.5 85.8C261.0 86.4 261.8 87.3 262.8 87.5C263.7 87.7 265.2 87.2 266.0 87.0C266.8 86.8 266.7 86.8 267.5 86.2C268.3 85.7 269.2 85.1 270.8 83.8C272.2 82.4 275.1 79.1 276.5 78.0C277.9 76.9 278.6 77.4 279.0 77.2", "M268.0 64.8C267.7 65.0 267.0 64.8 266.2 66.0C265.5 67.2 264.5 70.4 263.8 72.0C263.0 73.6 261.9 74.9 261.5 75.5", "M270.2 56.5C270.4 56.5 270.8 56.6 271.2 56.2C271.8 55.9 272.5 55.2 273.2 54.2C274.0 53.3 275.1 51.3 275.5 50.8", "M279.2 77.5C279.2 78.5 279.0 82.5 279.0 83.8C279.0 85.0 279.1 84.7 279.5 85.2C279.9 85.8 280.6 86.9 281.5 87.2C282.4 87.6 283.9 87.7 285.0 87.5C286.1 87.3 287.3 86.6 288.2 86.0C289.2 85.4 289.4 85.2 290.8 84.0C292.1 82.8 294.2 80.9 296.2 78.8C298.2 76.6 301.4 72.5 302.8 71.0C304.1 69.5 303.9 69.7 304.2 69.5C304.6 69.3 304.7 69.7 304.8 69.8", "M283.8 72.2C283.9 72.3 284.2 72.5 284.5 72.5C284.8 72.5 283.9 73.2 285.2 72.0C286.6 70.8 290.5 67.2 292.8 65.0C295.0 62.8 296.3 61.4 298.5 58.8C300.7 56.1 303.9 51.8 305.8 49.0C307.6 46.2 308.8 43.8 309.5 42.2C310.2 40.7 309.8 40.1 309.8 39.5C309.8 38.9 309.7 38.8 309.5 38.5C309.3 38.2 309.1 37.7 308.5 37.5C307.9 37.3 306.5 37.2 305.8 37.2C305.0 37.3 304.8 37.3 304.0 37.8C303.2 38.2 302.2 38.8 301.0 39.8C299.8 40.8 298.2 42.4 297.0 43.8C295.8 45.1 295.0 46.1 293.8 48.0C292.5 49.9 290.6 52.8 289.2 55.2C287.9 57.7 286.7 60.0 285.5 62.5C284.3 65.0 282.6 68.6 282.0 70.2C281.4 71.9 281.8 72.1 281.8 72.5", "M298.8 88.8C299.2 88.3 300.8 87.0 301.5 86.0C302.2 85.0 303.0 83.3 303.2 82.8", "M303.2 82.2C303.3 81.6 303.2 80.2 303.8 78.5C304.2 76.8 305.8 73.8 306.2 72.2C306.8 70.8 306.7 70.0 306.8 69.5", "M303.5 82.5C304.0 82.3 304.6 83.1 306.2 81.5C307.9 79.9 311.3 75.1 313.2 73.0C315.2 70.9 316.5 69.8 317.8 68.8C319.0 67.7 320.0 67.0 321.0 66.5C322.0 66.0 323.2 65.8 323.8 65.8C324.3 65.7 324.4 66.0 324.5 66.0", "M312.0 64.2C312.1 64.3 312.2 64.6 312.5 64.5C312.8 64.4 311.9 65.2 313.8 63.8C315.6 62.2 321.3 57.6 323.8 55.5C326.2 53.4 326.8 52.6 328.2 51.0C329.7 49.4 331.2 47.6 332.2 46.0C333.3 44.4 334.1 42.5 334.5 41.5C334.9 40.5 334.5 40.2 334.5 39.8C334.5 39.3 334.5 39.1 334.2 38.8C334.0 38.4 333.9 38.0 333.2 37.8C332.6 37.5 331.3 37.2 330.5 37.2C329.7 37.3 329.0 37.6 328.2 38.0C327.5 38.4 327.5 38.1 326.0 39.5C324.5 40.9 321.7 43.3 319.5 46.2C317.3 49.2 314.2 54.5 312.8 57.0C311.3 59.5 311.2 59.8 310.8 61.0C310.3 62.2 310.1 63.5 310.0 64.0", "M324.8 66.2C324.6 66.9 324.7 68.3 324.0 70.0C323.3 71.7 321.5 74.8 320.8 76.5C320.0 78.2 319.7 78.8 319.5 80.2C319.3 81.7 319.2 84.1 319.5 85.2C319.8 86.4 320.6 86.8 321.0 87.2C321.4 87.7 321.4 87.7 322.0 87.8C322.6 87.8 323.6 87.8 324.5 87.5C325.4 87.2 326.2 87.0 327.2 86.2C328.3 85.5 329.5 84.6 331.0 83.2C332.5 81.9 334.8 79.0 336.0 78.0C337.2 77.0 338.1 77.6 338.5 77.5", "M338.8 77.8C338.7 78.5 338.3 80.8 338.5 82.2C338.7 83.7 339.1 85.3 339.8 86.2C340.4 87.2 341.5 87.7 342.5 88.0C343.5 88.3 344.8 88.2 345.8 88.0C346.7 87.8 347.5 87.5 348.2 87.0C349.0 86.5 349.5 86.2 350.5 85.2C351.5 84.2 353.1 82.8 354.2 81.0C355.4 79.2 356.8 76.6 357.5 74.8C358.2 72.9 358.0 70.7 358.2 69.8C358.5 68.8 357.5 69.3 358.8 69.2C360.0 69.2 364.0 69.4 365.8 69.2C367.5 69.1 368.6 68.4 369.5 68.5C370.4 68.6 371.0 69.5 371.2 69.8", "M356.0 67.0C356.0 66.7 356.4 65.8 356.2 65.2C356.1 64.7 355.5 64.0 355.2 63.8C355.0 63.5 355.0 63.6 354.5 63.5C354.0 63.4 353.0 63.0 352.0 63.2C351.0 63.5 350.2 63.6 348.8 64.8C347.3 65.9 344.9 68.1 343.2 70.2C341.6 72.4 339.7 76.3 339.0 77.5", "M370.8 72.8C370.5 73.1 369.9 73.9 369.5 74.8C369.1 75.6 368.7 76.5 368.5 78.0C368.3 79.5 368.2 82.5 368.2 83.8C368.3 85.0 368.4 84.7 368.8 85.2C369.1 85.8 369.8 86.6 370.2 87.0C370.7 87.4 370.8 87.4 371.5 87.5C372.2 87.6 373.2 87.8 374.2 87.5C375.2 87.2 376.1 87.0 377.5 86.0C378.9 85.0 380.8 83.3 382.5 81.8C384.2 80.2 385.9 78.5 387.5 76.5C389.1 74.5 390.8 71.7 392.2 70.0C393.7 68.3 395.0 67.0 396.0 66.2C397.0 65.5 397.5 65.4 398.5 65.2C399.5 65.1 399.9 64.9 402.0 65.2C404.1 65.6 409.5 67.1 411.0 67.5", "M373.0 72.2C373.1 72.3 373.0 73.0 373.8 72.5C374.5 72.0 375.7 71.2 377.8 69.2C379.8 67.2 384.2 62.7 386.2 60.5C388.2 58.3 388.4 58.0 389.8 56.2C391.1 54.5 393.2 51.7 394.5 49.8C395.8 47.8 396.8 46.1 397.5 44.8C398.2 43.4 398.8 42.5 399.0 41.5C399.2 40.5 399.0 39.2 398.8 38.5C398.5 37.8 398.1 37.7 397.8 37.5C397.4 37.3 397.2 37.2 396.5 37.2C395.8 37.3 394.3 37.3 393.2 37.8C392.2 38.2 391.4 38.8 390.2 39.8C389.1 40.8 387.5 42.4 386.2 43.8C385.0 45.1 384.3 46.1 383.0 48.0C381.7 49.9 380.4 51.6 378.5 55.2C376.6 58.9 372.7 67.3 371.5 69.8", "M385.8 87.5C386.4 87.0 388.5 85.2 389.8 84.8C391.0 84.3 392.5 85.0 393.0 85.0", "M393.2 85.0C394.8 85.8 400.8 88.9 402.8 89.8C404.7 90.6 403.7 90.1 404.8 90.0C405.8 89.9 407.8 89.7 409.0 89.2C410.2 88.8 410.8 88.3 412.0 87.5C413.2 86.7 414.2 86.0 416.0 84.2C417.8 82.5 421.4 79.0 423.0 77.2C424.6 75.5 425.1 74.5 425.5 74.0", "M417.8 65.0C417.2 65.4 415.4 66.8 414.2 67.2C413.1 67.7 411.7 67.1 411.0 67.5C410.3 67.9 410.4 68.9 410.0 69.5C409.6 70.1 411.0 68.8 408.5 71.0C406.0 73.2 397.5 80.5 395.0 82.8C392.5 85.0 393.5 84.4 393.2 84.8"];
+  var el=document.createElement('div'); el.id='aog-intro'; el.setAttribute('aria-hidden','true');
+  el.innerHTML='<div class="ai-bg"><div class="ai-l"><img class="ai-logo" alt="" src="./logo.png"></div><div class="ai-w"><span>ALWAYS ON</span><span>GENERATORS</span></div>'+
+    '<div class="ai-by">BUILT BY</div><div class="ai-sig"><svg viewBox="0 0 600 130"><defs><linearGradient id="aiSg" x1="0" x2="1"><stop offset="0" stop-color="#F59E0B"/><stop offset=".5" stop-color="#FDE68A"/><stop offset="1" stop-color="#FBBF24"/></linearGradient></defs>'+
+    '<linearGradient id="aiSgU" gradientUnits="userSpaceOnUse" x1="160" x2="440" y1="0" y2="0"><stop offset="0" stop-color="#F59E0B"/><stop offset=".5" stop-color="#FDE68A"/><stop offset="1" stop-color="#FBBF24"/></linearGradient>'+
+    '<g style="filter:drop-shadow(0 0 4px rgba(251,191,36,.55))"><text class="ai-sigtxt" x="300" y="88" text-anchor="middle" font-family="\'AOG Sig\',cursive" font-size="86" fill="url(#aiSg)" stroke="#FFF7D6" stroke-width=".6" opacity="0">Keilholz</text>'+
+    '<g class="ai-ink" fill="none" stroke="url(#aiSgU)" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round">'+SIG_INK.map(function(dd){ return '<path d="'+dd+'"/>'; }).join('')+'</g></g>'+
+    '<line x1="190" x2="410" y1="112" y2="112" stroke="#FBBF24" stroke-width="1.6" stroke-linecap="round" opacity="0"/></svg></div>'+
+    '<div class="ai-tag"></div><div class="ai-skip">TAP TO SKIP</div></div><canvas></canvas><div class="ai-ring"></div>';
+  document.body.appendChild(el);
+  var bg=el.querySelector('.ai-bg'), cv=el.querySelector('canvas'), c=cv.getContext('2d'), logo=el.querySelector('.ai-logo'), word=el.querySelector('.ai-w'),
+      sigBox=el.querySelector('.ai-sig'), sigSvg=sigBox.querySelector('svg'), sigTxt=sigSvg.querySelector('.ai-sigtxt'), sigInk=[].slice.call(sigSvg.querySelectorAll('.ai-ink path')), sigLine=sigSvg.querySelector('line'),
+      tagEl=el.querySelector('.ai-tag'), byEl=el.querySelector('.ai-by'), ring=el.querySelector('.ai-ring');
+  var done=false, raf=0;
+  function finish(){ if(done) return; done=true; el.classList.add('out');
+    setTimeout(function(){ cancelAnimationFrame(raf); if(el.parentNode) el.parentNode.removeChild(el);
+      window.AOGIntro.active=false; var w=waiting; waiting=[]; w.forEach(function(fn){ try{ fn(); }catch(e){} }); },450); }
+  setTimeout(finish,(END+3)*1000);                           // safety net: never trap the hub behind it
+  // Skip on the CLICK, and swallow it. Skipping on touch-down let the rest of that same tap (the click that
+  // follows it) fall through to whatever form card was under the finger.
+  function swallow(e){ e.preventDefault(); e.stopPropagation(); }
+  el.addEventListener('click',function(e){ swallow(e); finish(); });
+  el.addEventListener('pointerup',swallow); el.addEventListener('touchend',function(e){ e.stopPropagation(); },{passive:true});
+  try{ run(); }catch(e){ finish(); }
+
+  function run(){
+    var GOLD=['#FFF7D6','#FDE68A','#FCD34D','#FBBF24','#F59E0B'];
+    var rnd=function(a,b){return a+Math.random()*(b-a);}, pick=function(a){return a[Math.random()*a.length|0];};
+    var clamp=function(x,a,b){return Math.max(a,Math.min(b,x));}, easeIO=function(k){ k=clamp(k,0,1); return k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2; };
+    var W=innerWidth, H=innerHeight, d=Math.min(2,devicePixelRatio||1);
+    cv.width=W*d; cv.height=H*d; c.setTransform(d,0,0,d,0,0);
+    var u=Math.min(W/100,H*.5625/100), parts=[], fns=[], evs=[];
+    function rectOf(e){ var r=e.getBoundingClientRect(); return {x:r.left,y:r.top,w:r.width,h:r.height,cx:r.left+r.width/2,cy:r.top+r.height/2}; }
+    function A(e,frames,dur,delay,easing){ if(!e.animate){ e.style.opacity=1; return; } return e.animate(frames,{duration:dur*1000,delay:(delay||0)*1000,easing:easing||'ease',fill:'both'}); }
+    function at(t,fn){ evs.push({t:t,fn:fn}); }
+    function emit(o){ var p={type:'spark',x:0,y:0,vx:0,vy:0,g:0,drag:.96,life:1,size:.5,color:pick(GOLD),tw:rnd(8,18),ph:rnd(0,6),alpha:1}; for(var k in o) p[k]=o[k];
+      p.vx*=u; p.vy*=u; p.g*=u; p.size*=u; p.max=p.life; parts.push(p); }
+    function burst(x,y,n,sp,g,type,life,color){ for(var i=0;i<n;i++){ var a=rnd(0,6.283), s=rnd(10,sp); emit({x:x,y:y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rnd(.5,life||1.2),size:rnd(.25,.6),g:g,type:type||(Math.random()<.25?'star':'spark'),color:color||pick(GOLD)}); } }
+    function star(x,y,r,a,col){ c.globalAlpha=a; c.fillStyle=col; c.beginPath(); c.moveTo(x,y-r*2.4); c.quadraticCurveTo(x,y,x+r*2.4,y); c.quadraticCurveTo(x,y,x,y+r*2.4); c.quadraticCurveTo(x,y,x-r*2.4,y); c.quadraticCurveTo(x,y,x,y-r*2.4); c.fill(); }
+    function glow(x,y,r,a,col){ var g=c.createRadialGradient(x,y,0,x,y,r); g.addColorStop(0,col); g.addColorStop(1,'rgba(251,191,36,0)'); c.globalAlpha=a; c.fillStyle=g; c.beginPath(); c.arc(x,y,r,0,7); c.fill(); }
+    function rainDrop(y,life){ return {type:Math.random()<.5?'star':'dot',x:rnd(0,W),y:y,vx:rnd(-3,3),vy:rnd(28,46),drag:1,life:life,size:rnd(.3,.65),alpha:.8}; }
+    function rain(until,rate,pre){ if(pre) for(var i=0;i<45;i++) emit(rainDrop(rnd(-10,H*.55),rnd(1.6,3.2)));
+      fns.push(function(t){ if(t>until) return; for(var i=0;i<rate;i++) emit(rainDrop(-2*u,rnd(4,6))); }); }
+    function bolt(x0,y0,x1,y1,depth,jit){ var pts=[[x0,y0],[x1,y1]]; for(var dd=0;dd<depth;dd++){ var n=[pts[0]]; for(var i=1;i<pts.length;i++){ var a=pts[i-1],b=pts[i]; n.push([(a[0]+b[0])/2+rnd(-jit,jit),(a[1]+b[1])/2+rnd(-jit,jit)],b); } pts=n; jit*=.55; } return pts; }
+    function strokeBolt(p,w){ c.beginPath(); p.forEach(function(q,i){ if(i) c.lineTo(q[0],q[1]); else c.moveTo(q[0],q[1]); });   // glow = wide faint strokes (shadowBlur is far too slow on phones)
+      c.strokeStyle='rgba(90,170,255,.18)'; c.lineWidth=u*4*w; c.stroke(); c.strokeStyle='rgba(150,210,255,.45)'; c.lineWidth=u*1.5*w; c.stroke(); c.strokeStyle='#f2f9ff'; c.lineWidth=u*.45*w; c.stroke(); }
+
+    var L=rectOf(logo.parentNode);
+    // 1) glitter falling, pulled into a whirl around the logo as it spins up throwing sparks; a gold burst
+    rain(T.swirl+.1,3,true);
+    at(T.swirl,function(){ for(var i=0;i<110;i++){ parts.push({orbit:true,type:Math.random()<.3?'star':'dot',cx:L.cx,cy:L.cy,a:rnd(0,6.283),r:rnd(32,60)*u,rmin:L.w*.5,va:-rnd(4,7),shrink:.35,x:0,y:0,life:rnd(.9,1.3),max:1.3,size:u*rnd(.3,.55),color:pick(GOLD),tw:rnd(8,16),ph:rnd(0,6),alpha:.9}); } });
+    A(logo,[{opacity:0,filter:'blur(8px)',transform:'rotate(0deg) scale(.75)'},{opacity:1,filter:'blur(0px)',transform:'rotate(-900deg) scale(1)',offset:.8},{opacity:1,filter:'blur(0px) drop-shadow(0 0 12px rgba(251,191,36,.7))',transform:'rotate(-1080deg) scale(1)'}],T.spinDur,T.spin,'cubic-bezier(.5,0,.3,1)');
+    fns.push(function(t){ var k=(t-T.spin-T.spinDur*.15)/(T.spinDur*.7); if(k<0||k>1) return; var spd=Math.sin(k*Math.PI), n=1+spd*3|0; for(var i=0;i<n;i++){ var a=rnd(0,6.283), r=L.w*.48; emit({x:L.cx+Math.cos(a)*r,y:L.cy+Math.sin(a)*r,vx:-Math.sin(a)*60*spd+Math.cos(a)*10,vy:Math.cos(a)*60*spd+Math.sin(a)*10,g:20,life:rnd(.3,.7),size:rnd(.25,.45)}); } });
+    at(T.spin+T.spinDur*.95,function(){ burst(L.cx,L.cy,60,42,14); burst(L.cx,L.cy,18,22,4,'star',1.4); });
+    // 2) the name comes into focus with a few twinkles
+    A(word,[{opacity:0,filter:'blur(10px)'},{opacity:1,filter:'blur(0px)'}],.8,T.name);
+    for(var i=0;i<6;i++) at(T.name+.5+i*.12,function(){ var r=word.getBoundingClientRect(); emit({type:'star',x:r.left+rnd(.1,.9)*r.width,y:r.top+rnd(.15,.85)*r.height,life:.8,size:rnd(.6,.9)}); });
+    // the maker's credit fades in just before the pen starts: BUILT BY → Keilholz
+    A(byEl,[{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],.5,T.sign-.3);
+    // 3) the signature is WRITTEN: gold ink runs along each pen stroke in order with a sparkler on the pen point;
+    //    when the last stroke is down, the finished script fades in over the ink; then the underline
+    var inkLen=sigInk.map(function(p){ var l=0; try{ l=p.getTotalLength(); }catch(e){} p.style.strokeDasharray=l+' '+(l+1); p.style.strokeDashoffset=l; return l; }), inkTot=inkLen.reduce(function(a,b){ return a+b; },0)||1;
+    var penEase=function(k){ return k<.08 ? k*k/.16 : k>.94 ? 1-(1-k)*(1-k)/.12 : (k-.04)/.92; };   // gentle start and finish, steady in between
+    fns.push(function(t){ if(t<T.sign||!sigInk.length) return; var k=clamp((t-T.sign)/T.signDur,0,1), drawn=inkTot*clamp(penEase(k),0,1), acc=0, pen=null;
+      for(var i=0;i<sigInk.length;i++){ var L=inkLen[i], here=clamp(drawn-acc,0,L); sigInk[i].style.strokeDashoffset=L-here; if(here>0&&here<L&&!pen) pen={p:sigInk[i],at:here}; acc+=L; }
+      if(k<1&&pen){ try{ var pt=pen.p.getPointAtLength(pen.at), m=sigSvg.getScreenCTM(), px=pt.x*m.a+pt.y*m.c+m.e, py=pt.x*m.b+pt.y*m.d+m.f;
+        for(var j=0;j<3;j++) emit({x:px,y:py,vx:rnd(-22,22),vy:rnd(-28,10),g:45,life:rnd(.2,.5),size:rnd(.18,.35)}); emit({type:'dot',x:px,y:py,life:.1,size:1.3,color:'#FFF7D6'}); }catch(e){} } });
+    at(T.sign+T.signDur,function(){ if(sigTxt.animate){ sigTxt.animate([{opacity:0},{opacity:1}],{duration:350,fill:'both'}); sigSvg.querySelector('.ai-ink').animate([{opacity:1},{opacity:0}],{duration:450,fill:'both'}); } else { sigTxt.setAttribute('opacity',1); } });
+    at(T.sign+T.signDur+.05,function(){ if(sigLine.animate) sigLine.animate([{opacity:0,strokeDasharray:'0 300'},{opacity:.85,strokeDasharray:'300 0'}],{duration:450,fill:'both',easing:'ease-out'}); else sigLine.setAttribute('opacity',.85);
+      var r=sigSvg.getBoundingClientRect(); emit({type:'star',x:r.right-r.width*.25,y:r.top+r.height*.3,life:1.1,size:1.1}); });
+    // 4) the tagline types out
+    for(var j=0;j<TAG.length;j++) (function(j){ at(T.tag+j*T.tagStep,function(){ tagEl.textContent=TAG.slice(0,j+1)+(j<TAG.length-1?'▌':''); }); })(j);
+    rain(blastAt,1,false);
+    // 5) ARC BLAST: arcs crawl over the name and signature as it charges, ONE flash, big arcs crack out to the
+    //    edges, the screen kicks, and the hub blows open from the centre behind a ring of light. One flash only.
+    var Wr, box, ends, cx, cy;
+    at(blastAt,function(){ Wr=rectOf(word); cx=Wr.cx; cy=Wr.cy; var Sg=sigBox.getBoundingClientRect(); box=[Wr.x,Wr.y,Wr.x+Wr.w,Sg.top+Sg.height*.8];
+      ends=[]; for(var i=0;i<8;i++){ var a=i/8*6.283+rnd(-.3,.3), r=Math.hypot(W,H); ends.push([cx+Math.cos(a)*r,cy+Math.sin(a)*r]); }
+      var F=T.charge;
+      A(word,[{transform:'translateY(-50%) scale(1)',filter:'brightness(1)'},{transform:'translateY(-50%) scale(1.03)',filter:'brightness(1.6)',offset:.55},{transform:'translateY(-50%) scale(1.08)',filter:'brightness(2.4)',offset:.75},{transform:'translateY(-50%) scale(1.4)',filter:'brightness(3) blur(4px)',opacity:0}],F+.4,0,'ease-in');
+      A(logo,[{filter:'brightness(1)'},{filter:'brightness(1.5)',offset:.55},{filter:'brightness(2.4)',offset:.75},{filter:'brightness(3) blur(4px)',opacity:0,transform:'scale(1.3)'}],F+.4,0,'ease-in');
+      [byEl,sigBox,tagEl].forEach(function(e){ A(e,[{opacity:1,filter:'brightness(1)'},{opacity:1,filter:'brightness(1.8)',offset:.6},{opacity:0,filter:'blur(4px) brightness(3)'}],F+.3,.05,'ease-in'); });
+      if(el.animate) el.animate([{transform:'translate(0,0)'},{transform:'translate(-6px,4px)'},{transform:'translate(5px,-3px)'},{transform:'translate(-3px,2px)'},{transform:'translate(2px,-1px)'},{transform:'translate(0,0)'}],{duration:520,delay:F*1000+20});
+      A(ring,[{width:'0px',height:'0px',opacity:1},{width:(H*1.6)+'px',height:(H*1.6)+'px',opacity:.9,offset:.85},{width:(H*1.8)+'px',height:(H*1.8)+'px',opacity:0}],T.open+.05,F+.3,'cubic-bezier(.5,0,.25,1)');
+    });
+    at(flashAt,function(){ burst(cx,cy,110,120,10,'spark',.9,'#dff0ff'); burst(cx,cy,60,75,20); });
+    fns.push(function(t){ if(t<blastAt||t>flashAt+T.open+.3||!box) return; var k=t-blastAt, F=T.charge; c.save(); c.globalCompositeOperation='lighter'; c.lineCap='round'; c.lineJoin='round';
+      if(k<F){ var n=1+Math.floor(k/F*5); for(var i=0;i<n;i++){ var x0=rnd(box[0],box[2]), y0=rnd(box[1],box[3]), a=rnd(0,6.283), Ln=u*rnd(4,12)*(1+k/F); strokeBolt(bolt(x0,y0,x0+Math.cos(a)*Ln,y0+Math.sin(a)*Ln,3,u*2.5),.55); }
+        var g=c.createRadialGradient(cx,cy,0,cx,cy,W*.6); g.addColorStop(0,'rgba(140,205,255,'+(.18*k/F)+')'); g.addColorStop(1,'rgba(60,120,255,0)'); c.fillStyle=g; c.fillRect(0,0,W,H);
+        if(Math.random()<.5) emit({x:rnd(box[0],box[2]),y:rnd(box[1],box[3]),vx:rnd(-20,20),vy:rnd(-25,5),g:30,life:.3,size:.3,color:'#dff0ff'}); }
+      else { var kk=k-F; ends.forEach(function(e,j){ if((kk>T.open*.45&&j%2)||(kk>T.open*.75&&j%4)) return; var reach=Math.min(1,kk/.12); strokeBolt(bolt(cx,cy,cx+(e[0]-cx)*reach,cy+(e[1]-cy)*reach,5,u*9),1); });
+        var f=kk<.06?kk/.06:Math.max(0,1-(kk-.06)/.45), g2=c.createRadialGradient(cx,cy,0,cx,cy,Math.hypot(W,H)*.7); g2.addColorStop(0,'rgba(235,246,255,'+(.85*f)+')'); g2.addColorStop(.5,'rgba(140,205,255,'+(.35*f)+')'); g2.addColorStop(1,'rgba(60,120,255,0)'); c.fillStyle=g2; c.fillRect(0,0,W,H); }
+      c.restore();
+      // the hole: the intro's background layer is cut away from the centre outward, showing the real hub
+      // it follows the ring of light exactly, so the hub only ever shows inside the ring
+      if(t>flashAt+.3){ var R=ring.getBoundingClientRect().width/2, m='radial-gradient(circle at 50% 58%, transparent '+R+'px, #000 '+(R+2)+'px)'; bg.style.webkitMaskImage=m; bg.style.maskImage=m; } });
+    at(END,finish);
+
+    // Sound (on by default; Sound Settings → "Intro spin-up" switches it off). Only where sound is allowed right
+    // now (the installed desktop app; a phone after a tap) — otherwise the engine would queue it and the tap that
+    // SKIPS the intro would unlock it, playing it over the hub. Each sound is skipped once the intro is.
+    var S=window.AOGSound, soundOK=false;
+    setTimeout(function(){ S=window.AOGSound; if(!S||done||!S.whenRunning) return; S.whenRunning(350,function(ok){ soundOK=ok; if(ok&&!done) S.play('introSpin'); }); },T.spin*1000-150);
+    function cue(t,name){ setTimeout(function(){ if(soundOK&&!done&&S) S.play(name); },t*1000); }
+    cue(T.name+.4,'introTwinkle'); cue(T.sign,'introPen'); cue(T.tag,'introType'); cue(blastAt,'introBlast');
+
+    var t0=performance.now(), last=t0;
+    function frame(now){
+      if(done&&!el.parentNode) return;
+      var t=(now-t0)/1000, dt=Math.min(.05,(now-last)/1000); last=now;
+      evs=evs.filter(function(e){ if(t>=e.t){ e.fn(); return false; } return true; });
+      c.clearRect(0,0,W,H); fns.forEach(function(f){ f(t); });
+      c.globalCompositeOperation='lighter';
+      for(var i=parts.length-1;i>=0;i--){ var p=parts[i];
+        if(p.orbit){ p.a+=p.va*dt; p.r=Math.max(p.rmin,p.r*Math.pow(p.shrink,dt)); p.x=p.cx+Math.cos(p.a)*p.r; p.y=p.cy+Math.sin(p.a)*p.r*.92; }
+        else { var dr=Math.pow(p.drag,dt*60); p.vx*=dr; p.vy=p.vy*dr+p.g*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; }
+        p.life-=dt; if(p.life<=0||p.y>H+20){ parts.splice(i,1); continue; }
+        var a=clamp(p.life/p.max,0,1);
+        if(p.type==='spark'){ c.globalAlpha=a; c.strokeStyle=p.color; c.lineWidth=p.size; c.lineCap='round'; c.beginPath(); c.moveTo(p.x-p.vx*.035,p.y-p.vy*.035); c.lineTo(p.x,p.y); c.stroke(); }
+        else if(p.type==='star'){ var r=p.size*(.55+.45*Math.sin(t*p.tw+p.ph)); star(p.x,p.y,r,a,p.color); glow(p.x,p.y,r*3,a*.5,'rgba(255,240,180,.9)'); }
+        else glow(p.x,p.y,p.size*3,a*p.alpha,p.color);
+      }
+      c.globalAlpha=1; c.globalCompositeOperation='source-over';
+      raf=requestAnimationFrame(frame);
+    }
+    raf=requestAnimationFrame(frame);
+  }
+})();
+</script>
 <canvas id="bg-canvas"></canvas>
 <div id="offline-banner">No network connection · Hub available offline</div>
 
@@ -4181,9 +4356,10 @@ document.querySelectorAll('.cat-btn').forEach(function(btn) {
     ['animations', '⚡', 'Background Animations'],
     ['seasonal',   '🎆', 'Seasonal & Fireworks'],
     ['forms',      '✅', 'Forms & Checklists'],
-    ['alerts',     '🔔', 'Alerts & Updates']
+    ['alerts',     '🔔', 'Alerts & Updates'],
+    ['intro',      '🌀', 'Intro spin-up (when the app opens)']
   ];
-  var SAMPLE = { master:'click', taps:'click', animations:'boltStrike', seasonal:'explosion', forms:'pop', alerts:'notify' };
+  var SAMPLE = { master:'click', taps:'click', animations:'boltStrike', seasonal:'explosion', forms:'pop', alerts:'notify', intro:'introSpin' };
   var TONES = [
     ['click', '👆 Button Click', [['thock','Thock'],['knock','Knock'],['classic','Classic'],['typewriter','Typewriter'],['bubble','Bubble'],['waterdrop','Water Drop'],['retro','Retro 8-Bit'],['pluck','Pluck'],['switch','Switch'],['chirpclick','Chirp'],['doubletap','Double Tap'],['softpad','Soft Pad'],['glasstap','Glass Tap'],['zapclick','Zap'],['boing','Boing'],['keypress','Keypress'],['pebble','Pebble'],['muffled','Muffled'],['hitick','Hi Tick'],['clack','Clack'],['dew','Dew'],['smallping','Small Ping'],['buzztap','Buzz Tap'],['fingersnap','Finger Snap']]],
     ['pop', '✅ Checkbox', [['bubblepop','Bubble Pop'],['pop','Pop'],['tick','Wood Tick'],['blip','Blip'],['cork','Cork'],['marble','Marble'],['ding','Ding'],['snap','Snap'],['clave','Woodblock'],['boop','Boop'],['kiss','Kiss'],['latch','Latch'],['droppop','Drop Pop'],['tinybell','Tiny Bell'],['chirppop','Chirp Pop'],['plip','Plip'],['knuckle','Knuckle'],['softsnap','Soft Snap'],['uncork','Uncork'],['pip','Pip'],['taptap','Tap-Tap'],['bloopdn','Bloop Down'],['stone','Stone'],['clickpop','Click Pop']]],
@@ -4611,7 +4787,9 @@ if('serviceWorker' in navigator){
           document.getElementById('update-toast-version').textContent=ver;
           var list=document.getElementById('update-toast-changelog'); list.innerHTML='';
           log.forEach(function(item){var li=document.createElement('li');li.textContent=item;list.appendChild(li);});
-          document.getElementById('update-toast').classList.add('visible');
+          // not under / over the launch intro — show it once the intro has finished
+          var show=function(){ document.getElementById('update-toast').classList.add('visible'); };
+          if(window.AOGIntro&&window.AOGIntro.active) window.AOGIntro.onDone(show); else show();
         };
         worker.postMessage({action:'GET_CHANGELOG'},[ch.port2]);
       }
