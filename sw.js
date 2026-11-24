@@ -21,7 +21,7 @@
 // 52-file re-download. A literal prefix could not fix it either: 'aog-forms-v'
 // is itself a prefix of 'aog-forms-vTEST2.5.0', so public would still eat test.
 // The scope is different by construction, so this cannot collide.
-var CACHE_VERSION = 'v3.1.3';
+var CACHE_VERSION = 'v3.1.4';
 var CACHE_PREFIX  = 'aog-forms::' + self.registration.scope + '::';
 var CACHE_NAME    = CACHE_PREFIX + CACHE_VERSION;
 
@@ -76,11 +76,10 @@ var cacheProgress = { percent: 0, label: '', done: false };
 //  Keep each line short — one change per item.
 // ============================================================
 var CHANGELOG = [
-  '⚡ ELECTRICAL THEORY — ⛶ Full screen for the one-line (pinch, drag, quick controls), Ctrl+scroll zooms just the drawing, a slim "What\'s happening" bar on phones, and it now says "utility out" instead of blaming a breaker when the power fails.',
-  '🌀 HOME HUB — a new opening: the logo spins up in gold glitter, gets signed, and an arc blast opens the hub. Tap to skip; its sound can be switched off in Sound Settings.',
-  '🎄 HOLIDAY SOUNDS — a steady autumn wind with turkeys gobbling on Thanksgiving pages; sleigh bells and a "ho ho ho" on Christmas pages.',
-  '🎵 SOUNDS — opening the app on iPhone no longer pauses your music or CarPlay audio.',
-  '📝 PROPERTY LOOKUP — the Elevation Certificate note on the map is easier to tap and opens the PDF.',
+  '🔋 ELECTRICAL THEORY — new PANEL · SHARED option (400 A): one battery bank feeding the inverters of both panels, paralleled per the EG4 18kPV manual. Every inverter is daisy-chained with paralleling cables and both systems drain the same bank.',
+  '🏛 PROPERTY LOOKUP — City of Naples zoning reads the city\'s ArcGIS Online layer (fast, and up when the city\'s own server is down). The city\'s server is the backup, and whichever copy was edited most recently is searched first.',
+  '📶 PROPERTY LOOKUP — when a city or county server is down, the card says so instead of "no polygon", no longer hangs on "confirming…", and the Live Code panel still loads.',
+  '🔧 PROPERTY LOOKUP — Diagnose live feeds shows every feed right away and fills each one in as it answers, instead of waiting on dead links.',
 ]
 //
 // ============================================================
